@@ -1,6 +1,7 @@
 import { Component, MarkdownRenderer, Menu, Notice, Platform } from "obsidian";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Action, Project, ProjectStatus } from "../domain/types";
+import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { useGtdSnapshot } from "../ui/hooks";
 import type { GtdServices } from "../ui/services";
 
@@ -29,8 +30,9 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     const status = optimistic.get(project.id);
     return status ? { ...project, status } : project;
   }), [snapshot, optimistic]);
+  const breadcrumbs = useMemo(() => projectBreadcrumbs(projects), [projects]);
 
-  if (selected) return <ProjectDetail services={services} project={selected} onBack={() => setSelectedId(null)} />;
+  if (selected) return <ProjectDetail services={services} project={selected} onBack={() => setSelectedId(null)} onSelect={setSelectedId} />;
 
   const moveProject = async (id: string, status: ProjectBoardStatus) => {
     const previous = snapshot.projectsById.get(id)?.status;
@@ -60,7 +62,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
         {BOARD_COLUMNS.map((status) => {
           const columnProjects = projects
             .filter((project) => projectColumn(project.status) === status)
-            .sort((a, b) => a.title.localeCompare(b.title));
+            .sort((a, b) => (breadcrumbs.get(a.id) ?? a.title).localeCompare(breadcrumbs.get(b.id) ?? b.title));
           return (
             <section
               class="dg-column dg-project-column"
@@ -81,8 +83,10 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
                     project={project}
                     actions={actionsByProject.get(project.id) ?? []}
                     services={services}
+                    breadcrumb={breadcrumbs.get(project.id) ?? project.title}
                     onOpen={() => setSelectedId(project.id)}
                     onMove={moveProject}
+                    onCreateSubproject={() => services.createProject(false, project.id)}
                   />
                 ))}
                 {columnProjects.length === 0 && <div class="dg-empty-row">No {projectStatusLabel(status).toLocaleLowerCase()} Projects.</div>}
@@ -99,15 +103,19 @@ function ProjectCard({
   project,
   actions,
   services,
+  breadcrumb,
   onOpen,
   onMove,
+  onCreateSubproject,
 }: {
   key?: string;
   project: Project;
   actions: Action[];
   services: GtdServices;
+  breadcrumb: string;
   onOpen: () => void;
   onMove: (id: string, status: ProjectBoardStatus) => Promise<void>;
+  onCreateSubproject: () => void;
 }) {
   const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
   const next = actions.filter((action) => action.status === "next").length;
@@ -121,6 +129,7 @@ function ProjectCard({
         .onClick(() => void onMove(project.id, status)));
     }
     menu.addSeparator();
+    menu.addItem((item) => item.setTitle("New sub-project…").onClick(onCreateSubproject));
     menu.addItem((item) => item.setTitle("Open note").onClick(() => void services.openFile(project.file)));
     menu.addItem((item) => item.setTitle("Edit…").onClick(() => services.editProject(project.id)));
     menu.showAtMouseEvent(event);
@@ -142,6 +151,7 @@ function ProjectCard({
         <button class="dg-card-title" onClick={onOpen}>{project.title}</button>
         <button class="dg-icon-button" aria-label={`Actions for ${project.title}`} onClick={openMenu}>•••</button>
       </div>
+      {breadcrumb !== project.title && <div class="dg-project-lineage" title={breadcrumb}>{breadcrumb}</div>}
       {project.area && <div class="dg-project-area">{project.area}</div>}
       <div class="dg-project-metrics">
         <span><strong>{open}</strong> open</span>
@@ -178,7 +188,7 @@ function waitForProjectStatus(services: GtdServices, id: string, status: Project
   });
 }
 
-function ProjectDetail({ services, project, onBack }: { services: GtdServices; project: Project; onBack: () => void }) {
+function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdServices; project: Project; onBack: () => void; onSelect: (id: string) => void }) {
   const snapshot = useGtdSnapshot(services.repository.index);
   const [outcome, setOutcome] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
@@ -191,6 +201,12 @@ function ProjectDetail({ services, project, onBack }: { services: GtdServices; p
   const open = all.filter((action) => action.status !== "done" && action.status !== "cancelled");
   const completed = all.filter((action) => action.status === "done");
   const support = services.repository.supportFiles(project);
+  const breadcrumbs = projectBreadcrumbs(snapshot.projects);
+  const breadcrumb = breadcrumbs.get(project.id) ?? project.title;
+  const parent = project.parentProjectId ? snapshot.projectsById.get(project.parentProjectId) : undefined;
+  const children = snapshot.projects
+    .filter((candidate) => candidate.parentProjectId === project.id)
+    .sort((left, right) => (breadcrumbs.get(left.id) ?? left.title).localeCompare(breadcrumbs.get(right.id) ?? right.title));
 
   return (
     <div class="dg-view dg-project-detail">
@@ -202,9 +218,17 @@ function ProjectDetail({ services, project, onBack }: { services: GtdServices; p
         </div>
         <div class="dg-header-actions">
           <button onClick={() => void services.openFile(project.file)}>Open note</button>
+          <button onClick={() => services.createProject(false, project.id)}>New sub-project</button>
           <button onClick={() => services.editProject(project.id)}>Edit</button>
         </div>
       </header>
+      {(parent || project.parentProjectId || children.length > 0) && <section class="dg-detail-section dg-project-hierarchy">
+        <div class="dg-section-heading"><h3>Project hierarchy</h3><span>{breadcrumb}</span></div>
+        {parent
+          ? <div><span>Parent</span><button onClick={() => onSelect(parent.id)}>{breadcrumbs.get(parent.id) ?? parent.title}</button></div>
+          : project.parentProjectId && <div class="dg-missing">Missing parent Project: {project.parentProjectId}</div>}
+        {children.length > 0 && <div><span>Sub-projects</span><div class="dg-hierarchy-links">{children.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}>{breadcrumbs.get(child.id) ?? child.title}</button>)}</div></div>}
+      </section>}
       <section class="dg-detail-section">
         <h3>Desired outcome</h3>
         {outcome ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} /> : <div class="dg-muted">No desired outcome written yet.</div>}

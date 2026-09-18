@@ -1,6 +1,7 @@
 import { MetadataCache, Plugin, TAbstractFile, TFile, Vault } from "obsidian";
 import type { Action, GtdSnapshot, InboxItem, IndexIssue, Project } from "../domain/types";
 import { parseAction, parseInboxItem, parseProject } from "../domain/validation";
+import { projectHierarchyIssue } from "../domain/project-hierarchy";
 
 type Listener = () => void;
 
@@ -112,6 +113,10 @@ export class GtdIndex {
       if (duplicateProjectIds.has(project.id)) {
         issues.push({ path: project.file.path, kind: "duplicate-id", message: `Duplicate Project ID '${project.id}'` });
       } else projectsById.set(project.id, project);
+    }
+    for (const project of projectsById.values()) {
+      const message = projectHierarchyIssue(project, projectsById);
+      if (message) issues.push({ path: project.file.path, kind: "invalid", message });
     }
 
     this.current = {

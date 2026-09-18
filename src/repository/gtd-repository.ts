@@ -17,6 +17,7 @@ import type {
   ProjectChanges,
   ProjectInput,
 } from "../domain/types";
+import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { localDate } from "../utils/date";
 import { noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
 import { normalizeVaultPath, parentPath, safeName } from "../utils/path";
@@ -155,6 +156,11 @@ export class GtdRepository {
     const id = createUlid();
     const title = input.title.trim();
     if (!title) throw new Error("A Project title is required.");
+    const parent = input.parentProjectId ? this.index.getSnapshot().projectsById.get(input.parentProjectId) : undefined;
+    if (input.parentProjectId && !parent) throw new Error("The selected parent Project no longer exists.");
+    if (parent && projectHierarchyIssue(parent, this.index.getSnapshot().projectsById)) {
+      throw new Error("The selected parent Project has an invalid hierarchy.");
+    }
     const directory = normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects";
     await this.ensureFolder(directory);
     const path = this.uniqueMarkdownPath(directory, title, id);
@@ -172,11 +178,17 @@ export class GtdRepository {
       reviewed: null,
       completed: null,
       support_path: supportPath,
+      parent_project_id: parent?.id ?? null,
+      parent_project: parent ? wikiLink(parent) : null,
     };
     const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n\n\n## Support material\n\n\`${supportPath}/\`\n`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
     if (input.area?.trim()) project.area = input.area.trim();
+    if (parent) {
+      project.parentProjectId = parent.id;
+      project.parentProjectLink = wikiLink(parent);
+    }
     return project;
   }
 
@@ -218,6 +230,16 @@ export class GtdRepository {
 
   async updateProject(id: string, changes: ProjectChanges): Promise<void> {
     const project = this.requireProject(id);
+    const parent = changes.parentProjectId
+      ? this.index.getSnapshot().projectsById.get(changes.parentProjectId)
+      : undefined;
+    if (changes.parentProjectId && !parent) throw new Error("The selected parent Project no longer exists.");
+    if (parent && projectHierarchyIssue(parent, this.index.getSnapshot().projectsById)) {
+      throw new Error("The selected parent Project has an invalid hierarchy.");
+    }
+    if (parent && wouldCreateProjectCycle(project.id, parent.id, this.index.getSnapshot().projectsById)) {
+      throw new Error("A Project cannot be its own parent or a descendant of itself.");
+    }
     await this.enqueue(project.file.path, async () => {
       const oldTitle = project.title;
       let supportPath = changes.supportPath ?? project.supportPath;
@@ -240,6 +262,10 @@ export class GtdRepository {
         }
         if (changes.area !== undefined) frontmatter.area = changes.area || null;
         if (changes.reviewed !== undefined) frontmatter.reviewed = changes.reviewed || null;
+        if (changes.parentProjectId !== undefined) {
+          frontmatter.parent_project_id = parent?.id ?? null;
+          frontmatter.parent_project = parent ? wikiLink(parent) : null;
+        }
         if (supportPath !== undefined) frontmatter.support_path = supportPath || null;
       });
       if (project.supportPath && supportPath && project.supportPath !== supportPath) {
@@ -359,7 +385,10 @@ export class GtdRepository {
       if (!project) throw new Error("The selected Project no longer exists.");
     } else if (input.projectTitle?.trim()) {
       const normalized = input.projectTitle.trim().toLocaleLowerCase();
-      project = snapshot.projects.find((candidate) => candidate.title.toLocaleLowerCase() === normalized);
+      project = snapshot.projects.find((candidate) =>
+        candidate.title.toLocaleLowerCase() === normalized
+        || projectBreadcrumb(candidate, snapshot.projectsById).toLocaleLowerCase() === normalized
+      );
     }
 
     const desiredOutcome = input.desiredOutcome?.trim() ?? "";
@@ -520,6 +549,8 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
     "area",
     "reviewed",
     "support_path",
+    "parent_project_id",
+    "parent_project",
   ]) delete frontmatter[key];
 }
 

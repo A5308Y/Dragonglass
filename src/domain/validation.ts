@@ -100,6 +100,8 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   const reviewed = optionalString(frontmatter, "reviewed");
   const completed = optionalString(frontmatter, "completed");
   const supportPath = optionalString(frontmatter, "support_path");
+  const parentProjectId = optionalString(frontmatter, "parent_project_id");
+  const parentProjectLink = optionalString(frontmatter, "parent_project");
   if (area) project.area = area;
   if (reviewed) project.reviewed = dateOnly(reviewed, "reviewed");
   if (completed) {
@@ -107,5 +109,7 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
     project.completed = completed;
   }
   if (supportPath) project.supportPath = supportPath;
+  if (parentProjectId) project.parentProjectId = parentProjectId;
+  if (parentProjectLink) project.parentProjectLink = parentProjectLink;
   return project;
 }

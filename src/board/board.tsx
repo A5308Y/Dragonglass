@@ -10,6 +10,7 @@ import {
   type SavedView,
   type SortField,
 } from "../domain/types";
+import { projectBreadcrumb } from "../domain/project-hierarchy";
 import { buildBoard, type ActionGroup } from "../state/query";
 import { isOverdue, localDate } from "../utils/date";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -235,8 +236,10 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
     }
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("No project").onClick(() => void safely(services.repository.updateAction(action.id, { projectId: "" }))));
-    for (const candidate of snapshot.projects.filter((item) => item.status !== "completed" && item.status !== "cancelled").sort((a, b) => a.title.localeCompare(b.title))) {
-      menu.addItem((item) => item.setTitle(`${candidate.id === action.projectId ? "✓ " : ""}${candidate.title}`).onClick(() => void safely(services.repository.updateAction(action.id, { projectId: candidate.id }))));
+    for (const candidate of snapshot.projects
+      .filter((item) => item.status !== "completed" && item.status !== "cancelled")
+      .sort((a, b) => projectBreadcrumb(a, snapshot.projectsById).localeCompare(projectBreadcrumb(b, snapshot.projectsById)))) {
+      menu.addItem((item) => item.setTitle(`${candidate.id === action.projectId ? "✓ " : ""}${projectBreadcrumb(candidate, snapshot.projectsById)}`).onClick(() => void safely(services.repository.updateAction(action.id, { projectId: candidate.id }))));
     }
     const contexts = [...new Set(snapshot.actions.map((item) => item.context).filter((value): value is string => Boolean(value)))].sort();
     if (contexts.length) {
@@ -265,7 +268,7 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
       </div>
       {action.projectId && (
         project
-          ? <button class="dg-project-link" onClick={() => services.showProjectDetail(project.id)}>{project.title}</button>
+          ? <button class="dg-project-link" title={projectBreadcrumb(project, snapshot.projectsById)} onClick={() => services.showProjectDetail(project.id)}>{projectBreadcrumb(project, snapshot.projectsById)}</button>
           : <span class="dg-missing">Missing project</span>
       )}
       <div class="dg-card-meta">
@@ -287,7 +290,7 @@ function FilterBuilder({ services, filters, onChange }: { services: GtdServices;
   const values = field === "status"
     ? ACTION_STATUSES.map((item) => ({ value: item, label: label(item) }))
     : field === "project"
-      ? [{ value: "", label: "No project" }, ...snapshot.projects.map((project) => ({ value: project.id, label: project.title }))]
+      ? [{ value: "", label: "No project" }, ...snapshot.projects.map((project) => ({ value: project.id, label: projectBreadcrumb(project, snapshot.projectsById) }))]
       : [...new Set(snapshot.actions.map((action) => field === "context" ? action.context : action.energy).filter((item): item is string => Boolean(item)))].sort().map((item) => ({ value: item, label: item }));
 
   const changeField = (next: string) => {
@@ -344,7 +347,11 @@ function ColumnPicker({ snapshotGroups, configuration, onChange }: { snapshotGro
 function describeFilter(filter: ActionFilter, snapshot: ReturnType<GtdServices["repository"]["index"]["getSnapshot"]>): string {
   if (filter.kind === "availability") return "Available now";
   if (filter.kind === "due") return filter.operator === "withinNextDays" ? `Due within ${filter.value} days` : `Due ${filter.operator}`;
-  const labels = filter.values.map((value) => filter.field === "project" ? snapshot.projectsById.get(value)?.title ?? "No project" : value);
+  const labels = filter.values.map((value) => {
+    if (filter.field !== "project") return value;
+    const project = snapshot.projectsById.get(value);
+    return project ? projectBreadcrumb(project, snapshot.projectsById) : "No project";
+  });
   return `${label(filter.field)} ${filter.operator === "in" ? "is" : "is not"} ${labels.join(", ")}`;
 }
 

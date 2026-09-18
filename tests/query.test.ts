@@ -43,6 +43,13 @@ describe("query model", () => {
     expect(filterActions(actions, [], "heat", projects).map((action) => action.id)).toEqual(["A1", "A2"]);
   });
 
+  it("searches full nested Project breadcrumbs", () => {
+    const child: Project = { type: "gtd-project", id: "P2", title: "Boiler", parentProjectId: "P1", file: file("GTD/Projects/Boiler.md"), status: "active", created: "2026-09-01" };
+    const nestedProjects = new Map([...projects, [child.id, child]]);
+    const nestedAction: Action = { type: "gtd-action", id: "A4", title: "Request quote", projectId: "P2", file: file("A4.md"), status: "next", created: "2026-09-18" };
+    expect(filterActions([nestedAction], [], "heating > boil", nestedProjects).map((action) => action.id)).toEqual(["A4"]);
+  });
+
   it("sorts empty due dates last in both directions", () => {
     expect(sortActions(actions, { field: "due", direction: "asc" }, projects).at(-1)?.id).toBe("A3");
     expect(sortActions(actions, { field: "due", direction: "desc" }, projects).at(-1)?.id).toBe("A3");

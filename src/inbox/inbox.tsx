@@ -2,6 +2,7 @@ import { Notice, prepareFuzzySearch } from "obsidian";
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { InboxItem, InboxProcessingInput, Project } from "../domain/types";
+import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { useGtdSnapshot } from "../ui/hooks";
 import type { GtdServices } from "../ui/services";
 
@@ -114,6 +115,7 @@ function InboxProcessor({
   const [nextAction, setNextAction] = useState("");
   const [context, setContext] = useState("");
   const [busy, setBusy] = useState(false);
+  const projectLabels = useMemo(() => projectBreadcrumbs(projects), [projects]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,7 +161,11 @@ function InboxProcessor({
   };
   const selectedProject = projectId
     ? projects.find((project) => project.id === projectId)
-    : projects.find((project) => project.title.toLocaleLowerCase() === projectQuery.trim().toLocaleLowerCase());
+    : projects.find((project) => {
+      const query = projectQuery.trim().toLocaleLowerCase();
+      return project.title.toLocaleLowerCase() === query || projectLabels.get(project.id)?.toLocaleLowerCase() === query;
+    });
+  const selectedProjectLabel = selectedProject ? projectLabels.get(selectedProject.id) ?? selectedProject.title : "";
   const projectName = selectedProject?.title ?? projectQuery.trim();
   const actionLabel = selectedProject
     ? `Create Next Action in ${selectedProject.title}`
@@ -198,10 +204,10 @@ function InboxProcessor({
             <FuzzyField
               value={projectQuery}
               placeholder="Search or name a Project…"
-              options={projects.map((project) => ({ id: project.id, label: project.title, ...(project.area ? { meta: project.area } : {}) }))}
+              options={projects.map((project) => ({ id: project.id, label: projectLabels.get(project.id) ?? project.title, ...(project.area ? { meta: project.area } : {}) }))}
               onChange={(value) => {
                 setProjectQuery(value);
-                if (value !== selectedProject?.title) setProjectId("");
+                if (value !== selectedProjectLabel) setProjectId("");
               }}
               onChoose={(option) => {
                 setProjectQuery(option.label);

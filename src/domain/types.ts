@@ -55,6 +55,8 @@ export interface Project {
   reviewed?: string;
   completed?: string;
   supportPath?: string;
+  parentProjectId?: string;
+  parentProjectLink?: string;
 }
 
 export interface ActionInput {
@@ -71,6 +73,7 @@ export interface ProjectInput {
   title: string;
   status?: ProjectStatus;
   area?: string;
+  parentProjectId?: string;
 }
 
 export interface InboxProcessingInput {
@@ -86,7 +89,7 @@ export type ActionChanges = Partial<
 >;
 
 export type ProjectChanges = Partial<
-  Pick<Project, "title" | "status" | "area" | "reviewed" | "supportPath">
+  Pick<Project, "title" | "status" | "area" | "reviewed" | "supportPath" | "parentProjectId">
 >;
 
 export interface IndexIssue {

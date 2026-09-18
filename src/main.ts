@@ -5,7 +5,7 @@ import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
 import { GtdSettingTab } from "./settings";
-import { ActionEditorModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
+import { ActionEditorModal, NewProjectModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
 import type { GtdServices } from "./ui/services";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, GtdBrainstormView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
 
@@ -30,7 +30,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       openFile: (file) => this.openFile(file),
       quickCapture: () => this.quickCapture(),
       openInbox: () => void this.activateView(INBOX_VIEW_TYPE),
-      createProject: (openAfterCreate = true) => this.createProject(openAfterCreate),
+      createProject: (openAfterCreate = true, parentProjectId) => this.createProject(openAfterCreate, parentProjectId),
       editAction: (id) => this.editAction(id),
       editProject: (id) => this.editProject(id),
       showProjectDetail: (id) => void this.openProjectDetail(id),
@@ -137,11 +137,10 @@ export default class DragonglassGtdPlugin extends Plugin {
     }).open();
   }
 
-  private createProject(openAfterCreate = true): void {
-    new TextPromptModal(this.app, "New Project", "Project title", async (title) => {
-      const file = await this.repository.createProject({ title });
+  private createProject(openAfterCreate = true, parentProjectId = ""): void {
+    new NewProjectModal(this.services, async (file) => {
       if (openAfterCreate) await this.openFile(file);
-    }).open();
+    }, parentProjectId).open();
   }
 
   private editAction(id: string): void {

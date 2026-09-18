@@ -1,5 +1,6 @@
 import { ACTION_STATUSES, type Action, type ActionFilter, type BoardConfiguration, type GtdSnapshot, type GroupBy, type Project, type SortSpec } from "../domain/types";
 import { addLocalDays, localDate } from "../utils/date";
+import { projectBreadcrumb } from "../domain/project-hierarchy";
 
 export interface ActionGroup {
   key: string;
@@ -47,7 +48,8 @@ export function filterActions(
   return actions.filter((action) => {
     if (!filters.every((filter) => matchesFilter(action, filter))) return false;
     if (!needle) return true;
-    const projectTitle = action.projectId ? projectsById.get(action.projectId)?.title ?? "" : "";
+    const project = action.projectId ? projectsById.get(action.projectId) : undefined;
+    const projectTitle = project ? projectBreadcrumb(project, projectsById) : "";
     return action.title.toLocaleLowerCase().includes(needle) || projectTitle.toLocaleLowerCase().includes(needle);
   });
 }
@@ -72,8 +74,8 @@ export function sortActions(actions: readonly Action[], spec: SortSpec, projects
     else if (spec.field === "title") result = compareNullable(left.title, right.title, false);
     else {
       result = compareNullable(
-        left.projectId ? projectsById.get(left.projectId)?.title : undefined,
-        right.projectId ? projectsById.get(right.projectId)?.title : undefined,
+        left.projectId && projectsById.get(left.projectId) ? projectBreadcrumb(projectsById.get(left.projectId)!, projectsById) : undefined,
+        right.projectId && projectsById.get(right.projectId) ? projectBreadcrumb(projectsById.get(right.projectId)!, projectsById) : undefined,
         true,
       );
     }
@@ -94,7 +96,10 @@ function groupLabel(key: string, groupBy: GroupBy, projectsById: ReadonlyMap<str
     if (groupBy === "context") return "No context";
     return "No energy";
   }
-  if (groupBy === "project") return projectsById.get(key)?.title ?? `Missing project (${key})`;
+  if (groupBy === "project") {
+    const project = projectsById.get(key);
+    return project ? projectBreadcrumb(project, projectsById) : `Missing project (${key})`;
+  }
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 

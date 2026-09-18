@@ -344,6 +344,14 @@
 }
 .dg-project-column .dg-card-list { overflow-y: auto; }
 .dg-project-card { contain-intrinsic-size: 128px; }
+.dg-project-lineage {
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dg-project-area {
   margin-top: 4px;
   color: var(--text-muted);
@@ -372,6 +380,35 @@
   margin-top: 7px;
   font-size: var(--font-ui-smaller);
 }
+
+.dg-project-hierarchy .dg-section-heading > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dg-project-hierarchy > div:not(.dg-section-heading) {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dg-project-hierarchy > div > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-project-hierarchy button {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-accent);
+  background: transparent;
+  box-shadow: none;
+}
+.dg-hierarchy-links { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 5px; }
 .dg-project-reviewed { color: var(--text-faint); }
 .dg-project-health {
   padding: 5px 7px;

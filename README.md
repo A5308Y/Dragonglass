@@ -68,6 +68,15 @@ completed:
 
 A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, and `support_path`. Normal notes, PDFs, and other files can live beneath that support path.
 
+Sub-projects use the same Project files and add an optional stable-ID relationship:
+
+```yaml
+parent_project_id: 01K5ABCDEF1234567890123456
+parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
+```
+
+`parent_project_id` is authoritative; the wiki-link is a convenience. Project pickers fuzzy-search and display the complete hierarchy as `Project > Sub-project > Sub-sub-project`. The Project editor can change or clear a parent, and Project cards and details provide quick sub-project creation. Cycles are rejected and malformed manual relationships appear in diagnostics.
+
 ## Commands
 
 - **GTD: Open Action Board**
@@ -92,7 +101,7 @@ Marking an Action done writes `status: done` and an ISO completion timestamp. Re
 
 ## Projects
 
-The Projects board has Active, Someday/Maybe, and Completed columns. Projects move between them by desktop drag-and-drop or the card menu on touch devices. Project `waiting` is not a supported status; legacy Projects using it are migrated to `active`. Cards display open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail reads the Desired outcome from the Project note, resolves its live Actions, and lists ordinary files beneath `support_path`; it does not duplicate Action data into the Project note.
+The Projects board has Active, Someday/Maybe, and Completed columns. Projects move between them by desktop drag-and-drop or the card menu on touch devices. Project `waiting` is not a supported status; legacy Projects using it are migrated to `active`. Cards display hierarchy breadcrumbs, open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail links its parent and immediate sub-projects, reads the Desired outcome from the Project note, resolves its live Actions, and lists ordinary files beneath `support_path`; it does not duplicate Action data into the Project note.
 
 ## Processing, review, and brainstorming
 

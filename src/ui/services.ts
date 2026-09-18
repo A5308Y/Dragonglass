@@ -10,7 +10,7 @@ export interface GtdServices {
   openFile: (file: TFile) => Promise<void>;
   quickCapture: () => void;
   openInbox: () => void;
-  createProject: (openAfterCreate?: boolean) => void;
+  createProject: (openAfterCreate?: boolean, parentProjectId?: string) => void;
   editAction: (id: string) => void;
   editProject: (id: string) => void;
   showProjectDetail: (id: string) => void;
