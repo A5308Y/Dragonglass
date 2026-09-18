@@ -18,8 +18,3 @@ support_path: Projects/Peter
 
 ## Notes
 
-
-
-## Support material
-
-`Projects/Peter/`
