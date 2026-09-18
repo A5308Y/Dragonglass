@@ -425,8 +425,6 @@
   background: var(--background-primary);
 }
 .dg-muted { color: var(--text-muted); }
-.dg-path { padding: 6px 8px; border-radius: var(--radius-s); background: var(--background-secondary); color: var(--text-muted); font-family: var(--font-monospace); font-size: var(--font-ui-smaller); }
-.dg-support-panel .dg-path { background: var(--background-primary); }
 .dg-support-note-create { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .dg-support-note-create input {
   min-width: 0;

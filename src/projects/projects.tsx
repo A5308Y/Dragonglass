@@ -371,7 +371,6 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
 
         <section class="dg-detail-section dg-support-panel">
           <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Project Support Material</h3></div><span class="dg-detail-count">{support.length}</span></div>
-          <div class="dg-path">{project.supportPath ?? "No support folder configured"}</div>
           <div class="dg-support-note-create">
             <input
               value={supportNoteTitle}
