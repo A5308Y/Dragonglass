@@ -1,6 +1,6 @@
 import { Component, MarkdownRenderer, Menu, Notice, Platform } from "obsidian";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { Action, GtdSnapshot, Project, ProjectStatus } from "../domain/types";
+import type { Action, Project, ProjectStatus } from "../domain/types";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { ActionRows } from "../ui/action-rows";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -241,6 +241,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const snapshot = useGtdSnapshot(services.repository.index);
   const [outcome, setOutcome] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
+  const [optimisticSubprojectStatuses, setOptimisticSubprojectStatuses] = useState<Map<string, ProjectStatus>>(new Map());
   useEffect(() => {
     let active = true;
     void services.repository.readDesiredOutcome(project).then((value) => { if (active) setOutcome(value); });
@@ -254,11 +255,33 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const parent = project.parentProjectId ? snapshot.projectsById.get(project.parentProjectId) : undefined;
   const children = snapshot.projects
     .filter((candidate) => candidate.parentProjectId === project.id)
+    .map((child) => {
+      const status = optimisticSubprojectStatuses.get(child.id);
+      return status ? { ...child, status } : child;
+    })
     .sort((left, right) => (breadcrumbs.get(left.id) ?? left.title).localeCompare(breadcrumbs.get(right.id) ?? right.title));
   const activeChildren = children.filter((child) => child.status === "active");
   const backlogChildren = children.filter((child) => child.status === "backlog");
   const otherChildren = children.filter((child) => child.status !== "active" && child.status !== "backlog");
   const hasParent = Boolean(parent || project.parentProjectId);
+
+  const moveSubproject = async (id: string, status: "active" | "backlog") => {
+    const previous = snapshot.projectsById.get(id)?.status;
+    if (!previous || previous === status) return;
+    setOptimisticSubprojectStatuses((current) => new Map(current).set(id, status));
+    try {
+      await services.repository.setProjectStatus(id, status);
+      await waitForProjectStatus(services, id, status);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not change the sub-project status.");
+    } finally {
+      setOptimisticSubprojectStatuses((current) => {
+        const next = new Map(current);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
 
   return (
     <div class="dg-view dg-project-detail">
@@ -318,8 +341,8 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             <span class="dg-detail-count">{children.length}</span>
           </div>
           <div class="dg-subproject-columns">
-            <SubprojectColumn title="Active" projects={activeChildren} snapshot={snapshot} onSelect={onSelect} />
-            <SubprojectColumn title="Backlog" projects={backlogChildren} snapshot={snapshot} onSelect={onSelect} />
+            <SubprojectColumn status="active" projects={activeChildren} onSelect={onSelect} onMove={moveSubproject} />
+            <SubprojectColumn status="backlog" projects={backlogChildren} onSelect={onSelect} onMove={moveSubproject} />
           </div>
           {otherChildren.length > 0 && <div class="dg-subproject-other">
             <span>Other statuses</span>
@@ -331,25 +354,34 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   );
 }
 
-function SubprojectColumn({ title: columnTitle, projects, snapshot, onSelect }: {
-  title: string;
+function SubprojectColumn({ status, projects, onSelect, onMove }: {
+  status: "active" | "backlog";
   projects: Project[];
-  snapshot: GtdSnapshot;
   onSelect: (id: string) => void;
+  onMove: (id: string, status: "active" | "backlog") => Promise<void>;
 }) {
-  return <div class="dg-subproject-column">
+  const columnTitle = projectStatusLabel(status);
+  const destination = status === "active" ? "backlog" : "active";
+  return <div
+    class="dg-subproject-column"
+    onDragOver={(event: DragEvent) => event.preventDefault()}
+    onDrop={(event: DragEvent) => {
+      event.preventDefault();
+      const id = event.dataTransfer?.getData("text/dragonglass-subproject");
+      if (id) void onMove(id, status);
+    }}
+  >
     <header><strong>{columnTitle}</strong><span>{projects.length}</span></header>
     <div class="dg-subproject-list">
-      {projects.map((child) => {
-        const actions = snapshot.actions.filter((action) => action.projectId === child.id);
-        const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
-        const next = actions.filter((action) => action.status === "next").length;
-        return <button class="dg-subproject-card" key={child.id} onClick={() => onSelect(child.id)}>
-          <span class="dg-subproject-title" title={child.title}>{child.title}</span>
-          <span class="dg-subproject-metrics"><span><strong>{open}</strong> open</span><span><strong>{next}</strong> next</span></span>
-          {child.status === "active" && next === 0 && <small>No Next Action</small>}
-        </button>;
-      })}
+      {projects.map((child) => <article
+        class="dg-subproject-card"
+        key={child.id}
+        draggable={!Platform.isMobile}
+        onDragStart={(event: DragEvent) => event.dataTransfer?.setData("text/dragonglass-subproject", child.id)}
+      >
+        <button class="dg-subproject-title" title={child.title} onClick={() => onSelect(child.id)}>{child.title}</button>
+        <button class="dg-subproject-move" onClick={() => void onMove(child.id, destination)}>Move to {projectStatusLabel(destination)}</button>
+      </article>)}
       {projects.length === 0 && <div class="dg-subproject-empty">No {columnTitle.toLocaleLowerCase()} sub-projects.</div>}
     </div>
   </div>;

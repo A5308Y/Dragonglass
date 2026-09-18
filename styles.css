@@ -608,31 +608,38 @@
   min-width: 0;
   padding: 11px;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  text-align: left;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
   color: var(--text-normal);
   background: var(--background-secondary);
   box-shadow: none;
 }
 .dg-subproject-card:hover { border-color: var(--interactive-accent); }
 .dg-subproject-title {
+  min-width: 0;
+  padding: 0;
   overflow: hidden;
+  border: 0 !important;
+  text-align: left;
   font-weight: var(--font-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-normal);
+  background: transparent !important;
+  box-shadow: none !important;
 }
-.dg-subproject-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-.dg-subproject-metrics > span {
-  padding: 5px 7px;
-  border-radius: var(--radius-s);
+.dg-subproject-move {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 3px 8px;
   color: var(--text-muted);
   background: var(--background-primary);
+  box-shadow: none;
   font-size: var(--font-ui-smaller);
 }
-.dg-subproject-metrics strong { color: var(--text-normal); }
-.dg-subproject-card > small { color: var(--text-warning); }
 .dg-subproject-empty { padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-subproject-other { margin-top: 12px; }
 .dg-subproject-other > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
@@ -1226,6 +1233,8 @@
   .dg-project-detail-content { padding: 8px; gap: 8px; }
   .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-columns { grid-template-columns: 1fr; gap: 8px; }
+  .dg-subproject-card { align-items: stretch; flex-direction: column; }
+  .dg-subproject-move { min-height: 38px; }
   .dg-detail-section { padding: 13px; }
   .dg-action-row { align-items: start; padding: 10px; }
   .dg-action-row-meta { gap: 4px 7px; }
