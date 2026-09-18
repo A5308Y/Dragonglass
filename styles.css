@@ -884,6 +884,10 @@
   min-width: 0;
   min-height: 40px;
 }
+.dg-brainstorm-start button {
+  min-height: 40px;
+  align-self: stretch;
+}
 .dg-brainstorm-task h3 { margin-top: 3px; }
 .dg-brainstorm-task button,
 .dg-word-bank button { min-height: 30px; }
