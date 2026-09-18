@@ -231,9 +231,9 @@ function InboxProcessor({
       </section>
 
       <section class="dg-processor-actions">
-        <button class="mod-cta" disabled={!actionReady || busy} onClick={() => void run(() => services.repository.processInboxAsNextAction(item.id, input()), "Next Action created.")}>{actionLabel}</button>
-        <button disabled={!referenceReady || busy} onClick={() => void run(() => services.repository.processInboxAsReference(item.id, input()), projectName ? "Filed with Project." : "Filed as General Reference.")}>{referenceLabel}</button>
-        <button disabled={!actionReady || busy} onClick={() => void run(() => services.repository.processInboxAsSomedayProject(item.id, input()), "Filed as a Someday/Maybe Project.")}>{somedayLabel}</button>
+        <button class="mod-cta" title={actionLabel} disabled={!actionReady || busy} onClick={() => void run(() => services.repository.processInboxAsNextAction(item.id, input()), "Next Action created.")}>{actionLabel}</button>
+        <button title={referenceLabel} disabled={!referenceReady || busy} onClick={() => void run(() => services.repository.processInboxAsReference(item.id, input()), projectName ? "Filed with Project." : "Filed as General Reference.")}>{referenceLabel}</button>
+        <button title={somedayLabel} disabled={!actionReady || busy} onClick={() => void run(() => services.repository.processInboxAsSomedayProject(item.id, input()), "Filed as a Someday/Maybe Project.")}>{somedayLabel}</button>
         <button class="mod-warning" disabled={busy} onClick={() => void run(() => services.repository.trashInboxItem(item.id), "Inbox Item deleted.")}>Delete</button>
       </section>
 
