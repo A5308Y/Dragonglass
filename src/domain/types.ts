@@ -153,6 +153,7 @@ export interface BoardConfiguration {
 
 export interface GtdSettings {
   inboxDirectory: string;
+  referenceDirectory: string;
   projectsDirectory: string;
   actionsDirectory: string;
   defaultActionStatus: ActionStatus;

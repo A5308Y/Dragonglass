@@ -136,6 +136,88 @@ export class ProcessInboxItemModal extends FormModal {
   }
 }
 
+export class CreateProjectFromInboxModal extends FormModal {
+  private title: string;
+  private desiredOutcome = "";
+
+  constructor(
+    private readonly services: GtdServices,
+    private readonly item: InboxItem,
+    private readonly status: ProjectStatus,
+  ) {
+    super(services.app);
+    this.title = item.title;
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: this.status === "someday" ? "Create Someday Project" : "Create Project" });
+    new Setting(this.formEl).setName("Title").addText((text) => {
+      text.setValue(this.title).onChange((value) => (this.title = value));
+      window.setTimeout(() => text.inputEl.focus(), 0);
+    });
+    new Setting(this.formEl)
+      .setName("Desired outcome")
+      .setDesc("Optional. What will be true when this Project is complete?")
+      .addTextArea((text) => text.setValue(this.desiredOutcome).onChange((value) => (this.desiredOutcome = value)));
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit(this.status === "someday" ? "Create Someday Project" : "Create Project");
+  }
+
+  protected async submit(): Promise<void> {
+    if (!this.title.trim()) return void new Notice("A Project title is required.");
+    try {
+      await this.services.repository.createProjectFromInbox(this.item.id, {
+        title: this.title.trim(),
+        status: this.status,
+        desiredOutcome: this.desiredOutcome.trim(),
+      });
+      this.close();
+    } catch (error) {
+      this.fail(error);
+    }
+  }
+}
+
+export class FileInboxItemWithProjectModal extends FormModal {
+  private projectId = "";
+  private projectQuery = "";
+
+  constructor(private readonly services: GtdServices, private readonly item: InboxItem) {
+    super(services.app);
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: "File as Project Support" });
+    this.formEl.createEl("p", { text: "The Inbox Item will become a normal Markdown file in the selected Project's support folder." });
+    addProjectSearch(
+      this.formEl,
+      this.services.app,
+      this.services.repository.index.getSnapshot().projects,
+      this.projectQuery,
+      (projectId, query) => {
+        this.projectId = projectId;
+        this.projectQuery = query;
+      },
+      (popover) => this.registerPopover(popover),
+    );
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit("File Item");
+  }
+
+  protected async submit(): Promise<void> {
+    if (!this.projectId || !validateProjectSelection(this.projectId, this.projectQuery)) {
+      if (!this.projectQuery.trim()) new Notice("Choose a Project.");
+      return;
+    }
+    try {
+      await this.services.repository.fileInboxItemWithProject(this.item.id, this.projectId);
+      this.close();
+    } catch (error) {
+      this.fail(error);
+    }
+  }
+}
+
 export class ActionEditorModal extends FormModal {
   private title: string;
   private status: ActionStatus;

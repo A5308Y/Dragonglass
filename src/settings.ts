@@ -31,6 +31,14 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     new Setting(containerEl)
+      .setName("Reference directory")
+      .setDesc("Vault-relative destination when an Inbox Item is filed as reference.")
+      .addText((text) => text.setValue(this.plugin.settings.referenceDirectory).onChange(async (value) => {
+        this.plugin.settings.referenceDirectory = normalizeVaultPath(value) || "Reference";
+        await this.plugin.saveSettings();
+      }));
+
+    new Setting(containerEl)
       .setName("Projects directory")
       .setDesc("Vault-relative destination for new Project files.")
       .addText((text) => text.setValue(this.plugin.settings.projectsDirectory).onChange(async (value) => {

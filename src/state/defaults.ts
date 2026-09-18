@@ -56,12 +56,13 @@ export function createDefaultViews(): SavedView[] {
 export function defaultSettings(): GtdSettings {
   return {
     inboxDirectory: "GTD/Inbox",
+    referenceDirectory: "Reference",
     projectsDirectory: "GTD/Projects",
     actionsDirectory: "GTD/Actions",
     defaultActionStatus: "next",
     showDoneColumn: true,
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
-    schemaVersion: 2,
+    schemaVersion: 3,
   };
 }

@@ -17,6 +17,7 @@ import type {
   ProjectInput,
 } from "../domain/types";
 import { localDate } from "../utils/date";
+import { noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
 import { normalizeVaultPath, parentPath, safeName } from "../utils/path";
 import { createUlid } from "../utils/ulid";
 import { GtdIndex } from "./gtd-index";
@@ -30,7 +31,20 @@ export class GtdRepository {
     private readonly getSettings: () => GtdSettings,
   ) {}
 
-  async createInboxItem(title: string): Promise<TFile> {
+  async createInboxItem(title: string, details = ""): Promise<TFile> {
+    return (await this.createInboxRecord(title, details)).file;
+  }
+
+  async createClarifiedAction(input: ActionInput): Promise<void> {
+    const item = await this.createInboxRecord(input.title);
+    await this.convertInboxItemToAction(item, input);
+  }
+
+  async processInboxItem(id: string, input: ActionInput): Promise<void> {
+    await this.convertInboxItemToAction(this.requireInboxItem(id), input);
+  }
+
+  private async createInboxRecord(title: string, details = ""): Promise<InboxItem> {
     const id = createUlid();
     const cleanTitle = title.trim();
     if (!cleanTitle) throw new Error("An Inbox Item title is required.");
@@ -43,11 +57,12 @@ export class GtdRepository {
       title: cleanTitle,
       created: localDate(),
     };
-    return this.app.vault.create(path, markdown(frontmatter, `# ${cleanTitle}\n\n`));
+    const body = `# ${cleanTitle}\n\n${details.trim()}${details.trim() ? "\n" : ""}`;
+    const file = await this.app.vault.create(path, markdown(frontmatter, body));
+    return { type: "gtd-inbox-item", id, title: cleanTitle, created: String(frontmatter.created), file };
   }
 
-  async processInboxItem(id: string, input: ActionInput): Promise<void> {
-    const item = this.requireInboxItem(id);
+  private async convertInboxItemToAction(item: InboxItem, input: ActionInput): Promise<void> {
     const project = input.projectId ? this.index.getSnapshot().projectsById.get(input.projectId) : undefined;
     if (input.projectId && !project) throw new Error("The selected Project no longer exists.");
     const directory = normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions";
@@ -76,6 +91,68 @@ export class GtdRepository {
       const target = this.uniqueMarkdownPath(directory, title, item.id);
       if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
     });
+  }
+
+  async createProjectFromInbox(id: string, input: { title: string; status: Project["status"]; desiredOutcome?: string }): Promise<void> {
+    const item = this.requireInboxItem(id);
+    const title = input.title.trim();
+    if (!title) throw new Error("A Project title is required.");
+    const directory = normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects";
+    await this.ensureFolder(directory);
+    const supportPath = this.uniqueFolderPath("Projects", title, item.id);
+    await this.ensureFolder(supportPath);
+    await this.enqueue(item.file.path, async () => {
+      await this.app.fileManager.processFrontMatter(item.file, (frontmatter) => {
+        clearGtdFrontmatter(frontmatter);
+        frontmatter.type = "gtd-project";
+        frontmatter.id = item.id;
+        frontmatter.title = title;
+        frontmatter.status = input.status;
+        frontmatter.captured = item.created;
+        frontmatter.created = localDate();
+        frontmatter.area = null;
+        frontmatter.reviewed = null;
+        frontmatter.completed = null;
+        frontmatter.support_path = supportPath;
+      });
+      if (title !== item.title) await this.updateGeneratedHeading(item.file, item.title, title);
+      await this.app.vault.process(item.file, (content) => {
+        let updated = content;
+        updated = setMarkdownSection(updated, "Desired outcome", input.desiredOutcome ?? "");
+        if (!/^## Notes\s*$/m.test(updated)) updated = `${updated.trimEnd()}\n\n## Notes\n\n`;
+        updated = setMarkdownSection(updated, "Support material", `\`${supportPath}/\``);
+        return updated;
+      });
+      const target = this.uniqueMarkdownPath(directory, title, item.id);
+      if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
+    });
+  }
+
+  async fileInboxItemWithProject(id: string, projectId: string): Promise<void> {
+    const item = this.requireInboxItem(id);
+    const project = this.requireProject(projectId);
+    const supportPath = await this.ensureProjectSupportPath(project);
+    await this.enqueue(item.file.path, async () => {
+      await this.clearEntityFrontmatter(item.file);
+      const target = this.uniqueMarkdownPath(supportPath, item.title, item.id);
+      if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
+    });
+  }
+
+  async fileInboxItemAsReference(id: string): Promise<void> {
+    const item = this.requireInboxItem(id);
+    const directory = normalizeVaultPath(this.getSettings().referenceDirectory) || "Reference";
+    await this.ensureFolder(directory);
+    await this.enqueue(item.file.path, async () => {
+      await this.clearEntityFrontmatter(item.file);
+      const target = this.uniqueMarkdownPath(directory, item.title, item.id);
+      if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
+    });
+  }
+
+  async trashInboxItem(id: string): Promise<void> {
+    const item = this.requireInboxItem(id);
+    await this.app.fileManager.trashFile(item.file);
   }
 
   async createProject(input: ProjectInput): Promise<TFile> {
@@ -178,14 +255,82 @@ export class GtdRepository {
 
   async readDesiredOutcome(project: Project): Promise<string> {
     const content = await this.app.vault.cachedRead(project.file);
-    const match = /^## Desired outcome\s*\n([\s\S]*?)(?=^##\s|(?![\s\S]))/m.exec(content);
-    return match?.[1]?.trim() ?? "";
+    return readMarkdownSection(content, "Desired outcome");
+  }
+
+  async setDesiredOutcome(projectId: string, desiredOutcome: string): Promise<void> {
+    const project = this.requireProject(projectId);
+    await this.enqueue(project.file.path, () => this.app.vault.process(
+      project.file,
+      (content) => setMarkdownSection(content, "Desired outcome", desiredOutcome),
+    ));
+  }
+
+  async readInboxBody(item: InboxItem): Promise<string> {
+    return noteBody(await this.app.vault.cachedRead(item.file), item.title);
+  }
+
+  async readProjectDiary(project: Project): Promise<DiaryEntry[]> {
+    return parseDiaryEntries(await this.app.vault.cachedRead(project.file));
+  }
+
+  async addProjectDiaryEntry(projectId: string, text: string): Promise<DiaryEntry> {
+    const project = this.requireProject(projectId);
+    const clean = text.trim();
+    if (!clean) throw new Error("A diary entry is required.");
+    const timestamp = localDateTime();
+    await this.enqueue(project.file.path, () => this.app.vault.process(
+      project.file,
+      (content) => prependMarkdownSectionLine(content, "Diary", `- **${timestamp}** — ${clean}`),
+    ));
+    return { timestamp, text: clean };
+  }
+
+  async markProjectReviewed(projectId: string): Promise<void> {
+    await this.updateProject(projectId, { reviewed: localDate() });
+  }
+
+  async saveBrainstorm(actionId: string, ideas: string, desiredOutcome?: string): Promise<TFile> {
+    const action = this.requireAction(actionId);
+    const cleanIdeas = ideas.trim();
+    if (!cleanIdeas) throw new Error("Brainstorming notes are required.");
+    const project = action.projectId ? this.index.getSnapshot().projectsById.get(action.projectId) : undefined;
+    const date = localDate();
+    const title = `Brainstorm - ${action.title}`;
+    const visionBlock = desiredOutcome?.trim() ? `\n## Desired outcome\n\n${desiredOutcome.trim()}\n` : "";
+    let file: TFile;
+    if (project) {
+      const supportPath = await this.ensureProjectSupportPath(project);
+      const path = this.uniqueMarkdownPath(supportPath, `${title} ${date}`, action.id);
+      const body = `# ${title}\n\n*${date}*\n${visionBlock}\n## Ideas\n\n${cleanIdeas}\n`;
+      file = await this.app.vault.create(path, body);
+      if (desiredOutcome !== undefined) await this.setDesiredOutcome(project.id, desiredOutcome);
+    } else {
+      file = await this.createInboxItem(title, `${visionBlock}\n## Ideas\n\n${cleanIdeas}`);
+    }
+    await this.updateAction(action.id, { status: "done" });
+    return file;
   }
 
   supportFiles(project: Project): TFile[] {
     if (!project.supportPath) return [];
     const prefix = `${project.supportPath}/`;
     return this.app.vault.getFiles().filter((file) => file.path.startsWith(prefix));
+  }
+
+  private async ensureProjectSupportPath(project: Project): Promise<string> {
+    const supportPath = project.supportPath || this.uniqueFolderPath("Projects", project.title, project.id);
+    await this.ensureFolder(supportPath);
+    if (!project.supportPath) {
+      await this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
+        frontmatter.support_path = supportPath;
+      });
+    }
+    return supportPath;
+  }
+
+  private async clearEntityFrontmatter(file: TFile): Promise<void> {
+    await this.app.fileManager.processFrontMatter(file, clearGtdFrontmatter);
   }
 
   private requireAction(id: string): Action {
@@ -282,4 +427,27 @@ function markdown(frontmatter: Record<string, unknown>, body: string): string {
 function wikiLink(project: Project): string {
   const path = project.file.path.replace(/\.md$/i, "");
   return `[[${path}|${project.title}]]`;
+}
+
+function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
+  for (const key of [
+    "type",
+    "id",
+    "status",
+    "project_id",
+    "project",
+    "context",
+    "energy",
+    "due",
+    "defer_until",
+    "completed",
+    "area",
+    "reviewed",
+    "support_path",
+  ]) delete frontmatter[key];
+}
+
+function localDateTime(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

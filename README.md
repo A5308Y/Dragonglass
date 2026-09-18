@@ -27,9 +27,10 @@ GTD/Inbox/
 GTD/Actions/
 GTD/Projects/
 Projects/<project title>/
+Reference/
 ```
 
-The three GTD paths and the default Action status are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it.
+The Inbox, Action, Project, and Reference destinations and the default Action status are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it.
 
 Quick Capture creates an Inbox Item, not an Action:
 
@@ -41,6 +42,8 @@ created: 2026-09-18
 ```
 
 Inbox Items have no status. Processing one explicitly transforms that same Markdown file into an Action, moves it to the Actions directory, and preserves its stable ID and note body. The original capture date is retained as `captured`; the Action receives its own `created` date. `inbox` is not a valid Action status.
+
+The processing view also supports the other useful outcomes from the former `gtd-processor`: turn the item into an active or Someday Project, file it as ordinary Project support material, file it as ordinary Reference material, skip it, or send it to Obsidian's trash. These are transformations and moves of the source Markdown file—not records in a second application database.
 
 For compatibility, legacy files with `type: gtd-action` and `status: inbox` appear in the dedicated Inbox view rather than on the Action board. Processing them rewrites them into the current Action format.
 
@@ -70,6 +73,8 @@ A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `are
 - **GTD: Open Action Board**
 - **GTD: Open Inbox**
 - **GTD: Open Projects**
+- **GTD: Start Project Review**
+- **GTD: Open Brainstorm**
 - **GTD: Quick Capture Inbox Item**
 - **GTD: New Project**
 
@@ -88,6 +93,16 @@ Marking an Action done writes `status: done` and an ISO completion timestamp. Re
 ## Projects
 
 The Projects view displays open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail reads the Desired outcome from the Project note, resolves its live Actions, and lists ordinary files beneath `support_path`; it does not duplicate Action data into the Project note.
+
+## Processing, review, and brainstorming
+
+**Process Inbox** works through indexed Inbox Item files in capture order, with a two-minute decision timer and session progress. Creating an Action transforms the Inbox Item into a `gtd-action`; creating a Project transforms it into a `gtd-project`. Filing removes Dragonglass entity metadata and leaves a normal Markdown note in the selected support or Reference folder.
+
+**Project Review** presents active and waiting Projects that have not been reviewed today, putting Projects without a Next Action first. It reads and writes the Project's `## Desired outcome` and `## Diary` sections, operates on the Project's real Action files, reports completed Action and support-file counts, and records the review in the Project's `reviewed` frontmatter property. Review progress is session-only and disposable; there is no review-session database or JSON file.
+
+**Brainstorm** chooses among open Actions whose title contains `brainstorm`, provides a five-minute timer and an offline random-word prompt bank, and edits the related Project's Desired outcome. Saving completes the source Action and writes a normal Markdown note into the Project's support folder. If the Action has no Project, the result becomes a new Inbox Item. The workflow deliberately makes no network requests for inspiration images.
+
+Actions captured during Project Review pass through the same Inbox Item-to-Action transformation as normal processing and retain a `captured` date; the plugin has no separate “floating actions” store.
 
 ## Bases
 
@@ -114,4 +129,4 @@ The last view uses `file.backlinks` and the convenience `project` wiki-link. Obs
 
 ## Scope
 
-This version intentionally excludes AI integration, Obsidian Tasks migration, bulk migration, recurring Actions, manual card ranking, body full-text indexing, and a dedicated diagnostics view.
+This version intentionally excludes AI integration, Obsidian Tasks migration, bulk migration, recurring Actions, manual card ranking, body full-text indexing, and a dedicated diagnostics view. The old `gtd-processor` Express server, embedded checkbox-task storage, floating-actions file, and review-session JSON are not part of Dragonglass.

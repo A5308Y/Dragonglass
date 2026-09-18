@@ -1,13 +1,37 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { render } from "preact";
 import { ActionBoard } from "./board/board";
+import { BrainstormView } from "./brainstorm/brainstorm";
 import { InboxView } from "./inbox/inbox";
 import { ProjectsView } from "./projects/projects";
+import { ProjectReview } from "./review/project-review";
 import type { GtdServices } from "./ui/services";
 
 export const BOARD_VIEW_TYPE = "dragonglass-action-board";
+export const BRAINSTORM_VIEW_TYPE = "dragonglass-brainstorm";
 export const INBOX_VIEW_TYPE = "dragonglass-inbox";
 export const PROJECTS_VIEW_TYPE = "dragonglass-projects";
+export const REVIEW_VIEW_TYPE = "dragonglass-project-review";
+
+export class GtdBrainstormView extends ItemView {
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) { super(leaf); }
+  getViewType(): string { return BRAINSTORM_VIEW_TYPE; }
+  getDisplayText(): string { return "GTD Brainstorm"; }
+  getIcon(): string { return "lightbulb"; }
+  async onOpen(): Promise<void> { this.refresh(); }
+  async onClose(): Promise<void> { render(null, this.contentEl); }
+  refresh(): void { render(null, this.contentEl); render(<BrainstormView services={this.services} />, this.contentEl); }
+}
+
+export class GtdProjectReviewView extends ItemView {
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) { super(leaf); }
+  getViewType(): string { return REVIEW_VIEW_TYPE; }
+  getDisplayText(): string { return "GTD Project Review"; }
+  getIcon(): string { return "clipboard-check"; }
+  async onOpen(): Promise<void> { this.refresh(); }
+  async onClose(): Promise<void> { render(null, this.contentEl); }
+  refresh(): void { render(null, this.contentEl); render(<ProjectReview services={this.services} />, this.contentEl); }
+}
 
 export class GtdInboxView extends ItemView {
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
