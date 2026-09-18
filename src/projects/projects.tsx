@@ -326,15 +326,6 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
           {showCompleted && <ActionRows actions={completed} services={services} />}
         </section>}
 
-        <section class="dg-detail-section dg-support-panel">
-          <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Support material</h3></div><span class="dg-detail-count">{support.length}</span></div>
-          <div class="dg-path">{project.supportPath ?? "No support folder configured"}</div>
-          <div class="dg-support-files">
-            {support.map((file) => <button key={file.path} onClick={() => void services.openFile(file)}>{file.path.slice((project.supportPath?.length ?? -1) + 1)}</button>)}
-            {project.supportPath && support.length === 0 && <span class="dg-muted">The support folder is empty.</span>}
-          </div>
-        </section>
-
         {children.length > 0 && <section class="dg-detail-section dg-subprojects-panel">
           <div class="dg-detail-section-heading">
             <div><h3>Sub-projects</h3></div>
@@ -349,6 +340,15 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             <div>{otherChildren.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}><span>{child.title}</span><small>{projectStatusLabel(child.status)}</small></button>)}</div>
           </div>}
         </section>}
+
+        <section class="dg-detail-section dg-support-panel">
+          <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Support material</h3></div><span class="dg-detail-count">{support.length}</span></div>
+          <div class="dg-path">{project.supportPath ?? "No support folder configured"}</div>
+          <div class="dg-support-files">
+            {support.map((file) => <button key={file.path} onClick={() => void services.openFile(file)}>{file.path.slice((project.supportPath?.length ?? -1) + 1)}</button>)}
+            {project.supportPath && support.length === 0 && <span class="dg-muted">The support folder is empty.</span>}
+          </div>
+        </section>
       </main>
     </div>
   );
