@@ -5,7 +5,7 @@ title: asfdsf
 status: next
 project_id:
 project:
-context:
+context: Computer
 energy:
 due:
 defer_until:
