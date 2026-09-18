@@ -3,8 +3,8 @@ import { useEffect, useState } from "preact/hooks";
 import type { Action } from "../domain/types";
 import type { GtdServices } from "./services";
 
-export function ActionRows({ actions, services, emptyText = "No Actions." }: { actions: Action[]; services: GtdServices; emptyText?: string }) {
-  if (!actions.length) return <div class="dg-project-actions-empty"><span>✓</span><div><strong>Nothing here</strong><small>{emptyText}</small></div></div>;
+export function ActionRows({ actions, services }: { actions: Action[]; services: GtdServices }) {
+  if (!actions.length) return null;
   return <div class="dg-action-rows">{actions.sort((a, b) => a.title.localeCompare(b.title)).map((action) => (
     <ActionRow key={action.id} action={action} services={services} />
   ))}</div>;

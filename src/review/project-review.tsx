@@ -199,7 +199,9 @@ export function ProjectReview({ services }: { services: GtdServices }) {
 
           <div class="dg-review-panel dg-review-pulse-panel">
             <div class="dg-review-panel-heading">
-              <span class="dg-review-panel-icon">◌</span>
+              <span class="dg-review-panel-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" focusable="false"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" strokeWidth="2" /></svg>
+              </span>
               <div><h3>Project pulse</h3><p>Capture the current texture of the work.</p></div>
             </div>
             <div class="dg-emoji-row">{DIARY_EMOJIS.map(([emoji, label]) => <button title={label} aria-label={label} onClick={() => void addDiary(`${emoji} ${label}`)}><span>{emoji}</span></button>)}</div>
@@ -216,7 +218,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
             <div><h3>Open Actions</h3><p>Confirm that the next visible step is concrete.</p></div>
             <span class="dg-review-count">{openActions.length}</span>
           </div>
-          <ActionRows actions={openActions} services={services} emptyText="No open Actions for this Project." />
+          <ActionRows actions={openActions} services={services} />
           <div class="dg-action-capture">
             <input value={actionTitle} placeholder="Define the next physical Action…" onInput={(event: Event) => setActionTitle((event.currentTarget as HTMLInputElement).value)} onKeyDown={(event: KeyboardEvent) => { if (event.key === "Enter") void addAction(); }} />
             <input list="dg-review-contexts" value={context} placeholder="Context" onInput={(event: Event) => setContext((event.currentTarget as HTMLInputElement).value)} />

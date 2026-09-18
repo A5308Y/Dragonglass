@@ -279,7 +279,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             <div><span class="dg-detail-eyebrow">Work</span><h3>Open Actions</h3></div>
             <span class="dg-detail-count">{open.length}</span>
           </div>
-          <ActionRows actions={open} services={services} emptyText="No open Actions for this Project." />
+          <ActionRows actions={open} services={services} />
         </section>
 
         {completed.length > 0 && <section class="dg-detail-section dg-completed-actions-panel">
