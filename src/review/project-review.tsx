@@ -175,7 +175,6 @@ export function ProjectReview({ services }: { services: GtdServices }) {
               <div><h3>Desired outcome</h3><p>Reconnect with what done looks like.</p></div>
             </div>
             <textarea value={desiredOutcome} placeholder="What will be true when this Project is complete?" onInput={(event: Event) => setDesiredOutcome((event.currentTarget as HTMLTextAreaElement).value)} />
-            <div class="dg-review-panel-footer"><span>Markdown is written to the Project note.</span><button onClick={() => void services.repository.setDesiredOutcome(project.id, desiredOutcome).then(() => new Notice("Desired outcome saved."), (error) => new Notice(message(error)))}>Save outcome</button></div>
           </div>
 
           <div class="dg-review-panel dg-review-pulse-panel">

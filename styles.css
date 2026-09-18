@@ -947,8 +947,6 @@
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 15%, transparent);
 }
-.dg-review-panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.dg-review-panel-footer span { color: var(--text-faint); font-size: var(--font-ui-smaller); }
 .dg-emoji-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -1169,7 +1167,6 @@
   .dg-review-timers { width: 100%; justify-content: space-between; }
   .dg-review-hero { align-items: flex-start; padding: 14px; }
   .dg-review-panel { padding: 13px; }
-  .dg-review-panel-footer { align-items: stretch; flex-direction: column; }
   .dg-emoji-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .dg-inline-form,
   .dg-action-capture { align-items: stretch; flex-direction: column; }
