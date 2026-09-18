@@ -553,16 +553,15 @@
   font-size: var(--font-ui-smaller);
 }
 
-.dg-project-hierarchy > div {
+.dg-project-parent-panel > div {
   display: flex;
   min-width: 0;
   flex-direction: column;
   align-items: start;
   gap: 4px;
 }
-.dg-project-hierarchy > div + div { margin-top: 14px; }
-.dg-project-hierarchy > div > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
-.dg-project-hierarchy button {
+.dg-project-parent-panel > div > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-project-parent-panel button {
   min-width: 0;
   padding: 0;
   overflow: hidden;
@@ -573,7 +572,74 @@
   background: transparent;
   box-shadow: none;
 }
-.dg-hierarchy-links { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 5px; }
+.dg-subproject-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.dg-subproject-column {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+}
+.dg-subproject-column > header {
+  min-height: 38px;
+  padding: 8px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.dg-subproject-column > header > span {
+  min-width: 24px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  font-size: var(--font-ui-smaller);
+}
+.dg-subproject-list { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.dg-subproject-card {
+  width: 100%;
+  min-width: 0;
+  padding: 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  text-align: left;
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  box-shadow: none;
+}
+.dg-subproject-card:hover { border-color: var(--interactive-accent); }
+.dg-subproject-title {
+  overflow: hidden;
+  font-weight: var(--font-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dg-subproject-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.dg-subproject-metrics > span {
+  padding: 5px 7px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  background: var(--background-primary);
+  font-size: var(--font-ui-smaller);
+}
+.dg-subproject-metrics strong { color: var(--text-normal); }
+.dg-subproject-card > small { color: var(--text-warning); }
+.dg-subproject-empty { padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-subproject-other { margin-top: 12px; }
+.dg-subproject-other > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-subproject-other > div { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 6px; }
+.dg-subproject-other button { display: flex; gap: 8px; min-width: 0; }
+.dg-subproject-other button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-subproject-other button > small { color: var(--text-muted); }
 .dg-project-reviewed { color: var(--text-faint); }
 .dg-project-health {
   padding: 5px 7px;
@@ -1159,6 +1225,7 @@
   .dg-action-row { grid-template-columns: auto minmax(0, 1fr) auto; }
   .dg-project-detail-content { padding: 8px; gap: 8px; }
   .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
+  .dg-subproject-columns { grid-template-columns: 1fr; gap: 8px; }
   .dg-detail-section { padding: 13px; }
   .dg-action-row { align-items: start; padding: 10px; }
   .dg-action-row-meta { gap: 4px 7px; }

@@ -1,6 +1,6 @@
 import { Component, MarkdownRenderer, Menu, Notice, Platform } from "obsidian";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { Action, Project, ProjectStatus } from "../domain/types";
+import type { Action, GtdSnapshot, Project, ProjectStatus } from "../domain/types";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { ActionRows } from "../ui/action-rows";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -255,7 +255,10 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const children = snapshot.projects
     .filter((candidate) => candidate.parentProjectId === project.id)
     .sort((left, right) => (breadcrumbs.get(left.id) ?? left.title).localeCompare(breadcrumbs.get(right.id) ?? right.title));
-  const hasHierarchy = Boolean(parent || project.parentProjectId || children.length > 0);
+  const activeChildren = children.filter((child) => child.status === "active");
+  const backlogChildren = children.filter((child) => child.status === "backlog");
+  const otherChildren = children.filter((child) => child.status !== "active" && child.status !== "backlog");
+  const hasParent = Boolean(parent || project.parentProjectId);
 
   return (
     <div class="dg-view dg-project-detail">
@@ -273,16 +276,15 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
         </div>
       </header>
       <main class="dg-project-detail-content">
-        <div class={`dg-project-overview-grid${hasHierarchy ? "" : " is-single"}`}>
+        <div class={`dg-project-overview-grid${hasParent ? "" : " is-single"}`}>
           <section class="dg-detail-section dg-project-outcome-panel">
             <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Outcome</span><h3>Desired outcome</h3></div></div>
             {outcome ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} /> : <div class="dg-detail-empty">No desired outcome written yet.</div>}
           </section>
-          {hasHierarchy && <section class="dg-detail-section dg-project-hierarchy">
+          {hasParent && <section class="dg-detail-section dg-project-parent-panel">
             {parent
               ? <div><span>Parent</span><button onClick={() => onSelect(parent.id)}>{parent.title}</button></div>
               : project.parentProjectId && <div class="dg-missing">Missing parent Project: {project.parentProjectId}</div>}
-            {children.length > 0 && <div><span>Sub-projects</span><div class="dg-hierarchy-links">{children.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}>{child.title}</button>)}</div></div>}
           </section>}
         </div>
 
@@ -309,9 +311,48 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             {project.supportPath && support.length === 0 && <span class="dg-muted">The support folder is empty.</span>}
           </div>
         </section>
+
+        {children.length > 0 && <section class="dg-detail-section dg-subprojects-panel">
+          <div class="dg-detail-section-heading">
+            <div><h3>Sub-projects</h3></div>
+            <span class="dg-detail-count">{children.length}</span>
+          </div>
+          <div class="dg-subproject-columns">
+            <SubprojectColumn title="Active" projects={activeChildren} snapshot={snapshot} onSelect={onSelect} />
+            <SubprojectColumn title="Backlog" projects={backlogChildren} snapshot={snapshot} onSelect={onSelect} />
+          </div>
+          {otherChildren.length > 0 && <div class="dg-subproject-other">
+            <span>Other statuses</span>
+            <div>{otherChildren.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}><span>{child.title}</span><small>{projectStatusLabel(child.status)}</small></button>)}</div>
+          </div>}
+        </section>}
       </main>
     </div>
   );
+}
+
+function SubprojectColumn({ title: columnTitle, projects, snapshot, onSelect }: {
+  title: string;
+  projects: Project[];
+  snapshot: GtdSnapshot;
+  onSelect: (id: string) => void;
+}) {
+  return <div class="dg-subproject-column">
+    <header><strong>{columnTitle}</strong><span>{projects.length}</span></header>
+    <div class="dg-subproject-list">
+      {projects.map((child) => {
+        const actions = snapshot.actions.filter((action) => action.projectId === child.id);
+        const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
+        const next = actions.filter((action) => action.status === "next").length;
+        return <button class="dg-subproject-card" key={child.id} onClick={() => onSelect(child.id)}>
+          <span class="dg-subproject-title" title={child.title}>{child.title}</span>
+          <span class="dg-subproject-metrics"><span><strong>{open}</strong> open</span><span><strong>{next}</strong> next</span></span>
+          {child.status === "active" && next === 0 && <small>No Next Action</small>}
+        </button>;
+      })}
+      {projects.length === 0 && <div class="dg-subproject-empty">No {columnTitle.toLocaleLowerCase()} sub-projects.</div>}
+    </div>
+  </div>;
 }
 
 function title(value: string): string {
