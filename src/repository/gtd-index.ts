@@ -77,8 +77,8 @@ export class GtdIndex {
   }
 
   private remove(path: string): void {
-    if (!this.inboxItemsByPath.has(path) && !this.actionsByPath.has(path) && !this.projectsByPath.has(path) && !this.parseIssues.has(path)) return;
     this.removeFromMaps(path);
+    // Untracked files still matter to views that read the vault directly, such as Project support material.
     this.rebuildSnapshot();
   }
 
