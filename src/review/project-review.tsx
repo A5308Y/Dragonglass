@@ -36,6 +36,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
   const openActions = projectActions.filter((action) => action.status !== "done" && action.status !== "cancelled");
   const nextActions = openActions.filter((action) => action.status === "next");
   const doneActions = projectActions.filter((action) => action.status === "done");
+  const needsNextAction = project?.status === "active" && nextActions.length === 0;
   const contexts = [...new Set(snapshot.actions.map((action) => action.context).filter((value): value is string => Boolean(value)))].sort();
 
   useEffect(() => {
@@ -109,12 +110,33 @@ export function ProjectReview({ services }: { services: GtdServices }) {
   };
 
   const nextProject = async () => {
+    if (needsNextAction) {
+      new Notice("Add a Next Action or move this Project to Someday/Maybe before continuing.");
+      return;
+    }
+    setSaving(true);
     try {
       await services.repository.setDesiredOutcome(project.id, desiredOutcome);
       await services.repository.markProjectReviewed(project.id);
       setQueue((current) => current.slice(1));
     } catch (error) {
       new Notice(message(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const moveToSomeday = async () => {
+    setSaving(true);
+    try {
+      await services.repository.setDesiredOutcome(project.id, desiredOutcome);
+      await services.repository.updateProject(project.id, { status: "someday", reviewed: localDate() });
+      setQueue((current) => current.slice(1));
+      new Notice(`Moved “${project.title}” to Someday/Maybe.`);
+    } catch (error) {
+      new Notice(message(error));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -209,9 +231,18 @@ export function ProjectReview({ services }: { services: GtdServices }) {
         </section>
 
         <div class="dg-workflow-footer">
-          <div><strong>Ready to move on?</strong><span>The Desired outcome is saved automatically.</span></div>
+          <div>
+            <strong>{needsNextAction ? "This active Project needs a Next Action." : "Ready to move on?"}</strong>
+            <span>{needsNextAction ? "Add one above or move the Project to Someday/Maybe." : "The Desired outcome is saved automatically."}</span>
+          </div>
           <div class="dg-review-footer-actions">
-            <button class="mod-cta" onClick={() => void nextProject()}>Mark reviewed and continue →</button>
+            <button disabled={saving} onClick={() => void moveToSomeday()}>Move to Someday/Maybe</button>
+            <button
+              class="mod-cta"
+              disabled={saving || needsNextAction}
+              title={needsNextAction ? "Add a Next Action or move this Project to Someday/Maybe." : undefined}
+              onClick={() => void nextProject()}
+            >Mark reviewed and continue →</button>
           </div>
         </div>
       </div>
