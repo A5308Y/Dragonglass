@@ -2,7 +2,7 @@ import { Notice } from "obsidian";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { Project } from "../domain/types";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
-import { activeProjectsWithoutNextAction, projectReviewMembers, projectReviewQueue } from "../domain/project-review";
+import { activeProjectsWithoutNextAction, projectReviewMembers, projectReviewQueue, projectsBlockingReview } from "../domain/project-review";
 import { ActionRows } from "../ui/action-rows";
 import { FuzzyField } from "../ui/fuzzy-field";
 import type { DiaryEntry } from "../utils/markdown";
@@ -47,7 +47,8 @@ export function ProjectReview({ services }: { services: GtdServices }) {
   const nextActions = openActions.filter((action) => action.status === "next");
   const doneActions = projectActions.filter((action) => action.status === "done");
   const missingNextProjects = activeProjectsWithoutNextAction(reviewProjects, projectActions);
-  const needsNextAction = missingNextProjects.length > 0;
+  const blockingProjects = project ? projectsBlockingReview(project, reviewProjects, projectActions) : [];
+  const needsNextAction = blockingProjects.length > 0;
   const supportFileCount = reviewProjects.reduce((total, candidate) => total + services.repository.supportFiles(candidate).length, 0);
   const contexts = [...new Set(snapshot.actions.map((action) => action.context).filter((value): value is string => Boolean(value)))].sort();
 
@@ -57,7 +58,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     setDiary([]);
     setDiaryInput("");
     setActionTitle("");
-    const defaultActionProject = missingNextProjects[0] ?? project;
+    const defaultActionProject = blockingProjects[0] ?? missingNextProjects[0] ?? project;
     setActionProjectId(defaultActionProject?.id ?? "");
     setActionProjectQuery(defaultActionProject ? reviewProjectLabels.get(defaultActionProject.id) ?? defaultActionProject.title : "");
     setContext("");
@@ -205,7 +206,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
               <span>{nextActions.length} next</span>
             </div>
           </div>
-          {needsNextAction && <span class="dg-no-next">{missingNextProjects.length} without Next Action</span>}
+          {needsNextAction && <span class="dg-no-next">{blockingProjects.length} without Next Action</span>}
         </section>
 
         {reviewProjects.length > 1 && <section class="dg-review-panel dg-review-tree-panel">
@@ -310,7 +311,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
 
         <div class="dg-workflow-footer">
           <div>
-            <strong>{needsNextAction ? `${missingNextProjects.length} active Project${missingNextProjects.length === 1 ? " needs" : "s need"} a Next Action.` : "Ready to move on?"}</strong>
+            <strong>{needsNextAction ? `${blockingProjects.length} active Project${blockingProjects.length === 1 ? " needs" : "s need"} a Next Action.` : "Ready to move on?"}</strong>
             {needsNextAction && <span>Add the missing Next Actions above or move the root Project to Someday/Maybe.</span>}
           </div>
           <div class="dg-review-footer-actions">
@@ -319,7 +320,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
             <button
               class="mod-cta"
               disabled={saving || needsNextAction}
-              title={needsNextAction ? "Every active Project in this tree needs a Next Action." : undefined}
+              title={needsNextAction ? "Every active sub-project needs a Next Action." : undefined}
               onClick={() => void nextProject()}
             >Mark reviewed and continue →</button>
           </div>

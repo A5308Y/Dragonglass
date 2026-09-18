@@ -29,6 +29,20 @@ export function activeProjectsWithoutNextAction(projects: readonly Project[], ac
   return projects.filter((project) => project.status === "active" && !nextProjectIds.has(project.id));
 }
 
+/**
+ * Active Projects that still block marking this review tree as reviewed.
+ *
+ * Every active sub-project needs a Next Action. The root only needs one itself
+ * when it has no active sub-projects to carry the work. Returns the Projects to
+ * fix, empty when nothing blocks.
+ */
+export function projectsBlockingReview(root: Project, members: readonly Project[], actions: readonly Action[]): Project[] {
+  const missing = activeProjectsWithoutNextAction(members, actions);
+  const hasActiveSubprojects = members.some((project) => project.id !== root.id && project.status === "active");
+  if (hasActiveSubprojects) return missing.filter((project) => project.id !== root.id);
+  return missing;
+}
+
 export function projectReviewQueue(snapshot: GtdSnapshot, today: string): string[] {
   const candidates = snapshot.projects.filter((project) => project.status === "active" && project.reviewed !== today);
   const roots = new Map<string, Project>();
