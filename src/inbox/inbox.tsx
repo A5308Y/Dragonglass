@@ -151,7 +151,7 @@ function InboxProcessor({
       <section class="dg-processor-actions">
         <button class="mod-cta" onClick={() => services.processInboxItem(item)}>Create Action</button>
         <button onClick={() => new CreateProjectFromInboxModal(services, item, "active").open()}>Create Project</button>
-        <button onClick={() => new CreateProjectFromInboxModal(services, item, "someday").open()}>Someday Project</button>
+        <button onClick={() => new CreateProjectFromInboxModal(services, item, "someday").open()}>Someday/Maybe Project</button>
         <button onClick={() => new FileInboxItemWithProjectModal(services, item).open()}>File with Project</button>
         <button onClick={() => void run(() => services.repository.fileInboxItemAsReference(item.id), "Filed as reference.")}>Reference</button>
         <button onClick={onSkip}>Skip</button>

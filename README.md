@@ -26,7 +26,7 @@ New files use these default destinations:
 GTD/Inbox/
 GTD/Actions/
 GTD/Projects/
-Projects/<project title>/
+Project Support Material/<project title>/
 Reference/
 ```
 
@@ -43,7 +43,7 @@ created: 2026-09-18
 
 Inbox Items have no status. Processing one explicitly transforms that same Markdown file into an Action, moves it to the Actions directory, and preserves its stable ID and note body. The original capture date is retained as `captured`; the Action receives its own `created` date. `inbox` is not a valid Action status.
 
-The processing view also supports the other useful outcomes from the former `gtd-processor`: turn the item into an active or Someday Project, file it as ordinary Project support material, file it as ordinary Reference material, skip it, or send it to Obsidian's trash. These are transformations and moves of the source Markdown file—not records in a second application database.
+The processing view also supports the other useful outcomes from the former `gtd-processor`: turn the item into an active or Someday/Maybe Project, file it as ordinary Project support material, file it as ordinary Reference material, skip it, or send it to Obsidian's trash. These are transformations and moves of the source Markdown file—not records in a second application database.
 
 For compatibility, legacy files with `type: gtd-action` and `status: inbox` appear in the dedicated Inbox view rather than on the Action board. Processing them rewrites them into the current Action format.
 
@@ -92,7 +92,7 @@ Marking an Action done writes `status: done` and an ISO completion timestamp. Re
 
 ## Projects
 
-The Projects view displays open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail reads the Desired outcome from the Project note, resolves its live Actions, and lists ordinary files beneath `support_path`; it does not duplicate Action data into the Project note.
+The Projects board has Active, Someday/Maybe, and Completed columns. Projects move between them by desktop drag-and-drop or the card menu on touch devices. Existing `waiting` Projects remain visible in Active without adding a Waiting column. Cards display open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail reads the Desired outcome from the Project note, resolves its live Actions, and lists ordinary files beneath `support_path`; it does not duplicate Action data into the Project note.
 
 ## Processing, review, and brainstorming
 

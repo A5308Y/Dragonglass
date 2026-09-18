@@ -150,7 +150,7 @@ export class CreateProjectFromInboxModal extends FormModal {
   }
 
   protected renderForm(): void {
-    this.formEl.createEl("h2", { text: this.status === "someday" ? "Create Someday Project" : "Create Project" });
+    this.formEl.createEl("h2", { text: this.status === "someday" ? "Create Someday/Maybe Project" : "Create Project" });
     new Setting(this.formEl).setName("Title").addText((text) => {
       text.setValue(this.title).onChange((value) => (this.title = value));
       window.setTimeout(() => text.inputEl.focus(), 0);
@@ -160,7 +160,7 @@ export class CreateProjectFromInboxModal extends FormModal {
       .setDesc("Optional. What will be true when this Project is complete?")
       .addTextArea((text) => text.setValue(this.desiredOutcome).onChange((value) => (this.desiredOutcome = value)));
     this.formEl.appendChild(this.actionsEl);
-    this.addSubmit(this.status === "someday" ? "Create Someday Project" : "Create Project");
+    this.addSubmit(this.status === "someday" ? "Create Someday/Maybe Project" : "Create Project");
   }
 
   protected async submit(): Promise<void> {
@@ -308,7 +308,7 @@ export class ProjectEditorModal extends FormModal {
     this.formEl.createEl("h2", { text: "Edit Project" });
     addText(this.formEl, "Title", this.title, (value) => (this.title = value));
     new Setting(this.formEl).setName("Status").addDropdown((dropdown) => {
-      for (const status of PROJECT_STATUSES) dropdown.addOption(status, label(status));
+      for (const status of PROJECT_STATUSES) dropdown.addOption(status, status === "someday" ? "Someday/Maybe" : label(status));
       dropdown.setValue(this.status).onChange((value) => (this.status = value as ProjectStatus));
     });
     addText(this.formEl, "Area", this.area, (value) => (this.area = value));

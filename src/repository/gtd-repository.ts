@@ -22,6 +22,8 @@ import { normalizeVaultPath, parentPath, safeName } from "../utils/path";
 import { createUlid } from "../utils/ulid";
 import { GtdIndex } from "./gtd-index";
 
+const PROJECT_SUPPORT_ROOT = "Project Support Material";
+
 export class GtdRepository {
   private queues = new Map<string, Promise<unknown>>();
 
@@ -99,7 +101,7 @@ export class GtdRepository {
     if (!title) throw new Error("A Project title is required.");
     const directory = normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects";
     await this.ensureFolder(directory);
-    const supportPath = this.uniqueFolderPath("Projects", title, item.id);
+    const supportPath = this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, title, item.id);
     await this.ensureFolder(supportPath);
     await this.enqueue(item.file.path, async () => {
       await this.app.fileManager.processFrontMatter(item.file, (frontmatter) => {
@@ -160,7 +162,7 @@ export class GtdRepository {
     const directory = normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects";
     await this.ensureFolder(directory);
     const path = this.uniqueMarkdownPath(directory, input.title, id);
-    const supportPath = this.uniqueFolderPath("Projects", input.title, id);
+    const supportPath = this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, input.title, id);
     await this.ensureFolder(supportPath);
     const frontmatter: Record<string, unknown> = {
       type: "gtd-project",
@@ -219,9 +221,9 @@ export class GtdRepository {
       const oldTitle = project.title;
       let supportPath = changes.supportPath ?? project.supportPath;
       if (changes.title && changes.title.trim() !== oldTitle && project.supportPath) {
-        const generatedOld = normalizePath(`Projects/${safeName(oldTitle)}`);
-        if (project.supportPath === generatedOld) {
-          const target = this.uniqueFolderPath("Projects", changes.title.trim(), project.id, project.supportPath);
+        const generatedOldPaths = [PROJECT_SUPPORT_ROOT, "Projects"].map((root) => normalizePath(`${root}/${safeName(oldTitle)}`));
+        if (generatedOldPaths.includes(project.supportPath)) {
+          const target = this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, changes.title.trim(), project.id, project.supportPath);
           const folder = this.app.vault.getAbstractFileByPath(project.supportPath);
           if (folder instanceof TFolder && target !== project.supportPath) {
             await this.app.vault.rename(folder, target);
@@ -319,7 +321,7 @@ export class GtdRepository {
   }
 
   private async ensureProjectSupportPath(project: Project): Promise<string> {
-    const supportPath = project.supportPath || this.uniqueFolderPath("Projects", project.title, project.id);
+    const supportPath = project.supportPath || this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, project.title, project.id);
     await this.ensureFolder(supportPath);
     if (!project.supportPath) {
       await this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {

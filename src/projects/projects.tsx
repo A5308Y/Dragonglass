@@ -1,17 +1,18 @@
-import { Component, MarkdownRenderer } from "obsidian";
+import { Component, MarkdownRenderer, Menu, Notice, Platform } from "obsidian";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Action, Project, ProjectStatus } from "../domain/types";
 import { useGtdSnapshot } from "../ui/hooks";
 import type { GtdServices } from "../ui/services";
 
-const VISIBLE_STATUSES: ProjectStatus[] = ["active", "waiting", "someday", "completed"];
+const BOARD_COLUMNS = ["active", "someday", "completed"] as const satisfies readonly ProjectStatus[];
+type ProjectBoardStatus = (typeof BOARD_COLUMNS)[number];
 
 export function ProjectsView({ services, initialProjectId = null }: { services: GtdServices; initialProjectId?: string | null }) {
   const snapshot = useGtdSnapshot(services.repository.index);
   const [selectedId, setSelectedId] = useState<string | null>(initialProjectId);
+  const [optimistic, setOptimistic] = useState<Map<string, ProjectStatus>>(new Map());
   useEffect(() => setSelectedId(initialProjectId), [initialProjectId]);
   const selected = selectedId ? snapshot.projectsById.get(selectedId) : undefined;
-  if (selected) return <ProjectDetail services={services} project={selected} onBack={() => setSelectedId(null)} />;
 
   const actionsByProject = useMemo(() => {
     const result = new Map<string, Action[]>();
@@ -24,45 +25,158 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     return result;
   }, [snapshot]);
 
+  const projects = useMemo(() => snapshot.projects.map((project) => {
+    const status = optimistic.get(project.id);
+    return status ? { ...project, status } : project;
+  }), [snapshot, optimistic]);
+
+  if (selected) return <ProjectDetail services={services} project={selected} onBack={() => setSelectedId(null)} />;
+
+  const moveProject = async (id: string, status: ProjectBoardStatus) => {
+    const previous = snapshot.projectsById.get(id)?.status;
+    if (!previous || previous === status) return;
+    setOptimistic((current) => new Map(current).set(id, status));
+    try {
+      await services.repository.setProjectStatus(id, status);
+      await waitForProjectStatus(services, id, status);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not change Project status.");
+    } finally {
+      setOptimistic((current) => {
+        const next = new Map(current);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
   return (
     <div class="dg-view dg-projects-view">
       <header class="dg-view-header">
         <div><h2>Projects</h2><span class="dg-count">{snapshot.projects.length}</span></div>
-        <button class="mod-cta" onClick={services.createProject}>New Project</button>
+        <button class="mod-cta" onClick={() => services.createProject(false)}>New Project</button>
       </header>
-      <div class="dg-project-groups">
-        {VISIBLE_STATUSES.map((status) => {
-          const projects = snapshot.projects.filter((project) => project.status === status).sort((a, b) => a.title.localeCompare(b.title));
+      <div class="dg-board dg-project-board" role="list" aria-label="Project board">
+        {BOARD_COLUMNS.map((status) => {
+          const columnProjects = projects
+            .filter((project) => projectColumn(project.status) === status)
+            .sort((a, b) => a.title.localeCompare(b.title));
           return (
-            <section class="dg-project-group" key={status}>
-              <header class="dg-column-header"><span>{title(status)}</span><span>{projects.length}</span></header>
-              {projects.map((project) => {
-                const actions = actionsByProject.get(project.id) ?? [];
-                const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
-                const next = actions.filter((action) => action.status === "next").length;
-                return (
-                  <article class="dg-project-row" key={project.id}>
-                    <button class="dg-project-title" onClick={() => setSelectedId(project.id)}>{project.title}</button>
-                    <div class="dg-project-stats">
-                      <span>{open} open</span><span>{next} next</span>
-                      {project.reviewed && <span>Reviewed {project.reviewed}</span>}
-                      {open === 0 && project.status === "active" && <span class="dg-warning-text">No open Actions</span>}
-                      {open > 0 && next === 0 && project.status === "active" && <span class="dg-warning-text">No Next Action</span>}
-                    </div>
-                    <div class="dg-row-actions">
-                      <button onClick={() => void services.openFile(project.file)}>Open note</button>
-                      <button onClick={() => services.editProject(project.id)}>Edit</button>
-                    </div>
-                  </article>
-                );
-              })}
-              {projects.length === 0 && <div class="dg-empty-row">No {title(status).toLocaleLowerCase()} Projects.</div>}
+            <section
+              class="dg-column dg-project-column"
+              key={status}
+              data-column={status}
+              onDragOver={(event: DragEvent) => event.preventDefault()}
+              onDrop={(event: DragEvent) => {
+                event.preventDefault();
+                const id = event.dataTransfer?.getData("text/dragonglass-project");
+                if (id) void moveProject(id, status);
+              }}
+            >
+              <header class="dg-column-header"><span>{projectStatusLabel(status)}</span><span>{columnProjects.length}</span></header>
+              <div class="dg-card-list">
+                {columnProjects.map((project) => (
+                  <ProjectCard
+                    key={`${project.id}-${project.file.path}`}
+                    project={project}
+                    actions={actionsByProject.get(project.id) ?? []}
+                    services={services}
+                    onOpen={() => setSelectedId(project.id)}
+                    onMove={moveProject}
+                  />
+                ))}
+                {columnProjects.length === 0 && <div class="dg-empty-row">No {projectStatusLabel(status).toLocaleLowerCase()} Projects.</div>}
+              </div>
             </section>
           );
         })}
       </div>
     </div>
   );
+}
+
+function ProjectCard({
+  project,
+  actions,
+  services,
+  onOpen,
+  onMove,
+}: {
+  key?: string;
+  project: Project;
+  actions: Action[];
+  services: GtdServices;
+  onOpen: () => void;
+  onMove: (id: string, status: ProjectBoardStatus) => Promise<void>;
+}) {
+  const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
+  const next = actions.filter((action) => action.status === "next").length;
+  const openMenu = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const menu = new Menu();
+    for (const status of BOARD_COLUMNS) {
+      menu.addItem((item) => item
+        .setTitle(`${projectColumn(project.status) === status ? "✓ " : ""}${projectStatusLabel(status)}`)
+        .onClick(() => void onMove(project.id, status)));
+    }
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle("Open note").onClick(() => void services.openFile(project.file)));
+    menu.addItem((item) => item.setTitle("Edit…").onClick(() => services.editProject(project.id)));
+    menu.showAtMouseEvent(event);
+  };
+
+  return (
+    <article
+      class="dg-card dg-project-card"
+      role="listitem"
+      data-project-card={project.id}
+      tabIndex={0}
+      draggable={!Platform.isMobile}
+      onDragStart={(event: DragEvent) => event.dataTransfer?.setData("text/dragonglass-project", project.id)}
+      onKeyDown={(event: KeyboardEvent) => {
+        if (event.key === "Enter") { event.preventDefault(); onOpen(); }
+      }}
+    >
+      <div class="dg-card-title-row">
+        <button class="dg-card-title" onClick={onOpen}>{project.title}</button>
+        <button class="dg-icon-button" aria-label={`Actions for ${project.title}`} onClick={openMenu}>•••</button>
+      </div>
+      {project.area && <div class="dg-project-area">{project.area}</div>}
+      <div class="dg-project-metrics">
+        <span><strong>{open}</strong> open</span>
+        <span><strong>{next}</strong> next</span>
+      </div>
+      {project.reviewed && <div class="dg-project-reviewed">Reviewed {project.reviewed}</div>}
+      {project.status === "waiting" && <div class="dg-project-waiting">Waiting · shown with Active</div>}
+      {open === 0 && project.status === "active" && <div class="dg-project-health">No open Actions</div>}
+      {open > 0 && next === 0 && project.status === "active" && <div class="dg-project-health">No Next Action</div>}
+    </article>
+  );
+}
+
+function projectColumn(status: ProjectStatus): ProjectBoardStatus | null {
+  if (status === "active" || status === "waiting") return "active";
+  if (status === "someday" || status === "completed") return status;
+  return null;
+}
+
+function projectStatusLabel(status: ProjectStatus): string {
+  return status === "someday" ? "Someday/Maybe" : title(status);
+}
+
+function waitForProjectStatus(services: GtdServices, id: string, status: ProjectStatus): Promise<void> {
+  if (services.repository.index.getSnapshot().projectsById.get(id)?.status === status) return Promise.resolve();
+  return new Promise((resolve) => {
+    let unsubscribe: () => void = () => {};
+    const timeout = window.setTimeout(() => { unsubscribe(); resolve(); }, 1500);
+    unsubscribe = services.repository.index.subscribe(() => {
+      if (services.repository.index.getSnapshot().projectsById.get(id)?.status !== status) return;
+      window.clearTimeout(timeout);
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 function ProjectDetail({ services, project, onBack }: { services: GtdServices; project: Project; onBack: () => void }) {
@@ -85,7 +199,7 @@ function ProjectDetail({ services, project, onBack }: { services: GtdServices; p
         <div class="dg-detail-heading">
           <button onClick={onBack}>← Projects</button>
           <h2>{project.title}</h2>
-          <span class={`dg-status dg-status-${project.status}`}>{title(project.status)}</span>
+          <span class={`dg-status dg-status-${project.status}`}>{projectStatusLabel(project.status)}</span>
         </div>
         <div class="dg-header-actions">
           <button onClick={() => void services.openFile(project.file)}>Open note</button>

@@ -31,7 +31,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       quickCapture: () => this.quickCapture(),
       openInbox: () => void this.activateView(INBOX_VIEW_TYPE),
       processInboxItem: (item) => this.processInboxItem(item),
-      createProject: () => this.createProject(),
+      createProject: (openAfterCreate = true) => this.createProject(openAfterCreate),
       editAction: (id) => this.editAction(id),
       editProject: (id) => this.editProject(id),
       showProjectDetail: (id) => void this.openProjectDetail(id),
@@ -118,10 +118,10 @@ export default class DragonglassGtdPlugin extends Plugin {
     new ProcessInboxItemModal(this.services, item).open();
   }
 
-  private createProject(): void {
+  private createProject(openAfterCreate = true): void {
     new TextPromptModal(this.app, "New Project", "Project title", async (title) => {
       const file = await this.repository.createProject({ title });
-      await this.openFile(file);
+      if (openAfterCreate) await this.openFile(file);
     }).open();
   }
 

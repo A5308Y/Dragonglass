@@ -120,30 +120,47 @@ export function ProjectReview({ services }: { services: GtdServices }) {
 
   return (
     <div class="dg-view dg-review-view">
-      <header class="dg-view-header">
-        <div><h2>Project Review</h2><span class="dg-count">{total - queue.length} / {total}</span></div>
-        <div class="dg-review-timers"><span>Session {formatTimer(timers.session)}</span><span class={timers.project <= 30 ? "is-overdue" : ""}>Project {formatTimer(timers.project)}</span></div>
+      <header class="dg-view-header dg-review-header">
+        <div class="dg-review-title">
+          <span class="dg-review-eyebrow">Guided workflow</span>
+          <h2>Project Review</h2>
+        </div>
+        <div class="dg-review-timers">
+          <div><span>Session</span><strong>{formatTimer(timers.session)}</strong></div>
+          <div class={timers.project <= 30 ? "is-overdue" : ""}><span>Project budget</span><strong>{formatTimer(timers.project)}</strong></div>
+        </div>
       </header>
       <div class="dg-progress-track"><span style={{ width: `${total ? (total - queue.length) / total * 100 : 100}%` }} /></div>
 
       <div class="dg-review-content">
-        <section class="dg-review-heading">
-          <div>
+        <section class="dg-review-hero">
+          <div class="dg-review-hero-copy">
+            <span class="dg-review-eyebrow">Project {total - queue.length + 1} of {total}</span>
             <button class="dg-project-title" onClick={() => void services.openFile(project.file)}>{project.title}</button>
-            <span>{project.area || project.status}</span>
+            <div class="dg-review-project-meta">
+              <span class="dg-status">{project.area || project.status}</span>
+              <span>{openActions.length} open</span>
+              <span>{nextActions.length} next</span>
+            </div>
           </div>
           {!nextActions.length && <span class="dg-no-next">No Next Action</span>}
         </section>
 
         <section class="dg-review-grid">
-          <div class="dg-review-panel">
-            <h3>Desired outcome</h3>
+          <div class="dg-review-panel dg-review-outcome-panel">
+            <div class="dg-review-panel-heading">
+              <span class="dg-review-panel-icon">◎</span>
+              <div><h3>Desired outcome</h3><p>Reconnect with what done looks like.</p></div>
+            </div>
             <textarea value={desiredOutcome} placeholder="What will be true when this Project is complete?" onInput={(event: Event) => setDesiredOutcome((event.currentTarget as HTMLTextAreaElement).value)} />
-            <button onClick={() => void services.repository.setDesiredOutcome(project.id, desiredOutcome).then(() => new Notice("Desired outcome saved."), (error) => new Notice(message(error)))}>Save outcome</button>
+            <div class="dg-review-panel-footer"><span>Markdown is written to the Project note.</span><button onClick={() => void services.repository.setDesiredOutcome(project.id, desiredOutcome).then(() => new Notice("Desired outcome saved."), (error) => new Notice(message(error)))}>Save outcome</button></div>
           </div>
 
-          <div class="dg-review-panel">
-            <h3>Project pulse</h3>
+          <div class="dg-review-panel dg-review-pulse-panel">
+            <div class="dg-review-panel-heading">
+              <span class="dg-review-panel-icon">◌</span>
+              <div><h3>Project pulse</h3><p>Capture the current texture of the work.</p></div>
+            </div>
             <div class="dg-emoji-row">{DIARY_EMOJIS.map(([emoji, label]) => <button title={label} onClick={() => void addDiary(`${emoji} ${label}`)}><span>{emoji}</span><small>{label}</small></button>)}</div>
             <div class="dg-inline-form">
               <input value={diaryInput} placeholder="Write a diary entry…" onInput={(event: Event) => setDiaryInput((event.currentTarget as HTMLInputElement).value)} onKeyDown={(event: KeyboardEvent) => { if (event.key === "Enter") void addDiary(diaryInput); }} />
@@ -152,8 +169,12 @@ export function ProjectReview({ services }: { services: GtdServices }) {
           </div>
         </section>
 
-        <section class={`dg-review-panel${nextActions.length ? "" : " needs-action"}`}>
-          <div class="dg-section-heading"><h3>Open Actions</h3><span class="dg-count">{openActions.length}</span></div>
+        <section class={`dg-review-panel dg-review-actions-panel${nextActions.length ? "" : " needs-action"}`}>
+          <div class="dg-review-panel-heading dg-review-panel-heading-row">
+            <span class="dg-review-panel-icon">→</span>
+            <div><h3>Open Actions</h3><p>Confirm that the next visible step is concrete.</p></div>
+            <span class="dg-review-count">{openActions.length}</span>
+          </div>
           <div class="dg-review-actions">
             {openActions.map((action) => <label key={action.id}><input type="checkbox" onChange={() => void completeAction(action)} /><button onClick={() => void services.openFile(action.file)}>{action.title}</button><span>{action.status}{action.context ? ` · @${action.context}` : ""}</span></label>)}
             {!openActions.length && <div class="dg-empty-row">No open Actions.</div>}
@@ -167,20 +188,32 @@ export function ProjectReview({ services }: { services: GtdServices }) {
         </section>
 
         <section class="dg-review-grid">
-          <div class="dg-review-panel">
-            <div class="dg-section-heading"><h3>Diary</h3><span class="dg-count">{diary.length}</span></div>
+          <div class="dg-review-panel dg-review-diary-panel">
+            <div class="dg-review-panel-heading dg-review-panel-heading-row">
+              <span class="dg-review-panel-icon">≡</span>
+              <div><h3>Diary</h3><p>Recent observations and decisions.</p></div>
+              <span class="dg-review-count">{diary.length}</span>
+            </div>
             <div class="dg-diary-list">{diary.map((entry, index) => <div key={`${entry.timestamp}-${index}`}><span>{entry.timestamp}</span><p>{entry.text}</p></div>)}{!diary.length && <span class="dg-muted">No entries yet.</span>}</div>
           </div>
           <div class="dg-review-panel dg-review-stats">
-            <h3>Project material</h3>
-            <span>{doneActions.length} completed Action{doneActions.length === 1 ? "" : "s"}</span>
-            <span>{services.repository.supportFiles(project).length} support file{services.repository.supportFiles(project).length === 1 ? "" : "s"}</span>
+            <div class="dg-review-panel-heading">
+              <span class="dg-review-panel-icon">◇</span>
+              <div><h3>Project material</h3><p>A quick inventory before moving on.</p></div>
+            </div>
+            <div class="dg-review-stat-grid">
+              <div><strong>{doneActions.length}</strong><span>completed Action{doneActions.length === 1 ? "" : "s"}</span></div>
+              <div><strong>{services.repository.supportFiles(project).length}</strong><span>support file{services.repository.supportFiles(project).length === 1 ? "" : "s"}</span></div>
+            </div>
           </div>
         </section>
 
         <div class="dg-workflow-footer">
-          <button onClick={() => setQueue((current) => current.length > 1 ? [...current.slice(1), current[0]!] : current)}>Skip</button>
-          <button class="mod-cta" onClick={() => void nextProject()}>Mark reviewed and continue →</button>
+          <div><strong>Ready to move on?</strong><span>The Desired outcome is saved automatically.</span></div>
+          <div class="dg-review-footer-actions">
+            <button onClick={() => setQueue((current) => current.length > 1 ? [...current.slice(1), current[0]!] : current)}>Review later</button>
+            <button class="mod-cta" onClick={() => void nextProject()}>Mark reviewed and continue →</button>
+          </div>
         </div>
       </div>
     </div>
