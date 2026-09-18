@@ -11,7 +11,6 @@ export const ACTION_STATUSES = [
 
 export const PROJECT_STATUSES = [
   "active",
-  "waiting",
   "someday",
   "completed",
   "cancelled",

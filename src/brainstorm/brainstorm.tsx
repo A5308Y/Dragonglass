@@ -23,8 +23,12 @@ export function BrainstormView({ services }: { services: GtdServices }) {
     [snapshot],
   );
   const [selectedId, setSelectedId] = useState<string | null>(() => randomItem(candidates)?.id ?? null);
-  const action = candidates.find((candidate) => candidate.id === selectedId) ?? candidates[0];
+  const [standaloneTopic, setStandaloneTopic] = useState("");
+  const [standalone, setStandalone] = useState(false);
+  const action = standalone ? undefined : candidates.find((candidate) => candidate.id === selectedId) ?? candidates[0];
   const project = action?.projectId ? snapshot.projectsById.get(action.projectId) : undefined;
+  const sessionKey = standalone ? `standalone:${standaloneTopic}` : action?.id;
+  const sessionActive = Boolean(action || standalone);
   const [desiredOutcome, setDesiredOutcome] = useState("");
   const [ideas, setIdeas] = useState("");
   const [words, setWords] = useState(() => pickRandom(WORDS, 10));
@@ -33,9 +37,10 @@ export function BrainstormView({ services }: { services: GtdServices }) {
   const ideasRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    if (standalone) return;
     if (!action) setSelectedId(null);
     else if (action.id !== selectedId) setSelectedId(action.id);
-  }, [action?.id, selectedId]);
+  }, [standalone, action?.id, selectedId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,12 +50,13 @@ export function BrainstormView({ services }: { services: GtdServices }) {
     setSeconds(300);
     if (project) void services.repository.readDesiredOutcome(project).then((value) => { if (!cancelled) setDesiredOutcome(value); });
     return () => { cancelled = true; };
-  }, [action?.id]);
+  }, [sessionKey]);
 
   useEffect(() => {
+    if (!sessionActive) return;
     const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
-  }, [action?.id]);
+  }, [sessionKey, sessionActive]);
 
   const shuffleTask = () => {
     if (!candidates.length) return;
@@ -59,11 +65,18 @@ export function BrainstormView({ services }: { services: GtdServices }) {
   };
 
   const save = async () => {
-    if (!action || !ideas.trim()) return;
+    if (!ideas.trim() || (!action && !standalone)) return;
     setSaving(true);
     try {
-      await services.repository.saveBrainstorm(action.id, ideas, project ? desiredOutcome : undefined);
-      new Notice(project ? "Brainstorm saved to Project support material; Action completed." : "Brainstorm captured to Inbox; Action completed.");
+      if (action) {
+        await services.repository.saveBrainstorm(action.id, ideas, project ? desiredOutcome : undefined);
+        new Notice(project ? "Brainstorm saved to Project support material; Action completed." : "Brainstorm captured to Inbox; Action completed.");
+      } else {
+        await services.repository.saveStandaloneBrainstorm(standaloneTopic, ideas);
+        new Notice("Standalone brainstorm captured to Inbox.");
+        setStandalone(false);
+        setStandaloneTopic("");
+      }
       setIdeas("");
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Could not save the brainstorm.");
@@ -93,21 +106,44 @@ export function BrainstormView({ services }: { services: GtdServices }) {
     <div class="dg-view dg-brainstorm-view">
       <header class="dg-view-header">
         <div><h2>Brainstorm</h2><span class="dg-count">{candidates.length}</span></div>
-        <span class={seconds === 0 ? "dg-brainstorm-timer is-done" : "dg-brainstorm-timer"}>{seconds === 0 ? "✓ five minutes reached" : formatTimer(seconds)}</span>
+        {sessionActive && <span class={seconds === 0 ? "dg-brainstorm-timer is-done" : "dg-brainstorm-timer"}>{seconds === 0 ? "✓ five minutes reached" : formatTimer(seconds)}</span>}
       </header>
 
-      {!action ? (
-        <div class="dg-workflow-complete"><span>💡</span><h3>No brainstorm Actions</h3><p>Create an open Action whose title contains “brainstorm” to start a session.</p></div>
+      {!sessionActive ? (
+        <div class="dg-workflow-complete dg-brainstorm-empty">
+          <span>💡</span>
+          <h3>Start a standalone brainstorm</h3>
+          <p>No “brainstorm” Action is required. The result will be captured as an Inbox Item.</p>
+          <div class="dg-brainstorm-start">
+            <input
+              value={standaloneTopic}
+              placeholder="What do you want to brainstorm?"
+              onInput={(event: Event) => setStandaloneTopic((event.currentTarget as HTMLInputElement).value)}
+              onKeyDown={(event: KeyboardEvent) => {
+                if (event.key === "Enter" && standaloneTopic.trim()) setStandalone(true);
+              }}
+            />
+            <button class="mod-cta" disabled={!standaloneTopic.trim()} onClick={() => setStandalone(true)}>Start brainstorming</button>
+          </div>
+        </div>
       ) : (
         <div class="dg-brainstorm-content">
           <section class="dg-brainstorm-task">
-            <div><span>Brainstorm this</span><h3>{action.title}</h3>{project ? <button onClick={() => services.showProjectDetail(project.id)}>{project.title}</button> : <small>No Project — output will return to Inbox</small>}</div>
-            <button onClick={shuffleTask}>Shuffle</button>
+            <div>
+              <span>{standalone ? "Standalone topic" : "Brainstorm this"}</span>
+              <h3>{standalone ? standaloneTopic : action?.title}</h3>
+              {project
+                ? <button onClick={() => services.showProjectDetail(project.id)}>{project.title}</button>
+                : <small>{standalone ? "No source Action — output will return to Inbox" : "No Project — output will return to Inbox"}</small>}
+            </div>
+            {standalone
+              ? <button onClick={() => setStandalone(false)}>Change topic</button>
+              : <button onClick={shuffleTask}>Shuffle</button>}
           </section>
 
           <section class="dg-word-bank">
             <div class="dg-section-heading"><h3>Random prompts</h3><button onClick={() => setWords(pickRandom(WORDS, 10))}>Shuffle words</button></div>
-            <div>{words.map((word) => <button onClick={() => insertWord(word)}>{word}</button>)}</div>
+            <div>{words.map((word) => <button key={word} onClick={() => insertWord(word)}>{word}</button>)}</div>
           </section>
 
           {project && (
@@ -124,7 +160,7 @@ export function BrainstormView({ services }: { services: GtdServices }) {
 
           <div class="dg-workflow-footer">
             <span>{project ? `Saves into ${project.title}'s support folder` : "Creates a new Inbox Item"}</span>
-            <button class="mod-cta" disabled={!ideas.trim() || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save ideas and complete Action"}</button>
+            <button class="mod-cta" disabled={!ideas.trim() || saving} onClick={() => void save()}>{saving ? "Saving…" : standalone ? "Save ideas to Inbox" : "Save ideas and complete Action"}</button>
           </div>
         </div>
       )}

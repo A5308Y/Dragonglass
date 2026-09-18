@@ -84,7 +84,9 @@ export function parseInboxItem(frontmatter: Frontmatter, file: TFile, legacyActi
 }
 
 export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
-  const status = frontmatter.status;
+  // Treat the removed Project-only `waiting` status as Active while the
+  // startup migration rewrites the source frontmatter.
+  const status = frontmatter.status === "waiting" ? "active" : frontmatter.status;
   if (!isProjectStatus(status)) throw new Error("Invalid 'status'");
   const project: Project = {
     type: "gtd-project",

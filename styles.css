@@ -368,13 +368,11 @@
   font-size: var(--font-ui-small);
 }
 .dg-project-reviewed,
-.dg-project-waiting,
 .dg-project-health {
   margin-top: 7px;
   font-size: var(--font-ui-smaller);
 }
 .dg-project-reviewed { color: var(--text-faint); }
-.dg-project-waiting { color: var(--text-muted); }
 .dg-project-health {
   padding: 5px 7px;
   border-radius: var(--radius-s);
@@ -642,14 +640,6 @@
 }
 .dg-emoji-row button:hover { border-color: var(--interactive-accent); background: var(--background-modifier-hover); }
 .dg-emoji-row span { display: block; font-size: 18px; }
-.dg-emoji-row small {
-  display: block;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .dg-inline-form,
 .dg-action-capture {
   display: flex;
@@ -660,6 +650,10 @@
 .dg-inline-form input,
 .dg-action-capture input:first-child { flex: 1; min-width: 0; }
 .dg-action-capture input:nth-child(2) { width: 150px; }
+.dg-inline-form input,
+.dg-action-capture input {
+  border-radius: var(--input-radius, var(--radius-s));
+}
 .dg-review-actions { margin-top: 12px; border-bottom: 1px solid var(--background-modifier-border); }
 .dg-review-actions label {
   display: grid;
@@ -732,6 +726,19 @@
   font-variant-numeric: tabular-nums;
 }
 .dg-brainstorm-timer.is-done { color: var(--text-success); }
+.dg-brainstorm-empty { width: min(560px, 100%); }
+.dg-brainstorm-start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.dg-brainstorm-start input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  border-radius: var(--input-radius, var(--radius-s));
+}
 .dg-brainstorm-task h3 { margin-top: 3px; }
 .dg-brainstorm-task button,
 .dg-word-bank button { min-height: 30px; }
@@ -825,6 +832,9 @@
   .dg-review-content > .dg-workflow-footer { bottom: -8px; margin: 14px -8px -8px; padding: 12px 8px; }
   .dg-review-footer-actions { align-items: stretch; flex-direction: column-reverse; }
   .dg-workflow-footer button { min-height: 42px; }
+  .dg-brainstorm-start { align-items: stretch; flex-direction: column; }
+  .dg-brainstorm-start input,
+  .dg-brainstorm-start button { width: 100%; min-height: 42px; }
   .modal.dg-modal-shell { width: calc(100vw - 12px); max-width: none; }
   .dg-modal .setting-item { display: flex; align-items: stretch; flex-direction: column; gap: 6px; }
   .dg-modal .setting-item-control { width: 100%; }

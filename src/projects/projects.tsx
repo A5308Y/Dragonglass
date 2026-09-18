@@ -148,7 +148,6 @@ function ProjectCard({
         <span><strong>{next}</strong> next</span>
       </div>
       {project.reviewed && <div class="dg-project-reviewed">Reviewed {project.reviewed}</div>}
-      {project.status === "waiting" && <div class="dg-project-waiting">Waiting · shown with Active</div>}
       {open === 0 && project.status === "active" && <div class="dg-project-health">No open Actions</div>}
       {open > 0 && next === 0 && project.status === "active" && <div class="dg-project-health">No Next Action</div>}
     </article>
@@ -156,7 +155,7 @@ function ProjectCard({
 }
 
 function projectColumn(status: ProjectStatus): ProjectBoardStatus | null {
-  if (status === "active" || status === "waiting") return "active";
+  if (status === "active") return "active";
   if (status === "someday" || status === "completed") return status;
   return null;
 }

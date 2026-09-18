@@ -50,11 +50,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addSettingTab(new GtdSettingTab(this.app, this));
     this.registerCommands();
 
-    this.app.workspace.onLayoutReady(() => {
-      this.index.initialize(this);
-      const count = this.index.getSnapshot().issues.length;
-      if (count) new Notice(`Dragonglass GTD found ${count} file${count === 1 ? "" : "s"} with invalid or duplicate metadata.`);
-    });
+    this.app.workspace.onLayoutReady(() => void this.initializeIndex());
   }
 
   onunload(): void {
@@ -104,6 +100,32 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
     this.addCommand({ id: "quick-capture-inbox-item", name: "Quick Capture Inbox Item", callback: () => this.quickCapture() });
     this.addCommand({ id: "new-project", name: "New Project", callback: () => this.createProject() });
+  }
+
+  private async initializeIndex(): Promise<void> {
+    let migrated = 0;
+    let failed = 0;
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      if (frontmatter?.type !== "gtd-project" || frontmatter.status !== "waiting") continue;
+      try {
+        await this.app.fileManager.processFrontMatter(file, (properties) => {
+          if (properties.type === "gtd-project" && properties.status === "waiting") {
+            properties.status = "active";
+            properties.completed = null;
+          }
+        });
+        migrated += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    this.index.initialize(this);
+    if (migrated) new Notice(`Migrated ${migrated} waiting Project${migrated === 1 ? "" : "s"} to Active.`);
+    if (failed) new Notice(`Could not migrate ${failed} waiting Project${failed === 1 ? "" : "s"}.`);
+    const count = this.index.getSnapshot().issues.length;
+    if (count) new Notice(`Dragonglass GTD found ${count} file${count === 1 ? "" : "s"} with invalid or duplicate metadata.`);
   }
 
   private quickCapture(): void {

@@ -314,6 +314,14 @@ export class GtdRepository {
     return file;
   }
 
+  async saveStandaloneBrainstorm(topic: string, ideas: string): Promise<TFile> {
+    const cleanTopic = topic.trim();
+    const cleanIdeas = ideas.trim();
+    if (!cleanTopic) throw new Error("A brainstorming topic is required.");
+    if (!cleanIdeas) throw new Error("Brainstorming notes are required.");
+    return this.createInboxItem(`Brainstorm - ${cleanTopic}`, `## Ideas\n\n${cleanIdeas}`);
+  }
+
   supportFiles(project: Project): TFile[] {
     if (!project.supportPath) return [];
     const prefix = `${project.supportPath}/`;

@@ -161,7 +161,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
               <span class="dg-review-panel-icon">◌</span>
               <div><h3>Project pulse</h3><p>Capture the current texture of the work.</p></div>
             </div>
-            <div class="dg-emoji-row">{DIARY_EMOJIS.map(([emoji, label]) => <button title={label} onClick={() => void addDiary(`${emoji} ${label}`)}><span>{emoji}</span><small>{label}</small></button>)}</div>
+            <div class="dg-emoji-row">{DIARY_EMOJIS.map(([emoji, label]) => <button title={label} aria-label={label} onClick={() => void addDiary(`${emoji} ${label}`)}><span>{emoji}</span></button>)}</div>
             <div class="dg-inline-form">
               <input value={diaryInput} placeholder="Write a diary entry…" onInput={(event: Event) => setDiaryInput((event.currentTarget as HTMLInputElement).value)} onKeyDown={(event: KeyboardEvent) => { if (event.key === "Enter") void addDiary(diaryInput); }} />
               <button disabled={!diaryInput.trim()} onClick={() => void addDiary(diaryInput)}>Add</button>
@@ -223,7 +223,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
 function reviewQueue(snapshot: GtdSnapshot): string[] {
   const today = localDate();
   return snapshot.projects
-    .filter((project) => (project.status === "active" || project.status === "waiting") && project.reviewed !== today)
+    .filter((project) => project.status === "active" && project.reviewed !== today)
     .sort((left, right) => {
       const leftHasNext = snapshot.actions.some((action) => action.projectId === left.id && action.status === "next");
       const rightHasNext = snapshot.actions.some((action) => action.projectId === right.id && action.status === "next");
