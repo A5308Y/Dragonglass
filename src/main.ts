@@ -6,6 +6,7 @@ import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
 import { GtdSettingTab } from "./settings";
 import { ActionEditorModal, NewActionModal, NewProjectModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
+import { OpenProjectModal } from "./ui/open-project";
 import type { GtdServices } from "./ui/services";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, GtdBrainstormView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
 
@@ -100,6 +101,12 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "open-action-board", name: "Open Action Board", callback: () => void this.activateView(BOARD_VIEW_TYPE) });
     this.addCommand({ id: "open-inbox", name: "Open Inbox", callback: () => void this.activateView(INBOX_VIEW_TYPE) });
     this.addCommand({ id: "open-projects", name: "Open Projects", callback: () => void this.activateView(PROJECTS_VIEW_TYPE) });
+    this.addCommand({
+      id: "open-project",
+      name: "Open Project",
+      hotkeys: [{ modifiers: ["Mod"], key: "k" }],
+      callback: () => this.openProjectPicker(),
+    });
     this.addCommand({ id: "start-project-review", name: "Start Project Review", callback: () => void this.activateView(REVIEW_VIEW_TYPE) });
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
     this.addCommand({ id: "quick-capture-inbox-item", name: "Quick Capture Inbox Item", callback: () => this.quickCapture() });
@@ -177,6 +184,12 @@ export default class DragonglassGtdPlugin extends Plugin {
     const project = this.index.getSnapshot().projectsById.get(id);
     if (!project) return void new Notice("This Project is missing or has a duplicate ID.");
     new ProjectEditorModal(this.services, project).open();
+  }
+
+  private openProjectPicker(): void {
+    const projects = this.index.getSnapshot().projects;
+    if (!projects.length) return void new Notice("There are no Projects to open.");
+    new OpenProjectModal(this.app, projects, (project) => void this.openProjectDetail(project.id)).open();
   }
 
   private async openFile(file: TFile): Promise<void> {

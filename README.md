@@ -96,6 +96,7 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 - **GTD: Open Action Board**
 - **GTD: Open Inbox**
 - **GTD: Open Projects**
+- **GTD: Open Project** (fuzzy Project picker; Cmd/Ctrl+K by default)
 - **GTD: Start Project Review**
 - **GTD: Open Brainstorm**
 - **GTD: Quick Capture Inbox Item**
