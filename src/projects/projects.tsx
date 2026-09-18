@@ -240,6 +240,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const children = snapshot.projects
     .filter((candidate) => candidate.parentProjectId === project.id)
     .sort((left, right) => (breadcrumbs.get(left.id) ?? left.title).localeCompare(breadcrumbs.get(right.id) ?? right.title));
+  const hasHierarchy = Boolean(parent || project.parentProjectId || children.length > 0);
 
   return (
     <div class="dg-view dg-project-detail">
@@ -256,45 +257,64 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
           <button onClick={() => services.editProject(project.id)}>Edit</button>
         </div>
       </header>
-      {(parent || project.parentProjectId || children.length > 0) && <section class="dg-detail-section dg-project-hierarchy">
-        <div class="dg-section-heading"><h3>Project hierarchy</h3><span>{breadcrumb}</span></div>
-        {parent
-          ? <div><span>Parent</span><button onClick={() => onSelect(parent.id)}>{breadcrumbs.get(parent.id) ?? parent.title}</button></div>
-          : project.parentProjectId && <div class="dg-missing">Missing parent Project: {project.parentProjectId}</div>}
-        {children.length > 0 && <div><span>Sub-projects</span><div class="dg-hierarchy-links">{children.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}>{breadcrumbs.get(child.id) ?? child.title}</button>)}</div></div>}
-      </section>}
-      <section class="dg-detail-section">
-        <h3>Desired outcome</h3>
-        {outcome ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} /> : <div class="dg-muted">No desired outcome written yet.</div>}
-      </section>
-      <section class="dg-detail-section">
-        <div class="dg-section-heading"><h3>Open Actions</h3><span>{open.length}</span></div>
-        <ActionRows actions={open} services={services} />
-      </section>
-      {completed.length > 0 && <section class="dg-detail-section">
-        <button class="dg-disclosure" onClick={() => setShowCompleted(!showCompleted)}>{showCompleted ? "▾" : "▸"} Completed Actions ({completed.length})</button>
-        {showCompleted && <ActionRows actions={completed} services={services} />}
-      </section>}
-      <section class="dg-detail-section">
-        <h3>Support material</h3>
-        <div class="dg-path">{project.supportPath ?? "No support folder configured"}</div>
-        <div class="dg-support-files">
-          {support.map((file) => <button key={file.path} onClick={() => void services.openFile(file)}>{file.path.slice((project.supportPath?.length ?? -1) + 1)}</button>)}
-          {project.supportPath && support.length === 0 && <span class="dg-muted">The support folder is empty.</span>}
+      <main class="dg-project-detail-content">
+        <div class={`dg-project-overview-grid${hasHierarchy ? "" : " is-single"}`}>
+          <section class="dg-detail-section dg-project-outcome-panel">
+            <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Outcome</span><h3>Desired outcome</h3></div></div>
+            {outcome ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} /> : <div class="dg-detail-empty">No desired outcome written yet.</div>}
+          </section>
+          {hasHierarchy && <section class="dg-detail-section dg-project-hierarchy">
+            <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Structure</span><h3>Project hierarchy</h3></div></div>
+            <div class="dg-project-breadcrumb" title={breadcrumb}>{breadcrumb}</div>
+            {parent
+              ? <div><span>Parent</span><button onClick={() => onSelect(parent.id)}>{breadcrumbs.get(parent.id) ?? parent.title}</button></div>
+              : project.parentProjectId && <div class="dg-missing">Missing parent Project: {project.parentProjectId}</div>}
+            {children.length > 0 && <div><span>Sub-projects</span><div class="dg-hierarchy-links">{children.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}>{breadcrumbs.get(child.id) ?? child.title}</button>)}</div></div>}
+          </section>}
         </div>
-      </section>
+
+        <section class="dg-detail-section dg-project-actions-panel">
+          <div class="dg-detail-section-heading">
+            <div><span class="dg-detail-eyebrow">Work</span><h3>Open Actions</h3></div>
+            <span class="dg-detail-count">{open.length}</span>
+          </div>
+          <ActionRows actions={open} services={services} emptyText="No open Actions for this Project." />
+        </section>
+
+        {completed.length > 0 && <section class="dg-detail-section dg-completed-actions-panel">
+          <button class="dg-disclosure" onClick={() => setShowCompleted(!showCompleted)}>
+            <span>{showCompleted ? "▾" : "▸"} Completed Actions</span><span class="dg-detail-count">{completed.length}</span>
+          </button>
+          {showCompleted && <ActionRows actions={completed} services={services} />}
+        </section>}
+
+        <section class="dg-detail-section dg-support-panel">
+          <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Support material</h3></div><span class="dg-detail-count">{support.length}</span></div>
+          <div class="dg-path">{project.supportPath ?? "No support folder configured"}</div>
+          <div class="dg-support-files">
+            {support.map((file) => <button key={file.path} onClick={() => void services.openFile(file)}>{file.path.slice((project.supportPath?.length ?? -1) + 1)}</button>)}
+            {project.supportPath && support.length === 0 && <span class="dg-muted">The support folder is empty.</span>}
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
 
-function ActionRows({ actions, services }: { actions: Action[]; services: GtdServices }) {
-  if (!actions.length) return <div class="dg-empty-row">No Actions.</div>;
+function ActionRows({ actions, services, emptyText = "No Actions." }: { actions: Action[]; services: GtdServices; emptyText?: string }) {
+  if (!actions.length) return <div class="dg-project-actions-empty"><span>✓</span><div><strong>Nothing here</strong><small>{emptyText}</small></div></div>;
   return <div class="dg-action-rows">{actions.sort((a, b) => a.title.localeCompare(b.title)).map((action) => (
     <div class="dg-action-row" key={action.id}>
-      <button onClick={() => void services.openFile(action.file)}>{action.title}</button>
-      <span>{title(action.status)}</span>
-      {action.due && <span>{action.due}</span>}
-      <button onClick={() => services.editAction(action.id)}>Edit</button>
+      <div class="dg-action-row-main">
+        <button class="dg-action-row-title" onClick={() => void services.openFile(action.file)}>{action.title}</button>
+        <div class="dg-action-row-meta">
+          <span class={`dg-action-status dg-action-status-${action.status}`}>{title(action.status)}</span>
+          {action.context && <span>@{action.context}</span>}
+          {action.energy && <span>{action.energy} energy</span>}
+          {action.due && <span>Due {action.due}</span>}
+        </div>
+      </div>
+      <button class="dg-action-row-edit" aria-label={`Edit ${action.title}`} onClick={() => services.editAction(action.id)}>Edit</button>
     </div>
   ))}</div>;
 }
