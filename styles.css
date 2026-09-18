@@ -440,7 +440,11 @@
   background: var(--background-modifier-hover);
   font-weight: var(--font-medium);
 }
-.dg-action-status-next { color: var(--text-accent) !important; background: color-mix(in srgb, var(--interactive-accent) 12%, transparent); }
+.dg-action-status-next {
+  padding: 0;
+  color: var(--text-accent) !important;
+  background: transparent;
+}
 .dg-action-status-done { color: var(--text-success) !important; background: color-mix(in srgb, var(--color-green) 12%, transparent); }
 .dg-action-row-edit {
   min-height: 30px;
