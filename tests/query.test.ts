@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
 import type { Action, GtdSnapshot, Project } from "../src/domain/types";
-import { isActionStatus } from "../src/domain/validation";
+import { isActionStatus, parseAction } from "../src/domain/validation";
 import { buildBoard, filterActions, matchesFilter, sortActions } from "../src/state/query";
 import { createDefaultViews } from "../src/state/defaults";
 
@@ -17,8 +17,20 @@ const projects = new Map([[project.id, project]]);
 describe("query model", () => {
   it("does not treat inbox as an Action status", () => {
     expect(isActionStatus("inbox")).toBe(false);
+    expect(isActionStatus("someday")).toBe(false);
     expect(isActionStatus("next")).toBe(true);
     expect(JSON.stringify(createDefaultViews())).not.toContain("inbox");
+    expect(JSON.stringify(createDefaultViews())).not.toContain("someday");
+  });
+
+  it("rejects a manually written Someday Action as invalid metadata", () => {
+    expect(() => parseAction({
+      type: "gtd-action",
+      id: "A-LEGACY",
+      title: "Old someday item",
+      status: "someday",
+      created: "2026-09-18",
+    }, file("Legacy.md"))).toThrow("Invalid 'status'");
   });
 
   it("combines filters with AND", () => {

@@ -17,7 +17,7 @@ import { useGtdSnapshot } from "../ui/hooks";
 import { TextPromptModal, label } from "../ui/modals";
 import type { GtdServices } from "../ui/services";
 
-const STATUS_COLUMNS: ActionStatus[] = ["next", "waiting", "scheduled", "someday", "done"];
+const STATUS_COLUMNS: ActionStatus[] = ["next", "waiting", "scheduled", "done"];
 
 export function ActionBoard({ services }: { services: GtdServices }) {
   const snapshot = useGtdSnapshot(services.repository.index);

@@ -105,27 +105,44 @@ export default class DragonglassGtdPlugin extends Plugin {
   }
 
   private async initializeIndex(): Promise<void> {
-    let migrated = 0;
-    let failed = 0;
+    let migratedProjects = 0;
+    let failedProjects = 0;
+    let migratedActions = 0;
+    let failedActions = 0;
     for (const file of this.app.vault.getMarkdownFiles()) {
       const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-      if (frontmatter?.type !== "gtd-project" || frontmatter.status !== "waiting") continue;
-      try {
-        await this.app.fileManager.processFrontMatter(file, (properties) => {
-          if (properties.type === "gtd-project" && properties.status === "waiting") {
-            properties.status = "active";
-            properties.completed = null;
-          }
-        });
-        migrated += 1;
-      } catch {
-        failed += 1;
+      if (frontmatter?.type === "gtd-project" && frontmatter.status === "waiting") {
+        try {
+          await this.app.fileManager.processFrontMatter(file, (properties) => {
+            if (properties.type === "gtd-project" && properties.status === "waiting") {
+              properties.status = "active";
+              properties.completed = null;
+            }
+          });
+          migratedProjects += 1;
+        } catch {
+          failedProjects += 1;
+        }
+      } else if (frontmatter?.type === "gtd-action" && frontmatter.status === "someday") {
+        try {
+          await this.app.fileManager.processFrontMatter(file, (properties) => {
+            if (properties.type === "gtd-action" && properties.status === "someday") {
+              properties.status = "next";
+              properties.completed = null;
+            }
+          });
+          migratedActions += 1;
+        } catch {
+          failedActions += 1;
+        }
       }
     }
 
     this.index.initialize(this);
-    if (migrated) new Notice(`Migrated ${migrated} waiting Project${migrated === 1 ? "" : "s"} to Active.`);
-    if (failed) new Notice(`Could not migrate ${failed} waiting Project${failed === 1 ? "" : "s"}.`);
+    if (migratedProjects) new Notice(`Migrated ${migratedProjects} waiting Project${migratedProjects === 1 ? "" : "s"} to Active.`);
+    if (failedProjects) new Notice(`Could not migrate ${failedProjects} waiting Project${failedProjects === 1 ? "" : "s"}.`);
+    if (migratedActions) new Notice(`Migrated ${migratedActions} Someday Action${migratedActions === 1 ? "" : "s"} to Next.`);
+    if (failedActions) new Notice(`Could not migrate ${failedActions} Someday Action${failedActions === 1 ? "" : "s"}.`);
     const count = this.index.getSnapshot().issues.length;
     if (count) new Notice(`Dragonglass GTD found ${count} file${count === 1 ? "" : "s"} with invalid or duplicate metadata.`);
   }
@@ -177,20 +194,20 @@ export default class DragonglassGtdPlugin extends Plugin {
 
 function migrateSavedViews(views: SavedView[]): SavedView[] {
   return views
-    .filter((view) => view.id !== "default-inbox" && !view.filters.some((filter) =>
+    .filter((view) => view.id !== "default-inbox" && view.id !== "default-someday" && !view.filters.some((filter) =>
       filter.kind === "value"
       && filter.field === "status"
       && filter.operator === "in"
       && filter.values.length > 0
-      && filter.values.every((value) => value === "inbox")
-    ))
+      && filter.values.every((value) => value === "inbox" || value === "someday")
+    ) && !(view.visibleColumns?.length && view.visibleColumns.every((column) => column === "inbox" || column === "someday")))
     .map((view) => ({
       ...view,
       filters: view.filters.flatMap((filter) => {
         if (filter.kind !== "value" || filter.field !== "status") return [filter];
-        const values = filter.values.filter((value) => value !== "inbox");
+        const values = filter.values.filter((value) => value !== "inbox" && value !== "someday");
         return values.length ? [{ ...filter, values }] : [];
       }),
-      visibleColumns: view.visibleColumns?.filter((column) => column !== "inbox") ?? null,
+      visibleColumns: view.visibleColumns?.filter((column) => column !== "inbox" && column !== "someday") ?? null,
     }));
 }

@@ -43,6 +43,8 @@ created: 2026-09-18
 
 Inbox Items have no status. Processing one explicitly transforms that same Markdown file into an Action, moves it to the Actions directory, and preserves its stable ID and note body. The original capture date is retained as `captured`; the Action receives its own `created` date. `inbox` is not a valid Action status.
 
+Supported Action statuses are `next`, `waiting`, `scheduled`, `done`, and `cancelled`. Someday/Maybe is represented by a Project status, never an Action status. Legacy Actions with `status: someday` are migrated to `next` when the plugin starts.
+
 The processing view puts Project, Project Vision, Next Action, and Context fields above four immediate dispositions. Project and Context support fuzzy matching while still accepting new names. A decision either creates a Next Action, files the source note as Project support or General Reference (optionally also creating a Next Action), creates a Someday/Maybe Project with support material and a Next Action, or sends the source note to Obsidian's trash. There is no Skip action and no follow-up modal after choosing a disposition.
 
 For compatibility, legacy files with `type: gtd-action` and `status: inbox` appear in the dedicated Inbox view rather than on the Action board. Processing them rewrites them into the current Action format.

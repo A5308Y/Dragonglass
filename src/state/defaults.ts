@@ -35,20 +35,12 @@ export function createDefaultViews(): SavedView[] {
       visibleColumns: null,
     },
     {
-      id: "default-someday",
-      name: "Someday",
-      filters: [{ kind: "value", field: "status", operator: "in", values: ["someday"] }],
-      groupBy: "status",
-      sort: DEFAULT_SORT,
-      visibleColumns: ["someday"],
-    },
-    {
       id: "default-all-open",
       name: "All Open",
       filters: [{ kind: "value", field: "status", operator: "notIn", values: ["done", "cancelled"] }],
       groupBy: "status",
       sort: DEFAULT_SORT,
-      visibleColumns: ["next", "waiting", "scheduled", "someday"],
+      visibleColumns: ["next", "waiting", "scheduled"],
     },
   ];
 }
@@ -63,6 +55,6 @@ export function defaultSettings(): GtdSettings {
     showDoneColumn: true,
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
-    schemaVersion: 4,
+    schemaVersion: 5,
   };
 }

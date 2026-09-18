@@ -4,7 +4,6 @@ export const ACTION_STATUSES = [
   "next",
   "waiting",
   "scheduled",
-  "someday",
   "done",
   "cancelled",
 ] as const;
