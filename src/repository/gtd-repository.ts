@@ -126,6 +126,28 @@ export class GtdRepository {
     await this.app.fileManager.trashFile(action.file);
   }
 
+  async convertActionToSubproject(id: string, title: string, parentProjectId: string): Promise<Project> {
+    const action = this.requireAction(id);
+    const parent = this.index.getSnapshot().projectsById.get(parentProjectId);
+    if (!parent) throw new Error("The selected parent Project no longer exists.");
+    const cleanTitle = title.trim();
+    if (!cleanTitle) throw new Error("A sub-project title is required.");
+    const content = await this.app.vault.cachedRead(action.file);
+    const project = await this.createProjectRecord({
+      title: cleanTitle,
+      status: "active",
+      parentProjectId: parent.id,
+      notes: projectNotesFromAction(content, action.title),
+    });
+    try {
+      await this.app.fileManager.trashFile(action.file);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`Created the sub-project, but could not trash the original Action: ${reason}`);
+    }
+    return project;
+  }
+
   async trashProject(id: string): Promise<void> {
     const project = this.requireProject(id);
     const snapshot = this.index.getSnapshot();
@@ -200,7 +222,7 @@ export class GtdRepository {
     return (await this.createProjectRecord(input)).file;
   }
 
-  private async createProjectRecord(input: ProjectInput & { desiredOutcome?: string }): Promise<Project> {
+  private async createProjectRecord(input: ProjectInput & { desiredOutcome?: string; notes?: string }): Promise<Project> {
     const id = createUlid();
     const title = input.title.trim();
     if (!title) throw new Error("A Project title is required.");
@@ -229,7 +251,7 @@ export class GtdRepository {
       parent_project_id: parent?.id ?? null,
       parent_project: parent ? wikiLink(parent) : null,
     };
-    const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n\n\n## Support material\n\n\`${supportPath}/\`\n`;
+    const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n${input.notes?.trim() ?? ""}\n\n## Support material\n\n\`${supportPath}/\`\n`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
     if (input.area?.trim()) project.area = input.area.trim();
@@ -623,6 +645,12 @@ export class GtdRepository {
 
 function markdown(frontmatter: Record<string, unknown>, body: string): string {
   return `---\n${stringifyYaml(frontmatter).trimEnd()}\n---\n\n${body}`;
+}
+
+function projectNotesFromAction(content: string, title: string): string {
+  return noteBody(content, title).replace(/^(#{1,6})(?=[ \t])/gm, (_match, hashes: string) =>
+    "#".repeat(Math.min(6, Math.max(3, hashes.length + 1)))
+  );
 }
 
 function wikiLink(project: Project): string {

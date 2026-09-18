@@ -3,14 +3,14 @@ import { useEffect, useState } from "preact/hooks";
 import type { Action } from "../domain/types";
 import type { GtdServices } from "./services";
 
-export function ActionRows({ actions, services, projectLabels }: { actions: Action[]; services: GtdServices; projectLabels?: ReadonlyMap<string, string> }) {
+export function ActionRows({ actions, services, projectLabels, allowProjectConversion = false }: { actions: Action[]; services: GtdServices; projectLabels?: ReadonlyMap<string, string>; allowProjectConversion?: boolean }) {
   if (!actions.length) return null;
   return <div class="dg-action-rows">{actions.sort((a, b) => a.title.localeCompare(b.title)).map((action) => (
-    <ActionRow key={action.id} action={action} services={services} {...(projectLabels ? { projectLabels } : {})} />
+    <ActionRow key={action.id} action={action} services={services} allowProjectConversion={allowProjectConversion} {...(projectLabels ? { projectLabels } : {})} />
   ))}</div>;
 }
 
-function ActionRow({ action, services, projectLabels }: { key?: string; action: Action; services: GtdServices; projectLabels?: ReadonlyMap<string, string> }) {
+function ActionRow({ action, services, projectLabels, allowProjectConversion }: { key?: string; action: Action; services: GtdServices; projectLabels?: ReadonlyMap<string, string>; allowProjectConversion: boolean }) {
   const done = action.status === "done";
   const [checked, setChecked] = useState(done);
   const [updating, setUpdating] = useState(false);
@@ -61,7 +61,7 @@ function ActionRow({ action, services, projectLabels }: { key?: string; action: 
         </div>
       </div>
       <div class="dg-action-row-actions">
-        <button class="dg-action-row-edit" aria-label={`Edit ${action.title}`} onClick={() => services.editAction(action.id)}>Edit</button>
+        <button class="dg-action-row-edit" aria-label={`Edit ${action.title}`} onClick={() => services.editAction(action.id, allowProjectConversion)}>Edit</button>
         <button class="dg-action-row-delete" aria-label={`Delete ${action.title}`} onClick={() => void deleteAction()}>Delete</button>
       </div>
     </div>

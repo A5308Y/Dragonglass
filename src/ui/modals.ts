@@ -161,7 +161,7 @@ export class ActionEditorModal extends FormModal {
   private due: string;
   private deferUntil: string;
 
-  constructor(private readonly services: GtdServices, private readonly action: Action) {
+  constructor(private readonly services: GtdServices, private readonly action: Action, private readonly allowProjectConversion = false) {
     super(services.app);
     this.title = action.title;
     this.status = action.status;
@@ -199,7 +199,33 @@ export class ActionEditorModal extends FormModal {
     addDate(this.formEl, "Due", this.due, (value) => (this.due = value));
     addDate(this.formEl, "Defer until", this.deferUntil, (value) => (this.deferUntil = value));
     this.formEl.appendChild(this.actionsEl);
+    if (this.allowProjectConversion && this.action.projectId) {
+      const convert = new ButtonComponent(this.actionsEl)
+        .setButtonText("Convert to Sub-project")
+        .onClick(() => void this.convertToSubproject());
+      convert.buttonEl.type = "button";
+    }
     this.addSubmit();
+  }
+
+  private async convertToSubproject(): Promise<void> {
+    const title = this.title.trim();
+    if (!title) return void new Notice("A sub-project title is required.");
+    if (!validateProjectSelection(this.projectId, this.projectQuery) || !this.projectId) {
+      return void new Notice("Select the parent Project before converting this Action.");
+    }
+    const parent = this.services.repository.index.getSnapshot().projectsById.get(this.projectId);
+    if (!parent) return void new Notice("The selected parent Project no longer exists.");
+    if (!window.confirm(
+      `Convert “${this.action.title}” into an Active sub-project of “${parent.title}”?\n\nThe Action body will be copied to Project Notes, then the original Action will be moved to Obsidian's trash.`,
+    )) return;
+    try {
+      await this.services.repository.convertActionToSubproject(this.action.id, title, parent.id);
+      this.close();
+      new Notice(`Converted “${this.action.title}” to a sub-project.`);
+    } catch (error) {
+      this.fail(error);
+    }
   }
 
   protected async submit(): Promise<void> {

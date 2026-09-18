@@ -316,14 +316,14 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             <div><span class="dg-detail-eyebrow">Work</span><h3>Open Actions</h3></div>
             <span class="dg-detail-count">{open.length}</span>
           </div>
-          <ActionRows actions={open} services={services} />
+          <ActionRows actions={open} services={services} allowProjectConversion />
         </section>
 
         {completed.length > 0 && <section class="dg-detail-section dg-completed-actions-panel">
           <button class="dg-disclosure" onClick={() => setShowCompleted(!showCompleted)}>
             <span>{showCompleted ? "▾" : "▸"} Completed Actions</span><span class="dg-detail-count">{completed.length}</span>
           </button>
-          {showCompleted && <ActionRows actions={completed} services={services} />}
+          {showCompleted && <ActionRows actions={completed} services={services} allowProjectConversion />}
         </section>}
 
         {children.length > 0 && <section class="dg-detail-section dg-subprojects-panel">

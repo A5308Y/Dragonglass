@@ -34,7 +34,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       openInbox: () => void this.activateView(INBOX_VIEW_TYPE),
       createAction: (projectId) => this.createAction(projectId),
       createProject: (openAfterCreate = true, parentProjectId) => this.createProject(openAfterCreate, parentProjectId),
-      editAction: (id) => this.editAction(id),
+      editAction: (id, allowProjectConversion) => this.editAction(id, allowProjectConversion),
       editProject: (id) => this.editProject(id),
       showProjectDetail: (id) => void this.openProjectDetail(id),
     };
@@ -174,10 +174,10 @@ export default class DragonglassGtdPlugin extends Plugin {
     new NewActionModal(this.services, projectId).open();
   }
 
-  private editAction(id: string): void {
+  private editAction(id: string, allowProjectConversion = false): void {
     const action = this.index.getSnapshot().actionsById.get(id);
     if (!action) return void new Notice("This Action is missing or has a duplicate ID.");
-    new ActionEditorModal(this.services, action).open();
+    new ActionEditorModal(this.services, action, allowProjectConversion).open();
   }
 
   private editProject(id: string): void {

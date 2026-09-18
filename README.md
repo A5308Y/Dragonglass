@@ -121,6 +121,8 @@ The Projects board has Active, Backlog, Someday/Maybe, and Completed columns. Pr
 
 Deleting a Project from its card menu moves its Project note, directly linked Action files, and complete configured support-material folder to Obsidian's trash. A Project with sub-projects cannot be deleted until those children are moved or deleted. Dragonglass also refuses deletion when the support folder contains unrelated GTD entities.
 
+When an Action is edited from Project Details, it can be converted into an Active sub-project of its selected Project. The Action title becomes the Project title, its Markdown body is retained in Project Notes, and the original Action is moved to Obsidian's trash only after the new Project is created.
+
 ## Processing, review, and brainstorming
 
 **Process Inbox** works through indexed Inbox Item files in capture order, with a two-minute decision timer and session progress. The inline form resolves an existing Project by fuzzy selection or exact title, creates an Active Project for an unmatched name when needed, and accepts existing or new Context values. Creating a Next Action transforms the Inbox Item into a `gtd-action`. Filing removes Dragonglass entity metadata and leaves the original Markdown note intact in Project support material or General Reference; an optional Next Action is a separate Action file. Someday/Maybe creates or updates the selected Project with its vision, files the source note as support material, and creates the supplied Next Action.
