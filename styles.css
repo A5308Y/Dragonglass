@@ -631,15 +631,6 @@
   background: transparent !important;
   box-shadow: none !important;
 }
-.dg-subproject-move {
-  flex: 0 0 auto;
-  min-height: 28px;
-  padding: 3px 8px;
-  color: var(--text-muted);
-  background: var(--background-primary);
-  box-shadow: none;
-  font-size: var(--font-ui-smaller);
-}
 .dg-subproject-empty { padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-subproject-other { margin-top: 12px; }
 .dg-subproject-other > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
@@ -1234,7 +1225,6 @@
   .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-columns { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-card { align-items: stretch; flex-direction: column; }
-  .dg-subproject-move { min-height: 38px; }
   .dg-detail-section { padding: 13px; }
   .dg-action-row { align-items: start; padding: 10px; }
   .dg-action-row-meta { gap: 4px 7px; }

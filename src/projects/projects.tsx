@@ -361,7 +361,6 @@ function SubprojectColumn({ status, projects, onSelect, onMove }: {
   onMove: (id: string, status: "active" | "backlog") => Promise<void>;
 }) {
   const columnTitle = projectStatusLabel(status);
-  const destination = status === "active" ? "backlog" : "active";
   return <div
     class="dg-subproject-column"
     onDragOver={(event: DragEvent) => event.preventDefault()}
@@ -380,7 +379,6 @@ function SubprojectColumn({ status, projects, onSelect, onMove }: {
         onDragStart={(event: DragEvent) => event.dataTransfer?.setData("text/dragonglass-subproject", child.id)}
       >
         <button class="dg-subproject-title" title={child.title} onClick={() => onSelect(child.id)}>{child.title}</button>
-        <button class="dg-subproject-move" onClick={() => void onMove(child.id, destination)}>Move to {projectStatusLabel(destination)}</button>
       </article>)}
       {projects.length === 0 && <div class="dg-subproject-empty">No {columnTitle.toLocaleLowerCase()} sub-projects.</div>}
     </div>
