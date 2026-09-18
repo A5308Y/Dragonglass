@@ -292,9 +292,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
           <span class={`dg-status dg-status-${project.status}`}>{projectStatusLabel(project.status)}</span>
         </div>
         <div class="dg-header-actions">
-          <button class="mod-cta" onClick={() => services.createAction(project.id)}>New Action</button>
           <button onClick={() => void services.openFile(project.file)}>Open note</button>
-          <button onClick={() => services.createProject(false, project.id)}>New sub-project</button>
           <button onClick={() => services.editProject(project.id)}>Edit</button>
         </div>
       </header>
@@ -314,7 +312,10 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
         <section class="dg-detail-section dg-project-actions-panel">
           <div class="dg-detail-section-heading">
             <div><span class="dg-detail-eyebrow">Work</span><h3>Open Actions</h3></div>
-            <span class="dg-detail-count">{open.length}</span>
+            <div class="dg-detail-section-actions">
+              <span class="dg-detail-count">{open.length}</span>
+              <button class="mod-cta" onClick={() => services.createAction(project.id)}>New Action</button>
+            </div>
           </div>
           <ActionRows actions={open} services={services} allowProjectConversion />
         </section>
@@ -326,10 +327,13 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
           {showCompleted && <ActionRows actions={completed} services={services} allowProjectConversion />}
         </section>}
 
-        {children.length > 0 && <section class="dg-detail-section dg-subprojects-panel">
+        <section class="dg-detail-section dg-subprojects-panel">
           <div class="dg-detail-section-heading">
             <div><h3>Sub-projects</h3></div>
-            <span class="dg-detail-count">{children.length}</span>
+            <div class="dg-detail-section-actions">
+              <span class="dg-detail-count">{children.length}</span>
+              <button class="mod-cta" onClick={() => services.createProject(false, project.id)}>New sub-project</button>
+            </div>
           </div>
           <div class="dg-subproject-columns">
             <SubprojectColumn status="active" projects={activeChildren} onSelect={onSelect} onMove={moveSubproject} />
@@ -339,7 +343,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             <span>Other statuses</span>
             <div>{otherChildren.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}><span>{child.title}</span><small>{projectStatusLabel(child.status)}</small></button>)}</div>
           </div>}
-        </section>}
+        </section>
 
         <section class="dg-detail-section dg-support-panel">
           <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Support material</h3></div><span class="dg-detail-count">{support.length}</span></div>

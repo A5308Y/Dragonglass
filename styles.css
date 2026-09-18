@@ -395,6 +395,8 @@
   gap: 12px;
   margin-bottom: 13px;
 }
+.dg-detail-section-actions { display: flex; align-items: center; gap: 8px; }
+.dg-detail-section-actions button { min-height: 30px; }
 .dg-detail-eyebrow {
   color: var(--text-accent);
   font-size: 9px;
@@ -1225,6 +1227,9 @@
   .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-columns { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-card { align-items: stretch; flex-direction: column; }
+  .dg-detail-section-heading { align-items: flex-start; flex-wrap: wrap; }
+  .dg-detail-section-actions { margin-left: auto; }
+  .dg-detail-section-actions button { min-height: 38px; }
   .dg-detail-section { padding: 13px; }
   .dg-action-row { align-items: start; padding: 10px; }
   .dg-action-row-meta { gap: 4px 7px; }
