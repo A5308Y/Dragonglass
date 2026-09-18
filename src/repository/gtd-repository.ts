@@ -65,13 +65,20 @@ export class GtdRepository {
     const project = resolvedProject ?? (input.projectId ? this.index.getSnapshot().projectsById.get(input.projectId) : undefined);
     if (input.projectId && !project) throw new Error("The selected Project no longer exists.");
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions");
+    const title = input.title.trim();
+    if (!title) throw new Error("An Action title is required.");
+    if (item.file.extension !== "md") {
+      await this.createNextActionFile(title, input.context ?? "", item.created, project);
+      if (project) await this.fileInboxItemToProject(item, project);
+      else await this.fileInboxItemToGeneralReference(item);
+      return;
+    }
     await this.enqueue(item.file.path, async () => {
       const oldTitle = item.title;
-      const title = input.title.trim();
-      if (!title) throw new Error("An Action title is required.");
+      const actionId = item.raw ? createUlid() : item.id;
       await this.app.fileManager.processFrontMatter(item.file, (frontmatter) => {
         frontmatter.type = "gtd-action";
-        frontmatter.id = item.id;
+        frontmatter.id = actionId;
         frontmatter.title = title;
         frontmatter.status = input.status;
         frontmatter.project_id = input.projectId ?? null;
@@ -86,7 +93,7 @@ export class GtdRepository {
       });
       if (title !== oldTitle) await this.updateGeneratedHeading(item.file, oldTitle, title);
       await this.ensureDoneWhenSection(item.file);
-      const target = this.uniqueMarkdownPath(directory, title, item.id);
+      const target = this.uniqueMarkdownPath(directory, title, actionId);
       if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
     });
   }
@@ -94,8 +101,8 @@ export class GtdRepository {
   private async fileInboxItemToProject(item: InboxItem, project: Project): Promise<void> {
     const supportPath = await this.ensureProjectSupportPath(project);
     await this.enqueue(item.file.path, async () => {
-      await this.clearEntityFrontmatter(item.file);
-      const target = this.uniqueMarkdownPath(supportPath, item.title, item.id);
+      if (this.hasGtdFrontmatter(item.file)) await this.clearEntityFrontmatter(item.file);
+      const target = this.uniqueInboxDestination(supportPath, item);
       if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
     });
   }
@@ -103,8 +110,8 @@ export class GtdRepository {
   private async fileInboxItemToGeneralReference(item: InboxItem): Promise<void> {
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().referenceDirectory) || "General Reference");
     await this.enqueue(item.file.path, async () => {
-      await this.clearEntityFrontmatter(item.file);
-      const target = this.uniqueMarkdownPath(directory, item.title, item.id);
+      if (this.hasGtdFrontmatter(item.file)) await this.clearEntityFrontmatter(item.file);
+      const target = this.uniqueInboxDestination(directory, item);
       if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
     });
   }
@@ -337,6 +344,7 @@ export class GtdRepository {
   }
 
   async readInboxBody(item: InboxItem): Promise<string> {
+    if (item.file.extension !== "md") return `${item.file.name}\n\nOpen the file to inspect it before processing.`;
     return noteBody(await this.app.vault.cachedRead(item.file), item.title);
   }
 
@@ -479,6 +487,12 @@ export class GtdRepository {
     await this.app.fileManager.processFrontMatter(file, clearGtdFrontmatter);
   }
 
+  private hasGtdFrontmatter(file: TFile): boolean {
+    if (file.extension !== "md") return false;
+    const type = this.app.metadataCache.getFileCache(file)?.frontmatter?.type;
+    return type === "gtd-inbox-item" || type === "gtd-action" || type === "gtd-project";
+  }
+
   private requireAction(id: string): Action {
     const action = this.index.getSnapshot().actionsById.get(id);
     if (!action) throw new Error(`Action '${id}' is missing or has a duplicate ID.`);
@@ -555,6 +569,22 @@ export class GtdRepository {
     let counter = 2;
     while (this.app.vault.getAbstractFileByPath(normalizePath(`${directory}/${clean} - ${id.slice(-4)}-${counter}.md`))) counter += 1;
     return normalizePath(`${directory}/${clean} - ${id.slice(-4)}-${counter}.md`);
+  }
+
+  private uniqueInboxDestination(directory: string, item: InboxItem): string {
+    const fileName = item.raw ? item.file.name : `${safeName(item.title)}.md`;
+    const extensionIndex = fileName.lastIndexOf(".");
+    const hasExtension = extensionIndex > 0;
+    const extension = hasExtension ? fileName.slice(extensionIndex) : "";
+    const stem = safeName(hasExtension ? fileName.slice(0, extensionIndex) : fileName);
+    const first = normalizePath(`${directory}/${stem}${extension}`);
+    if (first === item.file.path || !this.app.vault.getAbstractFileByPath(first)) return first;
+    const suffix = item.id.slice(-4);
+    const second = normalizePath(`${directory}/${stem} - ${suffix}${extension}`);
+    if (second === item.file.path || !this.app.vault.getAbstractFileByPath(second)) return second;
+    let counter = 2;
+    while (this.app.vault.getAbstractFileByPath(normalizePath(`${directory}/${stem} - ${suffix}-${counter}${extension}`))) counter += 1;
+    return normalizePath(`${directory}/${stem} - ${suffix}-${counter}${extension}`);
   }
 
   private uniqueFolderPath(root: string, title: string, id: string, currentPath?: string): string {

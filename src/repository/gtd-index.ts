@@ -2,6 +2,8 @@ import { MetadataCache, Plugin, TAbstractFile, TFile, Vault } from "obsidian";
 import type { Action, GtdSnapshot, InboxItem, IndexIssue, Project } from "../domain/types";
 import { parseAction, parseInboxItem, parseProject } from "../domain/validation";
 import { projectHierarchyIssue } from "../domain/project-hierarchy";
+import { localDate } from "../utils/date";
+import { isPathInDirectory, rawInboxId } from "../utils/path";
 
 type Listener = () => void;
 
@@ -25,21 +27,33 @@ export class GtdIndex {
   constructor(
     private readonly vault: Vault,
     private readonly metadataCache: MetadataCache,
+    private readonly getInboxDirectory: () => string,
   ) {}
 
   initialize(plugin: Plugin): void {
-    for (const file of this.vault.getMarkdownFiles()) this.readFile(file);
-    this.rebuildSnapshot();
+    this.reindex();
 
     plugin.registerEvent(this.metadataCache.on("changed", (file) => this.refresh(file)));
     plugin.registerEvent(this.vault.on("create", (file) => {
-      if (file instanceof TFile && file.extension === "md") this.refresh(file);
+      if (file instanceof TFile) this.refresh(file);
     }));
     plugin.registerEvent(this.vault.on("rename", (file, oldPath) => this.rename(file, oldPath)));
-    plugin.registerEvent(this.vault.on("delete", (file) => this.remove(file.path)));
+    plugin.registerEvent(this.vault.on("delete", (file) => {
+      if (file instanceof TFile) this.remove(file.path);
+      else this.reindex();
+    }));
   }
 
   getSnapshot = (): GtdSnapshot => this.current;
+
+  reindex(): void {
+    this.inboxItemsByPath.clear();
+    this.actionsByPath.clear();
+    this.projectsByPath.clear();
+    this.parseIssues.clear();
+    for (const file of this.vault.getFiles()) this.readFile(file);
+    this.rebuildSnapshot();
+  }
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
@@ -53,8 +67,12 @@ export class GtdIndex {
   }
 
   private rename(file: TAbstractFile, oldPath: string): void {
+    if (!(file instanceof TFile)) {
+      this.reindex();
+      return;
+    }
     this.removeFromMaps(oldPath);
-    if (file instanceof TFile && file.extension === "md") this.readFile(file);
+    this.readFile(file);
     this.rebuildSnapshot();
   }
 
@@ -72,16 +90,18 @@ export class GtdIndex {
   }
 
   private readFile(file: TFile): void {
-    const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter;
-    if (!frontmatter) return;
-    const type = frontmatter.type;
-    if (type !== "gtd-inbox-item" && type !== "gtd-action" && type !== "gtd-project") return;
+    const frontmatter = file.extension === "md" ? this.metadataCache.getFileCache(file)?.frontmatter : undefined;
+    const type = frontmatter?.type;
     try {
-      if (type === "gtd-inbox-item") this.inboxItemsByPath.set(file.path, parseInboxItem(frontmatter, file));
-      else if (type === "gtd-action" && frontmatter.status === "inbox") this.inboxItemsByPath.set(file.path, parseInboxItem(frontmatter, file, true));
-      else if (type === "gtd-action") this.actionsByPath.set(file.path, parseAction(frontmatter, file));
-      else this.projectsByPath.set(file.path, parseProject(frontmatter, file));
+      if (isPathInDirectory(file.path, this.getInboxDirectory())) {
+        if (type === "gtd-inbox-item" && frontmatter) this.inboxItemsByPath.set(file.path, parseInboxItem(frontmatter, file));
+        else if (type === "gtd-action" && frontmatter?.status === "inbox") this.inboxItemsByPath.set(file.path, parseInboxItem(frontmatter, file, true));
+        else this.inboxItemsByPath.set(file.path, rawInboxItem(file));
+      } else if (type === "gtd-action" && frontmatter?.status === "inbox") this.inboxItemsByPath.set(file.path, parseInboxItem(frontmatter, file, true));
+      else if (type === "gtd-action" && frontmatter) this.actionsByPath.set(file.path, parseAction(frontmatter, file));
+      else if (type === "gtd-project" && frontmatter) this.projectsByPath.set(file.path, parseProject(frontmatter, file));
     } catch (error) {
+      if (isPathInDirectory(file.path, this.getInboxDirectory())) this.inboxItemsByPath.set(file.path, rawInboxItem(file));
       this.parseIssues.set(file.path, {
         path: file.path,
         kind: "invalid",
@@ -131,6 +151,17 @@ export class GtdIndex {
     };
     for (const listener of this.listeners) listener();
   }
+}
+
+function rawInboxItem(file: TFile): InboxItem {
+  return {
+    type: "gtd-inbox-item",
+    id: rawInboxId(file.path),
+    title: file.extension === "md" ? file.basename : file.name,
+    created: localDate(new Date(file.stat.ctime)),
+    file,
+    raw: true,
+  };
 }
 
 function duplicates<T extends { id: string }>(entities: T[]): Set<string> {

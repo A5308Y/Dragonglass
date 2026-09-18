@@ -25,6 +25,7 @@ export interface InboxItem {
   file: TFile;
   created: string;
   legacyAction?: boolean;
+  raw?: boolean;
 }
 
 export interface Action {

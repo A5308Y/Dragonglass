@@ -1,6 +1,6 @@
 # Dragonglass GTD
 
-Dragonglass GTD is a file-first GTD board for Obsidian. Every Inbox Item, Project, and Action is an ordinary Markdown file; the plugin keeps only a disposable in-memory index and view configuration.
+Dragonglass GTD is a file-first GTD board for Obsidian. Projects and Actions are ordinary Markdown files, while the Inbox accepts any normal vault file; the plugin keeps only a disposable in-memory index and view configuration.
 
 ## Development installation
 
@@ -42,7 +42,7 @@ Project Support Material/<project title>/
 General Reference/
 ```
 
-The Inbox, Action, Project, and Reference destinations and the default Action status are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it.
+The Inbox, Action, Project, and Reference destinations and the default Action status are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it. Every file beneath the configured Inbox directory is indexed as an Inbox Item even when it has no frontmatter or is not Markdown.
 
 Quick Capture creates an Inbox Item, not an Action:
 
@@ -53,7 +53,7 @@ title: Look into heating options
 created: 2026-09-18
 ```
 
-Inbox Items have no status. Processing one explicitly transforms that same Markdown file into an Action, moves it to the Actions directory, and preserves its stable ID and note body. The original capture date is retained as `captured`; the Action receives its own `created` date. `inbox` is not a valid Action status.
+Inbox Items have no status. Processing a captured Dragonglass note transforms that Markdown file into an Action, moves it to the Actions directory, and preserves its stable ID and note body. A plain Markdown file dropped into Inbox receives a new ULID when converted. Binary files cannot become Markdown Actions, so Dragonglass creates the Action separately and preserves the source file in Project Support Material or General Reference. The original capture date is retained as `captured`; the Action receives its own `created` date. `inbox` is not a valid Action status.
 
 Supported Action statuses are `next`, `waiting`, `scheduled`, `done`, and `cancelled`. Someday/Maybe is represented by a Project status, never an Action status. Legacy Actions with `status: someday` are migrated to `next` when the plugin starts.
 
@@ -110,7 +110,7 @@ The default board groups by status. It supports Project, status, context, energy
 
 On desktop, drag an Action between status columns. On mobile, or whenever drag-and-drop is inconvenient, open the card's menu to change its status, Project, or context. A failed write rolls the optimistic card move back and displays an Obsidian Notice.
 
-Keyboard navigation inside the board uses Up/Down to move between cards, Enter to open the Markdown file, and `D` to mark the focused Action done.
+Keyboard navigation inside the board uses Up/Down to move between cards and `D` to mark the focused Action done.
 
 Marking an Action done writes `status: done` and an ISO completion timestamp. Reopening through the quick action sets `status: next` and clears `completed`. Dates never change statuses automatically.
 

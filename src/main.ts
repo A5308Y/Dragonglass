@@ -17,7 +17,7 @@ export default class DragonglassGtdPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    this.index = new GtdIndex(this.app.vault, this.app.metadataCache);
+    this.index = new GtdIndex(this.app.vault, this.app.metadataCache, () => this.settings.inboxDirectory);
     this.repository = new GtdRepository(this.app, this.index, () => this.settings);
     this.services = {
       app: this.app,
@@ -26,6 +26,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       saveSettings: async (settings) => {
         this.settings = settings;
         await this.saveSettings();
+        this.index.reindex();
       },
       openFile: (file) => this.openFile(file),
       quickCapture: () => this.quickCapture(),
