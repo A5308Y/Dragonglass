@@ -232,7 +232,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
         <div class="dg-workflow-footer">
           <div>
             <strong>{needsNextAction ? "This active Project needs a Next Action." : "Ready to move on?"}</strong>
-            <span>{needsNextAction ? "Add one above or move the Project to Someday/Maybe." : "The Desired outcome is saved automatically."}</span>
+            {needsNextAction && <span>Add one above or move the Project to Someday/Maybe.</span>}
           </div>
           <div class="dg-review-footer-actions">
             <button disabled={saving} onClick={() => void moveToSomeday()}>Move to Someday/Maybe</button>
