@@ -4,3 +4,4 @@ main.js
 .DS_Store
 coverage/
 Test Vault/
+.dragonglass-vaults.json

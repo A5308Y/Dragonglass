@@ -18,6 +18,18 @@ Do not first develop or test file-writing plugins against your only copy of an i
 
 The repository includes `Test Vault`. Running `mise exec -- npm run build` produces the production bundle and automatically copies `main.js`, `manifest.json`, and `styles.css` into `Test Vault/.obsidian/plugins/dragonglass-gtd`. Reload Obsidian after building to load the new code.
 
+To deploy every build into additional local vaults, copy `.dragonglass-vaults.example.json` to `.dragonglass-vaults.json` and replace the example with absolute vault paths:
+
+```json
+{
+  "vaults": [
+    "/Users/you/Documents/Main Vault"
+  ]
+}
+```
+
+The local configuration is ignored by Git. Each build copies real plugin files into every configured vault's `.obsidian/plugins/dragonglass-gtd` directory, so Obsidian Sync can carry the plugin to mobile. After the first build, enable **Dragonglass GTD** in that vault; after later builds, reload Obsidian to load the update. `mise exec -- npm run deploy:vaults` redeploys existing build artifacts without rebuilding.
+
 ## Files are the database
 
 New files use these default destinations:

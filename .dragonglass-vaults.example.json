@@ -1,0 +1,5 @@
+{
+  "vaults": [
+    "/absolute/path/to/your/main/vault"
+  ]
+}
