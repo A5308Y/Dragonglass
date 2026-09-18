@@ -45,7 +45,7 @@ export function InboxView({ services }: { services: GtdServices }) {
   };
 
   return (
-    <div class="dg-view dg-inbox-view">
+    <div class={`dg-view dg-inbox-view${processing ? " is-processing" : ""}`}>
       <header class="dg-view-header">
         <div>
           <h2>{processing ? "Process Inbox" : "Inbox"}</h2>

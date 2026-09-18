@@ -18,6 +18,15 @@
 
 .dg-board-view { --dg-card-width: 340px; }
 
+/* Top bars (header, warning strip, toolbar) line up with the body content below them. */
+.dg-board-view,
+.dg-projects-view { --dg-bar-inset: 10px; }
+.dg-inbox-view { --dg-bar-inset: 12px; }
+.dg-inbox-view.is-processing,
+.dg-brainstorm-view { --dg-bar-inset: calc(max(0px, (100% - 980px) / 2) + 14px); }
+.dg-review-view { --dg-bar-inset: calc(max(0px, (100% - 1080px) / 2) + 20px); }
+.dg-project-detail { --dg-bar-inset: max(16px, calc((100% - 1080px) / 2)); }
+
 .dg-view button,
 .dg-view input,
 .dg-view select,
@@ -27,7 +36,7 @@
 
 .dg-view-header {
   min-height: 54px;
-  padding: 10px 14px;
+  padding: 10px var(--dg-bar-inset, 14px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -79,7 +88,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 8px var(--dg-bar-inset, 12px);
   overflow-x: auto;
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-secondary);
@@ -113,7 +122,7 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  padding: 8px 12px;
+  padding: 8px var(--dg-bar-inset, 12px);
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-secondary-alt);
 }
@@ -129,7 +138,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  padding: 6px 12px;
+  padding: 6px var(--dg-bar-inset, 12px);
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
@@ -140,7 +149,7 @@
 }
 
 .dg-warning {
-  padding: 6px 12px;
+  padding: 6px var(--dg-bar-inset, 12px);
   color: var(--text-warning);
   background: color-mix(in srgb, var(--color-yellow) 12%, transparent);
   border-bottom: 1px solid var(--background-modifier-border);
@@ -1055,13 +1064,14 @@
 }
 .dg-review-tree-list > div {
   min-height: 38px;
-  padding: 7px 9px;
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto auto auto;
+  padding: 8px 14px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 4px 12px;
   border-top: 1px solid var(--background-modifier-border);
 }
+.dg-review-tree-list > div > button { flex: 0 1 auto; max-width: 100%; }
 .dg-review-tree-list > div:first-child { border-top: 0; }
 .dg-review-tree-list button {
   min-width: 0;
@@ -1284,7 +1294,13 @@
   .dg-header-actions { flex-wrap: wrap; }
   .dg-view-header button,
   .dg-card .dg-icon-button { min-height: 38px; }
-  .dg-toolbar { padding: 8px; }
+  .dg-board-view,
+  .dg-projects-view,
+  .dg-project-detail,
+  .dg-brainstorm-view,
+  .dg-review-view,
+  .dg-inbox-view.is-processing { --dg-bar-inset: 8px; }
+  .dg-toolbar { padding-block: 8px; }
   .dg-toolbar button,
   .dg-toolbar select { min-height: 38px; }
   .dg-toolbar input[type="search"] { min-height: 38px; width: 190px; }
@@ -1324,12 +1340,8 @@
   .dg-review-timers { width: 100%; justify-content: space-between; }
   .dg-review-hero { align-items: flex-start; padding: 14px; }
   .dg-review-panel { padding: 13px; }
-  .dg-review-tree-list > div {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 4px 10px;
-  }
-  .dg-review-tree-list > div > span:nth-of-type(2),
-  .dg-review-tree-list > div > strong { grid-column: 1 / -1; }
+  .dg-review-tree-list > div { padding: 8px 12px; gap: 4px 10px; }
+  .dg-review-tree-list > div > button { flex-basis: 100%; }
   .dg-emoji-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .dg-inline-form,
   .dg-action-capture { align-items: stretch; flex-direction: column; }
