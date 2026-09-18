@@ -606,25 +606,32 @@
   width: 100%;
   resize: vertical;
 }
+.dg-review-panel textarea,
+.dg-review-panel input:not([type="checkbox"]) {
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  background: var(--background-primary);
+  box-shadow: none;
+  appearance: none;
+}
 .dg-review-panel textarea {
   min-height: 112px;
   margin: 13px 0 8px;
-  padding: 10px 12px;
-  border-color: var(--background-modifier-border);
-  background: var(--background-primary);
   line-height: var(--line-height-normal);
 }
+.dg-review-panel input:not([type="checkbox"]) {
+  min-height: 40px;
+  line-height: 1.2;
+}
 .dg-review-panel textarea:focus,
-.dg-review-panel input:focus {
+.dg-review-panel input:not([type="checkbox"]):focus {
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 15%, transparent);
 }
 .dg-review-panel-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .dg-review-panel-footer span { color: var(--text-faint); font-size: var(--font-ui-smaller); }
-.dg-review-panel.needs-action {
-  border-color: color-mix(in srgb, var(--color-yellow) 62%, var(--background-modifier-border));
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-yellow) 72%, transparent);
-}
 .dg-emoji-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -650,10 +657,6 @@
 .dg-inline-form input,
 .dg-action-capture input:first-child { flex: 1; min-width: 0; }
 .dg-action-capture input:nth-child(2) { width: 150px; }
-.dg-inline-form input,
-.dg-action-capture input {
-  border-radius: var(--input-radius, var(--radius-s));
-}
 .dg-review-actions { margin-top: 12px; border-bottom: 1px solid var(--background-modifier-border); }
 .dg-review-actions label {
   display: grid;
@@ -679,10 +682,10 @@
 }
 .dg-review-actions label > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-action-capture {
-  margin: 12px -4px -4px;
-  padding: 10px;
-  border-radius: var(--radius-m);
-  background: var(--background-secondary);
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--background-modifier-border);
+  background: transparent;
 }
 .dg-diary-list { max-height: 240px; margin-top: 12px; overflow-y: auto; }
 .dg-diary-list > div { padding: 9px 2px; border-top: 1px solid var(--background-modifier-border); }

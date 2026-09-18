@@ -169,7 +169,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
           </div>
         </section>
 
-        <section class={`dg-review-panel dg-review-actions-panel${nextActions.length ? "" : " needs-action"}`}>
+        <section class="dg-review-panel dg-review-actions-panel">
           <div class="dg-review-panel-heading dg-review-panel-heading-row">
             <span class="dg-review-panel-icon">→</span>
             <div><h3>Open Actions</h3><p>Confirm that the next visible step is concrete.</p></div>
