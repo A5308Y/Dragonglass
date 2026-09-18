@@ -490,6 +490,7 @@
   font-family: var(--font-text);
   line-height: var(--line-height-normal);
 }
+.dg-support-note-body .dg-outcome { white-space: normal; }
 .dg-support-note-body .dg-outcome > :first-child { margin-top: 0; }
 .dg-support-note-body .dg-outcome > :last-child { margin-bottom: 0; }
 .dg-support-note-edit-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 8px; }
