@@ -27,6 +27,15 @@
 .dg-review-view { --dg-bar-inset: calc(max(0px, (100% - 1080px) / 2) + 20px); }
 .dg-project-detail { --dg-bar-inset: max(16px, calc((100% - 1080px) / 2)); }
 
+.dg-project-detail > .dg-view-header,
+.dg-review-view > .dg-view-header,
+.dg-brainstorm-view > .dg-view-header,
+.dg-inbox-view.is-processing > .dg-view-header,
+.dg-inbox-view.is-processing > .dg-warning {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
 .dg-view button,
 .dg-view input,
 .dg-view select,
@@ -55,6 +64,10 @@
   align-items: center;
   gap: 8px;
 }
+
+.dg-view-header > div { min-width: 0; }
+.dg-view-header > .dg-header-actions,
+.dg-view-header > .dg-review-timers { flex-shrink: 0; }
 
 .dg-view-header h2,
 .dg-detail-section h3 {
@@ -581,7 +594,6 @@
   background: var(--background-modifier-hover);
   font-weight: var(--font-medium);
 }
-.dg-action-status-next { color: var(--text-accent) !important; background: color-mix(in srgb, var(--interactive-accent) 12%, transparent); }
 .dg-action-status-done { color: var(--text-success) !important; background: color-mix(in srgb, var(--color-green) 12%, transparent); }
 .dg-action-row-edit {
   min-height: 30px;
@@ -744,6 +756,7 @@
   margin: 0 auto;
   padding: 14px;
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .dg-workflow-progress,

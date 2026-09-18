@@ -53,7 +53,7 @@ function ActionRow({ action, services, projectLabels, allowProjectConversion }: 
       <div class="dg-action-row-main">
         <button class="dg-action-row-title" title={action.title} onClick={() => void services.openFile(action.file)}>{action.title}</button>
         <div class="dg-action-row-meta">
-          <span class={`dg-action-status dg-action-status-${action.status}`}>{label(action.status)}</span>
+          {action.status !== "next" && <span class={`dg-action-status dg-action-status-${action.status}`}>{label(action.status)}</span>}
           {action.projectId && projectLabels?.has(action.projectId) && <span class="dg-action-project-label">{projectLabels.get(action.projectId)}</span>}
           {action.context && <span>@{action.context}</span>}
           {action.energy && <span>{action.energy} energy</span>}
