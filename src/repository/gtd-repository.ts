@@ -117,6 +117,11 @@ export class GtdRepository {
     await this.app.fileManager.trashFile(item.file);
   }
 
+  async trashAction(id: string): Promise<void> {
+    const action = this.requireAction(id);
+    await this.app.fileManager.trashFile(action.file);
+  }
+
   async trashProject(id: string): Promise<void> {
     const project = this.requireProject(id);
     const snapshot = this.index.getSnapshot();

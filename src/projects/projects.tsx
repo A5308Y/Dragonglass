@@ -181,7 +181,7 @@ function ProjectCard({
       }}
     >
       <div class="dg-card-title-row">
-        <button class="dg-card-title" onClick={onOpen}>{project.title}</button>
+        <button class="dg-card-title" title={breadcrumb} onClick={onOpen}>{project.title}</button>
         <button class="dg-icon-button" aria-label={`Actions for ${project.title}`} onClick={openMenu}>•••</button>
       </div>
       {breadcrumb !== project.title && <div class="dg-project-lineage" title={breadcrumb}>{breadcrumb}</div>}
@@ -328,6 +328,16 @@ function ActionRow({ action, services }: { key?: string; action: Action; service
     }
   };
 
+  const deleteAction = async () => {
+    if (!window.confirm(`Delete “${action.title}”?\n\nThis moves the Action file to Obsidian's trash.`)) return;
+    try {
+      await services.repository.trashAction(action.id);
+      new Notice(`Deleted “${action.title}”.`);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not delete the Action.");
+    }
+  };
+
   return (
     <div class="dg-action-row">
       <input
@@ -339,7 +349,7 @@ function ActionRow({ action, services }: { key?: string; action: Action; service
         onChange={(event) => void changeCompletion(event.currentTarget.checked)}
       />
       <div class="dg-action-row-main">
-        <button class="dg-action-row-title" onClick={() => void services.openFile(action.file)}>{action.title}</button>
+        <button class="dg-action-row-title" title={action.title} onClick={() => void services.openFile(action.file)}>{action.title}</button>
         <div class="dg-action-row-meta">
           <span class={`dg-action-status dg-action-status-${action.status}`}>{title(action.status)}</span>
           {action.context && <span>@{action.context}</span>}
@@ -347,7 +357,10 @@ function ActionRow({ action, services }: { key?: string; action: Action; service
           {action.due && <span>Due {action.due}</span>}
         </div>
       </div>
-      <button class="dg-action-row-edit" aria-label={`Edit ${action.title}`} onClick={() => services.editAction(action.id)}>Edit</button>
+      <div class="dg-action-row-actions">
+        <button class="dg-action-row-edit" aria-label={`Edit ${action.title}`} onClick={() => services.editAction(action.id)}>Edit</button>
+        <button class="dg-action-row-delete" aria-label={`Delete ${action.title}`} onClick={() => void deleteAction()}>Delete</button>
+      </div>
     </div>
   );
 }

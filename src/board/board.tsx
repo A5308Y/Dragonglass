@@ -228,6 +228,15 @@ function BoardColumn({ group, services, groupBy, onMove }: { key?: string; group
 function ActionCard({ action, services, onMove }: { key?: string; action: Action; services: GtdServices; onMove: (id: string, status: ActionStatus) => Promise<void> }) {
   const snapshot = services.repository.index.getSnapshot();
   const project = action.projectId ? snapshot.projectsById.get(action.projectId) : undefined;
+  const deleteAction = async () => {
+    if (!window.confirm(`Delete “${action.title}”?\n\nThis moves the Action file to Obsidian's trash.`)) return;
+    try {
+      await services.repository.trashAction(action.id);
+      new Notice(`Deleted “${action.title}”.`);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not delete the Action.");
+    }
+  };
   const openMenu = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -250,6 +259,11 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
     }
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("Edit…").onClick(() => services.editAction(action.id)));
+    menu.addItem((item) => item
+      .setTitle("Delete Action…")
+      .setIcon("trash-2")
+      .setWarning(true)
+      .onClick(() => void deleteAction()));
     menu.showAtMouseEvent(event);
   };
 
@@ -264,7 +278,7 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
       onKeyDown={(event: KeyboardEvent) => handleCardKey(event, action, services, onMove)}
     >
       <div class="dg-card-title-row">
-        <button class="dg-card-title" onClick={() => void services.openFile(action.file)}>{action.title}</button>
+        <button class="dg-card-title" title={action.title} onClick={() => void services.openFile(action.file)}>{action.title}</button>
         <button class="dg-icon-button" aria-label={`Actions for ${action.title}`} onClick={openMenu}>•••</button>
       </div>
       {action.projectId && (

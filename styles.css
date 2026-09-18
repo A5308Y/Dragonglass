@@ -16,6 +16,8 @@
   background: var(--background-primary);
 }
 
+.dg-board-view { --dg-card-width: 340px; }
+
 .dg-view button,
 .dg-view input,
 .dg-view select,
@@ -169,6 +171,12 @@
   z-index: 1;
   background: var(--background-secondary);
 }
+.dg-column-header > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .dg-card-list {
   min-height: 46px;
@@ -198,7 +206,7 @@
 .dg-card[draggable="true"] { cursor: grab; }
 .dg-card[draggable="true"]:active { cursor: grabbing; }
 
-.dg-card-title-row { justify-content: space-between; }
+.dg-card-title-row { min-width: 0; justify-content: space-between; }
 
 .dg-card-title,
 .dg-project-link,
@@ -211,6 +219,17 @@
   background: transparent !important;
   box-shadow: none !important;
   font-weight: var(--font-medium);
+}
+
+.dg-card-title {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 0 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dg-card-title:hover,
@@ -328,15 +347,18 @@
 }
 .dg-status { padding: 2px 7px; border-radius: 999px; background: var(--background-modifier-hover); color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-project-detail-content {
-  width: min(1080px, 100%);
+  width: 100%;
   min-height: 0;
-  margin: 0 auto;
-  padding: 16px;
+  margin: 0;
+  padding: 16px max(16px, calc((100% - 1080px) / 2));
+  box-sizing: border-box;
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
 }
 .dg-project-overview-grid {
   display: grid;
@@ -455,6 +477,14 @@
   min-height: 30px;
   padding: 4px 9px;
   color: var(--text-muted);
+  background: transparent;
+  box-shadow: none;
+}
+.dg-action-row-actions { display: flex; align-items: center; gap: 3px; }
+.dg-action-row-delete {
+  min-height: 30px;
+  padding: 4px 7px;
+  color: var(--text-error);
   background: transparent;
   box-shadow: none;
 }
@@ -1128,7 +1158,7 @@
   .dg-processor-actions { grid-template-columns: 1fr; }
   .dg-processor-actions button { min-height: 42px; white-space: normal; }
   .dg-row-actions { grid-column: 1; grid-row: auto; }
-  .dg-action-row { grid-template-columns: 1fr auto; }
+  .dg-action-row { grid-template-columns: auto minmax(0, 1fr) auto; }
   .dg-project-detail-content { padding: 8px; gap: 8px; }
   .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
   .dg-detail-section { padding: 13px; }
