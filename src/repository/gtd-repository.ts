@@ -19,7 +19,7 @@ import type {
 } from "../domain/types";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { localDate } from "../utils/date";
-import { noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
+import { noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
 import { normalizeVaultPath, parentPath, safeName } from "../utils/path";
 import { createUlid } from "../utils/ulid";
 import { GtdIndex } from "./gtd-index";
@@ -493,6 +493,25 @@ export class GtdRepository {
     return this.app.vault.getFiles().filter((file) => file.path.startsWith(prefix));
   }
 
+  async createProjectSupportNote(projectId: string, title: string): Promise<TFile> {
+    const project = this.requireProject(projectId);
+    const cleanTitle = title.trim().replace(/\.md$/i, "").trim();
+    if (!cleanTitle) throw new Error("A note title is required.");
+    const supportPath = await this.ensureProjectSupportPath(project);
+    const path = this.uniqueMarkdownPath(supportPath, cleanTitle, createUlid());
+    return this.app.vault.create(path, `# ${cleanTitle}\n\n`);
+  }
+
+  async readProjectSupportNote(projectId: string, path: string): Promise<string> {
+    const file = this.requireProjectSupportNote(projectId, path);
+    return noteBody(await this.app.vault.cachedRead(file));
+  }
+
+  async updateProjectSupportNote(projectId: string, path: string, body: string): Promise<void> {
+    const file = this.requireProjectSupportNote(projectId, path);
+    await this.enqueue(file.path, () => this.app.vault.process(file, (content) => replaceNoteBody(content, body)));
+  }
+
   private async ensureProjectSupportPath(project: Project): Promise<string> {
     const supportRoot = await this.ensureFolder(PROJECT_SUPPORT_ROOT);
     const requestedPath = project.supportPath || this.uniqueFolderPath(supportRoot, project.title, project.id);
@@ -538,6 +557,22 @@ export class GtdRepository {
     const project = this.index.getSnapshot().projectsById.get(id);
     if (!project) throw new Error(`Project '${id}' is missing or has a duplicate ID.`);
     return project;
+  }
+
+  private requireProjectSupportNote(projectId: string, path: string): TFile {
+    const project = this.requireProject(projectId);
+    const supportPath = normalizeVaultPath(project.supportPath ?? "");
+    const normalizedPath = normalizeVaultPath(path);
+    if (!supportPath || !pathIsWithin(normalizedPath, supportPath)) {
+      throw new Error("This note is not inside the Project Support Material folder.");
+    }
+    const file = this.app.vault.getAbstractFileByPath(normalizedPath);
+    if (!(file instanceof TFile) || file.extension !== "md") throw new Error("The support note no longer exists.");
+    const type = this.app.metadataCache.getFileCache(file)?.frontmatter?.type;
+    if (type === "gtd-action" || type === "gtd-project" || type === "gtd-inbox-item") {
+      throw new Error("GTD entity files cannot be edited as support notes.");
+    }
+    return file;
   }
 
   private enqueue<T>(key: string, operation: () => Promise<T>): Promise<T> {

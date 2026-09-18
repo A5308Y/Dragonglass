@@ -98,7 +98,6 @@
 .dg-detail-heading button,
 .dg-project-row button,
 .dg-action-row button,
-.dg-support-files button,
 .dg-panel button,
 .dg-panel select {
   min-height: 30px;
@@ -427,9 +426,79 @@
 }
 .dg-muted { color: var(--text-muted); }
 .dg-path { padding: 6px 8px; border-radius: var(--radius-s); background: var(--background-secondary); color: var(--text-muted); font-family: var(--font-monospace); font-size: var(--font-ui-smaller); }
-.dg-support-files { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-top: 8px; }
-.dg-support-files button { padding: 3px 0; color: var(--text-accent); background: transparent; box-shadow: none; }
 .dg-support-panel .dg-path { background: var(--background-primary); }
+.dg-support-note-create { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.dg-support-note-create input {
+  min-width: 0;
+  min-height: 36px;
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  background: var(--background-primary);
+}
+.dg-support-note-create button { min-height: 36px; }
+.dg-support-notes { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.dg-support-note {
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+}
+.dg-support-note > header {
+  min-height: 40px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dg-support-note > header > div { display: flex; align-items: center; gap: 4px; }
+.dg-support-note > header > div > button {
+  min-height: 28px;
+  padding: 3px 8px;
+  color: var(--text-muted);
+  background: transparent;
+  box-shadow: none;
+}
+.dg-support-note-toggle {
+  min-width: 0;
+  padding: 3px 4px;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  border: 0 !important;
+  text-align: left;
+  color: var(--text-normal);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.dg-support-note-toggle > span:last-child { overflow: hidden; font-weight: var(--font-medium); text-overflow: ellipsis; white-space: nowrap; }
+.dg-support-note-body { padding: 12px; border-top: 1px solid var(--background-modifier-border); }
+.dg-support-note-body textarea {
+  width: 100%;
+  min-height: 190px;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  background: var(--background-primary);
+  font-family: var(--font-text);
+  line-height: var(--line-height-normal);
+}
+.dg-support-note-body .dg-outcome > :first-child { margin-top: 0; }
+.dg-support-note-body .dg-outcome > :last-child { margin-bottom: 0; }
+.dg-support-note-edit-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 8px; }
+.dg-support-attachments { margin-top: 14px; }
+.dg-support-attachments > span,
+.dg-support-empty { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-support-attachments > div { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-top: 5px; }
+.dg-support-attachments button { padding: 3px 0; color: var(--text-accent); background: transparent; box-shadow: none; }
+.dg-support-empty { display: block; margin-top: 12px; }
 .dg-disclosure {
   width: 100%;
   display: flex;
@@ -1227,6 +1296,10 @@
   .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-columns { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-card { align-items: stretch; flex-direction: column; }
+  .dg-support-note-create { align-items: stretch; flex-direction: column; }
+  .dg-support-note-create button { min-height: 40px; }
+  .dg-support-note > header { align-items: flex-start; }
+  .dg-support-note > header > div > button { min-height: 36px; }
   .dg-detail-section-heading { align-items: flex-start; flex-wrap: wrap; }
   .dg-detail-section-actions { margin-left: auto; }
   .dg-detail-section-actions button { min-height: 38px; }

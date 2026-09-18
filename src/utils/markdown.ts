@@ -12,6 +12,12 @@ export function noteBody(content: string, generatedTitle?: string): string {
   return body;
 }
 
+export function replaceNoteBody(content: string, body: string): string {
+  const frontmatter = /^(---\r?\n[\s\S]*?\r?\n---\r?\n?)/.exec(content)?.[1] ?? "";
+  const cleanBody = body.trimEnd();
+  return `${frontmatter}${frontmatter ? "\n" : ""}${cleanBody}${cleanBody ? "\n" : ""}`;
+}
+
 export function readMarkdownSection(content: string, heading: string, level = 2): string {
   const marker = "#".repeat(level);
   const escaped = escapeRegExp(heading);

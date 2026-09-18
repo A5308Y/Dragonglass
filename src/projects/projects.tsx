@@ -1,4 +1,4 @@
-import { Component, MarkdownRenderer, Menu, Notice, Platform } from "obsidian";
+import { Component, MarkdownRenderer, Menu, Notice, Platform, type TFile } from "obsidian";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Action, Project, ProjectStatus } from "../domain/types";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
@@ -242,6 +242,9 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const [outcome, setOutcome] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
   const [optimisticSubprojectStatuses, setOptimisticSubprojectStatuses] = useState<Map<string, ProjectStatus>>(new Map());
+  const [supportNoteTitle, setSupportNoteTitle] = useState("");
+  const [creatingSupportNote, setCreatingSupportNote] = useState(false);
+  const [newSupportNotePath, setNewSupportNotePath] = useState("");
   useEffect(() => {
     let active = true;
     void services.repository.readDesiredOutcome(project).then((value) => { if (active) setOutcome(value); });
@@ -251,6 +254,12 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const open = all.filter((action) => action.status !== "done" && action.status !== "cancelled");
   const completed = all.filter((action) => action.status === "done");
   const support = services.repository.supportFiles(project);
+  const supportNotes = support
+    .filter((file) => isEditableSupportNote(services, file))
+    .sort((left, right) => left.path.localeCompare(right.path));
+  const supportAttachments = support
+    .filter((file) => !isEditableSupportNote(services, file))
+    .sort((left, right) => left.path.localeCompare(right.path));
   const breadcrumbs = projectBreadcrumbs(snapshot.projects);
   const parent = project.parentProjectId ? snapshot.projectsById.get(project.parentProjectId) : undefined;
   const children = snapshot.projects
@@ -280,6 +289,21 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
         next.delete(id);
         return next;
       });
+    }
+  };
+
+  const createSupportNote = async () => {
+    const title = supportNoteTitle.trim();
+    if (!title || creatingSupportNote) return;
+    setCreatingSupportNote(true);
+    try {
+      const file = await services.repository.createProjectSupportNote(project.id, title);
+      setSupportNoteTitle("");
+      setNewSupportNotePath(file.path);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not create the support note.");
+    } finally {
+      setCreatingSupportNote(false);
     }
   };
 
@@ -346,16 +370,142 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
         </section>
 
         <section class="dg-detail-section dg-support-panel">
-          <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Support material</h3></div><span class="dg-detail-count">{support.length}</span></div>
+          <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Project Support Material</h3></div><span class="dg-detail-count">{support.length}</span></div>
           <div class="dg-path">{project.supportPath ?? "No support folder configured"}</div>
-          <div class="dg-support-files">
-            {support.map((file) => <button key={file.path} onClick={() => void services.openFile(file)}>{file.path.slice((project.supportPath?.length ?? -1) + 1)}</button>)}
-            {project.supportPath && support.length === 0 && <span class="dg-muted">The support folder is empty.</span>}
+          <div class="dg-support-note-create">
+            <input
+              value={supportNoteTitle}
+              placeholder="Note title…"
+              aria-label="New support note title"
+              disabled={creatingSupportNote}
+              onInput={(event: Event) => setSupportNoteTitle((event.currentTarget as HTMLInputElement).value)}
+              onKeyDown={(event: KeyboardEvent) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void createSupportNote();
+                }
+              }}
+            />
+            <button class="mod-cta" disabled={!supportNoteTitle.trim() || creatingSupportNote} onClick={() => void createSupportNote()}>Create note</button>
           </div>
+          <div class="dg-support-notes">
+            {supportNotes.map((file) => <SupportNote
+              key={file.path}
+              services={services}
+              projectId={project.id}
+              file={file}
+              label={supportFileLabel(file, project.supportPath)}
+              startEditing={file.path === newSupportNotePath}
+            />)}
+          </div>
+          {supportAttachments.length > 0 && <div class="dg-support-attachments">
+            <span>Other files</span>
+            <div>{supportAttachments.map((file) => <button key={file.path} onClick={() => void services.openFile(file)}>{supportFileLabel(file, project.supportPath)}</button>)}</div>
+          </div>}
+          {support.length === 0 && <span class="dg-support-empty">No support material yet.</span>}
         </section>
       </main>
     </div>
   );
+}
+
+function SupportNote({ services, projectId, file, label: noteLabel, startEditing }: {
+  services: GtdServices;
+  projectId: string;
+  file: TFile;
+  label: string;
+  startEditing: boolean;
+}) {
+  const [open, setOpen] = useState(startEditing);
+  const [editing, setEditing] = useState(false);
+  const [content, setContent] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const load = async (): Promise<string | null> => {
+    setLoading(true);
+    try {
+      const body = await services.repository.readProjectSupportNote(projectId, file.path);
+      setContent(body);
+      setDraft(body);
+      return body;
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not read the support note.");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const beginEditing = async () => {
+    setOpen(true);
+    const body = await load();
+    if (body !== null) setEditing(true);
+  };
+
+  useEffect(() => {
+    if (startEditing) void beginEditing();
+  }, [file.path, startEditing]);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !editing) void load();
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await services.repository.updateProjectSupportNote(projectId, file.path, draft);
+      setContent(draft.trimEnd());
+      setEditing(false);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not save the support note.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <article class={`dg-support-note${open ? " is-open" : ""}`}>
+    <header>
+      <button class="dg-support-note-toggle" onClick={toggle} aria-expanded={open}>
+        <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+        <span title={noteLabel}>{noteLabel}</span>
+      </button>
+      <div>
+        <button onClick={() => void services.openFile(file)}>Open</button>
+        <button onClick={() => void beginEditing()}>Edit</button>
+      </div>
+    </header>
+    {open && <div class="dg-support-note-body">
+      {loading && content === null
+        ? <span class="dg-muted">Loading…</span>
+        : editing
+          ? <>
+            <textarea value={draft} aria-label={`Edit ${noteLabel}`} onInput={(event: Event) => setDraft((event.currentTarget as HTMLTextAreaElement).value)} />
+            <div class="dg-support-note-edit-actions">
+              <button disabled={saving} onClick={() => { setDraft(content ?? ""); setEditing(false); }}>Cancel</button>
+              <button class="mod-cta" disabled={saving} onClick={() => void save()}>Save note</button>
+            </div>
+          </>
+          : content
+            ? <MarkdownText services={services} markdown={content} sourcePath={file.path} />
+            : <span class="dg-muted">This note is empty.</span>}
+    </div>}
+  </article>;
+}
+
+function isEditableSupportNote(services: GtdServices, file: TFile): boolean {
+  if (file.extension !== "md") return false;
+  const type = services.app.metadataCache.getFileCache(file)?.frontmatter?.type;
+  return type !== "gtd-action" && type !== "gtd-project" && type !== "gtd-inbox-item";
+}
+
+function supportFileLabel(file: TFile, supportPath?: string): string {
+  return supportPath && file.path.startsWith(`${supportPath}/`)
+    ? file.path.slice(supportPath.length + 1)
+    : file.name;
 }
 
 function SubprojectColumn({ status, projects, onSelect, onMove }: {

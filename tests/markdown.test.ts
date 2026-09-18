@@ -4,6 +4,7 @@ import {
   parseDiaryEntries,
   prependMarkdownSectionLine,
   readMarkdownSection,
+  replaceNoteBody,
   setMarkdownSection,
 } from "../src/utils/markdown";
 
@@ -51,5 +52,16 @@ describe("Markdown workflow helpers", () => {
   it("extracts an Inbox Item body without generated metadata or heading", () => {
     const note = `---\ntype: gtd-inbox-item\ntitle: Compare offers\n---\n\n# Compare offers\n\nCall Alex first.\n`;
     expect(noteBody(note, "Compare offers")).toBe("Call Alex first.");
+  });
+
+  it("replaces a note body without overwriting frontmatter", () => {
+    expect(replaceNoteBody(projectNote, "# Updated note")).toBe(`---
+type: gtd-project
+id: 01KTEST
+title: Heat pump
+---
+
+# Updated note
+`);
   });
 });
