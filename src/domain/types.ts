@@ -73,6 +73,14 @@ export interface ProjectInput {
   area?: string;
 }
 
+export interface InboxProcessingInput {
+  projectId?: string;
+  projectTitle?: string;
+  desiredOutcome?: string;
+  nextAction?: string;
+  context?: string;
+}
+
 export type ActionChanges = Partial<
   Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "deferUntil">
 >;

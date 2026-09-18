@@ -211,7 +211,6 @@ export function ProjectReview({ services }: { services: GtdServices }) {
         <div class="dg-workflow-footer">
           <div><strong>Ready to move on?</strong><span>The Desired outcome is saved automatically.</span></div>
           <div class="dg-review-footer-actions">
-            <button onClick={() => setQueue((current) => current.length > 1 ? [...current.slice(1), current[0]!] : current)}>Review later</button>
             <button class="mod-cta" onClick={() => void nextProject()}>Mark reviewed and continue →</button>
           </div>
         </div>

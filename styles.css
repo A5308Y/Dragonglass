@@ -459,11 +459,111 @@
 }
 .dg-inbox-preview.is-empty { color: var(--text-muted); font-style: italic; }
 
+.dg-processing-form {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.dg-processing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px 12px;
+}
+
+.dg-processing-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dg-processing-field.is-wide { grid-column: 1 / -1; }
+.dg-processing-field > span {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+.dg-processing-field > small {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.25;
+}
+.dg-processing-field input,
+.dg-processing-field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  background: var(--background-primary);
+  box-shadow: none;
+  appearance: none;
+}
+.dg-processing-field input { min-height: 40px; }
+.dg-processing-field textarea {
+  min-height: 78px;
+  resize: vertical;
+  line-height: var(--line-height-normal);
+}
+.dg-processing-field input:focus,
+.dg-processing-field textarea:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+}
+
+.dg-fuzzy-field { position: relative; min-width: 0; }
+.dg-fuzzy-results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: min(260px, 38vh);
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary-alt);
+  box-shadow: var(--shadow-s);
+}
+.dg-fuzzy-results button {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  box-shadow: none;
+}
+.dg-fuzzy-results button:hover,
+.dg-fuzzy-results button:focus,
+.dg-fuzzy-results button.is-active { background: var(--background-modifier-hover); }
+.dg-fuzzy-results button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dg-fuzzy-results button > small { flex: 0 0 auto; color: var(--text-muted); }
+
 .dg-processor-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
   margin-top: 12px;
+}
+.dg-processor-actions button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dg-workflow-complete {
@@ -810,6 +910,10 @@
   .dg-project-row { grid-template-columns: 1fr; }
   .dg-inbox-row { grid-template-columns: 1fr; }
   .dg-inbox-row > button { width: 100%; min-height: 40px; }
+  .dg-processing-grid { grid-template-columns: 1fr; }
+  .dg-processing-field.is-wide { grid-column: auto; }
+  .dg-processor-actions { grid-template-columns: 1fr; }
+  .dg-processor-actions button { min-height: 42px; white-space: normal; }
   .dg-row-actions { grid-column: 1; grid-row: auto; }
   .dg-action-row { grid-template-columns: 1fr auto; }
   .dg-action-row span { display: none; }

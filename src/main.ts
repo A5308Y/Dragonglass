@@ -1,11 +1,11 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { isActionStatus } from "./domain/validation";
-import type { GtdSettings, InboxItem, SavedView } from "./domain/types";
+import type { GtdSettings, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
 import { GtdSettingTab } from "./settings";
-import { ActionEditorModal, ProcessInboxItemModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
+import { ActionEditorModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
 import type { GtdServices } from "./ui/services";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, GtdBrainstormView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
 
@@ -30,7 +30,6 @@ export default class DragonglassGtdPlugin extends Plugin {
       openFile: (file) => this.openFile(file),
       quickCapture: () => this.quickCapture(),
       openInbox: () => void this.activateView(INBOX_VIEW_TYPE),
-      processInboxItem: (item) => this.processInboxItem(item),
       createProject: (openAfterCreate = true) => this.createProject(openAfterCreate),
       editAction: (id) => this.editAction(id),
       editProject: (id) => this.editProject(id),
@@ -67,6 +66,9 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.settings = {
       ...defaults,
       ...(saved ?? {}),
+      referenceDirectory: saved?.referenceDirectory === "Reference"
+        ? defaults.referenceDirectory
+        : saved?.referenceDirectory ?? defaults.referenceDirectory,
       savedViews: Array.isArray(saved?.savedViews) ? migrateSavedViews(saved.savedViews) : defaults.savedViews,
       defaultActionStatus: isActionStatus(saved?.defaultActionStatus) ? saved.defaultActionStatus : defaults.defaultActionStatus,
       schemaVersion: defaults.schemaVersion,
@@ -133,11 +135,6 @@ export default class DragonglassGtdPlugin extends Plugin {
       await this.repository.createInboxItem(title);
       new Notice("Captured to Inbox.");
     }).open();
-  }
-
-  private processInboxItem(item: InboxItem): void {
-    if (!this.index.getSnapshot().inboxItemsById.has(item.id)) return void new Notice("This Inbox Item is missing or has a duplicate ID.");
-    new ProcessInboxItemModal(this.services, item).open();
   }
 
   private createProject(openAfterCreate = true): void {

@@ -27,7 +27,7 @@ GTD/Inbox/
 GTD/Actions/
 GTD/Projects/
 Project Support Material/<project title>/
-Reference/
+General Reference/
 ```
 
 The Inbox, Action, Project, and Reference destinations and the default Action status are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it.
@@ -43,7 +43,7 @@ created: 2026-09-18
 
 Inbox Items have no status. Processing one explicitly transforms that same Markdown file into an Action, moves it to the Actions directory, and preserves its stable ID and note body. The original capture date is retained as `captured`; the Action receives its own `created` date. `inbox` is not a valid Action status.
 
-The processing view also supports the other useful outcomes from the former `gtd-processor`: turn the item into an active or Someday/Maybe Project, file it as ordinary Project support material, file it as ordinary Reference material, skip it, or send it to Obsidian's trash. These are transformations and moves of the source Markdown file—not records in a second application database.
+The processing view puts Project, Project Vision, Next Action, and Context fields above four immediate dispositions. Project and Context support fuzzy matching while still accepting new names. A decision either creates a Next Action, files the source note as Project support or General Reference (optionally also creating a Next Action), creates a Someday/Maybe Project with support material and a Next Action, or sends the source note to Obsidian's trash. There is no Skip action and no follow-up modal after choosing a disposition.
 
 For compatibility, legacy files with `type: gtd-action` and `status: inbox` appear in the dedicated Inbox view rather than on the Action board. Processing them rewrites them into the current Action format.
 
@@ -96,7 +96,7 @@ The Projects board has Active, Someday/Maybe, and Completed columns. Projects mo
 
 ## Processing, review, and brainstorming
 
-**Process Inbox** works through indexed Inbox Item files in capture order, with a two-minute decision timer and session progress. Creating an Action transforms the Inbox Item into a `gtd-action`; creating a Project transforms it into a `gtd-project`. Filing removes Dragonglass entity metadata and leaves a normal Markdown note in the selected support or Reference folder.
+**Process Inbox** works through indexed Inbox Item files in capture order, with a two-minute decision timer and session progress. The inline form resolves an existing Project by fuzzy selection or exact title, creates an Active Project for an unmatched name when needed, and accepts existing or new Context values. Creating a Next Action transforms the Inbox Item into a `gtd-action`. Filing removes Dragonglass entity metadata and leaves the original Markdown note intact in Project support material or General Reference; an optional Next Action is a separate Action file. Someday/Maybe creates or updates the selected Project with its vision, files the source note as support material, and creates the supplied Next Action.
 
 **Project Review** presents active Projects that have not been reviewed today, putting Projects without a Next Action first. It reads and writes the Project's `## Desired outcome` and `## Diary` sections, operates on the Project's real Action files, reports completed Action and support-file counts, and records the review in the Project's `reviewed` frontmatter property. Review progress is session-only and disposable; there is no review-session database or JSON file.
 

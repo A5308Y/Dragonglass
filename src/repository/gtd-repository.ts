@@ -12,6 +12,7 @@ import type {
   ActionInput,
   GtdSettings,
   InboxItem,
+  InboxProcessingInput,
   Project,
   ProjectChanges,
   ProjectInput,
@@ -42,10 +43,6 @@ export class GtdRepository {
     await this.convertInboxItemToAction(item, input);
   }
 
-  async processInboxItem(id: string, input: ActionInput): Promise<void> {
-    await this.convertInboxItemToAction(this.requireInboxItem(id), input);
-  }
-
   private async createInboxRecord(title: string, details = ""): Promise<InboxItem> {
     const id = createUlid();
     const cleanTitle = title.trim();
@@ -64,8 +61,8 @@ export class GtdRepository {
     return { type: "gtd-inbox-item", id, title: cleanTitle, created: String(frontmatter.created), file };
   }
 
-  private async convertInboxItemToAction(item: InboxItem, input: ActionInput): Promise<void> {
-    const project = input.projectId ? this.index.getSnapshot().projectsById.get(input.projectId) : undefined;
+  private async convertInboxItemToAction(item: InboxItem, input: ActionInput, resolvedProject?: Project): Promise<void> {
+    const project = resolvedProject ?? (input.projectId ? this.index.getSnapshot().projectsById.get(input.projectId) : undefined);
     if (input.projectId && !project) throw new Error("The selected Project no longer exists.");
     const directory = normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions";
     await this.ensureFolder(directory);
@@ -95,44 +92,7 @@ export class GtdRepository {
     });
   }
 
-  async createProjectFromInbox(id: string, input: { title: string; status: Project["status"]; desiredOutcome?: string }): Promise<void> {
-    const item = this.requireInboxItem(id);
-    const title = input.title.trim();
-    if (!title) throw new Error("A Project title is required.");
-    const directory = normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects";
-    await this.ensureFolder(directory);
-    const supportPath = this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, title, item.id);
-    await this.ensureFolder(supportPath);
-    await this.enqueue(item.file.path, async () => {
-      await this.app.fileManager.processFrontMatter(item.file, (frontmatter) => {
-        clearGtdFrontmatter(frontmatter);
-        frontmatter.type = "gtd-project";
-        frontmatter.id = item.id;
-        frontmatter.title = title;
-        frontmatter.status = input.status;
-        frontmatter.captured = item.created;
-        frontmatter.created = localDate();
-        frontmatter.area = null;
-        frontmatter.reviewed = null;
-        frontmatter.completed = null;
-        frontmatter.support_path = supportPath;
-      });
-      if (title !== item.title) await this.updateGeneratedHeading(item.file, item.title, title);
-      await this.app.vault.process(item.file, (content) => {
-        let updated = content;
-        updated = setMarkdownSection(updated, "Desired outcome", input.desiredOutcome ?? "");
-        if (!/^## Notes\s*$/m.test(updated)) updated = `${updated.trimEnd()}\n\n## Notes\n\n`;
-        updated = setMarkdownSection(updated, "Support material", `\`${supportPath}/\``);
-        return updated;
-      });
-      const target = this.uniqueMarkdownPath(directory, title, item.id);
-      if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
-    });
-  }
-
-  async fileInboxItemWithProject(id: string, projectId: string): Promise<void> {
-    const item = this.requireInboxItem(id);
-    const project = this.requireProject(projectId);
+  private async fileInboxItemToProject(item: InboxItem, project: Project): Promise<void> {
     const supportPath = await this.ensureProjectSupportPath(project);
     await this.enqueue(item.file.path, async () => {
       await this.clearEntityFrontmatter(item.file);
@@ -141,9 +101,8 @@ export class GtdRepository {
     });
   }
 
-  async fileInboxItemAsReference(id: string): Promise<void> {
-    const item = this.requireInboxItem(id);
-    const directory = normalizeVaultPath(this.getSettings().referenceDirectory) || "Reference";
+  private async fileInboxItemToGeneralReference(item: InboxItem): Promise<void> {
+    const directory = normalizeVaultPath(this.getSettings().referenceDirectory) || "General Reference";
     await this.ensureFolder(directory);
     await this.enqueue(item.file.path, async () => {
       await this.clearEntityFrontmatter(item.file);
@@ -157,26 +116,68 @@ export class GtdRepository {
     await this.app.fileManager.trashFile(item.file);
   }
 
+  async processInboxAsNextAction(id: string, input: InboxProcessingInput): Promise<void> {
+    const item = this.requireInboxItem(id);
+    const title = requiredProcessingValue(input.nextAction, "A Next Action is required.");
+    const context = requiredProcessingValue(input.context, "A context is required.");
+    const project = await this.prepareProcessingProject(input, "active");
+    await this.convertInboxItemToAction(item, actionInput(title, context, project), project);
+  }
+
+  async processInboxAsReference(id: string, input: InboxProcessingInput): Promise<void> {
+    const item = this.requireInboxItem(id);
+    const title = input.nextAction?.trim() ?? "";
+    const context = input.context?.trim() ?? "";
+    if (title && !context) throw new Error("A context is required when creating a Next Action.");
+    const project = await this.prepareProcessingProject(input, "active");
+
+    if (title) await this.createNextActionFile(title, context, item.created, project);
+    if (project) await this.fileInboxItemToProject(item, project);
+    else await this.fileInboxItemToGeneralReference(item);
+  }
+
+  async processInboxAsSomedayProject(id: string, input: InboxProcessingInput): Promise<void> {
+    const item = this.requireInboxItem(id);
+    const title = requiredProcessingValue(input.nextAction, "A Next Action is required.");
+    const context = requiredProcessingValue(input.context, "A context is required.");
+    const project = await this.prepareProcessingProject(input, "someday", title, true);
+    if (!project) throw new Error("Could not create the Someday/Maybe Project.");
+
+    await this.createNextActionFile(title, context, item.created, project);
+    await this.fileInboxItemToProject(item, project);
+  }
+
   async createProject(input: ProjectInput): Promise<TFile> {
+    return (await this.createProjectRecord(input)).file;
+  }
+
+  private async createProjectRecord(input: ProjectInput & { desiredOutcome?: string }): Promise<Project> {
     const id = createUlid();
+    const title = input.title.trim();
+    if (!title) throw new Error("A Project title is required.");
     const directory = normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects";
     await this.ensureFolder(directory);
-    const path = this.uniqueMarkdownPath(directory, input.title, id);
-    const supportPath = this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, input.title, id);
+    const path = this.uniqueMarkdownPath(directory, title, id);
+    const supportPath = this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, title, id);
     await this.ensureFolder(supportPath);
+    const status = input.status ?? "active";
+    const created = localDate();
     const frontmatter: Record<string, unknown> = {
       type: "gtd-project",
       id,
-      title: input.title.trim(),
-      status: input.status ?? "active",
+      title,
+      status,
       area: input.area || null,
-      created: localDate(),
+      created,
       reviewed: null,
       completed: null,
       support_path: supportPath,
     };
-    const body = `# ${input.title.trim()}\n\n## Desired outcome\n\n\n\n## Notes\n\n\n\n## Support material\n\n\`${supportPath}/\`\n`;
-    return this.app.vault.create(path, markdown(frontmatter, body));
+    const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n\n\n## Support material\n\n\`${supportPath}/\`\n`;
+    const file = await this.app.vault.create(path, markdown(frontmatter, body));
+    const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
+    if (input.area?.trim()) project.area = input.area.trim();
+    return project;
   }
 
   async updateAction(id: string, changes: ActionChanges): Promise<void> {
@@ -322,6 +323,71 @@ export class GtdRepository {
     return this.createInboxItem(`Brainstorm - ${cleanTopic}`, `## Ideas\n\n${cleanIdeas}`);
   }
 
+  private async createNextActionFile(title: string, context: string, captured: string, project?: Project): Promise<TFile> {
+    const id = createUlid();
+    const directory = normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions";
+    await this.ensureFolder(directory);
+    const path = this.uniqueMarkdownPath(directory, title, id);
+    const frontmatter: Record<string, unknown> = {
+      type: "gtd-action",
+      id,
+      title,
+      status: "next",
+      project_id: project?.id ?? null,
+      project: project ? wikiLink(project) : null,
+      context,
+      energy: null,
+      due: null,
+      defer_until: null,
+      captured,
+      created: localDate(),
+      completed: null,
+    };
+    return this.app.vault.create(path, markdown(frontmatter, `# ${title}\n\n## Done when\n\n`));
+  }
+
+  private async prepareProcessingProject(
+    input: InboxProcessingInput,
+    newProjectStatus: Project["status"],
+    fallbackTitle = "",
+    updateExistingStatus = false,
+  ): Promise<Project | undefined> {
+    const snapshot = this.index.getSnapshot();
+    let project: Project | undefined;
+    if (input.projectId) {
+      project = snapshot.projectsById.get(input.projectId);
+      if (!project) throw new Error("The selected Project no longer exists.");
+    } else if (input.projectTitle?.trim()) {
+      const normalized = input.projectTitle.trim().toLocaleLowerCase();
+      project = snapshot.projects.find((candidate) => candidate.title.toLocaleLowerCase() === normalized);
+    }
+
+    const desiredOutcome = input.desiredOutcome?.trim() ?? "";
+    if (project) {
+      if (updateExistingStatus && project.status !== newProjectStatus) {
+        await this.updateProject(project.id, { status: newProjectStatus });
+        project = { ...project, status: newProjectStatus };
+      }
+      if (desiredOutcome) await this.setDesiredOutcomeForProject(project, desiredOutcome);
+      return project;
+    }
+
+    const title = input.projectTitle?.trim() || fallbackTitle.trim();
+    if (!title) return undefined;
+    return this.createProjectRecord({
+      title,
+      status: newProjectStatus,
+      ...(desiredOutcome ? { desiredOutcome } : {}),
+    });
+  }
+
+  private async setDesiredOutcomeForProject(project: Project, desiredOutcome: string): Promise<void> {
+    await this.enqueue(project.file.path, () => this.app.vault.process(
+      project.file,
+      (content) => setMarkdownSection(content, "Desired outcome", desiredOutcome),
+    ));
+  }
+
   supportFiles(project: Project): TFile[] {
     if (!project.supportPath) return [];
     const prefix = `${project.supportPath}/`;
@@ -460,4 +526,19 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
 function localDateTime(date = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function requiredProcessingValue(value: string | undefined, message: string): string {
+  const clean = value?.trim() ?? "";
+  if (!clean) throw new Error(message);
+  return clean;
+}
+
+function actionInput(title: string, context: string, project?: Project): ActionInput {
+  return {
+    title,
+    status: "next",
+    context,
+    ...(project ? { projectId: project.id } : {}),
+  };
 }

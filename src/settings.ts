@@ -34,7 +34,7 @@ export class GtdSettingTab extends PluginSettingTab {
       .setName("Reference directory")
       .setDesc("Vault-relative destination when an Inbox Item is filed as reference.")
       .addText((text) => text.setValue(this.plugin.settings.referenceDirectory).onChange(async (value) => {
-        this.plugin.settings.referenceDirectory = normalizeVaultPath(value) || "Reference";
+        this.plugin.settings.referenceDirectory = normalizeVaultPath(value) || "General Reference";
         await this.plugin.saveSettings();
       }));
 
