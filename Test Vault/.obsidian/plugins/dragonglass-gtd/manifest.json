@@ -1,0 +1,9 @@
+{
+  "id": "dragonglass-gtd",
+  "name": "Dragonglass GTD",
+  "version": "0.1.0",
+  "minAppVersion": "1.13.0",
+  "description": "Manage file-first GTD actions and projects from a fast board.",
+  "author": "Andy",
+  "isDesktopOnly": false
+}
