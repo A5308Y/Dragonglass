@@ -1,0 +1,9 @@
+views:
+  - type: table
+    name: Inbox Items
+    filters:
+      and:
+        - type == "gtd-inbox-item"
+    order:
+      - title
+      - created

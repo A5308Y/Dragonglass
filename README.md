@@ -1,6 +1,6 @@
 # Dragonglass GTD
 
-Dragonglass GTD is a file-first GTD board for Obsidian. Every Project and Action is an ordinary Markdown file; the plugin keeps only a disposable in-memory index and view configuration.
+Dragonglass GTD is a file-first GTD board for Obsidian. Every Inbox Item, Project, and Action is an ordinary Markdown file; the plugin keeps only a disposable in-memory index and view configuration.
 
 ## Development installation
 
@@ -23,12 +23,26 @@ The repository includes `Test Vault`. Running `mise exec -- npm run build` produ
 New files use these default destinations:
 
 ```text
+GTD/Inbox/
 GTD/Actions/
 GTD/Projects/
 Projects/<project title>/
 ```
 
-The first two paths and the default Action status are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it.
+The three GTD paths and the default Action status are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it.
+
+Quick Capture creates an Inbox Item, not an Action:
+
+```yaml
+type: gtd-inbox-item
+id: 01K5INBOX1234567890123456
+title: Look into heating options
+created: 2026-09-18
+```
+
+Inbox Items have no status. Processing one explicitly transforms that same Markdown file into an Action, moves it to the Actions directory, and preserves its stable ID and note body. The original capture date is retained as `captured`; the Action receives its own `created` date. `inbox` is not a valid Action status.
+
+For compatibility, legacy files with `type: gtd-action` and `status: inbox` appear in the dedicated Inbox view rather than on the Action board. Processing them rewrites them into the current Action format.
 
 An Action contains clean YAML such as:
 
@@ -54,12 +68,12 @@ A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `are
 ## Commands
 
 - **GTD: Open Action Board**
+- **GTD: Open Inbox**
 - **GTD: Open Projects**
-- **GTD: New Action**
-- **GTD: Quick Capture Action**
+- **GTD: Quick Capture Inbox Item**
 - **GTD: New Project**
 
-Assign any command to an Obsidian hotkey. Quick Capture asks only for a title and immediately creates an Inbox Action.
+Assign any command to an Obsidian hotkey. Quick Capture asks only for a title and immediately creates an Inbox Item. Actions are created by processing items from the dedicated Inbox view.
 
 ## Board behavior
 
@@ -77,8 +91,9 @@ The Projects view displays open and Next Action counts, review dates, and warnin
 
 ## Bases
 
-Ready-to-copy examples are in [GTD Actions.base](examples/GTD%20Actions.base) and [GTD Projects.base](examples/GTD%20Projects.base). They contain views for:
+Ready-to-copy examples are in [GTD Inbox.base](examples/GTD%20Inbox.base), [GTD Actions.base](examples/GTD%20Actions.base), and [GTD Projects.base](examples/GTD%20Projects.base). They contain views for:
 
+- Inbox Items
 - All Actions
 - Next Actions
 - Actions by Project

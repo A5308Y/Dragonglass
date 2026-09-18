@@ -1,18 +1,21 @@
 import { MetadataCache, Plugin, TAbstractFile, TFile, Vault } from "obsidian";
-import type { Action, GtdSnapshot, IndexIssue, Project } from "../domain/types";
-import { parseAction, parseProject } from "../domain/validation";
+import type { Action, GtdSnapshot, InboxItem, IndexIssue, Project } from "../domain/types";
+import { parseAction, parseInboxItem, parseProject } from "../domain/validation";
 
 type Listener = () => void;
 
 export class GtdIndex {
+  private inboxItemsByPath = new Map<string, InboxItem>();
   private actionsByPath = new Map<string, Action>();
   private projectsByPath = new Map<string, Project>();
   private parseIssues = new Map<string, IndexIssue>();
   private listeners = new Set<Listener>();
   private current: GtdSnapshot = {
     revision: 0,
+    inboxItems: [],
     actions: [],
     projects: [],
+    inboxItemsById: new Map(),
     actionsById: new Map(),
     projectsById: new Map(),
     issues: [],
@@ -55,12 +58,13 @@ export class GtdIndex {
   }
 
   private remove(path: string): void {
-    if (!this.actionsByPath.has(path) && !this.projectsByPath.has(path) && !this.parseIssues.has(path)) return;
+    if (!this.inboxItemsByPath.has(path) && !this.actionsByPath.has(path) && !this.projectsByPath.has(path) && !this.parseIssues.has(path)) return;
     this.removeFromMaps(path);
     this.rebuildSnapshot();
   }
 
   private removeFromMaps(path: string): void {
+    this.inboxItemsByPath.delete(path);
     this.actionsByPath.delete(path);
     this.projectsByPath.delete(path);
     this.parseIssues.delete(path);
@@ -70,9 +74,11 @@ export class GtdIndex {
     const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter;
     if (!frontmatter) return;
     const type = frontmatter.type;
-    if (type !== "gtd-action" && type !== "gtd-project") return;
+    if (type !== "gtd-inbox-item" && type !== "gtd-action" && type !== "gtd-project") return;
     try {
-      if (type === "gtd-action") this.actionsByPath.set(file.path, parseAction(frontmatter, file));
+      if (type === "gtd-inbox-item") this.inboxItemsByPath.set(file.path, parseInboxItem(frontmatter, file));
+      else if (type === "gtd-action" && frontmatter.status === "inbox") this.inboxItemsByPath.set(file.path, parseInboxItem(frontmatter, file, true));
+      else if (type === "gtd-action") this.actionsByPath.set(file.path, parseAction(frontmatter, file));
       else this.projectsByPath.set(file.path, parseProject(frontmatter, file));
     } catch (error) {
       this.parseIssues.set(file.path, {
@@ -85,11 +91,18 @@ export class GtdIndex {
 
   private rebuildSnapshot(): void {
     const issues: IndexIssue[] = [...this.parseIssues.values()];
+    const inboxItemsById = new Map<string, InboxItem>();
     const actionsById = new Map<string, Action>();
     const projectsById = new Map<string, Project>();
+    const duplicateInboxItemIds = duplicates([...this.inboxItemsByPath.values()]);
     const duplicateActionIds = duplicates([...this.actionsByPath.values()]);
     const duplicateProjectIds = duplicates([...this.projectsByPath.values()]);
 
+    for (const item of this.inboxItemsByPath.values()) {
+      if (duplicateInboxItemIds.has(item.id)) {
+        issues.push({ path: item.file.path, kind: "duplicate-id", message: `Duplicate Inbox Item ID '${item.id}'` });
+      } else inboxItemsById.set(item.id, item);
+    }
     for (const action of this.actionsByPath.values()) {
       if (duplicateActionIds.has(action.id)) {
         issues.push({ path: action.file.path, kind: "duplicate-id", message: `Duplicate Action ID '${action.id}'` });
@@ -103,8 +116,10 @@ export class GtdIndex {
 
     this.current = {
       revision: this.current.revision + 1,
+      inboxItems: [...this.inboxItemsByPath.values()],
       actions: [...this.actionsByPath.values()],
       projects: [...this.projectsByPath.values()],
+      inboxItemsById,
       actionsById,
       projectsById,
       issues,

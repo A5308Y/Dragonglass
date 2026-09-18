@@ -4,6 +4,7 @@ views:
     filters:
       and:
         - type == "gtd-action"
+        - status != "inbox"
     order:
       - title
       - status
@@ -16,6 +17,7 @@ views:
     filters:
       and:
         - type == "gtd-action"
+        - status != "inbox"
         - status == "next"
         - defer_until.isEmpty() || defer_until <= today()
     order:
@@ -29,6 +31,7 @@ views:
     filters:
       and:
         - type == "gtd-action"
+        - status != "inbox"
     groupBy:
       property: project
       direction: ASC
@@ -51,6 +54,7 @@ views:
     filters:
       and:
         - type == "gtd-action"
+        - status != "inbox"
         - status != "done"
         - status != "cancelled"
         - due >= today()

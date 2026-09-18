@@ -15,6 +15,14 @@ export class GtdSettingTab extends PluginSettingTab {
     containerEl.createEl("p", { text: "Directories are creation destinations. Existing GTD files are discovered by their type property anywhere in the vault." });
 
     new Setting(containerEl)
+      .setName("Inbox directory")
+      .setDesc("Vault-relative destination for new Inbox Item files.")
+      .addText((text) => text.setValue(this.plugin.settings.inboxDirectory).onChange(async (value) => {
+        this.plugin.settings.inboxDirectory = normalizeVaultPath(value) || "GTD/Inbox";
+        await this.plugin.saveSettings();
+      }));
+
+    new Setting(containerEl)
       .setName("Actions directory")
       .setDesc("Vault-relative destination for new Action files.")
       .addText((text) => text.setValue(this.plugin.settings.actionsDirectory).onChange(async (value) => {

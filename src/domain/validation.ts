@@ -3,6 +3,7 @@ import {
   PROJECT_STATUSES,
   type Action,
   type ActionStatus,
+  type InboxItem,
   type Project,
   type ProjectStatus,
 } from "./types";
@@ -68,6 +69,18 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
     action.completed = completed;
   }
   return action;
+}
+
+export function parseInboxItem(frontmatter: Frontmatter, file: TFile, legacyAction = false): InboxItem {
+  const item: InboxItem = {
+    type: "gtd-inbox-item",
+    id: requiredString(frontmatter, "id"),
+    title: requiredString(frontmatter, "title"),
+    created: dateOnly(requiredString(frontmatter, "created"), "created"),
+    file,
+  };
+  if (legacyAction) item.legacyAction = true;
+  return item;
 }
 
 export function parseProject(frontmatter: Frontmatter, file: TFile): Project {

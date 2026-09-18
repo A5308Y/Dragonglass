@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
 import type { Action, GtdSnapshot, Project } from "../src/domain/types";
+import { isActionStatus } from "../src/domain/validation";
 import { buildBoard, filterActions, matchesFilter, sortActions } from "../src/state/query";
+import { createDefaultViews } from "../src/state/defaults";
 
 const file = (path: string) => ({ path } as TFile);
 const project: Project = { type: "gtd-project", id: "P1", title: "Heating", file: file("GTD/Projects/Heating.md"), status: "active", created: "2026-09-01" };
@@ -13,6 +15,12 @@ const actions: Action[] = [
 const projects = new Map([[project.id, project]]);
 
 describe("query model", () => {
+  it("does not treat inbox as an Action status", () => {
+    expect(isActionStatus("inbox")).toBe(false);
+    expect(isActionStatus("next")).toBe(true);
+    expect(JSON.stringify(createDefaultViews())).not.toContain("inbox");
+  });
+
   it("combines filters with AND", () => {
     const result = filterActions(actions, [
       { kind: "value", field: "status", operator: "in", values: ["next"] },
@@ -43,8 +51,10 @@ describe("query model", () => {
   it("builds serializable project groups", () => {
     const snapshot: GtdSnapshot = {
       revision: 1,
+      inboxItems: [],
       actions,
       projects: [project],
+      inboxItemsById: new Map(),
       actionsById: new Map(actions.map((action) => [action.id, action])),
       projectsById: projects,
       issues: [],

@@ -1,11 +1,31 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { render } from "preact";
 import { ActionBoard } from "./board/board";
+import { InboxView } from "./inbox/inbox";
 import { ProjectsView } from "./projects/projects";
 import type { GtdServices } from "./ui/services";
 
 export const BOARD_VIEW_TYPE = "dragonglass-action-board";
+export const INBOX_VIEW_TYPE = "dragonglass-inbox";
 export const PROJECTS_VIEW_TYPE = "dragonglass-projects";
+
+export class GtdInboxView extends ItemView {
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
+    super(leaf);
+  }
+
+  getViewType(): string { return INBOX_VIEW_TYPE; }
+  getDisplayText(): string { return "GTD Inbox"; }
+  getIcon(): string { return "inbox"; }
+
+  async onOpen(): Promise<void> { this.refresh(); }
+  async onClose(): Promise<void> { render(null, this.contentEl); }
+
+  refresh(): void {
+    render(null, this.contentEl);
+    render(<InboxView services={this.services} />, this.contentEl);
+  }
+}
 
 export class ActionBoardView extends ItemView {
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {

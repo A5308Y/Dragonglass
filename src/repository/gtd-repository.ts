@@ -11,6 +11,7 @@ import type {
   ActionChanges,
   ActionInput,
   GtdSettings,
+  InboxItem,
   Project,
   ProjectChanges,
   ProjectInput,
@@ -29,29 +30,52 @@ export class GtdRepository {
     private readonly getSettings: () => GtdSettings,
   ) {}
 
-  async createAction(input: ActionInput): Promise<TFile> {
+  async createInboxItem(title: string): Promise<TFile> {
     const id = createUlid();
+    const cleanTitle = title.trim();
+    if (!cleanTitle) throw new Error("An Inbox Item title is required.");
+    const directory = normalizeVaultPath(this.getSettings().inboxDirectory) || "GTD/Inbox";
+    await this.ensureFolder(directory);
+    const path = this.uniqueMarkdownPath(directory, cleanTitle, id);
+    const frontmatter: Record<string, unknown> = {
+      type: "gtd-inbox-item",
+      id,
+      title: cleanTitle,
+      created: localDate(),
+    };
+    return this.app.vault.create(path, markdown(frontmatter, `# ${cleanTitle}\n\n`));
+  }
+
+  async processInboxItem(id: string, input: ActionInput): Promise<void> {
+    const item = this.requireInboxItem(id);
     const project = input.projectId ? this.index.getSnapshot().projectsById.get(input.projectId) : undefined;
     if (input.projectId && !project) throw new Error("The selected Project no longer exists.");
     const directory = normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions";
     await this.ensureFolder(directory);
-    const path = this.uniqueMarkdownPath(directory, input.title, id);
-    const frontmatter: Record<string, unknown> = {
-      type: "gtd-action",
-      id,
-      title: input.title.trim(),
-      status: input.status,
-      project_id: input.projectId ?? null,
-      project: project ? wikiLink(project) : null,
-      context: input.context || null,
-      energy: input.energy || null,
-      due: input.due || null,
-      defer_until: input.deferUntil || null,
-      created: localDate(),
-      completed: null,
-    };
-    const body = `# ${input.title.trim()}\n\n## Done when\n\n`;
-    return this.app.vault.create(path, markdown(frontmatter, body));
+    await this.enqueue(item.file.path, async () => {
+      const oldTitle = item.title;
+      const title = input.title.trim();
+      if (!title) throw new Error("An Action title is required.");
+      await this.app.fileManager.processFrontMatter(item.file, (frontmatter) => {
+        frontmatter.type = "gtd-action";
+        frontmatter.id = item.id;
+        frontmatter.title = title;
+        frontmatter.status = input.status;
+        frontmatter.project_id = input.projectId ?? null;
+        frontmatter.project = project ? wikiLink(project) : null;
+        frontmatter.context = input.context || null;
+        frontmatter.energy = input.energy || null;
+        frontmatter.due = input.due || null;
+        frontmatter.defer_until = input.deferUntil || null;
+        frontmatter.captured = item.created;
+        frontmatter.created = localDate();
+        frontmatter.completed = null;
+      });
+      if (title !== oldTitle) await this.updateGeneratedHeading(item.file, oldTitle, title);
+      await this.ensureDoneWhenSection(item.file);
+      const target = this.uniqueMarkdownPath(directory, title, item.id);
+      if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
+    });
   }
 
   async createProject(input: ProjectInput): Promise<TFile> {
@@ -170,6 +194,12 @@ export class GtdRepository {
     return action;
   }
 
+  private requireInboxItem(id: string): InboxItem {
+    const item = this.index.getSnapshot().inboxItemsById.get(id);
+    if (!item) throw new Error(`Inbox Item '${id}' is missing or has a duplicate ID.`);
+    return item;
+  }
+
   private requireProject(id: string): Project {
     const project = this.index.getSnapshot().projectsById.get(id);
     if (!project) throw new Error(`Project '${id}' is missing or has a duplicate ID.`);
@@ -238,6 +268,10 @@ export class GtdRepository {
 
   private async updateSupportPathInBody(file: TFile, oldPath: string, newPath: string): Promise<void> {
     await this.app.vault.process(file, (content) => content.replace(`\`${oldPath}/\``, `\`${newPath}/\``));
+  }
+
+  private async ensureDoneWhenSection(file: TFile): Promise<void> {
+    await this.app.vault.process(file, (content) => /^## Done when\s*$/m.test(content) ? content : `${content.trimEnd()}\n\n## Done when\n\n`);
   }
 }
 

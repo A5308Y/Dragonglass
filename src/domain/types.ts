@@ -1,7 +1,6 @@
 import type { TFile } from "obsidian";
 
 export const ACTION_STATUSES = [
-  "inbox",
   "next",
   "waiting",
   "scheduled",
@@ -20,6 +19,15 @@ export const PROJECT_STATUSES = [
 
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
+export interface InboxItem {
+  type: "gtd-inbox-item";
+  id: string;
+  title: string;
+  file: TFile;
+  created: string;
+  legacyAction?: boolean;
+}
 
 export interface Action {
   type: "gtd-action";
@@ -82,8 +90,10 @@ export interface IndexIssue {
 
 export interface GtdSnapshot {
   revision: number;
+  inboxItems: readonly InboxItem[];
   actions: readonly Action[];
   projects: readonly Project[];
+  inboxItemsById: ReadonlyMap<string, InboxItem>;
   actionsById: ReadonlyMap<string, Action>;
   projectsById: ReadonlyMap<string, Project>;
   issues: readonly IndexIssue[];
@@ -142,6 +152,7 @@ export interface BoardConfiguration {
 }
 
 export interface GtdSettings {
+  inboxDirectory: string;
   projectsDirectory: string;
   actionsDirectory: string;
   defaultActionStatus: ActionStatus;

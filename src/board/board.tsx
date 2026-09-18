@@ -16,7 +16,7 @@ import { useGtdSnapshot } from "../ui/hooks";
 import { TextPromptModal, label } from "../ui/modals";
 import type { GtdServices } from "../ui/services";
 
-const STATUS_COLUMNS: ActionStatus[] = ["inbox", "next", "waiting", "scheduled", "someday", "done"];
+const STATUS_COLUMNS: ActionStatus[] = ["next", "waiting", "scheduled", "someday", "done"];
 
 export function ActionBoard({ services }: { services: GtdServices }) {
   const snapshot = useGtdSnapshot(services.repository.index);
@@ -137,8 +137,8 @@ export function ActionBoard({ services }: { services: GtdServices }) {
           <span class="dg-count">{snapshot.actions.length}</span>
         </div>
         <div class="dg-header-actions">
-          <button class="mod-cta" onClick={services.createAction}>New Action</button>
           <button onClick={services.quickCapture}>Quick Capture</button>
+          <button onClick={services.openInbox}>Open Inbox</button>
         </div>
       </header>
 
@@ -281,7 +281,7 @@ function FilterBuilder({ services, filters, onChange }: { services: GtdServices;
   const snapshot = services.repository.index.getSnapshot();
   const [field, setField] = useState("status");
   const [operator, setOperator] = useState<"in" | "notIn">("in");
-  const [value, setValue] = useState("inbox");
+  const [value, setValue] = useState("next");
   const [dueOperator, setDueOperator] = useState<"before" | "onOrBefore" | "after" | "onOrAfter" | "withinNextDays" | "isEmpty" | "isNotEmpty">("onOrBefore");
   const [dueValue, setDueValue] = useState<string>(localDate());
   const values = field === "status"
@@ -292,7 +292,7 @@ function FilterBuilder({ services, filters, onChange }: { services: GtdServices;
 
   const changeField = (next: string) => {
     setField(next);
-    if (next === "status") setValue("inbox");
+    if (next === "status") setValue("next");
     else setValue("");
   };
   const add = () => {

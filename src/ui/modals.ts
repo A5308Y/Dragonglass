@@ -8,7 +8,7 @@ import {
   Setting,
   TextComponent,
 } from "obsidian";
-import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionInput, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
+import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionInput, type ActionStatus, type InboxItem, type Project, type ProjectStatus } from "../domain/types";
 import type { GtdServices } from "./services";
 
 abstract class FormModal extends Modal {
@@ -82,21 +82,22 @@ export class TextPromptModal extends FormModal {
   }
 }
 
-export class NewActionModal extends FormModal {
-  private title = "";
+export class ProcessInboxItemModal extends FormModal {
+  private title: string;
   private projectId = "";
   private projectQuery = "";
   private status: ActionStatus;
 
-  constructor(private readonly services: GtdServices) {
+  constructor(private readonly services: GtdServices, private readonly item: InboxItem) {
     super(services.app);
+    this.title = item.title;
     this.status = services.getSettings().defaultActionStatus;
   }
 
   protected renderForm(): void {
-    this.formEl.createEl("h2", { text: "New Action" });
+    this.formEl.createEl("h2", { text: "Process Inbox Item" });
     new Setting(this.formEl).setName("Title").addText((text) => {
-      text.setPlaceholder("What is the next physical action?").onChange((value) => (this.title = value));
+      text.setValue(this.title).setPlaceholder("What is the next physical action?").onChange((value) => (this.title = value));
       window.setTimeout(() => text.inputEl.focus(), 0);
     });
     addProjectSearch(
@@ -127,7 +128,7 @@ export class NewActionModal extends FormModal {
     const input: ActionInput = { title: this.title.trim(), status: this.status };
     if (this.projectId) input.projectId = this.projectId;
     try {
-      await this.services.repository.createAction(input);
+      await this.services.repository.processInboxItem(this.item.id, input);
       this.close();
     } catch (error) {
       this.fail(error);

@@ -5,14 +5,6 @@ const DEFAULT_SORT = { field: "created", direction: "desc" } as const;
 export function createDefaultViews(): SavedView[] {
   return [
     {
-      id: "default-inbox",
-      name: "Inbox",
-      filters: [{ kind: "value", field: "status", operator: "in", values: ["inbox"] }],
-      groupBy: "status",
-      sort: DEFAULT_SORT,
-      visibleColumns: ["inbox"],
-    },
-    {
       id: "default-next",
       name: "Next Actions",
       filters: [
@@ -56,19 +48,20 @@ export function createDefaultViews(): SavedView[] {
       filters: [{ kind: "value", field: "status", operator: "notIn", values: ["done", "cancelled"] }],
       groupBy: "status",
       sort: DEFAULT_SORT,
-      visibleColumns: ["inbox", "next", "waiting", "scheduled", "someday"],
+      visibleColumns: ["next", "waiting", "scheduled", "someday"],
     },
   ];
 }
 
 export function defaultSettings(): GtdSettings {
   return {
+    inboxDirectory: "GTD/Inbox",
     projectsDirectory: "GTD/Projects",
     actionsDirectory: "GTD/Actions",
-    defaultActionStatus: "inbox",
+    defaultActionStatus: "next",
     showDoneColumn: true,
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
-    schemaVersion: 1,
+    schemaVersion: 2,
   };
 }
