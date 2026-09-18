@@ -114,17 +114,21 @@ export function BrainstormView({ services }: { services: GtdServices }) {
           <span>💡</span>
           <h3>Start a standalone brainstorm</h3>
           <p>No “brainstorm” Action is required. The result will be captured as an Inbox Item.</p>
-          <div class="dg-brainstorm-start">
-            <input
-              value={standaloneTopic}
-              placeholder="What do you want to brainstorm?"
-              onInput={(event: Event) => setStandaloneTopic((event.currentTarget as HTMLInputElement).value)}
-              onKeyDown={(event: KeyboardEvent) => {
-                if (event.key === "Enter" && standaloneTopic.trim()) setStandalone(true);
-              }}
-            />
-            <button class="mod-cta" disabled={!standaloneTopic.trim()} onClick={() => setStandalone(true)}>Start brainstorming</button>
-          </div>
+          <section class="dg-brainstorm-field dg-brainstorm-start-field">
+            <label>Brainstorming topic</label>
+            <div class="dg-brainstorm-start">
+              <input
+                autofocus
+                value={standaloneTopic}
+                placeholder="What do you want to brainstorm?"
+                onInput={(event: Event) => setStandaloneTopic((event.currentTarget as HTMLInputElement).value)}
+                onKeyDown={(event: KeyboardEvent) => {
+                  if (event.key === "Enter" && standaloneTopic.trim()) setStandalone(true);
+                }}
+              />
+              <button class="mod-cta" disabled={!standaloneTopic.trim()} onClick={() => setStandalone(true)}>Start brainstorming</button>
+            </div>
+          </section>
         </div>
       ) : (
         <div class="dg-brainstorm-content">

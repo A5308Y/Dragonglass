@@ -869,17 +869,20 @@
 }
 .dg-brainstorm-timer.is-done { color: var(--text-success); }
 .dg-brainstorm-empty { width: min(560px, 100%); }
+.dg-brainstorm-start-field {
+  width: 100%;
+  margin-top: 18px;
+  text-align: left;
+}
 .dg-brainstorm-start {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 18px;
 }
 .dg-brainstorm-start input {
   flex: 1;
   min-width: 0;
-  min-height: 36px;
-  border-radius: var(--input-radius, var(--radius-s));
+  min-height: 40px;
 }
 .dg-brainstorm-task h3 { margin-top: 3px; }
 .dg-brainstorm-task button,
@@ -891,7 +894,23 @@
   background: var(--background-primary);
 }
 .dg-brainstorm-field label { display: block; margin-bottom: 8px; font-weight: var(--font-semibold); }
-.dg-brainstorm-field textarea { min-height: 92px; }
+.dg-brainstorm-field textarea,
+.dg-brainstorm-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  background: var(--background-primary);
+  box-shadow: none;
+  appearance: none;
+}
+.dg-brainstorm-field textarea:focus,
+.dg-brainstorm-field input:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 15%, transparent);
+}
+.dg-brainstorm-field textarea { min-height: 92px; resize: vertical; line-height: var(--line-height-normal); }
 .dg-ideas-field { flex: 1; display: flex; min-height: 240px; flex-direction: column; }
 .dg-ideas-field textarea { flex: 1; min-height: 190px; }
 
