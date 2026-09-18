@@ -13,6 +13,7 @@ export function InboxView({ services }: { services: GtdServices }) {
   const [processing, setProcessing] = useState(false);
   const [cursor, setCursor] = useState(0);
   const [sessionTotal, setSessionTotal] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const allItems = useMemo(() => [...snapshot.inboxItems].sort(compareInboxItems), [snapshot]);
   const items = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
@@ -28,6 +29,19 @@ export function InboxView({ services }: { services: GtdServices }) {
     setCursor(Math.max(0, index));
     setSessionTotal(allItems.length);
     setProcessing(true);
+  };
+
+  const deleteItem = async (item: InboxItem) => {
+    if (deletingId) return;
+    setDeletingId(item.id);
+    try {
+      await services.repository.trashInboxItem(item);
+      new Notice(`Deleted “${item.title}”.`);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not delete the Inbox Item.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -81,7 +95,10 @@ export function InboxView({ services }: { services: GtdServices }) {
                     {item.legacyAction && " · Legacy Inbox Action"}
                   </span>
                 </div>
-                <button class="mod-cta" onClick={() => startProcessing(item.id)}>Process</button>
+                <div class="dg-inbox-row-actions">
+                  <button class="mod-cta" disabled={deletingId === item.id} onClick={() => startProcessing(item.id)}>Process</button>
+                  <button class="mod-warning" disabled={deletingId === item.id} onClick={() => void deleteItem(item)}>Delete</button>
+                </div>
               </article>
             ))}
             {items.length === 0 && <div class="dg-empty-row">{search ? "No Inbox Items match this search." : "Inbox zero."}</div>}
