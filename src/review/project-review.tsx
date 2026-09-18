@@ -1,6 +1,8 @@
 import { Notice } from "obsidian";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import type { GtdSnapshot, Project } from "../domain/types";
+import type { Project } from "../domain/types";
+import { projectBreadcrumbs } from "../domain/project-hierarchy";
+import { activeProjectsWithoutNextAction, projectReviewMembers, projectReviewQueue } from "../domain/project-review";
 import { ActionRows } from "../ui/action-rows";
 import { FuzzyField } from "../ui/fuzzy-field";
 import type { DiaryEntry } from "../utils/markdown";
@@ -20,25 +22,33 @@ const DIARY_EMOJIS = [
 
 export function ProjectReview({ services }: { services: GtdServices }) {
   const snapshot = useGtdSnapshot(services.repository.index);
-  const [queue, setQueue] = useState<string[]>(() => reviewQueue(snapshot));
+  const [queue, setQueue] = useState<string[]>(() => projectReviewQueue(snapshot, localDate()));
   const [total] = useState(queue.length);
   const project = queue.length ? snapshot.projectsById.get(queue[0]!) : undefined;
   const [desiredOutcome, setDesiredOutcome] = useState("");
   const [diary, setDiary] = useState<DiaryEntry[]>([]);
   const [diaryInput, setDiaryInput] = useState("");
   const [actionTitle, setActionTitle] = useState("");
+  const [actionProjectId, setActionProjectId] = useState("");
+  const [actionProjectQuery, setActionProjectQuery] = useState("");
   const [context, setContext] = useState("");
   const [saving, setSaving] = useState(false);
   const timers = useReviewTimers(total, project?.id);
 
+  const reviewProjects = useMemo(() => project ? projectReviewMembers(project, snapshot.projects) : [], [snapshot, project?.id]);
+  const reviewProjectIds = useMemo(() => new Set(reviewProjects.map((candidate) => candidate.id)), [reviewProjects]);
+  const reviewProjectLabels = useMemo(() => projectBreadcrumbs(snapshot.projects), [snapshot]);
+  const activeReviewProjects = reviewProjects.filter((candidate) => candidate.status === "active");
   const projectActions = useMemo(
-    () => project ? snapshot.actions.filter((action) => action.projectId === project.id) : [],
-    [snapshot, project?.id],
+    () => snapshot.actions.filter((action) => action.projectId && reviewProjectIds.has(action.projectId)),
+    [snapshot, reviewProjectIds],
   );
   const openActions = projectActions.filter((action) => action.status !== "done" && action.status !== "cancelled");
   const nextActions = openActions.filter((action) => action.status === "next");
   const doneActions = projectActions.filter((action) => action.status === "done");
-  const needsNextAction = project?.status === "active" && nextActions.length === 0;
+  const missingNextProjects = activeProjectsWithoutNextAction(reviewProjects, projectActions);
+  const needsNextAction = missingNextProjects.length > 0;
+  const supportFileCount = reviewProjects.reduce((total, candidate) => total + services.repository.supportFiles(candidate).length, 0);
   const contexts = [...new Set(snapshot.actions.map((action) => action.context).filter((value): value is string => Boolean(value)))].sort();
 
   useEffect(() => {
@@ -47,6 +57,9 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     setDiary([]);
     setDiaryInput("");
     setActionTitle("");
+    const defaultActionProject = missingNextProjects[0] ?? project;
+    setActionProjectId(defaultActionProject?.id ?? "");
+    setActionProjectQuery(defaultActionProject ? reviewProjectLabels.get(defaultActionProject.id) ?? defaultActionProject.title : "");
     setContext("");
     if (project) {
       void Promise.all([
@@ -66,7 +79,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     return (
       <div class="dg-view dg-review-view">
         <header class="dg-view-header"><div><h2>Project Review</h2></div></header>
-        <div class="dg-workflow-complete"><span>✅</span><h3>Review complete</h3><p>{total ? `All ${total} Projects were reviewed.` : "No Projects need review today."}</p></div>
+        <div class="dg-workflow-complete"><span>✅</span><h3>Review complete</h3><p>{total ? `All ${total} Project trees were reviewed.` : "No Projects need review today."}</p></div>
       </div>
     );
   }
@@ -76,10 +89,12 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     if (!title) return;
     setSaving(true);
     try {
+      const targetProject = reviewProjects.find((candidate) => candidate.id === actionProjectId);
+      if (!targetProject) throw new Error("Select a Project for the Next Action.");
       await services.repository.createClarifiedAction({
         title,
         status: "next",
-        projectId: project.id,
+        projectId: targetProject.id,
         ...(context.trim() ? { context: context.trim() } : {}),
       });
       setActionTitle("");
@@ -111,7 +126,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     setSaving(true);
     try {
       await services.repository.setDesiredOutcome(project.id, desiredOutcome);
-      await services.repository.markProjectReviewed(project.id);
+      for (const candidate of activeReviewProjects) await services.repository.markProjectReviewed(candidate.id);
       setQueue((current) => current.slice(1));
     } catch (error) {
       new Notice(message(error));
@@ -125,6 +140,9 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     try {
       await services.repository.setDesiredOutcome(project.id, desiredOutcome);
       await services.repository.updateProject(project.id, { status: "someday", reviewed: localDate() });
+      for (const candidate of activeReviewProjects) {
+        if (candidate.id !== project.id) await services.repository.markProjectReviewed(candidate.id);
+      }
       setQueue((current) => current.slice(1));
       new Notice(`Moved “${project.title}” to Someday/Maybe.`);
     } catch (error) {
@@ -140,7 +158,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
       new Notice(`Move or delete ${children.length} sub-project${children.length === 1 ? "" : "s"} first.`);
       return;
     }
-    const linkedActions = projectActions.length;
+    const linkedActions = projectActions.filter((action) => action.projectId === project.id).length;
     const supportFiles = services.repository.supportFiles(project).length;
     const supportDescription = project.supportPath
       ? `${supportFiles} support file${supportFiles === 1 ? "" : "s"} in “${project.supportPath}”`
@@ -178,16 +196,38 @@ export function ProjectReview({ services }: { services: GtdServices }) {
       <div class="dg-review-content">
         <section class="dg-review-hero">
           <div class="dg-review-hero-copy">
-            <span class="dg-review-eyebrow">Project {total - queue.length + 1} of {total}</span>
+            <span class="dg-review-eyebrow">Project tree {total - queue.length + 1} of {total}</span>
             <button class="dg-project-title" onClick={() => void services.openFile(project.file)}>{project.title}</button>
             <div class="dg-review-project-meta">
-              <span class="dg-status">{project.area || project.status}</span>
+              <span class="dg-status">{project.area || projectStatusLabel(project.status)}</span>
+              <span>{reviewProjects.length} Project{reviewProjects.length === 1 ? "" : "s"}</span>
               <span>{openActions.length} open</span>
               <span>{nextActions.length} next</span>
             </div>
           </div>
-          {!nextActions.length && <span class="dg-no-next">No Next Action</span>}
+          {needsNextAction && <span class="dg-no-next">{missingNextProjects.length} without Next Action</span>}
         </section>
+
+        {reviewProjects.length > 1 && <section class="dg-review-panel dg-review-tree-panel">
+          <div class="dg-review-panel-heading dg-review-panel-heading-row">
+            <span class="dg-review-panel-icon">⌘</span>
+            <div><h3>Project tree</h3><p>Reviewed together as one outcome hierarchy.</p></div>
+            <span class="dg-review-count">{reviewProjects.length}</span>
+          </div>
+          <div class="dg-review-tree-list">
+            {reviewProjects.map((candidate) => {
+              const actions = projectActions.filter((action) => action.projectId === candidate.id && action.status !== "done" && action.status !== "cancelled");
+              const next = actions.filter((action) => action.status === "next").length;
+              const missing = candidate.status === "active" && next === 0;
+              return <div key={candidate.id}>
+                <button title={reviewProjectLabels.get(candidate.id)} onClick={() => void services.openFile(candidate.file)}>{reviewProjectLabel(candidate, project, snapshot.projectsById)}</button>
+                <span>{projectStatusLabel(candidate.status)}</span>
+                <span>{actions.length} open · {next} next</span>
+                {missing && <strong>No Next Action</strong>}
+              </div>;
+            })}
+          </div>
+        </section>}
 
         <section class="dg-review-grid">
           <div class="dg-review-panel dg-review-outcome-panel">
@@ -219,9 +259,23 @@ export function ProjectReview({ services }: { services: GtdServices }) {
             <div><h3>Open Actions</h3><p>Confirm that the next visible step is concrete.</p></div>
             <span class="dg-review-count">{openActions.length}</span>
           </div>
-          <ActionRows actions={openActions} services={services} />
+          <ActionRows actions={openActions} services={services} projectLabels={reviewProjectLabels} />
           <div class="dg-action-capture">
             <input value={actionTitle} placeholder="Define the next physical Action…" onInput={(event: Event) => setActionTitle((event.currentTarget as HTMLInputElement).value)} onKeyDown={(event: KeyboardEvent) => { if (event.key === "Enter") void addAction(); }} />
+            <FuzzyField
+              value={actionProjectQuery}
+              placeholder="Project"
+              options={reviewProjects.map((candidate) => ({ id: candidate.id, label: reviewProjectLabels.get(candidate.id) ?? candidate.title, meta: candidate.status }))}
+              onChange={(value) => {
+                setActionProjectQuery(value);
+                const match = reviewProjects.find((candidate) => (reviewProjectLabels.get(candidate.id) ?? candidate.title) === value);
+                setActionProjectId(match?.id ?? "");
+              }}
+              onChoose={(option) => {
+                setActionProjectId(option.id);
+                setActionProjectQuery(option.label);
+              }}
+            />
             <FuzzyField
               value={context}
               placeholder="Context"
@@ -229,7 +283,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
               onChange={setContext}
               onChoose={(option) => setContext(option.label)}
             />
-            <button class="mod-cta" disabled={!actionTitle.trim() || saving} onClick={() => void addAction()}>Add Next Action</button>
+            <button class="mod-cta" disabled={!actionTitle.trim() || !actionProjectId || saving} onClick={() => void addAction()}>Add Next Action</button>
           </div>
         </section>
 
@@ -249,15 +303,15 @@ export function ProjectReview({ services }: { services: GtdServices }) {
             </div>
             <div class="dg-review-stat-grid">
               <div><strong>{doneActions.length}</strong><span>completed Action{doneActions.length === 1 ? "" : "s"}</span></div>
-              <div><strong>{services.repository.supportFiles(project).length}</strong><span>support file{services.repository.supportFiles(project).length === 1 ? "" : "s"}</span></div>
+              <div><strong>{supportFileCount}</strong><span>support file{supportFileCount === 1 ? "" : "s"}</span></div>
             </div>
           </div>
         </section>
 
         <div class="dg-workflow-footer">
           <div>
-            <strong>{needsNextAction ? "This active Project needs a Next Action." : "Ready to move on?"}</strong>
-            {needsNextAction && <span>Add one above or move the Project to Someday/Maybe.</span>}
+            <strong>{needsNextAction ? `${missingNextProjects.length} active Project${missingNextProjects.length === 1 ? " needs" : "s need"} a Next Action.` : "Ready to move on?"}</strong>
+            {needsNextAction && <span>Add the missing Next Actions above or move the root Project to Someday/Maybe.</span>}
           </div>
           <div class="dg-review-footer-actions">
             <button class="mod-warning" disabled={saving} onClick={() => void deleteProject()}>Delete Project</button>
@@ -265,7 +319,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
             <button
               class="mod-cta"
               disabled={saving || needsNextAction}
-              title={needsNextAction ? "Add a Next Action or move this Project to Someday/Maybe." : undefined}
+              title={needsNextAction ? "Every active Project in this tree needs a Next Action." : undefined}
               onClick={() => void nextProject()}
             >Mark reviewed and continue →</button>
           </div>
@@ -275,17 +329,22 @@ export function ProjectReview({ services }: { services: GtdServices }) {
   );
 }
 
-function reviewQueue(snapshot: GtdSnapshot): string[] {
-  const today = localDate();
-  return snapshot.projects
-    .filter((project) => project.status === "active" && project.reviewed !== today)
-    .sort((left, right) => {
-      const leftHasNext = snapshot.actions.some((action) => action.projectId === left.id && action.status === "next");
-      const rightHasNext = snapshot.actions.some((action) => action.projectId === right.id && action.status === "next");
-      if (leftHasNext !== rightHasNext) return leftHasNext ? 1 : -1;
-      return left.title.localeCompare(right.title);
-    })
-    .map((project: Project) => project.id);
+function reviewProjectLabel(project: Project, root: Project, projectsById: ReadonlyMap<string, Project>): string {
+  if (project.id === root.id) return project.title;
+  const titles: string[] = [];
+  const seen = new Set<string>();
+  let current: Project | undefined = project;
+  while (current && current.id !== root.id && !seen.has(current.id)) {
+    seen.add(current.id);
+    titles.unshift(current.title);
+    current = current.parentProjectId ? projectsById.get(current.parentProjectId) : undefined;
+  }
+  return titles.join(" > ") || project.title;
+}
+
+function projectStatusLabel(status: Project["status"]): string {
+  if (status === "someday") return "Someday/Maybe";
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function useReviewTimers(total: number, projectId?: string): { session: number; project: number } {

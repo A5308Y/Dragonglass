@@ -478,6 +478,12 @@
 .dg-action-row-title:hover { color: var(--text-accent); }
 .dg-action-row-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; margin-top: 5px; }
 .dg-action-row-meta > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-action-row-meta .dg-action-project-label {
+  max-width: min(360px, 55vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dg-action-status {
   padding: 2px 6px;
   border-radius: 999px;
@@ -893,6 +899,37 @@
   height: 16px;
   display: block;
 }
+.dg-review-tree-panel { margin-bottom: 14px; }
+.dg-review-tree-list {
+  margin-top: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+.dg-review-tree-list > div {
+  min-height: 38px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.dg-review-tree-list > div:first-child { border-top: 0; }
+.dg-review-tree-list button {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0 !important;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-normal);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.dg-review-tree-list span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-review-tree-list strong { color: var(--text-warning); font-size: var(--font-ui-smaller); }
 .dg-review-count {
   min-width: 25px;
   margin-left: auto;
@@ -1132,6 +1169,12 @@
   .dg-review-timers { width: 100%; justify-content: space-between; }
   .dg-review-hero { align-items: flex-start; padding: 14px; }
   .dg-review-panel { padding: 13px; }
+  .dg-review-tree-list > div {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+  .dg-review-tree-list > div > span:nth-of-type(2),
+  .dg-review-tree-list > div > strong { grid-column: 1 / -1; }
   .dg-emoji-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .dg-inline-form,
   .dg-action-capture { align-items: stretch; flex-direction: column; }

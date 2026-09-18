@@ -3,14 +3,14 @@ import { useEffect, useState } from "preact/hooks";
 import type { Action } from "../domain/types";
 import type { GtdServices } from "./services";
 
-export function ActionRows({ actions, services }: { actions: Action[]; services: GtdServices }) {
+export function ActionRows({ actions, services, projectLabels }: { actions: Action[]; services: GtdServices; projectLabels?: ReadonlyMap<string, string> }) {
   if (!actions.length) return null;
   return <div class="dg-action-rows">{actions.sort((a, b) => a.title.localeCompare(b.title)).map((action) => (
-    <ActionRow key={action.id} action={action} services={services} />
+    <ActionRow key={action.id} action={action} services={services} {...(projectLabels ? { projectLabels } : {})} />
   ))}</div>;
 }
 
-function ActionRow({ action, services }: { key?: string; action: Action; services: GtdServices }) {
+function ActionRow({ action, services, projectLabels }: { key?: string; action: Action; services: GtdServices; projectLabels?: ReadonlyMap<string, string> }) {
   const done = action.status === "done";
   const [checked, setChecked] = useState(done);
   const [updating, setUpdating] = useState(false);
@@ -54,6 +54,7 @@ function ActionRow({ action, services }: { key?: string; action: Action; service
         <button class="dg-action-row-title" title={action.title} onClick={() => void services.openFile(action.file)}>{action.title}</button>
         <div class="dg-action-row-meta">
           <span class={`dg-action-status dg-action-status-${action.status}`}>{label(action.status)}</span>
+          {action.projectId && projectLabels?.has(action.projectId) && <span class="dg-action-project-label">{projectLabels.get(action.projectId)}</span>}
           {action.context && <span>@{action.context}</span>}
           {action.energy && <span>{action.energy} energy</span>}
           {action.due && <span>Due {action.due}</span>}

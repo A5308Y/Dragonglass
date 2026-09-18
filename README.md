@@ -80,7 +80,7 @@ completed:
 
 `project_id` is authoritative. The `project` link is only a human- and Bases-friendly convenience.
 
-A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, and `support_path`. Normal notes, PDFs, and other files can live beneath that support path.
+A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, and `support_path`. Supported Project statuses are `active`, `backlog`, `someday`, `completed`, and `cancelled`; the UI labels `someday` as Someday/Maybe. Normal notes, PDFs, and other files can live beneath that support path.
 
 Sub-projects use the same Project files and add an optional stable-ID relationship:
 
@@ -116,7 +116,7 @@ Marking an Action done writes `status: done` and an ISO completion timestamp. Re
 
 ## Projects
 
-The Projects board has Active, Someday/Maybe, and Completed columns. Projects move between them by desktop drag-and-drop or the card menu on touch devices. Project `waiting` is not a supported status; legacy Projects using it are migrated to `active`. Cards display hierarchy breadcrumbs, open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail links its parent and immediate sub-projects, reads the Desired outcome from the Project note, resolves its live Actions, and lists ordinary files beneath `support_path`; it does not duplicate Action data into the Project note.
+The Projects board has Active, Backlog, Someday/Maybe, and Completed columns. Projects move between them by desktop drag-and-drop or the card menu on touch devices. Project `waiting` is not a supported status; legacy Projects using it are migrated to `active`. Cards display hierarchy breadcrumbs, open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail links its parent and immediate sub-projects, reads the Desired outcome from the Project note, resolves its live Actions, and lists ordinary files beneath `support_path`; it does not duplicate Action data into the Project note.
 
 Deleting a Project from its card menu moves its Project note, directly linked Action files, and complete configured support-material folder to Obsidian's trash. A Project with sub-projects cannot be deleted until those children are moved or deleted. Dragonglass also refuses deletion when the support folder contains unrelated GTD entities.
 
@@ -124,7 +124,7 @@ Deleting a Project from its card menu moves its Project note, directly linked Ac
 
 **Process Inbox** works through indexed Inbox Item files in capture order, with a two-minute decision timer and session progress. The inline form resolves an existing Project by fuzzy selection or exact title, creates an Active Project for an unmatched name when needed, and accepts existing or new Context values. Creating a Next Action transforms the Inbox Item into a `gtd-action`. Filing removes Dragonglass entity metadata and leaves the original Markdown note intact in Project support material or General Reference; an optional Next Action is a separate Action file. Someday/Maybe creates or updates the selected Project with its vision, files the source note as support material, and creates the supplied Next Action.
 
-**Project Review** presents active Projects that have not been reviewed today, putting Projects without a Next Action first. It reads and writes the Project's `## Desired outcome` and `## Diary` sections, operates on the Project's real Action files, reports completed Action and support-file counts, and records the review in the Project's `reviewed` frontmatter property. Review progress is session-only and disposable; there is no review-session database or JSON file.
+**Project Review** presents each active Project hierarchy as one combined review item instead of reviewing its sub-projects one by one. It shows the whole Project tree, aggregates and labels Actions and support-file counts across all descendants, and requires every active member of the tree to have a Next Action before continuing. The inline Action capture can target any Project in the tree through fuzzy search. Marking the tree reviewed records the date on every active member. The root Project's `## Desired outcome` and `## Diary` remain the focus of the review. Review progress is session-only and disposable; there is no review-session database or JSON file.
 
 **Brainstorm** chooses among open Actions whose title contains `brainstorm`, provides a five-minute timer and an offline random-word prompt bank, and edits the related Project's Desired outcome. Saving completes the source Action and writes a normal Markdown note into the Project's support folder. If the Action has no Project, the result becomes a new Inbox Item. When no matching Action exists, a standalone session can be started from a typed topic and its result is captured to the Inbox. The workflow deliberately makes no network requests for inspiration images.
 

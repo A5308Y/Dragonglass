@@ -6,7 +6,7 @@ import { ActionRows } from "../ui/action-rows";
 import { useGtdSnapshot } from "../ui/hooks";
 import type { GtdServices } from "../ui/services";
 
-const BOARD_COLUMNS = ["active", "someday", "completed"] as const satisfies readonly ProjectStatus[];
+const BOARD_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
 type ProjectBoardStatus = (typeof BOARD_COLUMNS)[number];
 
 export function ProjectsView({ services, initialProjectId = null }: { services: GtdServices; initialProjectId?: string | null }) {
@@ -215,7 +215,7 @@ function ProjectCard({
 
 function projectColumn(status: ProjectStatus): ProjectBoardStatus | null {
   if (status === "active") return "active";
-  if (status === "someday" || status === "completed") return status;
+  if (status === "backlog" || status === "someday" || status === "completed") return status;
   return null;
 }
 

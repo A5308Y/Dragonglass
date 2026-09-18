@@ -7,7 +7,8 @@ const file = { path: "GTD/Projects/Legacy.md" } as TFile;
 
 describe("Project statuses", () => {
   it("does not expose Waiting as a supported Project status", () => {
-    expect(PROJECT_STATUSES).toEqual(["active", "someday", "completed", "cancelled"]);
+    expect(PROJECT_STATUSES).toEqual(["active", "backlog", "someday", "completed", "cancelled"]);
+    expect(isProjectStatus("backlog")).toBe(true);
     expect(isProjectStatus("waiting")).toBe(false);
   });
 
