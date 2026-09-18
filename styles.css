@@ -521,7 +521,10 @@
   max-height: 100%;
 }
 .dg-project-column .dg-card-list { overflow-y: auto; }
-.dg-project-card { contain-intrinsic-size: 128px; }
+.dg-project-card {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
 .dg-project-lineage {
   margin-top: 5px;
   overflow: hidden;
