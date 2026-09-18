@@ -279,7 +279,6 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             {outcome ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} /> : <div class="dg-detail-empty">No desired outcome written yet.</div>}
           </section>
           {hasHierarchy && <section class="dg-detail-section dg-project-hierarchy">
-            <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Structure</span><h3>Project hierarchy</h3></div></div>
             {parent
               ? <div><span>Parent</span><button onClick={() => onSelect(parent.id)}>{parent.title}</button></div>
               : project.parentProjectId && <div class="dg-missing">Missing parent Project: {project.parentProjectId}</div>}
