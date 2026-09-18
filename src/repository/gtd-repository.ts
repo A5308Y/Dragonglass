@@ -117,6 +117,45 @@ export class GtdRepository {
     await this.app.fileManager.trashFile(item.file);
   }
 
+  async trashProject(id: string): Promise<void> {
+    const project = this.requireProject(id);
+    const snapshot = this.index.getSnapshot();
+    const children = snapshot.projects.filter((candidate) => candidate.parentProjectId === project.id);
+    if (children.length) {
+      throw new Error(`Move or delete ${children.length} sub-project${children.length === 1 ? "" : "s"} before deleting this Project.`);
+    }
+
+    const actions = snapshot.actions.filter((action) => action.projectId === project.id);
+    const supportPath = normalizeVaultPath(project.supportPath ?? "");
+    const supportEntry = supportPath ? this.app.vault.getAbstractFileByPath(supportPath) : null;
+    if (supportEntry && !(supportEntry instanceof TFolder)) {
+      throw new Error(`Project support path is not a folder: ${supportPath}`);
+    }
+
+    if (supportEntry instanceof TFolder) {
+      const unrelatedProjects = snapshot.projects.filter((candidate) =>
+        candidate.id !== project.id && pathIsWithin(candidate.file.path, supportPath)
+      );
+      const unrelatedActions = snapshot.actions.filter((action) =>
+        action.projectId !== project.id && pathIsWithin(action.file.path, supportPath)
+      );
+      const inboxItems = snapshot.inboxItems.filter((item) => pathIsWithin(item.file.path, supportPath));
+      if (unrelatedProjects.length || unrelatedActions.length || inboxItems.length) {
+        throw new Error("The support folder contains unrelated GTD entities. Move them before deleting this Project.");
+      }
+    }
+
+    for (const action of actions) {
+      if (!supportPath || !pathIsWithin(action.file.path, supportPath)) {
+        await this.app.fileManager.trashFile(action.file);
+      }
+    }
+    if (supportEntry instanceof TFolder) await this.app.fileManager.trashFile(supportEntry);
+    if (!supportPath || !pathIsWithin(project.file.path, supportPath)) {
+      await this.app.fileManager.trashFile(project.file);
+    }
+  }
+
   async processInboxAsNextAction(id: string, input: InboxProcessingInput): Promise<void> {
     const item = this.requireInboxItem(id);
     const title = requiredProcessingValue(input.nextAction, "A Next Action is required.");
@@ -572,4 +611,8 @@ function actionInput(title: string, context: string, project?: Project): ActionI
     context,
     ...(project ? { projectId: project.id } : {}),
   };
+}
+
+function pathIsWithin(path: string, folderPath: string): boolean {
+  return path === folderPath || path.startsWith(`${folderPath}/`);
 }

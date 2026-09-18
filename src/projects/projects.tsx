@@ -132,7 +132,36 @@ function ProjectCard({
     menu.addItem((item) => item.setTitle("New sub-project…").onClick(onCreateSubproject));
     menu.addItem((item) => item.setTitle("Open note").onClick(() => void services.openFile(project.file)));
     menu.addItem((item) => item.setTitle("Edit…").onClick(() => services.editProject(project.id)));
+    menu.addSeparator();
+    menu.addItem((item) => item
+      .setTitle("Delete Project…")
+      .setIcon("trash-2")
+      .setWarning(true)
+      .onClick(() => void deleteProject()));
     menu.showAtMouseEvent(event);
+  };
+  const deleteProject = async () => {
+    const snapshot = services.repository.index.getSnapshot();
+    const children = snapshot.projects.filter((candidate) => candidate.parentProjectId === project.id);
+    if (children.length) {
+      new Notice(`Move or delete ${children.length} sub-project${children.length === 1 ? "" : "s"} first.`);
+      return;
+    }
+    const linkedActions = snapshot.actions.filter((action) => action.projectId === project.id).length;
+    const supportFiles = services.repository.supportFiles(project).length;
+    const supportDescription = project.supportPath
+      ? `${supportFiles} support file${supportFiles === 1 ? "" : "s"} in “${project.supportPath}”`
+      : "no configured support folder";
+    const confirmed = window.confirm(
+      `Delete “${project.title}”?\n\nThis moves the Project note, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, and ${supportDescription} to Obsidian's trash.`,
+    );
+    if (!confirmed) return;
+    try {
+      await services.repository.trashProject(project.id);
+      new Notice(`Deleted Project, ${linkedActions} Action${linkedActions === 1 ? "" : "s"}, and its support material.`);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not delete the Project.");
+    }
   };
 
   return (

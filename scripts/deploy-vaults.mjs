@@ -6,19 +6,22 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const localConfigurationPath = join(projectRoot, ".dragonglass-vaults.json");
 const artifacts = ["main.js", "manifest.json", "styles.css"];
 const vaults = [{ name: "Test Vault", path: join(projectRoot, "Test Vault"), optional: true }];
+const testVaultOnly = process.argv.includes("--test-vault-only");
 
-try {
-  const configuration = JSON.parse(await readFile(localConfigurationPath, "utf8"));
-  if (!Array.isArray(configuration.vaults) || !configuration.vaults.every((path) => typeof path === "string" && path.trim())) {
-    throw new Error("'vaults' must be an array of non-empty vault paths.");
-  }
-  for (const configuredPath of configuration.vaults) {
-    const path = isAbsolute(configuredPath) ? configuredPath : resolve(projectRoot, configuredPath);
-    vaults.push({ name: path, path, optional: false });
-  }
-} catch (error) {
-  if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
-    throw new Error(`Could not read .dragonglass-vaults.json: ${error instanceof Error ? error.message : String(error)}`);
+if (!testVaultOnly) {
+  try {
+    const configuration = JSON.parse(await readFile(localConfigurationPath, "utf8"));
+    if (!Array.isArray(configuration.vaults) || !configuration.vaults.every((path) => typeof path === "string" && path.trim())) {
+      throw new Error("'vaults' must be an array of non-empty vault paths.");
+    }
+    for (const configuredPath of configuration.vaults) {
+      const path = isAbsolute(configuredPath) ? configuredPath : resolve(projectRoot, configuredPath);
+      vaults.push({ name: path, path, optional: false });
+    }
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+      throw new Error(`Could not read .dragonglass-vaults.json: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
 

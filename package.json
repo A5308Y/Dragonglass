@@ -11,7 +11,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production && node scripts/deploy-vaults.mjs",
     "deploy:vaults": "node scripts/deploy-vaults.mjs",
-    "deploy:test-vault": "node scripts/deploy-vaults.mjs",
+    "deploy:test-vault": "node scripts/deploy-vaults.mjs --test-vault-only",
     "test": "vitest run",
     "test:watch": "vitest"
   },
