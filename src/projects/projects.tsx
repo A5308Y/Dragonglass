@@ -304,7 +304,40 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
 function ActionRows({ actions, services, emptyText = "No Actions." }: { actions: Action[]; services: GtdServices; emptyText?: string }) {
   if (!actions.length) return <div class="dg-project-actions-empty"><span>✓</span><div><strong>Nothing here</strong><small>{emptyText}</small></div></div>;
   return <div class="dg-action-rows">{actions.sort((a, b) => a.title.localeCompare(b.title)).map((action) => (
-    <div class="dg-action-row" key={action.id}>
+    <ActionRow key={action.id} action={action} services={services} />
+  ))}</div>;
+}
+
+function ActionRow({ action, services }: { key?: string; action: Action; services: GtdServices }) {
+  const done = action.status === "done";
+  const [checked, setChecked] = useState(done);
+  const [updating, setUpdating] = useState(false);
+  useEffect(() => setChecked(done), [done]);
+
+  const changeCompletion = async (next: boolean) => {
+    setChecked(next);
+    setUpdating(true);
+    try {
+      if (next) await services.repository.setActionStatus(action.id, "done");
+      else await services.repository.reopenAction(action.id);
+    } catch (error) {
+      setChecked(!next);
+      new Notice(error instanceof Error ? error.message : `Could not ${next ? "complete" : "reopen"} the Action.`);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <div class="dg-action-row">
+      <input
+        class="dg-action-row-checkbox"
+        type="checkbox"
+        checked={checked}
+        disabled={updating}
+        aria-label={`${done ? "Reopen" : "Complete"} ${action.title}`}
+        onChange={(event) => void changeCompletion(event.currentTarget.checked)}
+      />
       <div class="dg-action-row-main">
         <button class="dg-action-row-title" onClick={() => void services.openFile(action.file)}>{action.title}</button>
         <div class="dg-action-row-meta">
@@ -316,7 +349,7 @@ function ActionRows({ actions, services, emptyText = "No Actions." }: { actions:
       </div>
       <button class="dg-action-row-edit" aria-label={`Edit ${action.title}`} onClick={() => services.editAction(action.id)}>Edit</button>
     </div>
-  ))}</div>;
+  );
 }
 
 function title(value: string): string {
