@@ -399,9 +399,10 @@
   align-items: center;
   justify-content: space-between;
   padding: 0;
+  border: 0 !important;
   color: var(--text-normal);
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
   font-weight: var(--font-semibold);
 }
 .dg-completed-actions-panel .dg-action-rows { margin-top: 13px; }
@@ -422,13 +423,14 @@
   max-width: 100%;
   min-height: 0 !important;
   padding: 0;
+  border: 0 !important;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-normal);
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
   font-weight: var(--font-medium);
 }
 .dg-action-row-title:hover { color: var(--text-accent); }
@@ -440,11 +442,7 @@
   background: var(--background-modifier-hover);
   font-weight: var(--font-medium);
 }
-.dg-action-status-next {
-  padding: 0;
-  color: var(--text-accent) !important;
-  background: transparent;
-}
+.dg-action-status-next { color: var(--text-accent) !important; background: color-mix(in srgb, var(--interactive-accent) 12%, transparent); }
 .dg-action-status-done { color: var(--text-success) !important; background: color-mix(in srgb, var(--color-green) 12%, transparent); }
 .dg-action-row-edit {
   min-height: 30px;
