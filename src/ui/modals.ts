@@ -37,7 +37,8 @@ abstract class FormModal extends Modal {
   }
 
   protected addSubmit(label = "Save"): void {
-    new ButtonComponent(this.actionsEl).setButtonText("Cancel").onClick(() => this.close());
+    const cancel = new ButtonComponent(this.actionsEl).setButtonText("Cancel").onClick(() => this.close());
+    cancel.buttonEl.type = "button";
     new ButtonComponent(this.actionsEl).setButtonText(label).setCta().buttonEl.type = "submit";
   }
 

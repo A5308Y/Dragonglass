@@ -41,6 +41,8 @@ for (const vault of vaults) {
 
   const pluginDirectory = join(vaultConfigDirectory, "plugins", "dragonglass-gtd");
   await mkdir(pluginDirectory, { recursive: true });
-  await Promise.all(artifacts.map((artifact) => copyFile(join(projectRoot, artifact), join(pluginDirectory, artifact))));
+  for (const artifact of artifacts) {
+    await copyFile(join(projectRoot, artifact), join(pluginDirectory, artifact));
+  }
   console.log(`Updated Dragonglass GTD in ${vault.name} (${artifacts.join(", ")}).`);
 }
