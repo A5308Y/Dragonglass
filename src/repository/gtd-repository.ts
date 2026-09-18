@@ -48,8 +48,7 @@ export class GtdRepository {
     const id = createUlid();
     const cleanTitle = title.trim();
     if (!cleanTitle) throw new Error("An Inbox Item title is required.");
-    const directory = normalizeVaultPath(this.getSettings().inboxDirectory) || "GTD/Inbox";
-    await this.ensureFolder(directory);
+    const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().inboxDirectory) || "GTD/Inbox");
     const path = this.uniqueMarkdownPath(directory, cleanTitle, id);
     const frontmatter: Record<string, unknown> = {
       type: "gtd-inbox-item",
@@ -65,8 +64,7 @@ export class GtdRepository {
   private async convertInboxItemToAction(item: InboxItem, input: ActionInput, resolvedProject?: Project): Promise<void> {
     const project = resolvedProject ?? (input.projectId ? this.index.getSnapshot().projectsById.get(input.projectId) : undefined);
     if (input.projectId && !project) throw new Error("The selected Project no longer exists.");
-    const directory = normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions";
-    await this.ensureFolder(directory);
+    const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions");
     await this.enqueue(item.file.path, async () => {
       const oldTitle = item.title;
       const title = input.title.trim();
@@ -103,8 +101,7 @@ export class GtdRepository {
   }
 
   private async fileInboxItemToGeneralReference(item: InboxItem): Promise<void> {
-    const directory = normalizeVaultPath(this.getSettings().referenceDirectory) || "General Reference";
-    await this.ensureFolder(directory);
+    const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().referenceDirectory) || "General Reference");
     await this.enqueue(item.file.path, async () => {
       await this.clearEntityFrontmatter(item.file);
       const target = this.uniqueMarkdownPath(directory, item.title, item.id);
@@ -112,8 +109,8 @@ export class GtdRepository {
     });
   }
 
-  async trashInboxItem(id: string): Promise<void> {
-    const item = this.requireInboxItem(id);
+  async trashInboxItem(itemOrId: InboxItem | string): Promise<void> {
+    const item = this.resolveInboxItem(itemOrId);
     await this.app.fileManager.trashFile(item.file);
   }
 
@@ -161,16 +158,16 @@ export class GtdRepository {
     }
   }
 
-  async processInboxAsNextAction(id: string, input: InboxProcessingInput): Promise<void> {
-    const item = this.requireInboxItem(id);
+  async processInboxAsNextAction(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
+    const item = this.resolveInboxItem(itemOrId);
     const title = requiredProcessingValue(input.nextAction, "A Next Action is required.");
     const context = requiredProcessingValue(input.context, "A context is required.");
     const project = await this.prepareProcessingProject(input, "active");
     await this.convertInboxItemToAction(item, actionInput(title, context, project), project);
   }
 
-  async processInboxAsReference(id: string, input: InboxProcessingInput): Promise<void> {
-    const item = this.requireInboxItem(id);
+  async processInboxAsReference(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
+    const item = this.resolveInboxItem(itemOrId);
     const title = input.nextAction?.trim() ?? "";
     const context = input.context?.trim() ?? "";
     if (title && !context) throw new Error("A context is required when creating a Next Action.");
@@ -181,8 +178,8 @@ export class GtdRepository {
     else await this.fileInboxItemToGeneralReference(item);
   }
 
-  async processInboxAsSomedayProject(id: string, input: InboxProcessingInput): Promise<void> {
-    const item = this.requireInboxItem(id);
+  async processInboxAsSomedayProject(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
+    const item = this.resolveInboxItem(itemOrId);
     const title = requiredProcessingValue(input.nextAction, "A Next Action is required.");
     const context = requiredProcessingValue(input.context, "A context is required.");
     const project = await this.prepareProcessingProject(input, "someday", title, true);
@@ -205,10 +202,10 @@ export class GtdRepository {
     if (parent && projectHierarchyIssue(parent, this.index.getSnapshot().projectsById)) {
       throw new Error("The selected parent Project has an invalid hierarchy.");
     }
-    const directory = normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects";
-    await this.ensureFolder(directory);
+    const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects");
     const path = this.uniqueMarkdownPath(directory, title, id);
-    const supportPath = this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, title, id);
+    const supportRoot = await this.ensureFolder(PROJECT_SUPPORT_ROOT);
+    const supportPath = this.uniqueFolderPath(supportRoot, title, id);
     await this.ensureFolder(supportPath);
     const status = input.status ?? "active";
     const created = localDate();
@@ -395,8 +392,7 @@ export class GtdRepository {
 
   private async createNextActionFile(title: string, context: string, captured: string, project?: Project): Promise<TFile> {
     const id = createUlid();
-    const directory = normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions";
-    await this.ensureFolder(directory);
+    const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions");
     const path = this.uniqueMarkdownPath(directory, title, id);
     const frontmatter: Record<string, unknown> = {
       type: "gtd-action",
@@ -468,8 +464,9 @@ export class GtdRepository {
   }
 
   private async ensureProjectSupportPath(project: Project): Promise<string> {
-    const supportPath = project.supportPath || this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, project.title, project.id);
-    await this.ensureFolder(supportPath);
+    const supportRoot = await this.ensureFolder(PROJECT_SUPPORT_ROOT);
+    const requestedPath = project.supportPath || this.uniqueFolderPath(supportRoot, project.title, project.id);
+    const supportPath = await this.ensureFolder(requestedPath);
     if (!project.supportPath) {
       await this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
         frontmatter.support_path = supportPath;
@@ -494,6 +491,13 @@ export class GtdRepository {
     return item;
   }
 
+  private resolveInboxItem(itemOrId: InboxItem | string): InboxItem {
+    if (typeof itemOrId === "string") return this.requireInboxItem(itemOrId);
+    const current = this.app.vault.getAbstractFileByPath(itemOrId.file.path);
+    if (!(current instanceof TFile)) throw new Error(`Inbox Item '${itemOrId.id}' no longer exists.`);
+    return { ...itemOrId, file: current };
+  }
+
   private requireProject(id: string): Project {
     const project = this.index.getSnapshot().projectsById.get(id);
     if (!project) throw new Error(`Project '${id}' is missing or has a duplicate ID.`);
@@ -511,23 +515,34 @@ export class GtdRepository {
     return result;
   }
 
-  private async ensureFolder(path: string): Promise<void> {
-    if (!path) return;
+  private async ensureFolder(path: string): Promise<string> {
+    if (!path) return "";
     const normalized = normalizePath(path);
     const indexed = this.app.vault.getAbstractFileByPath(normalized);
-    if (indexed instanceof TFolder) return;
+    if (indexed instanceof TFolder) return indexed.path;
     if (indexed) throw new Error(`A file already exists where a folder is required: ${normalized}`);
+    const caseInsensitiveMatch = this.app.vault.getAllLoadedFiles().find((entry): entry is TFolder =>
+      entry instanceof TFolder && entry.path.toLocaleLowerCase() === normalized.toLocaleLowerCase()
+    );
+    if (caseInsensitiveMatch) return caseInsensitiveMatch.path;
     const adapterEntry = await this.app.vault.adapter.stat(normalized);
-    if (adapterEntry?.type === "folder") return;
+    if (adapterEntry?.type === "folder") return normalized;
     if (adapterEntry) throw new Error(`A file already exists where a folder is required: ${normalized}`);
     const parent = parentPath(normalized);
-    if (parent) await this.ensureFolder(parent);
+    let target = normalized;
+    if (parent) {
+      const canonicalParent = await this.ensureFolder(parent);
+      target = normalizePath(`${canonicalParent}/${normalized.slice(parent.length + 1)}`);
+    }
     try {
-      await this.app.vault.createFolder(normalized);
+      const created = await this.app.vault.createFolder(target);
+      return created.path;
     } catch (error) {
-      const created = this.app.vault.getAbstractFileByPath(normalized);
-      const createdOnAdapter = created ? null : await this.app.vault.adapter.stat(normalized);
-      if (!(created instanceof TFolder) && createdOnAdapter?.type !== "folder") throw error;
+      const created = this.app.vault.getAbstractFileByPath(target);
+      const createdOnAdapter = created ? null : await this.app.vault.adapter.stat(target);
+      if (created instanceof TFolder) return created.path;
+      if (createdOnAdapter?.type === "folder") return target;
+      throw error;
     }
   }
 
