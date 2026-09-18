@@ -491,6 +491,18 @@
 .dg-support-note-body .dg-outcome { white-space: normal; }
 .dg-support-note-body .dg-outcome > :first-child { margin-top: 0; }
 .dg-support-note-body .dg-outcome > :last-child { margin-bottom: 0; }
+.dg-support-image-body {
+  display: grid;
+  place-items: center;
+  background: var(--background-secondary);
+}
+.dg-support-image-body img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: var(--radius-s);
+  object-fit: contain;
+}
 .dg-support-note-edit-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 8px; }
 .dg-support-attachments { margin-top: 14px; }
 .dg-support-attachments > span,

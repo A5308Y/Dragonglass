@@ -8,6 +8,7 @@ import type { GtdServices } from "../ui/services";
 
 const BOARD_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
 type ProjectBoardStatus = (typeof BOARD_COLUMNS)[number];
+const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "jpeg", "jpg", "png", "svg", "webp"]);
 
 export function ProjectsView({ services, initialProjectId = null }: { services: GtdServices; initialProjectId?: string | null }) {
   const snapshot = useGtdSnapshot(services.repository.index);
@@ -257,8 +258,11 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const supportNotes = support
     .filter((file) => isEditableSupportNote(services, file))
     .sort((left, right) => left.path.localeCompare(right.path));
+  const supportImages = support
+    .filter(isSupportImage)
+    .sort((left, right) => left.path.localeCompare(right.path));
   const supportAttachments = support
-    .filter((file) => !isEditableSupportNote(services, file))
+    .filter((file) => !isEditableSupportNote(services, file) && !isSupportImage(file))
     .sort((left, right) => left.path.localeCompare(right.path));
   const breadcrumbs = projectBreadcrumbs(snapshot.projects);
   const parent = project.parentProjectId ? snapshot.projectsById.get(project.parentProjectId) : undefined;
@@ -396,6 +400,12 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
               label={supportFileLabel(file, project.supportPath)}
               startEditing={file.path === newSupportNotePath}
             />)}
+            {supportImages.map((file) => <SupportImage
+              key={file.path}
+              services={services}
+              file={file}
+              label={supportFileLabel(file, project.supportPath)}
+            />)}
           </div>
           {supportAttachments.length > 0 && <div class="dg-support-attachments">
             <span>Other files</span>
@@ -406,6 +416,34 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
       </main>
     </div>
   );
+}
+
+function SupportImage({ services, file, label: imageLabel }: {
+  services: GtdServices;
+  file: TFile;
+  label: string;
+}) {
+  const [open, setOpen] = useState(true);
+  const [failed, setFailed] = useState(false);
+  return <article class={`dg-support-note dg-support-image${open ? " is-open" : ""}`}>
+    <header>
+      <button class="dg-support-note-toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+        <span title={imageLabel}>{imageLabel}</span>
+      </button>
+      <div><button onClick={() => void services.openFile(file)}>Open</button></div>
+    </header>
+    {open && <div class="dg-support-note-body dg-support-image-body">
+      {failed
+        ? <span class="dg-muted">Could not display this image.</span>
+        : <img
+          src={services.app.vault.getResourcePath(file)}
+          alt={file.basename}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />}
+    </div>}
+  </article>;
 }
 
 function SupportNote({ services, projectId, file, label: noteLabel, startEditing }: {
@@ -499,6 +537,10 @@ function isEditableSupportNote(services: GtdServices, file: TFile): boolean {
   if (file.extension !== "md") return false;
   const type = services.app.metadataCache.getFileCache(file)?.frontmatter?.type;
   return type !== "gtd-action" && type !== "gtd-project" && type !== "gtd-inbox-item";
+}
+
+function isSupportImage(file: TFile): boolean {
+  return IMAGE_EXTENSIONS.has(file.extension.toLocaleLowerCase());
 }
 
 function supportFileLabel(file: TFile, supportPath?: string): string {
