@@ -251,7 +251,6 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const completed = all.filter((action) => action.status === "done");
   const support = services.repository.supportFiles(project);
   const breadcrumbs = projectBreadcrumbs(snapshot.projects);
-  const breadcrumb = breadcrumbs.get(project.id) ?? project.title;
   const parent = project.parentProjectId ? snapshot.projectsById.get(project.parentProjectId) : undefined;
   const children = snapshot.projects
     .filter((candidate) => candidate.parentProjectId === project.id)
@@ -281,11 +280,10 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
           </section>
           {hasHierarchy && <section class="dg-detail-section dg-project-hierarchy">
             <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Structure</span><h3>Project hierarchy</h3></div></div>
-            <div class="dg-project-breadcrumb" title={breadcrumb}>{breadcrumb}</div>
             {parent
-              ? <div><span>Parent</span><button onClick={() => onSelect(parent.id)}>{breadcrumbs.get(parent.id) ?? parent.title}</button></div>
+              ? <div><span>Parent</span><button onClick={() => onSelect(parent.id)}>{parent.title}</button></div>
               : project.parentProjectId && <div class="dg-missing">Missing parent Project: {project.parentProjectId}</div>}
-            {children.length > 0 && <div><span>Sub-projects</span><div class="dg-hierarchy-links">{children.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}>{breadcrumbs.get(child.id) ?? child.title}</button>)}</div></div>}
+            {children.length > 0 && <div><span>Sub-projects</span><div class="dg-hierarchy-links">{children.map((child) => <button key={child.id} onClick={() => onSelect(child.id)}>{child.title}</button>)}</div></div>}
           </section>}
         </div>
 
