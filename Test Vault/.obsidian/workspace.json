@@ -51,8 +51,8 @@
             "state": {
               "type": "dragonglass-projects",
               "state": {},
-              "icon": "folder-kanban",
-              "title": "GTD Projects"
+              "icon": "lucide-ghost",
+              "title": "dragonglass-projects"
             }
           }
         ],
@@ -221,7 +221,8 @@
       "templates:Insert template": false,
       "command-palette:Open command palette": false,
       "bases:Create new base": false,
-      "dragonglass-gtd:Open GTD Action Board": false
+      "dragonglass-gtd:Open GTD Action Board": false,
+      "dragonglass-gtd:Open GTD Projects": false
     }
   },
   "active": "60e25a7565718c04",
