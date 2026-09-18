@@ -2,6 +2,7 @@ import { Notice } from "obsidian";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { GtdSnapshot, Project } from "../domain/types";
 import { ActionRows } from "../ui/action-rows";
+import { FuzzyField } from "../ui/fuzzy-field";
 import type { DiaryEntry } from "../utils/markdown";
 import { localDate } from "../utils/date";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -221,8 +222,13 @@ export function ProjectReview({ services }: { services: GtdServices }) {
           <ActionRows actions={openActions} services={services} />
           <div class="dg-action-capture">
             <input value={actionTitle} placeholder="Define the next physical Action…" onInput={(event: Event) => setActionTitle((event.currentTarget as HTMLInputElement).value)} onKeyDown={(event: KeyboardEvent) => { if (event.key === "Enter") void addAction(); }} />
-            <input list="dg-review-contexts" value={context} placeholder="Context" onInput={(event: Event) => setContext((event.currentTarget as HTMLInputElement).value)} />
-            <datalist id="dg-review-contexts">{contexts.map((value) => <option value={value} />)}</datalist>
+            <FuzzyField
+              value={context}
+              placeholder="Context"
+              options={contexts.map((value) => ({ id: value, label: value }))}
+              onChange={setContext}
+              onChoose={(option) => setContext(option.label)}
+            />
             <button class="mod-cta" disabled={!actionTitle.trim() || saving} onClick={() => void addAction()}>Add Next Action</button>
           </div>
         </section>

@@ -953,7 +953,8 @@
 }
 .dg-inline-form input,
 .dg-action-capture input:first-child { flex: 1; min-width: 0; }
-.dg-action-capture input:nth-child(2) { width: 150px; }
+.dg-action-capture > .dg-fuzzy-field { width: 180px; flex: 0 1 180px; }
+.dg-action-capture > .dg-fuzzy-field input { width: 100%; }
 .dg-review-actions-panel .dg-action-rows { margin-top: 12px; }
 .dg-action-capture {
   margin: 12px 0 0;
@@ -1133,6 +1134,7 @@
   .dg-inline-form button,
   .dg-action-capture input,
   .dg-action-capture button { width: 100% !important; min-height: 40px; }
+  .dg-action-capture > .dg-fuzzy-field { width: 100%; flex: 0 0 auto; }
   .dg-workflow-footer { align-items: stretch; flex-direction: column; }
   .dg-review-content > .dg-workflow-footer { bottom: -8px; margin: 14px -8px -8px; padding: 12px 8px; }
   .dg-review-footer-actions { align-items: stretch; flex-direction: column-reverse; }
