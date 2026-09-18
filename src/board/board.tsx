@@ -275,10 +275,10 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
       tabIndex={0}
       draggable={!Platform.isMobile}
       onDragStart={(event: DragEvent) => event.dataTransfer?.setData("text/dragonglass-action", action.id)}
-      onKeyDown={(event: KeyboardEvent) => handleCardKey(event, action, services, onMove)}
+      onKeyDown={(event: KeyboardEvent) => handleCardKey(event, action, onMove)}
     >
       <div class="dg-card-title-row">
-        <button class="dg-card-title" title={action.title} onClick={() => void services.openFile(action.file)}>{action.title}</button>
+        <span class="dg-card-title dg-action-card-title" title={action.title}>{action.title}</span>
         <button class="dg-icon-button" aria-label={`Actions for ${action.title}`} onClick={openMenu}>•••</button>
       </div>
       {action.projectId && (
@@ -370,8 +370,7 @@ function describeFilter(filter: ActionFilter, snapshot: ReturnType<GtdServices["
   return `${label(filter.field)} ${filter.operator === "in" ? "is" : "is not"} ${labels.join(", ")}`;
 }
 
-function handleCardKey(event: KeyboardEvent, action: Action, services: GtdServices, onMove: (id: string, status: ActionStatus) => Promise<void>): void {
-  if (event.key === "Enter") { event.preventDefault(); void services.openFile(action.file); return; }
+function handleCardKey(event: KeyboardEvent, action: Action, onMove: (id: string, status: ActionStatus) => Promise<void>): void {
   if (event.key.toLocaleLowerCase() === "d") { event.preventDefault(); void onMove(action.id, "done"); return; }
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
   event.preventDefault();

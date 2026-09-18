@@ -245,6 +245,7 @@
 
 .dg-card-title:hover,
 .dg-project-title:hover { color: var(--text-accent); }
+.dg-card-title.dg-action-card-title:hover { color: var(--text-normal); }
 
 .dg-project-link {
   display: block;
