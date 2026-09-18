@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "build": "tsc --noEmit && node esbuild.config.mjs production && node scripts/deploy-test-vault.mjs",
+    "deploy:test-vault": "node scripts/deploy-test-vault.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

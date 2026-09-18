@@ -14,6 +14,10 @@ Requires Obsidian 1.13 or newer. Development uses Node.js 24 LTS (pinned in `mis
 
 Do not first develop or test file-writing plugins against your only copy of an important vault.
 
+### Repository test vault
+
+The repository includes `Test Vault`. Running `mise exec -- npm run build` produces the production bundle and automatically copies `main.js`, `manifest.json`, and `styles.css` into `Test Vault/.obsidian/plugins/dragonglass-gtd`. Reload Obsidian after building to load the new code.
+
 ## Files are the database
 
 New files use these default destinations:
