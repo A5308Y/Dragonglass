@@ -509,13 +509,20 @@ export class GtdRepository {
   private async ensureFolder(path: string): Promise<void> {
     if (!path) return;
     const normalized = normalizePath(path);
-    if (this.app.vault.getAbstractFileByPath(normalized)) return;
+    const indexed = this.app.vault.getAbstractFileByPath(normalized);
+    if (indexed instanceof TFolder) return;
+    if (indexed) throw new Error(`A file already exists where a folder is required: ${normalized}`);
+    const adapterEntry = await this.app.vault.adapter.stat(normalized);
+    if (adapterEntry?.type === "folder") return;
+    if (adapterEntry) throw new Error(`A file already exists where a folder is required: ${normalized}`);
     const parent = parentPath(normalized);
     if (parent) await this.ensureFolder(parent);
     try {
       await this.app.vault.createFolder(normalized);
     } catch (error) {
-      if (!this.app.vault.getAbstractFileByPath(normalized)) throw error;
+      const created = this.app.vault.getAbstractFileByPath(normalized);
+      const createdOnAdapter = created ? null : await this.app.vault.adapter.stat(normalized);
+      if (!(created instanceof TFolder) && createdOnAdapter?.type !== "folder") throw error;
     }
   }
 
