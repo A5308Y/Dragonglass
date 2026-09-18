@@ -99,9 +99,10 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 - **GTD: Start Project Review**
 - **GTD: Open Brainstorm**
 - **GTD: Quick Capture Inbox Item**
+- **GTD: New Action**
 - **GTD: New Project**
 
-Assign any command to an Obsidian hotkey. Quick Capture asks only for a title and immediately creates an Inbox Item. Actions are created by processing items from the dedicated Inbox view.
+Assign any command to an Obsidian hotkey. Quick Capture asks only for a title and immediately creates an Inbox Item. New Action provides a lightweight Title, fuzzy Project, fuzzy Context, and Status form. It is also available from the Actions header, Projects header, each Project card menu, and Project detail; Project-specific entry points preselect that Project.
 
 ## Board behavior
 

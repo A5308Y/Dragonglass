@@ -5,7 +5,7 @@ import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
 import { GtdSettingTab } from "./settings";
-import { ActionEditorModal, NewProjectModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
+import { ActionEditorModal, NewActionModal, NewProjectModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
 import type { GtdServices } from "./ui/services";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, GtdBrainstormView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
 
@@ -30,6 +30,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       openFile: (file) => this.openFile(file),
       quickCapture: () => this.quickCapture(),
       openInbox: () => void this.activateView(INBOX_VIEW_TYPE),
+      createAction: (projectId) => this.createAction(projectId),
       createProject: (openAfterCreate = true, parentProjectId) => this.createProject(openAfterCreate, parentProjectId),
       editAction: (id) => this.editAction(id),
       editProject: (id) => this.editProject(id),
@@ -101,6 +102,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "start-project-review", name: "Start Project Review", callback: () => void this.activateView(REVIEW_VIEW_TYPE) });
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
     this.addCommand({ id: "quick-capture-inbox-item", name: "Quick Capture Inbox Item", callback: () => this.quickCapture() });
+    this.addCommand({ id: "new-action", name: "New Action", callback: () => this.createAction() });
     this.addCommand({ id: "new-project", name: "New Project", callback: () => this.createProject() });
   }
 
@@ -158,6 +160,10 @@ export default class DragonglassGtdPlugin extends Plugin {
     new NewProjectModal(this.services, async (file) => {
       if (openAfterCreate) await this.openFile(file);
     }, parentProjectId).open();
+  }
+
+  private createAction(projectId = ""): void {
+    new NewActionModal(this.services, projectId).open();
   }
 
   private editAction(id: string): void {

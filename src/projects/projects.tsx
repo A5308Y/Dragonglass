@@ -56,7 +56,10 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     <div class="dg-view dg-projects-view">
       <header class="dg-view-header">
         <div><h2>Projects</h2><span class="dg-count">{snapshot.projects.length}</span></div>
-        <button class="mod-cta" onClick={() => services.createProject(false)}>New Project</button>
+        <div class="dg-header-actions">
+          <button onClick={() => services.createAction()}>New Action</button>
+          <button class="mod-cta" onClick={() => services.createProject(false)}>New Project</button>
+        </div>
       </header>
       <div class="dg-board dg-project-board" role="list" aria-label="Project board">
         {BOARD_COLUMNS.map((status) => {
@@ -129,6 +132,7 @@ function ProjectCard({
         .onClick(() => void onMove(project.id, status)));
     }
     menu.addSeparator();
+    menu.addItem((item) => item.setTitle("New Action…").onClick(() => services.createAction(project.id)));
     menu.addItem((item) => item.setTitle("New sub-project…").onClick(onCreateSubproject));
     menu.addItem((item) => item.setTitle("Open note").onClick(() => void services.openFile(project.file)));
     menu.addItem((item) => item.setTitle("Edit…").onClick(() => services.editProject(project.id)));
@@ -246,6 +250,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
           <span class={`dg-status dg-status-${project.status}`}>{projectStatusLabel(project.status)}</span>
         </div>
         <div class="dg-header-actions">
+          <button class="mod-cta" onClick={() => services.createAction(project.id)}>New Action</button>
           <button onClick={() => void services.openFile(project.file)}>Open note</button>
           <button onClick={() => services.createProject(false, project.id)}>New sub-project</button>
           <button onClick={() => services.editProject(project.id)}>Edit</button>

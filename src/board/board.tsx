@@ -138,6 +138,7 @@ export function ActionBoard({ services }: { services: GtdServices }) {
           <span class="dg-count">{snapshot.actions.length}</span>
         </div>
         <div class="dg-header-actions">
+          <button class="mod-cta" onClick={() => services.createAction()}>New Action</button>
           <button onClick={services.quickCapture}>Quick Capture</button>
           <button onClick={services.openInbox}>Open Inbox</button>
         </div>

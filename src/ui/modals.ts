@@ -84,6 +84,73 @@ export class TextPromptModal extends FormModal {
   }
 }
 
+export class NewActionModal extends FormModal {
+  private title = "";
+  private status: ActionStatus;
+  private projectId: string;
+  private projectQuery: string;
+  private context = "";
+
+  constructor(private readonly services: GtdServices, projectId = "") {
+    super(services.app);
+    const snapshot = services.repository.index.getSnapshot();
+    const project = projectId ? snapshot.projectsById.get(projectId) : undefined;
+    this.status = services.getSettings().defaultActionStatus;
+    this.projectId = project?.id ?? "";
+    this.projectQuery = project ? projectBreadcrumb(project, snapshot.projectsById) : "";
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: "New Action" });
+    new Setting(this.formEl).setName("Title").addText((text) => {
+      text.setPlaceholder("What is the next physical Action?").onChange((value) => (this.title = value));
+      window.setTimeout(() => text.inputEl.focus(), 0);
+    });
+    addProjectSearch(
+      this.formEl,
+      this.services.app,
+      this.services.repository.index.getSnapshot().projects,
+      this.projectQuery,
+      (projectId, query) => {
+        this.projectId = projectId;
+        this.projectQuery = query;
+      },
+      (popover) => this.registerPopover(popover),
+    );
+    addContextSearch(
+      this.formEl,
+      this.services.app,
+      this.services.repository.index.getSnapshot().actions,
+      this.context,
+      (value) => (this.context = value),
+      (popover) => this.registerPopover(popover),
+    );
+    new Setting(this.formEl).setName("Status").addDropdown((dropdown) => {
+      for (const status of ACTION_STATUSES) dropdown.addOption(status, label(status));
+      dropdown.setValue(this.status).onChange((value) => (this.status = value as ActionStatus));
+    });
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit("Create Action");
+  }
+
+  protected async submit(): Promise<void> {
+    if (!this.title.trim()) return void new Notice("An Action title is required.");
+    if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
+    try {
+      await this.services.repository.createClarifiedAction({
+        title: this.title.trim(),
+        status: this.status,
+        ...(this.projectId ? { projectId: this.projectId } : {}),
+        ...(this.context.trim() ? { context: this.context.trim() } : {}),
+      });
+      new Notice("Action created.");
+      this.close();
+    } catch (error) {
+      this.fail(error);
+    }
+  }
+}
+
 export class ActionEditorModal extends FormModal {
   private title: string;
   private status: ActionStatus;
@@ -293,6 +360,54 @@ function addDate(container: HTMLElement, name: string, value: string, onChange: 
     text.inputEl.type = "date";
     text.setValue(value).onChange(onChange);
   });
+}
+
+function addContextSearch(
+  container: HTMLElement,
+  app: App,
+  actions: readonly Action[],
+  value: string,
+  onChange: (value: string) => void,
+  registerPopover: (popover: ContextInputSuggest) => void,
+): void {
+  const contexts = [...new Set(actions.map((action) => action.context).filter((context): context is string => Boolean(context)))].sort();
+  new Setting(container)
+    .setName("Context")
+    .setDesc("Optional. Select an existing Context or type a new one.")
+    .addText((text) => {
+      text.setValue(value).setPlaceholder(contexts.length ? "Search or name a Context…" : "Name a Context…").onChange(onChange);
+      const suggest = new ContextInputSuggest(app, text.inputEl, contexts, onChange);
+      registerPopover(suggest);
+    });
+}
+
+class ContextInputSuggest extends AbstractInputSuggest<string> {
+  constructor(
+    app: App,
+    inputEl: HTMLInputElement,
+    private readonly contexts: readonly string[],
+    private readonly choose: (context: string) => void,
+  ) {
+    super(app, inputEl);
+    this.limit = 30;
+  }
+
+  protected getSuggestions(query: string): string[] {
+    const trimmed = query.trim();
+    if (!trimmed) return this.contexts.slice(0, this.limit);
+    const matches = prepareFuzzySearch(trimmed);
+    return this.contexts.filter((context) => matches(context) !== null).slice(0, this.limit);
+  }
+
+  renderSuggestion(context: string, el: HTMLElement): void {
+    el.setText(`@${context}`);
+  }
+
+  selectSuggestion(context: string): void {
+    this.setValue(context);
+    this.choose(context);
+    this.close();
+  }
 }
 
 function addProjectSearch(
