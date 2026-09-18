@@ -1,0 +1,22 @@
+views:
+  - type: table
+    name: Active Projects
+    filters:
+      and:
+        - type == "gtd-project"
+        - status == "active"
+    order:
+      - title
+      - area
+      - reviewed
+  - type: table
+    name: Projects without Next Actions
+    filters:
+      and:
+        - type == "gtd-project"
+        - status == "active"
+        - file.backlinks.filter(value.asFile().properties.type == "gtd-action" && value.asFile().properties.status == "next").isEmpty()
+    order:
+      - title
+      - area
+      - reviewed

@@ -1,0 +1,61 @@
+views:
+  - type: table
+    name: All Actions
+    filters:
+      and:
+        - type == "gtd-action"
+    order:
+      - title
+      - status
+      - project
+      - context
+      - energy
+      - due
+  - type: table
+    name: Next Actions
+    filters:
+      and:
+        - type == "gtd-action"
+        - status == "next"
+        - defer_until.isEmpty() || defer_until <= today()
+    order:
+      - title
+      - project
+      - context
+      - energy
+      - due
+  - type: table
+    name: Actions by Project
+    filters:
+      and:
+        - type == "gtd-action"
+    groupBy:
+      property: project
+      direction: ASC
+    order:
+      - title
+      - status
+      - due
+  - type: table
+    name: Waiting
+    filters:
+      and:
+        - type == "gtd-action"
+        - status == "waiting"
+    order:
+      - title
+      - project
+      - due
+  - type: table
+    name: Due Soon
+    filters:
+      and:
+        - type == "gtd-action"
+        - status != "done"
+        - status != "cancelled"
+        - due >= today()
+        - due <= today() + "7d"
+    order:
+      - due
+      - title
+      - project
