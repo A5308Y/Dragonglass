@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import type { Action, GtdSnapshot, Project } from "../domain/types";
+import type { GtdSnapshot, Project } from "../domain/types";
+import { ActionRows } from "../ui/action-rows";
 import type { DiaryEntry } from "../utils/markdown";
 import { localDate } from "../utils/date";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -69,14 +70,6 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     );
   }
 
-  const completeAction = async (action: Action) => {
-    try {
-      await services.repository.setActionStatus(action.id, "done");
-    } catch (error) {
-      new Notice(message(error));
-    }
-  };
-
   const addAction = async () => {
     const title = actionTitle.trim();
     if (!title) return;
@@ -140,6 +133,33 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     }
   };
 
+  const deleteProject = async () => {
+    const children = snapshot.projects.filter((candidate) => candidate.parentProjectId === project.id);
+    if (children.length) {
+      new Notice(`Move or delete ${children.length} sub-project${children.length === 1 ? "" : "s"} first.`);
+      return;
+    }
+    const linkedActions = projectActions.length;
+    const supportFiles = services.repository.supportFiles(project).length;
+    const supportDescription = project.supportPath
+      ? `${supportFiles} support file${supportFiles === 1 ? "" : "s"} in “${project.supportPath}”`
+      : "no configured support folder";
+    if (!window.confirm(
+      `Delete “${project.title}”?\n\nThis moves the Project note, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, and ${supportDescription} to Obsidian's trash.`,
+    )) return;
+
+    setSaving(true);
+    try {
+      await services.repository.trashProject(project.id);
+      setQueue((current) => current.slice(1));
+      new Notice(`Deleted Project, ${linkedActions} Action${linkedActions === 1 ? "" : "s"}, and its support material.`);
+    } catch (error) {
+      new Notice(message(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div class="dg-view dg-review-view">
       <header class="dg-view-header dg-review-header">
@@ -196,10 +216,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
             <div><h3>Open Actions</h3><p>Confirm that the next visible step is concrete.</p></div>
             <span class="dg-review-count">{openActions.length}</span>
           </div>
-          <div class="dg-review-actions">
-            {openActions.map((action) => <label key={action.id}><input type="checkbox" onChange={() => void completeAction(action)} /><button onClick={() => void services.openFile(action.file)}>{action.title}</button><span>{action.status}{action.context ? ` · @${action.context}` : ""}</span></label>)}
-            {!openActions.length && <div class="dg-empty-row">No open Actions.</div>}
-          </div>
+          <ActionRows actions={openActions} services={services} emptyText="No open Actions for this Project." />
           <div class="dg-action-capture">
             <input value={actionTitle} placeholder="Define the next physical Action…" onInput={(event: Event) => setActionTitle((event.currentTarget as HTMLInputElement).value)} onKeyDown={(event: KeyboardEvent) => { if (event.key === "Enter") void addAction(); }} />
             <input list="dg-review-contexts" value={context} placeholder="Context" onInput={(event: Event) => setContext((event.currentTarget as HTMLInputElement).value)} />
@@ -235,6 +252,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
             {needsNextAction && <span>Add one above or move the Project to Someday/Maybe.</span>}
           </div>
           <div class="dg-review-footer-actions">
+            <button class="mod-warning" disabled={saving} onClick={() => void deleteProject()}>Delete Project</button>
             <button disabled={saving} onClick={() => void moveToSomeday()}>Move to Someday/Maybe</button>
             <button
               class="mod-cta"

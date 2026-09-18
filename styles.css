@@ -906,6 +906,15 @@
   color: var(--text-accent);
   background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
   font-weight: var(--font-semibold);
+  line-height: 1;
+}
+.dg-review-pulse-panel .dg-review-panel-icon { font-size: 0; }
+.dg-review-pulse-panel .dg-review-panel-icon::before {
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  content: "";
 }
 .dg-review-count {
   min-width: 25px;
@@ -972,30 +981,7 @@
 .dg-inline-form input,
 .dg-action-capture input:first-child { flex: 1; min-width: 0; }
 .dg-action-capture input:nth-child(2) { width: 150px; }
-.dg-review-actions { margin-top: 12px; border-bottom: 1px solid var(--background-modifier-border); }
-.dg-review-actions label {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 2px 5px;
-  border-top: 1px solid var(--background-modifier-border);
-}
-.dg-review-actions label:first-child { border-top: 0; }
-.dg-review-actions label:hover { background: var(--background-modifier-hover); }
-.dg-review-actions button {
-  min-width: 0;
-  overflow: hidden;
-  padding: 0;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-normal);
-  background: transparent;
-  box-shadow: none;
-}
-.dg-review-actions label > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-review-actions-panel .dg-action-rows { margin-top: 12px; }
 .dg-action-capture {
   margin: 12px 0 0;
   padding: 12px 0 0;
@@ -1174,8 +1160,6 @@
   .dg-inline-form button,
   .dg-action-capture input,
   .dg-action-capture button { width: 100% !important; min-height: 40px; }
-  .dg-review-actions label { grid-template-columns: auto minmax(0, 1fr); }
-  .dg-review-actions label > span { display: none; }
   .dg-workflow-footer { align-items: stretch; flex-direction: column; }
   .dg-review-content > .dg-workflow-footer { bottom: -8px; margin: 14px -8px -8px; padding: 12px 8px; }
   .dg-review-footer-actions { align-items: stretch; flex-direction: column-reverse; }
