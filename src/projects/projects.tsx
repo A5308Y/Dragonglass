@@ -13,6 +13,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
   const snapshot = useGtdSnapshot(services.repository.index);
   const [selectedId, setSelectedId] = useState<string | null>(initialProjectId);
   const [optimistic, setOptimistic] = useState<Map<string, ProjectStatus>>(new Map());
+  const [search, setSearch] = useState("");
   useEffect(() => setSelectedId(initialProjectId), [initialProjectId]);
   const selected = selectedId ? snapshot.projectsById.get(selectedId) : undefined;
 
@@ -32,6 +33,12 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     return status ? { ...project, status } : project;
   }), [snapshot, optimistic]);
   const breadcrumbs = useMemo(() => projectBreadcrumbs(projects), [projects]);
+  const searchQuery = search.trim().toLocaleLowerCase();
+  const matchesSearch = (project: Project) => !searchQuery || [
+    project.title,
+    breadcrumbs.get(project.id) ?? "",
+    project.area ?? "",
+  ].some((value) => value.toLocaleLowerCase().includes(searchQuery));
 
   if (selected) return <ProjectDetail services={services} project={selected} onBack={() => setSelectedId(null)} onSelect={setSelectedId} />;
 
@@ -62,10 +69,18 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
           <button class="mod-cta" onClick={() => services.createProject(false)}>New Project</button>
         </div>
       </header>
+      <div class="dg-toolbar dg-project-toolbar">
+        <input
+          type="search"
+          placeholder="Search Projects"
+          value={search}
+          onInput={(event: Event) => setSearch((event.currentTarget as HTMLInputElement).value)}
+        />
+      </div>
       <div class="dg-board dg-project-board" role="list" aria-label="Project board">
         {BOARD_COLUMNS.map((status) => {
           const columnProjects = projects
-            .filter((project) => projectColumn(project.status) === status)
+            .filter((project) => projectColumn(project.status) === status && matchesSearch(project))
             .sort((a, b) => (breadcrumbs.get(a.id) ?? a.title).localeCompare(breadcrumbs.get(b.id) ?? b.title));
           return (
             <section

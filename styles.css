@@ -89,6 +89,7 @@
   width: min(260px, 30vw);
   min-width: 150px;
 }
+.dg-project-toolbar input[type="search"] { width: min(420px, 100%); }
 
 .dg-toolbar button,
 .dg-toolbar select,
