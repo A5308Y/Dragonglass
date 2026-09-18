@@ -39,6 +39,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
   const reviewProjectIds = useMemo(() => new Set(reviewProjects.map((candidate) => candidate.id)), [reviewProjects]);
   const reviewProjectLabels = useMemo(() => projectBreadcrumbs(snapshot.projects), [snapshot]);
   const activeReviewProjects = reviewProjects.filter((candidate) => candidate.status === "active");
+  const subprojects = reviewProjects.filter((candidate) => candidate.id !== project?.id);
   const projectActions = useMemo(
     () => snapshot.actions.filter((action) => action.projectId && reviewProjectIds.has(action.projectId)),
     [snapshot, reviewProjectIds],
@@ -209,14 +210,14 @@ export function ProjectReview({ services }: { services: GtdServices }) {
           {needsNextAction && <span class="dg-no-next">{blockingProjects.length} without Next Action</span>}
         </section>
 
-        {reviewProjects.length > 1 && <section class="dg-review-panel dg-review-tree-panel">
+        {subprojects.length > 0 && <section class="dg-review-panel dg-review-tree-panel">
           <div class="dg-review-panel-heading dg-review-panel-heading-row">
             <span class="dg-review-panel-icon">⌘</span>
             <div><h3>Project tree</h3><p>Reviewed together as one outcome hierarchy.</p></div>
-            <span class="dg-review-count">{reviewProjects.length}</span>
+            <span class="dg-review-count">{subprojects.length}</span>
           </div>
           <div class="dg-review-tree-list">
-            {reviewProjects.map((candidate) => {
+            {subprojects.map((candidate) => {
               const actions = projectActions.filter((action) => action.projectId === candidate.id && action.status !== "done" && action.status !== "cancelled");
               const next = actions.filter((action) => action.status === "next").length;
               const missing = candidate.status === "active" && next === 0;
