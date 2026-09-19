@@ -295,6 +295,7 @@ export class GtdRepository {
     await this.ensureFolder(supportPath);
     const status = input.status ?? "active";
     const created = localDate();
+    const completed = status === "completed" ? new Date().toISOString() : undefined;
     const tags = normalizeProjectTags(input.tags ?? []);
     const siblingOrders = parent
       ? this.index.getSnapshot().projects.filter((candidate) => candidate.parentProjectId === parent.id).map((candidate) => candidate.order ?? 0)
@@ -308,7 +309,7 @@ export class GtdRepository {
       area: input.area || null,
       created,
       reviewed: null,
-      completed: status === "completed" ? new Date().toISOString() : null,
+      completed: completed ?? null,
       support_path: supportPath,
       image: input.image?.trim() || null,
       tags: tags.length ? tags : null,
@@ -320,7 +321,7 @@ export class GtdRepository {
     const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n${input.notes?.trim() ?? ""}\n\n## Support material\n\n\`${supportPath}/\`\n`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
-    if (status === "completed") project.completed = String(frontmatter.completed);
+    if (completed) project.completed = completed;
     if (input.area?.trim()) project.area = input.area.trim();
     if (input.image?.trim()) project.image = input.image.trim();
     if (tags.length) project.tags = tags;

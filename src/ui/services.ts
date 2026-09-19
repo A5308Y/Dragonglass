@@ -13,6 +13,7 @@ export interface GtdServices {
   createAction: (projectId?: string) => void;
   scheduleAction: (id: string) => void;
   importActions: (projectId?: string) => void;
+  importSubprojects: (parentProjectId?: string) => void;
   createProject: (openAfterCreate?: boolean, parentProjectId?: string) => void;
   editAction: (id: string, allowProjectConversion?: boolean) => void;
   editProject: (id: string) => void;

@@ -987,6 +987,31 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   min-height: 16px;
   margin: 0;
   padding: 0;
+  display: grid;
+  place-content: center;
+  appearance: none;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 3px;
+  background: var(--background-primary);
+  cursor: pointer;
+}
+.dg-processing-toggle > input::before {
+  width: 4px;
+  height: 8px;
+  content: "";
+  border: solid var(--text-on-accent);
+  border-width: 0 2px 2px 0;
+  opacity: 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+.dg-processing-toggle > input:checked {
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+}
+.dg-processing-toggle > input:checked::before { opacity: 1; }
+.dg-processing-toggle > input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 22%, transparent);
 }
 .dg-processing-toggle > small { order: 3; grid-column: 1 / -1; }
 

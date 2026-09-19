@@ -504,6 +504,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             <div><span class="dg-detail-eyebrow">Board</span><h3>Sub-projects</h3></div>
             <div class="dg-detail-section-actions">
               <span class="dg-detail-count">{visibleChildren.length}{visibleChildren.length !== children.length ? `/${children.length}` : ""}</span>
+              <button onClick={() => services.importSubprojects(project.id)}>Import…</button>
               <button class="mod-cta" onClick={() => services.createProject(false, project.id)}>New sub-project</button>
             </div>
           </div>

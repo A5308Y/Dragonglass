@@ -6,7 +6,7 @@ import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
 import { GtdSettingTab } from "./settings";
-import { ActionEditorModal, ImportActionsModal, NewActionModal, NewProjectModal, ProjectEditorModal, ScheduleActionModal, TextPromptModal } from "./ui/modals";
+import { ActionEditorModal, ImportActionsModal, ImportSubprojectsModal, NewActionModal, NewProjectModal, ProjectEditorModal, ScheduleActionModal, TextPromptModal } from "./ui/modals";
 import { OpenProjectModal } from "./ui/open-project";
 import type { GtdServices } from "./ui/services";
 import { normalizeVaultPath } from "./utils/path";
@@ -40,6 +40,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       createAction: (projectId) => this.createAction(projectId),
       scheduleAction: (id) => this.scheduleAction(id),
       importActions: (projectId) => this.importActions(projectId),
+      importSubprojects: (parentProjectId) => this.importSubprojects(parentProjectId),
       createProject: (openAfterCreate = true, parentProjectId) => this.createProject(openAfterCreate, parentProjectId),
       editAction: (id, allowProjectConversion) => this.editAction(id, allowProjectConversion),
       editProject: (id) => this.editProject(id),
@@ -156,6 +157,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "quick-capture-inbox-item", name: "Quick Capture Inbox Item", callback: () => this.quickCapture() });
     this.addCommand({ id: "new-action", name: "New Action", callback: () => this.createAction() });
     this.addCommand({ id: "import-actions", name: "Import Actions", callback: () => this.importActions() });
+    this.addCommand({ id: "import-subprojects", name: "Import Sub-projects", callback: () => this.importSubprojects() });
     this.addCommand({ id: "new-project", name: "New Project", callback: () => this.createProject() });
   }
 
@@ -234,6 +236,10 @@ export default class DragonglassGtdPlugin extends Plugin {
 
   private importActions(projectId = ""): void {
     new ImportActionsModal(this.services, projectId).open();
+  }
+
+  private importSubprojects(parentProjectId = ""): void {
+    new ImportSubprojectsModal(this.services, parentProjectId).open();
   }
 
   private scheduleAction(id: string): void {

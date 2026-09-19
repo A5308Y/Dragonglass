@@ -11,6 +11,7 @@ import {
 import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
 import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../domain/project-hierarchy";
 import { parseActionList } from "../domain/action-import";
+import { parseSubprojectList } from "../domain/project-import";
 import { parseProjectTags } from "../domain/project-board";
 import { normalizeVaultPath } from "../utils/path";
 import { confirmDeleteProject } from "./delete-project";
@@ -425,6 +426,94 @@ export class ImportActionsModal extends FormModal {
         ...(this.projectId ? { projectId: this.projectId } : {}),
       })));
       new Notice(`Imported ${created} Action${created === 1 ? "" : "s"}.`);
+      this.close();
+    } catch (error) {
+      this.fail(error);
+    } finally {
+      this.importing = false;
+    }
+  }
+}
+
+export class ImportSubprojectsModal extends FormModal {
+  private text = "";
+  private parentProjectId: string;
+  private parentProjectQuery: string;
+  private summaryEl!: HTMLElement;
+  private importing = false;
+
+  constructor(private readonly services: GtdServices, parentProjectId = "") {
+    super(services.app);
+    const snapshot = services.repository.index.getSnapshot();
+    const parent = parentProjectId ? snapshot.projectsById.get(parentProjectId) : undefined;
+    this.parentProjectId = parent?.id ?? "";
+    this.parentProjectQuery = parent ? projectBreadcrumb(parent, snapshot.projectsById) : "";
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: "Import Sub-projects" });
+    addProjectSearch(
+      this.formEl,
+      this.services.app,
+      this.services.repository.index.getSnapshot().projects,
+      this.parentProjectQuery,
+      (projectId, query) => {
+        this.parentProjectId = projectId;
+        this.parentProjectQuery = query;
+      },
+      (popover) => this.registerPopover(popover),
+      { name: "Parent Project", description: "Required. Every imported Project becomes an immediate child of this Project." },
+    );
+    new Setting(this.formEl)
+      .setName("Pasted list")
+      .setDesc("One Sub-project per line. Checked items become Done; #tags become Project tags.")
+      .addTextArea((text) => {
+        text.setPlaceholder("- [ ] Research suppliers #planning\n- [x] Choose a supplier").onChange((value) => {
+          this.text = value;
+          this.paintSummary();
+        });
+        text.inputEl.rows = 10;
+        text.inputEl.addClass("dg-import-input");
+        window.setTimeout(() => text.inputEl.focus(), 0);
+      });
+    this.summaryEl = this.formEl.createDiv({ cls: "dg-import-summary" });
+    this.paintSummary();
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit("Import");
+  }
+
+  private paintSummary(): void {
+    const parsed = parseSubprojectList(this.text);
+    this.summaryEl.empty();
+    if (!parsed.length) {
+      this.summaryEl.createSpan({ cls: "dg-muted", text: "Nothing to import yet." });
+      return;
+    }
+    const completed = parsed.filter((project) => project.done).length;
+    const tags = [...new Set(parsed.flatMap((project) => project.tags))];
+    const parts = [`${parsed.length} Sub-project${parsed.length === 1 ? "" : "s"}`, `${completed} Done`];
+    if (tags.length) parts.push(`tags: ${tags.join(", ")}`);
+    this.summaryEl.createSpan({ text: parts.join(" · ") });
+  }
+
+  protected async submit(): Promise<void> {
+    if (this.importing) return;
+    const parsed = parseSubprojectList(this.text);
+    if (!parsed.length) return void new Notice("Paste a list of Sub-projects first.");
+    if (!validateProjectSelection(this.parentProjectId, this.parentProjectQuery)) return;
+    if (!this.parentProjectId) return void new Notice("Choose a parent Project.");
+
+    this.importing = true;
+    try {
+      const created = await this.services.repository.importSubprojects(
+        this.parentProjectId,
+        parsed.map((project) => ({
+          title: project.title,
+          status: project.done ? "completed" as const : "active" as const,
+          tags: project.tags,
+        })),
+      );
+      new Notice(`Imported ${created} Sub-project${created === 1 ? "" : "s"}.`);
       this.close();
     } catch (error) {
       this.fail(error);
