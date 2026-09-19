@@ -1307,14 +1307,13 @@
   white-space: nowrap;
 }
 
-/* Every button lights up on hover the way the primary button does: an accent tint
-   over the normal button surface, which stays visible in light and dark themes.
-   !important is needed because several buttons here force a transparent background. */
+/* Every button simply lightens on hover. !important is needed because several
+   buttons here force a transparent background. */
 .dg-view button:not(:disabled):not(.is-active):hover,
 .dg-modal button:not(:disabled):not(.is-active):hover,
 .dg-fuzzy-results button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--interactive-accent) 18%, var(--interactive-normal)) !important;
-  border-color: color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border)) !important;
+  background: color-mix(in srgb, var(--interactive-normal) 86%, white) !important;
+  border-color: color-mix(in srgb, var(--background-modifier-border) 75%, white) !important;
 }
 .dg-view button.mod-cta:not(:disabled):hover,
 .dg-modal button.mod-cta:not(:disabled):hover {
@@ -1323,7 +1322,7 @@
 }
 .dg-view button.mod-warning:not(:disabled):hover,
 .dg-modal button.mod-warning:not(:disabled):hover {
-  background: color-mix(in srgb, var(--text-error) 22%, var(--interactive-normal)) !important;
+  background: color-mix(in srgb, var(--background-modifier-error) 86%, white) !important;
 }
 
 @media (max-width: 600px) {
