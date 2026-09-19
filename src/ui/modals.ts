@@ -11,6 +11,7 @@ import {
 import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
 import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../domain/project-hierarchy";
 import { parseActionList } from "../domain/action-import";
+import { parseProjectTags } from "../domain/project-board";
 import { normalizeVaultPath } from "../utils/path";
 import { confirmDeleteProject } from "./delete-project";
 import { addImagePathSetting, resolveVaultImage } from "./image-input";
@@ -361,6 +362,7 @@ export class ImportActionsModal extends FormModal {
 export class NewProjectModal extends FormModal {
   private title = "";
   private image = "";
+  private tags = "";
   private parentProjectId: string;
   private parentProjectQuery: string;
 
@@ -390,6 +392,7 @@ export class NewProjectModal extends FormModal {
       (suggest) => this.registerPopover(suggest),
       { description: "Optional. Overrides the Default project image." },
     );
+    addTags(this.formEl, this.tags, (value) => (this.tags = value));
     addProjectSearch(
       this.formEl,
       this.services.app,
@@ -409,12 +412,14 @@ export class NewProjectModal extends FormModal {
   protected async submit(): Promise<void> {
     if (!this.title.trim()) return void new Notice("A Project title is required.");
     const image = normalizeVaultPath(this.image);
+    const tags = parseProjectTags(this.tags);
     if (image && !resolveVaultImage(this.services.app, image, "")) return void new Notice("Select an image file from the vault.");
     if (!validateProjectSelection(this.parentProjectId, this.parentProjectQuery)) return;
     try {
       const file = await this.services.repository.createProject({
         title: this.title.trim(),
         ...(image ? { image } : {}),
+        ...(tags.length ? { tags } : {}),
         ...(this.parentProjectId ? { parentProjectId: this.parentProjectId } : {}),
       });
       await this.onCreated(file);
@@ -430,6 +435,7 @@ export class ProjectEditorModal extends FormModal {
   private status: ProjectStatus;
   private area: string;
   private image: string;
+  private tags: string;
   private reviewed: string;
   private parentProjectId: string;
   private parentProjectQuery: string;
@@ -443,6 +449,7 @@ export class ProjectEditorModal extends FormModal {
     this.status = project.status;
     this.area = project.area ?? "";
     this.image = project.image ?? "";
+    this.tags = (project.tags ?? []).join(", ");
     this.reviewed = project.reviewed ?? "";
     const snapshot = services.repository.index.getSnapshot();
     const parent = project.parentProjectId ? snapshot.projectsById.get(project.parentProjectId) : undefined;
@@ -468,6 +475,7 @@ export class ProjectEditorModal extends FormModal {
       (suggest) => this.registerPopover(suggest),
       { description: "Optional. Overrides the Default project image." },
     );
+    addTags(this.formEl, this.tags, (value) => (this.tags = value));
     const snapshot = this.services.repository.index.getSnapshot();
     const excluded = projectDescendantIds(this.project.id, snapshot.projects);
     excluded.add(this.project.id);
@@ -545,6 +553,7 @@ export class ProjectEditorModal extends FormModal {
         status: this.status,
         area: this.area.trim(),
         image,
+        tags: parseProjectTags(this.tags),
         reviewed: this.reviewed,
         parentProjectId: this.parentProjectId,
       });
@@ -558,8 +567,64 @@ export class ProjectEditorModal extends FormModal {
   }
 }
 
+export class ProjectDependenciesModal extends FormModal {
+  private readonly selected: Set<string>;
+  private readonly candidates: Project[];
+
+  constructor(private readonly services: GtdServices, private readonly project: Project) {
+    super(services.app);
+    const snapshot = services.repository.index.getSnapshot();
+    this.selected = new Set((project.blockedByProjectIds ?? []).filter((id) => snapshot.projectsById.has(id)));
+    this.candidates = snapshot.projects
+      .filter((candidate) => candidate.id !== project.id)
+      .sort((left, right) => {
+        const leftSibling = left.parentProjectId === project.parentProjectId ? 0 : 1;
+        const rightSibling = right.parentProjectId === project.parentProjectId ? 0 : 1;
+        return leftSibling - rightSibling || projectBreadcrumb(left, snapshot.projectsById).localeCompare(projectBreadcrumb(right, snapshot.projectsById));
+      });
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: `Blocked by — ${this.project.title}` });
+    this.formEl.createEl("p", {
+      cls: "dg-muted",
+      text: "Select Projects that must finish first. Completed or cancelled blockers no longer mark this Project as blocked.",
+    });
+    const list = this.formEl.createDiv({ cls: "dg-dependency-list" });
+    if (!this.candidates.length) list.createSpan({ cls: "dg-muted", text: "No other Projects are available." });
+    const snapshot = this.services.repository.index.getSnapshot();
+    for (const candidate of this.candidates) {
+      new Setting(list)
+        .setName(candidate.title)
+        .setDesc(projectBreadcrumb(candidate, snapshot.projectsById))
+        .addToggle((toggle) => toggle.setValue(this.selected.has(candidate.id)).onChange((selected) => {
+          if (selected) this.selected.add(candidate.id);
+          else this.selected.delete(candidate.id);
+        }));
+    }
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit("Save dependencies");
+  }
+
+  protected async submit(): Promise<void> {
+    try {
+      await this.services.repository.updateProject(this.project.id, { blockedByProjectIds: [...this.selected] });
+      this.close();
+    } catch (error) {
+      this.fail(error);
+    }
+  }
+}
+
 function addText(container: HTMLElement, name: string, value: string, onChange: (value: string) => void, placeholder = ""): void {
   new Setting(container).setName(name).addText((text: TextComponent) => text.setValue(value).setPlaceholder(placeholder).onChange(onChange));
+}
+
+function addTags(container: HTMLElement, value: string, onChange: (value: string) => void): void {
+  new Setting(container)
+    .setName("Tags")
+    .setDesc("Comma-separated. Used to filter Project boards.")
+    .addText((text) => text.setValue(value).setPlaceholder("planning, home").onChange(onChange));
 }
 
 function addWorkToggle(container: HTMLElement, value: boolean, onChange: (value: boolean) => void): void {

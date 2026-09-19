@@ -59,6 +59,9 @@ export interface Project {
   completed?: string;
   supportPath?: string;
   image?: string;
+  tags?: string[];
+  order?: number;
+  blockedByProjectIds?: string[];
   parentProjectId?: string;
   parentProjectLink?: string;
 }
@@ -79,6 +82,7 @@ export interface ProjectInput {
   status?: ProjectStatus;
   area?: string;
   image?: string;
+  tags?: string[];
   parentProjectId?: string;
 }
 
@@ -96,7 +100,7 @@ export type ActionChanges = Partial<
 >;
 
 export type ProjectChanges = Partial<
-  Pick<Project, "title" | "status" | "area" | "reviewed" | "supportPath" | "image" | "parentProjectId">
+  Pick<Project, "title" | "status" | "area" | "reviewed" | "supportPath" | "image" | "tags" | "order" | "blockedByProjectIds" | "parentProjectId">
 >;
 
 export interface IndexIssue {

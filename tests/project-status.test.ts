@@ -36,4 +36,21 @@ describe("Project statuses", () => {
 
     expect(project.image).toBe("Images/project.jpg");
   });
+
+  it("reads Project board metadata from frontmatter", () => {
+    const project = parseProject({
+      type: "gtd-project",
+      id: "01KBOARDPROJECT",
+      title: "Sequenced Project",
+      status: "active",
+      created: "2026-09-19",
+      tags: ["planning", "home"],
+      order: 2_000,
+      blocked_by_project_ids: ["P1", "P2"],
+    }, file);
+
+    expect(project.tags).toEqual(["home", "planning"]);
+    expect(project.order).toBe(2_000);
+    expect(project.blockedByProjectIds).toEqual(["P1", "P2"]);
+  });
 });

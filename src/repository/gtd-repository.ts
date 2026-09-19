@@ -17,6 +17,7 @@ import type {
   ProjectChanges,
   ProjectInput,
 } from "../domain/types";
+import { normalizeProjectTags, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { localDate } from "../utils/date";
 import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
@@ -198,6 +199,11 @@ export class GtdRepository {
       }
     }
 
+    for (const dependent of snapshot.projects.filter((candidate) => candidate.blockedByProjectIds?.includes(project.id))) {
+      await this.updateProject(dependent.id, {
+        blockedByProjectIds: dependent.blockedByProjectIds!.filter((blockerId) => blockerId !== project.id),
+      });
+    }
     for (const action of actions) {
       if (!supportPath || !pathIsWithin(action.file.path, supportPath)) {
         await this.app.fileManager.trashFile(action.file);
@@ -262,6 +268,11 @@ export class GtdRepository {
     await this.ensureFolder(supportPath);
     const status = input.status ?? "active";
     const created = localDate();
+    const tags = normalizeProjectTags(input.tags ?? []);
+    const siblingOrders = parent
+      ? this.index.getSnapshot().projects.filter((candidate) => candidate.parentProjectId === parent.id).map((candidate) => candidate.order ?? 0)
+      : [];
+    const order = parent ? Math.max(0, ...siblingOrders) + 1_000 : undefined;
     const frontmatter: Record<string, unknown> = {
       type: "gtd-project",
       id,
@@ -273,6 +284,9 @@ export class GtdRepository {
       completed: null,
       support_path: supportPath,
       image: input.image?.trim() || null,
+      tags: tags.length ? tags : null,
+      order: order ?? null,
+      blocked_by_project_ids: null,
       parent_project_id: parent?.id ?? null,
       parent_project: parent ? wikiLink(parent) : null,
     };
@@ -281,6 +295,8 @@ export class GtdRepository {
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
     if (input.area?.trim()) project.area = input.area.trim();
     if (input.image?.trim()) project.image = input.image.trim();
+    if (tags.length) project.tags = tags;
+    if (order !== undefined) project.order = order;
     if (parent) {
       project.parentProjectId = parent.id;
       project.parentProjectLink = wikiLink(parent);
@@ -328,15 +344,27 @@ export class GtdRepository {
 
   async updateProject(id: string, changes: ProjectChanges): Promise<void> {
     const project = this.requireProject(id);
+    const snapshot = this.index.getSnapshot();
     const parent = changes.parentProjectId
-      ? this.index.getSnapshot().projectsById.get(changes.parentProjectId)
+      ? snapshot.projectsById.get(changes.parentProjectId)
       : undefined;
     if (changes.parentProjectId && !parent) throw new Error("The selected parent Project no longer exists.");
-    if (parent && projectHierarchyIssue(parent, this.index.getSnapshot().projectsById)) {
+    if (parent && projectHierarchyIssue(parent, snapshot.projectsById)) {
       throw new Error("The selected parent Project has an invalid hierarchy.");
     }
-    if (parent && wouldCreateProjectCycle(project.id, parent.id, this.index.getSnapshot().projectsById)) {
+    if (parent && wouldCreateProjectCycle(project.id, parent.id, snapshot.projectsById)) {
       throw new Error("A Project cannot be its own parent or a descendant of itself.");
+    }
+    const tags = changes.tags === undefined ? undefined : normalizeProjectTags(changes.tags);
+    if (changes.order !== undefined && !Number.isFinite(changes.order)) throw new Error("Project order must be a finite number.");
+    const blockers = changes.blockedByProjectIds === undefined
+      ? undefined
+      : [...new Set(changes.blockedByProjectIds.filter(Boolean))];
+    if (blockers?.some((blockerId) => !snapshot.projectsById.has(blockerId))) {
+      throw new Error("A blocking Project no longer exists.");
+    }
+    if (blockers && wouldCreateProjectDependencyCycle(project.id, blockers, snapshot.projectsById)) {
+      throw new Error("Project dependencies cannot contain a cycle.");
     }
     await this.enqueue(project.file.path, async () => {
       const oldTitle = project.title;
@@ -365,6 +393,9 @@ export class GtdRepository {
         if (changes.area !== undefined) frontmatter.area = changes.area || null;
         if (changes.reviewed !== undefined) frontmatter.reviewed = changes.reviewed || null;
         if (changes.image !== undefined) frontmatter.image = changes.image.trim() || null;
+        if (tags !== undefined) frontmatter.tags = tags.length ? tags : null;
+        if (changes.order !== undefined) frontmatter.order = changes.order;
+        if (blockers !== undefined) frontmatter.blocked_by_project_ids = blockers.length ? blockers : null;
         if (changes.parentProjectId !== undefined) {
           frontmatter.parent_project_id = parent?.id ?? null;
           frontmatter.parent_project = parent ? wikiLink(parent) : null;

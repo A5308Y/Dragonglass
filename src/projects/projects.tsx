@@ -3,17 +3,19 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Action, Project, ProjectStatus } from "../domain/types";
 import type { DiaryEntry } from "../utils/markdown";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
+import { activeProjectBlockers, compareProjectPriority, normalizeProjectTags, priorityOrderBefore } from "../domain/project-board";
 import { ActionRows } from "../ui/action-rows";
 import { confirmDeleteProject } from "../ui/delete-project";
 import { useGtdSnapshot } from "../ui/hooks";
 import { isVaultImage, resolveVaultImage } from "../ui/image-input";
+import { ProjectDependenciesModal } from "../ui/modals";
 import type { GtdServices } from "../ui/services";
 
 const BOARD_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
 type ProjectBoardStatus = (typeof BOARD_COLUMNS)[number];
-const SUBPROJECT_COLUMNS = ["active", "backlog", "completed"] as const satisfies readonly ProjectStatus[];
+const SUBPROJECT_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
 type SubprojectColumnStatus = (typeof SUBPROJECT_COLUMNS)[number];
-const SUBPROJECT_COLUMN_LABELS: Record<SubprojectColumnStatus, string> = { active: "Active", backlog: "Backlog", completed: "Done" };
+const SUBPROJECT_COLUMN_LABELS: Record<SubprojectColumnStatus, string> = { active: "Active", backlog: "Backlog", someday: "Someday/Maybe", completed: "Done" };
 
 export function ProjectsView({ services, initialProjectId = null }: { services: GtdServices; initialProjectId?: string | null }) {
   const snapshot = useGtdSnapshot(services.repository.index);
@@ -241,6 +243,7 @@ function ProjectCard({
       </div>
       {breadcrumb !== project.title && <div class="dg-project-lineage" title={breadcrumb}>{breadcrumb}</div>}
       {project.area && <div class="dg-project-area">{project.area}</div>}
+      {Boolean(project.tags?.length) && <div class="dg-project-tags">{project.tags!.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
       <div class="dg-project-metrics">
         <span><strong>{open}</strong> open</span>
         <span><strong>{next}</strong> next</span>
@@ -276,15 +279,35 @@ function waitForProjectStatus(services: GtdServices, id: string, status: Project
   });
 }
 
+function waitForProjectPlacement(services: GtdServices, id: string, status: ProjectStatus, order: number): Promise<void> {
+  const matches = () => {
+    const project = services.repository.index.getSnapshot().projectsById.get(id);
+    return project?.status === status && project.order === order;
+  };
+  if (matches()) return Promise.resolve();
+  return new Promise((resolve) => {
+    let unsubscribe: () => void = () => {};
+    const timeout = window.setTimeout(() => { unsubscribe(); resolve(); }, 1_500);
+    unsubscribe = services.repository.index.subscribe(() => {
+      if (!matches()) return;
+      window.clearTimeout(timeout);
+      unsubscribe();
+      resolve();
+    });
+  });
+}
+
 function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdServices; project: Project; onBack: () => void; onSelect: (id: string) => void }) {
   const snapshot = useGtdSnapshot(services.repository.index);
   const [outcome, setOutcome] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
-  const [optimisticSubprojectStatuses, setOptimisticSubprojectStatuses] = useState<Map<string, ProjectStatus>>(new Map());
+  const [optimisticSubprojectPlacements, setOptimisticSubprojectPlacements] = useState<Map<string, { status: ProjectStatus; order: number }>>(new Map());
+  const [subprojectTagFilters, setSubprojectTagFilters] = useState<string[]>([]);
   const [supportNoteTitle, setSupportNoteTitle] = useState("");
   const [creatingSupportNote, setCreatingSupportNote] = useState(false);
   const [newSupportNotePath, setNewSupportNotePath] = useState("");
   const image = projectImageFile(services, project);
+  useEffect(() => setSubprojectTagFilters([]), [project.id]);
   useEffect(() => {
     let active = true;
     void services.repository.readDesiredOutcome(project).then((value) => { if (active) setOutcome(value); });
@@ -308,32 +331,54 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const children = snapshot.projects
     .filter((candidate) => candidate.parentProjectId === project.id)
     .map((child) => {
-      const status = optimisticSubprojectStatuses.get(child.id);
-      return status ? { ...child, status } : child;
+      const placement = optimisticSubprojectPlacements.get(child.id);
+      return placement ? { ...child, ...placement } : child;
     })
-    .sort((left, right) => (breadcrumbs.get(left.id) ?? left.title).localeCompare(breadcrumbs.get(right.id) ?? right.title));
-  const activeChildren = children.filter((child) => child.status === "active");
-  const backlogChildren = children.filter((child) => child.status === "backlog");
-  const completedChildren = children.filter((child) => child.status === "completed");
-  const otherChildren = children.filter((child) => !SUBPROJECT_COLUMNS.includes(child.status as SubprojectColumnStatus));
+    .sort(compareProjectPriority);
+  const availableSubprojectTags = normalizeProjectTags(children.flatMap((child) => child.tags ?? []));
+  const availableSubprojectTagKey = availableSubprojectTags.join("\0");
+  useEffect(() => {
+    setSubprojectTagFilters((current) => current.filter((tag) => availableSubprojectTags.includes(tag)));
+  }, [project.id, availableSubprojectTagKey]);
+  const visibleChildren = subprojectTagFilters.length
+    ? children.filter((child) => subprojectTagFilters.every((tag) =>
+      child.tags?.some((candidate) => candidate.toLocaleLowerCase() === tag.toLocaleLowerCase())
+    ))
+    : children;
+  const childrenByStatus = new Map(SUBPROJECT_COLUMNS.map((status) => [status, visibleChildren.filter((child) => child.status === status)]));
+  const otherChildren = visibleChildren.filter((child) => !SUBPROJECT_COLUMNS.includes(child.status as SubprojectColumnStatus));
   const hasParent = Boolean(parent || project.parentProjectId);
 
-  const moveSubproject = async (id: string, status: SubprojectColumnStatus) => {
-    const previous = snapshot.projectsById.get(id)?.status;
-    if (!previous || previous === status) return;
-    setOptimisticSubprojectStatuses((current) => new Map(current).set(id, status));
+  const moveSubproject = async (id: string, status: SubprojectColumnStatus, beforeId?: string) => {
+    const currentProject = children.find((child) => child.id === id);
+    if (!currentProject) return;
+    const targetProjects = children.filter((child) => child.id !== id && child.status === status);
+    const order = priorityOrderBefore(targetProjects, beforeId);
+    setOptimisticSubprojectPlacements((current) => new Map(current).set(id, { status, order }));
     try {
-      await services.repository.setProjectStatus(id, status);
-      await waitForProjectStatus(services, id, status);
+      await services.repository.updateProject(id, { status, order });
+      await waitForProjectPlacement(services, id, status, order);
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Could not change the sub-project status.");
     } finally {
-      setOptimisticSubprojectStatuses((current) => {
+      setOptimisticSubprojectPlacements((current) => {
         const next = new Map(current);
         next.delete(id);
         return next;
       });
     }
+  };
+
+  const moveSubprojectPriority = (id: string, direction: -1 | 1) => {
+    const child = children.find((candidate) => candidate.id === id);
+    if (!child || !SUBPROJECT_COLUMNS.includes(child.status as SubprojectColumnStatus)) return;
+    const status = child.status as SubprojectColumnStatus;
+    const column = children.filter((candidate) => candidate.status === status).sort(compareProjectPriority);
+    const index = column.findIndex((candidate) => candidate.id === id);
+    if (index < 0) return;
+    const beforeId = direction < 0 ? column[index - 1]?.id : column[index + 2]?.id;
+    if (direction < 0 && index === 0 || direction > 0 && index === column.length - 1) return;
+    void moveSubproject(id, status, beforeId);
   };
 
   const createSupportNote = async () => {
@@ -399,16 +444,32 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
 
         <section class="dg-detail-section dg-subprojects-panel">
           <div class="dg-detail-section-heading">
-            <div><h3>Sub-projects</h3></div>
+            <div><span class="dg-detail-eyebrow">Board</span><h3>Sub-projects</h3></div>
             <div class="dg-detail-section-actions">
-              <span class="dg-detail-count">{children.length}</span>
+              <span class="dg-detail-count">{visibleChildren.length}{visibleChildren.length !== children.length ? `/${children.length}` : ""}</span>
               <button class="mod-cta" onClick={() => services.createProject(false, project.id)}>New sub-project</button>
             </div>
           </div>
+          {availableSubprojectTags.length > 0 && <div class="dg-subproject-toolbar">
+            <span>Filter by tag</span>
+            {availableSubprojectTags.map((tag) => <button
+              key={tag}
+              class={subprojectTagFilters.includes(tag) ? "is-active" : ""}
+              onClick={() => setSubprojectTagFilters((current) => current.includes(tag) ? current.filter((value) => value !== tag) : [...current, tag])}
+            >#{tag}</button>)}
+            {subprojectTagFilters.length > 0 && <button onClick={() => setSubprojectTagFilters([])}>Clear</button>}
+          </div>}
           <div class="dg-subproject-columns">
-            <SubprojectColumn status="active" projects={activeChildren} onSelect={onSelect} onMove={moveSubproject} />
-            <SubprojectColumn status="backlog" projects={backlogChildren} onSelect={onSelect} onMove={moveSubproject} />
-            <SubprojectColumn status="completed" projects={completedChildren} onSelect={onSelect} onMove={moveSubproject} />
+            {SUBPROJECT_COLUMNS.map((status) => <SubprojectColumn
+              key={status}
+              status={status}
+              projects={childrenByStatus.get(status) ?? []}
+              projectsById={snapshot.projectsById}
+              services={services}
+              onSelect={onSelect}
+              onMove={moveSubproject}
+              onMovePriority={moveSubprojectPriority}
+            />)}
           </div>
           {otherChildren.length > 0 && <div class="dg-subproject-other">
             <span>Other statuses</span>
@@ -658,11 +719,14 @@ function supportFileLabel(file: TFile, supportPath?: string): string {
     : file.name;
 }
 
-function SubprojectColumn({ status, projects, onSelect, onMove }: {
+function SubprojectColumn({ status, projects, projectsById, services, onSelect, onMove, onMovePriority }: {
   status: SubprojectColumnStatus;
   projects: Project[];
+  projectsById: ReadonlyMap<string, Project>;
+  services: GtdServices;
   onSelect: (id: string) => void;
-  onMove: (id: string, status: SubprojectColumnStatus) => Promise<void>;
+  onMove: (id: string, status: SubprojectColumnStatus, beforeId?: string) => Promise<void>;
+  onMovePriority: (id: string, direction: -1 | 1) => void;
 }) {
   const columnTitle = SUBPROJECT_COLUMN_LABELS[status];
   return <div
@@ -677,14 +741,59 @@ function SubprojectColumn({ status, projects, onSelect, onMove }: {
   >
     <header><strong>{columnTitle}</strong><span>{projects.length}</span></header>
     <div class="dg-subproject-list">
-      {projects.map((child) => <article
-        class="dg-subproject-card"
-        key={child.id}
-        draggable={!Platform.isMobile}
-        onDragStart={(event: DragEvent) => event.dataTransfer?.setData("text/dragonglass-subproject", child.id)}
-      >
-        <button class="dg-subproject-title" title={child.title} onClick={() => onSelect(child.id)}>{child.title}</button>
-      </article>)}
+      {projects.map((child, index) => {
+        const blockers = activeProjectBlockers(child, projectsById);
+        const openMenu = (event: MouseEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const menu = new Menu();
+          for (const targetStatus of SUBPROJECT_COLUMNS) {
+            menu.addItem((item) => item
+              .setTitle(`${targetStatus === child.status ? "✓ " : ""}${SUBPROJECT_COLUMN_LABELS[targetStatus]}`)
+              .setDisabled(targetStatus === child.status)
+              .onClick(() => void onMove(child.id, targetStatus)));
+          }
+          menu.addSeparator();
+          menu.addItem((item) => item.setTitle("Move up").setDisabled(index === 0).onClick(() => onMovePriority(child.id, -1)));
+          menu.addItem((item) => item.setTitle("Move down").setDisabled(index === projects.length - 1).onClick(() => onMovePriority(child.id, 1)));
+          menu.addSeparator();
+          menu.addItem((item) => item.setTitle("Blocked by…").onClick(() => new ProjectDependenciesModal(services, child).open()));
+          menu.addItem((item) => item.setTitle("Edit…").onClick(() => services.editProject(child.id)));
+          menu.addItem((item) => item.setTitle("Open note").onClick(() => void services.openFile(child.file)));
+          menu.addItem((item) => item.setTitle("New Action…").onClick(() => services.createAction(child.id)));
+          menu.addItem((item) => item.setTitle("New sub-project…").onClick(() => services.createProject(false, child.id)));
+          menu.addSeparator();
+          menu.addItem((item) => item
+            .setTitle("Delete Project…")
+            .setIcon("trash-2")
+            .setWarning(true)
+            .onClick(() => void confirmDeleteProject(services, child.id)));
+          menu.showAtMouseEvent(event);
+        };
+        return <article
+          class={`dg-subproject-card${blockers.length ? " is-blocked" : ""}`}
+          key={child.id}
+          data-subproject-card={child.id}
+          draggable={!Platform.isMobile}
+          onDragStart={(event: DragEvent) => event.dataTransfer?.setData("text/dragonglass-subproject", child.id)}
+          onDragOver={(event: DragEvent) => { event.preventDefault(); event.stopPropagation(); }}
+          onDrop={(event: DragEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const id = event.dataTransfer?.getData("text/dragonglass-subproject");
+            if (id && id !== child.id) void onMove(id, status, child.id);
+          }}
+        >
+          <div class="dg-subproject-card-heading">
+            <button class="dg-subproject-title" title={child.title} onClick={() => onSelect(child.id)}>{child.title}</button>
+            <button class="dg-icon-button" aria-label={`Options for ${child.title}`} onClick={openMenu}>•••</button>
+          </div>
+          {Boolean(child.tags?.length) && <div class="dg-project-tags">{child.tags!.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
+          {blockers.length > 0 && <div class="dg-subproject-blocked" title={blockers.map((blocker) => blocker.title).join(", ")}>
+            Blocked by {blockers.length === 1 ? blockers[0]!.title : `${blockers.length} Projects`}
+          </div>}
+        </article>;
+      })}
       {projects.length === 0 && <div class="dg-subproject-empty">No {columnTitle.toLocaleLowerCase()} sub-projects.</div>}
     </div>
   </div>;

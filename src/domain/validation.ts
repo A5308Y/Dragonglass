@@ -8,6 +8,7 @@ import {
   type ProjectStatus,
 } from "./types";
 import type { TFile } from "obsidian";
+import { normalizeProjectTags } from "./project-board";
 
 type Frontmatter = Record<string, unknown>;
 
@@ -25,6 +26,21 @@ function optionalString(frontmatter: Frontmatter, key: string): string | undefin
   if (typeof value !== "string") throw new Error(`Invalid '${key}'`);
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+function optionalStringList(frontmatter: Frontmatter, key: string): string[] {
+  const value = frontmatter[key];
+  if (value === null || value === undefined || value === "") return [];
+  const values = Array.isArray(value) ? value : [value];
+  if (values.some((item) => typeof item !== "string")) throw new Error(`Invalid '${key}'`);
+  return [...new Set((values as string[]).map((item) => item.trim()).filter(Boolean))];
+}
+
+function optionalNumber(frontmatter: Frontmatter, key: string): number | undefined {
+  const value = frontmatter[key];
+  if (value === null || value === undefined || value === "") return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Invalid '${key}'`);
+  return value;
 }
 
 function dateOnly(value: string, key: string): string {
@@ -102,6 +118,9 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   const completed = optionalString(frontmatter, "completed");
   const supportPath = optionalString(frontmatter, "support_path");
   const image = optionalString(frontmatter, "image");
+  const tags = normalizeProjectTags(optionalStringList(frontmatter, "tags").flatMap((tag) => tag.split(",")));
+  const order = optionalNumber(frontmatter, "order");
+  const blockedByProjectIds = optionalStringList(frontmatter, "blocked_by_project_ids");
   const parentProjectId = optionalString(frontmatter, "parent_project_id");
   const parentProjectLink = optionalString(frontmatter, "parent_project");
   if (area) project.area = area;
@@ -112,6 +131,9 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   }
   if (supportPath) project.supportPath = supportPath;
   if (image) project.image = image;
+  if (tags.length) project.tags = tags;
+  if (order !== undefined) project.order = order;
+  if (blockedByProjectIds.length) project.blockedByProjectIds = blockedByProjectIds;
   if (parentProjectId) project.parentProjectId = parentProjectId;
   if (parentProjectLink) project.parentProjectLink = parentProjectLink;
   return project;

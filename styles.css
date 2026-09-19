@@ -670,6 +670,19 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }
+.dg-project-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+}
+.dg-project-tags span {
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--background-modifier-hover);
+  font-size: 10px;
+}
 .dg-project-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -715,10 +728,29 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 .dg-subproject-columns {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(210px, 1fr));
   gap: 12px;
+  overflow-x: auto;
 }
-.dg-subproject-column[data-subproject-column="completed"] { grid-column: 1 / -1; }
+.dg-subproject-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -2px 0 12px;
+}
+.dg-subproject-toolbar > span { margin-right: 2px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-subproject-toolbar button {
+  min-height: 26px;
+  padding: 3px 8px;
+  color: var(--text-muted);
+  background: var(--background-primary) !important;
+  box-shadow: none;
+}
+.dg-subproject-toolbar button.is-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent) !important;
+}
 .dg-subproject-column {
   min-width: 0;
   overflow: hidden;
@@ -749,10 +781,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   width: 100%;
   min-width: 0;
   padding: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
   color: var(--text-normal);
@@ -760,6 +788,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   box-shadow: none;
 }
 .dg-subproject-card:hover { border-color: var(--interactive-accent); }
+.dg-subproject-card[draggable="true"] { cursor: grab; }
+.dg-subproject-card[draggable="true"]:active { cursor: grabbing; }
+.dg-subproject-card.is-blocked { border-color: color-mix(in srgb, var(--color-orange) 35%, var(--background-modifier-border)); }
+.dg-subproject-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dg-subproject-card-heading .dg-icon-button { flex: 0 0 28px; }
 .dg-subproject-title {
   min-width: 0;
   padding: 0;
@@ -772,6 +805,20 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   color: var(--text-normal);
   background: transparent !important;
   box-shadow: none !important;
+}
+.dg-subproject-blocked {
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--text-warning);
+  font-size: var(--font-ui-smaller);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dg-dependency-list {
+  max-height: min(55vh, 520px);
+  overflow-y: auto;
+  border-top: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
 }
 .dg-subproject-empty { padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-subproject-other { margin-top: 12px; }
