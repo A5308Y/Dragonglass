@@ -1,4 +1,4 @@
-import { Component, MarkdownRenderer, Menu, Notice, Platform, type TFile } from "obsidian";
+import { Component, Keymap, MarkdownRenderer, Menu, Notice, Platform, type TFile } from "obsidian";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Action, Project, ProjectStatus } from "../domain/types";
 import type { DiaryEntry } from "../utils/markdown";
@@ -646,10 +646,29 @@ function MarkdownText({ services, markdown, sourcePath }: { services: GtdService
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
+    const container = ref.current;
     const component = new Component();
     component.load();
-    ref.current.empty();
-    void MarkdownRenderer.render(services.app, markdown, ref.current, sourcePath, component);
+    container.empty();
+    component.registerDomEvent(container, "click", (event) => {
+      const target = event.target as Node | null;
+      const anchor = ((target as Element | null)?.closest?.("a") ?? target?.parentElement?.closest("a")) as HTMLAnchorElement | null;
+      if (!anchor || !container.contains(anchor)) return;
+      if (anchor.hasClass("internal-link")) {
+        const linktext = anchor.dataset.href ?? anchor.getAttr("href");
+        if (!linktext) return;
+        event.preventDefault();
+        void services.app.workspace.openLinkText(linktext, sourcePath, Keymap.isModEvent(event));
+        return;
+      }
+      if (anchor.hasClass("external-link")) {
+        const href = anchor.getAttr("href");
+        if (!href) return;
+        event.preventDefault();
+        anchor.win.open(href, "_blank", "noopener,noreferrer");
+      }
+    });
+    void MarkdownRenderer.render(services.app, markdown, container, sourcePath, component);
     return () => component.unload();
   }, [markdown, sourcePath]);
   return <div class="dg-outcome markdown-rendered" ref={ref} />;
