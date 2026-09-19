@@ -1291,8 +1291,10 @@
 .dg-modal-diary { margin-top: 18px; padding-top: 6px; border-top: 1px solid var(--background-modifier-border); }
 .dg-modal-diary h3 { margin: 10px 0 0; font-size: var(--font-ui-medium); }
 .dg-modal-diary .dg-diary-list { max-height: 180px; }
-.dg-modal-diary .setting-item-control { display: flex; gap: 8px; }
-.dg-modal-diary .setting-item-control input { flex: 1; }
+.dg-modal-diary .setting-item { align-items: start; }
+.dg-modal-diary .setting-item-control { display: flex; align-items: flex-start; gap: 8px; }
+.dg-modal-diary .setting-item-control textarea { flex: 1; width: 100%; min-height: 66px; resize: vertical; }
+.dg-diary-list p { white-space: pre-wrap; }
 
 .dg-project-suggestion-title { font-weight: var(--font-medium); }
 .dg-project-suggestion-meta {

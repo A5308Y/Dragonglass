@@ -44,14 +44,31 @@ export function prependMarkdownSectionLine(content: string, heading: string, lin
   return `${content.slice(0, insertion)}\n${line}${content.slice(insertion)}`;
 }
 
+/** One Diary bullet, with any further lines indented so they stay part of the same list item. */
+export function diaryEntryMarkdown(timestamp: string, text: string): string {
+  const [first = "", ...rest] = text.replace(/\r\n?/g, "\n").trim().split("\n");
+  return [`- **${timestamp}** — ${first}`, ...rest.map((line) => (line.trim() ? `  ${line.trimEnd()}` : ""))].join("\n");
+}
+
 export function parseDiaryEntries(content: string): DiaryEntry[] {
   const body = readMarkdownSection(content, "Diary");
   if (!body) return [];
   const entries: DiaryEntry[] = [];
+  let pendingBlank = false;
   for (const rawLine of body.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!line) continue;
-    const structured = /^-\s+\*\*([^*]+)\*\*\s*[—-]\s*(.+)$/.exec(line);
+    if (!line) {
+      pendingBlank = true;
+      continue;
+    }
+    const previous = entries[entries.length - 1];
+    if (previous && /^\s/.test(rawLine)) {
+      previous.text = `${previous.text}\n${pendingBlank ? "\n" : ""}${dedentContinuation(rawLine)}`;
+      pendingBlank = false;
+      continue;
+    }
+    pendingBlank = false;
+    const structured = /^-\s+\*\*([^*]+)\*\*\s*[—-]\s*(.*)$/.exec(line);
     if (structured) {
       entries.push({ timestamp: structured[1]!.trim(), text: structured[2]!.trim() });
       continue;
@@ -60,6 +77,10 @@ export function parseDiaryEntries(content: string): DiaryEntry[] {
     entries.push({ text: (bullet?.[1] ?? line).trim() });
   }
   return entries;
+}
+
+function dedentContinuation(rawLine: string): string {
+  return (rawLine.startsWith("  ") ? rawLine.slice(2) : rawLine.trimStart()).trimEnd();
 }
 
 function escapeRegExp(value: string): string {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  diaryEntryMarkdown,
   noteBody,
   parseDiaryEntries,
   prependMarkdownSectionLine,
@@ -47,6 +48,19 @@ describe("Markdown workflow helpers", () => {
       { timestamp: "2026-09-18 11:31", text: "Chose an installer" },
       { timestamp: "2026-09-18 11:30", text: "🚀 great progress" },
     ]);
+  });
+
+  it("keeps line breaks and blank lines in a pasted diary entry", () => {
+    const pasted = "Quote from the installer:\n\n- 14kW unit\n- lead time 6 weeks";
+    const updated = prependMarkdownSectionLine(projectNote, "Diary", diaryEntryMarkdown("2026-09-19 08:15", pasted));
+
+    expect(updated).toContain("- **2026-09-19 08:15** — Quote from the installer:\n\n  - 14kW unit\n  - lead time 6 weeks");
+    expect(parseDiaryEntries(updated)).toEqual([{ timestamp: "2026-09-19 08:15", text: pasted }]);
+  });
+
+  it("still reads single-line entries written before multi-line support", () => {
+    const updated = prependMarkdownSectionLine(projectNote, "Diary", "- **2026-09-18 11:30** — Chose an installer");
+    expect(parseDiaryEntries(updated)).toEqual([{ timestamp: "2026-09-18 11:30", text: "Chose an installer" }]);
   });
 
   it("extracts an Inbox Item body without generated metadata or heading", () => {

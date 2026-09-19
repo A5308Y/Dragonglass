@@ -19,7 +19,7 @@ import type {
 } from "../domain/types";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { localDate } from "../utils/date";
-import { noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
+import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
 import { baseName, generatedFolderNames, normalizeVaultPath, parentPath, safeName } from "../utils/path";
 import { createUlid } from "../utils/ulid";
 import { GtdIndex } from "./gtd-index";
@@ -385,7 +385,7 @@ export class GtdRepository {
     const timestamp = localDateTime();
     await this.enqueue(project.file.path, () => this.app.vault.process(
       project.file,
-      (content) => prependMarkdownSectionLine(content, "Diary", `- **${timestamp}** — ${clean}`),
+      (content) => prependMarkdownSectionLine(content, "Diary", diaryEntryMarkdown(timestamp, clean)),
     ));
     return { timestamp, text: clean };
   }

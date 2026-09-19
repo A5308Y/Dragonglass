@@ -6,6 +6,7 @@ import {
   Notice,
   prepareFuzzySearch,
   Setting,
+  TextAreaComponent,
   TextComponent,
 } from "obsidian";
 import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
@@ -374,7 +375,7 @@ export class ProjectEditorModal extends FormModal {
       .catch(() => this.paintDiary("Could not read the Diary."));
 
     let draft = "";
-    let input: TextComponent | undefined;
+    let input: TextAreaComponent | undefined;
     // Entries are appended to the note straight away, independent of the fields above.
     const addEntry = async (): Promise<void> => {
       const text = draft.trim();
@@ -395,12 +396,14 @@ export class ProjectEditorModal extends FormModal {
 
     new Setting(section)
       .setName("New entry")
-      .setDesc("Saved to the Project note immediately.")
-      .addText((text) => {
+      .setDesc("Saved to the Project note immediately. Line breaks are kept; ⌘/Ctrl+Enter adds the entry.")
+      .addTextArea((text) => {
         input = text;
         text.setPlaceholder("Observation or decision…").onChange((value) => (draft = value));
+        text.inputEl.rows = 3;
         text.inputEl.addEventListener("keydown", (event: KeyboardEvent) => {
-          if (event.key !== "Enter") return;
+          // Enter stays a line break; the entry is added deliberately.
+          if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
           event.preventDefault();
           void addEntry();
         });
