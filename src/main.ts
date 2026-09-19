@@ -8,6 +8,7 @@ import { GtdSettingTab } from "./settings";
 import { ActionEditorModal, ImportActionsModal, NewActionModal, NewProjectModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
 import { OpenProjectModal } from "./ui/open-project";
 import type { GtdServices } from "./ui/services";
+import { normalizeVaultPath } from "./utils/path";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, GtdBrainstormView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
 
 export default class DragonglassGtdPlugin extends Plugin {
@@ -73,6 +74,9 @@ export default class DragonglassGtdPlugin extends Plugin {
       referenceDirectory: saved?.referenceDirectory === "Reference"
         ? defaults.referenceDirectory
         : saved?.referenceDirectory ?? defaults.referenceDirectory,
+      defaultProjectImage: typeof saved?.defaultProjectImage === "string"
+        ? normalizeVaultPath(saved.defaultProjectImage)
+        : defaults.defaultProjectImage,
       savedViews: Array.isArray(saved?.savedViews) ? migrateSavedViews(saved.savedViews) : defaults.savedViews,
       defaultActionStatus: isActionStatus(saved?.defaultActionStatus) ? saved.defaultActionStatus : defaults.defaultActionStatus,
       schemaVersion: defaults.schemaVersion,

@@ -633,6 +633,30 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   max-height: 100%;
 }
 .dg-project-column .dg-card-list { overflow-y: auto; }
+.dg-project-card-image {
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  margin-bottom: 9px;
+  overflow: hidden;
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+.dg-project-card-image img,
+.dg-project-main-image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.dg-project-main-image {
+  width: 100%;
+  height: clamp(180px, 28vw, 320px);
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
 .dg-project-lineage {
   margin-top: 5px;
   overflow: hidden;
@@ -1409,6 +1433,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-row-actions { grid-column: 1; grid-row: auto; }
   .dg-action-row { grid-template-columns: auto minmax(0, 1fr) auto; }
   .dg-project-detail-content { padding: 8px; gap: 8px; }
+  .dg-project-main-image { height: min(220px, 42vw); }
   .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-columns { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-card { align-items: stretch; flex-direction: column; }

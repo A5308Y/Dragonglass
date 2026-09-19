@@ -51,10 +51,11 @@ export function defaultSettings(): GtdSettings {
     referenceDirectory: "General Reference",
     projectsDirectory: "GTD/Projects",
     actionsDirectory: "GTD/Actions",
+    defaultProjectImage: "",
     defaultActionStatus: "next",
     showDoneColumn: true,
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
-    schemaVersion: 5,
+    schemaVersion: 6,
   };
 }

@@ -272,6 +272,7 @@ export class GtdRepository {
       reviewed: null,
       completed: null,
       support_path: supportPath,
+      image: input.image?.trim() || null,
       parent_project_id: parent?.id ?? null,
       parent_project: parent ? wikiLink(parent) : null,
     };
@@ -279,6 +280,7 @@ export class GtdRepository {
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
     if (input.area?.trim()) project.area = input.area.trim();
+    if (input.image?.trim()) project.image = input.image.trim();
     if (parent) {
       project.parentProjectId = parent.id;
       project.parentProjectLink = wikiLink(parent);
@@ -362,6 +364,7 @@ export class GtdRepository {
         }
         if (changes.area !== undefined) frontmatter.area = changes.area || null;
         if (changes.reviewed !== undefined) frontmatter.reviewed = changes.reviewed || null;
+        if (changes.image !== undefined) frontmatter.image = changes.image.trim() || null;
         if (changes.parentProjectId !== undefined) {
           frontmatter.parent_project_id = parent?.id ?? null;
           frontmatter.parent_project = parent ? wikiLink(parent) : null;

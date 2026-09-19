@@ -23,4 +23,17 @@ describe("Project statuses", () => {
 
     expect(project.status).toBe("active");
   });
+
+  it("reads an optional main image from Project frontmatter", () => {
+    const project = parseProject({
+      type: "gtd-project",
+      id: "01KIMAGEPROJECT",
+      title: "Illustrated Project",
+      status: "active",
+      created: "2026-09-19",
+      image: "Images/project.jpg",
+    }, file);
+
+    expect(project.image).toBe("Images/project.jpg");
+  });
 });

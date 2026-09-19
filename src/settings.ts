@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
+import { addImagePathSetting } from "./ui/image-input";
 import { normalizeVaultPath } from "./utils/path";
 
 export class GtdSettingTab extends PluginSettingTab {
@@ -45,6 +46,18 @@ export class GtdSettingTab extends PluginSettingTab {
         this.plugin.settings.projectsDirectory = normalizeVaultPath(value) || "GTD/Projects";
         await this.plugin.saveSettings();
       }));
+
+    addImagePathSetting(
+      containerEl,
+      this.app,
+      this.plugin.settings.defaultProjectImage,
+      (value) => {
+        this.plugin.settings.defaultProjectImage = normalizeVaultPath(value);
+        void this.plugin.saveSettings();
+      },
+      undefined,
+      { name: "Default project image", description: "Used on Project cards and details when a Project has no Main image." },
+    );
 
     new Setting(containerEl)
       .setName("Default Action status")

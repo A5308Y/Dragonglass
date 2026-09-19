@@ -42,7 +42,7 @@ Project Support Material/<project title>/
 General Reference/
 ```
 
-The Inbox, Action, Project, and Reference destinations and the default Action status are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it. Every file beneath the configured Inbox directory is indexed as an Inbox Item even when it has no frontmatter or is not Markdown.
+The Inbox, Action, Project, and Reference destinations, default Action status, and default Project image are configurable. Existing entities are discovered anywhere in the vault by their `type` property, so moving or renaming a file does not break it. Every file beneath the configured Inbox directory is indexed as an Inbox Item even when it has no frontmatter or is not Markdown.
 
 Quick Capture creates an Inbox Item, not an Action:
 
@@ -80,7 +80,7 @@ completed:
 
 `project_id` is authoritative. The `project` link is only a human- and Bases-friendly convenience.
 
-A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, and `support_path`. Supported Project statuses are `active`, `backlog`, `someday`, `completed`, and `cancelled`; the UI labels `someday` as Someday/Maybe. Normal notes, PDFs, and other files can live beneath that support path.
+A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, `image`, and `support_path`. The `image` value is a vault-relative image path selected in the Project editor; when absent, the configured default Project image is used. Supported Project statuses are `active`, `backlog`, `someday`, `completed`, and `cancelled`; the UI labels `someday` as Someday/Maybe. Normal notes, PDFs, and other files can live beneath that support path.
 
 Sub-projects use the same Project files and add an optional stable-ID relationship:
 
@@ -117,7 +117,7 @@ Marking an Action done writes `status: done` and an ISO completion timestamp. Re
 
 ## Projects
 
-The Projects board has Active, Backlog, Someday/Maybe, and Completed columns. Projects move between them by desktop drag-and-drop or the card menu on touch devices. Project `waiting` is not a supported status; legacy Projects using it are migrated to `active`. Cards display hierarchy breadcrumbs, open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail links its parent and immediate sub-projects, reads the Desired outcome from the Project note, and resolves its live Actions without duplicating Action data into the Project note. Markdown files beneath `support_path` have collapsible previews and inline editing; new support notes can be created directly from Project Details. Other support files remain normal openable vault files.
+The Projects board has Active, Backlog, Someday/Maybe, and Completed columns. Projects move between them by desktop drag-and-drop or the card menu on touch devices. Project `waiting` is not a supported status; legacy Projects using it are migrated to `active`. Cards display the Project image, hierarchy breadcrumbs, open and Next Action counts, review dates, and warnings for active Projects with no open or Next Actions. Project detail shows a larger version of the image, links its parent and immediate sub-projects, reads the Desired outcome from the Project note, and resolves its live Actions without duplicating Action data into the Project note. Markdown files beneath `support_path` have collapsible previews and inline editing; new support notes can be created directly from Project Details. Other support files remain normal openable vault files.
 
 Deleting a Project from its card menu moves its Project note, directly linked Action files, and complete configured support-material folder to Obsidian's trash. A Project with sub-projects cannot be deleted until those children are moved or deleted. Dragonglass also refuses deletion when the support folder contains unrelated GTD entities.
 

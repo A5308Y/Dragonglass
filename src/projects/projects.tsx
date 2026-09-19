@@ -6,6 +6,7 @@ import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { ActionRows } from "../ui/action-rows";
 import { confirmDeleteProject } from "../ui/delete-project";
 import { useGtdSnapshot } from "../ui/hooks";
+import { isVaultImage, resolveVaultImage } from "../ui/image-input";
 import type { GtdServices } from "../ui/services";
 
 const BOARD_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
@@ -13,7 +14,6 @@ type ProjectBoardStatus = (typeof BOARD_COLUMNS)[number];
 const SUBPROJECT_COLUMNS = ["active", "backlog", "completed"] as const satisfies readonly ProjectStatus[];
 type SubprojectColumnStatus = (typeof SUBPROJECT_COLUMNS)[number];
 const SUBPROJECT_COLUMN_LABELS: Record<SubprojectColumnStatus, string> = { active: "Active", backlog: "Backlog", completed: "Done" };
-const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "jpeg", "jpg", "png", "svg", "webp"]);
 
 export function ProjectsView({ services, initialProjectId = null }: { services: GtdServices; initialProjectId?: string | null }) {
   const snapshot = useGtdSnapshot(services.repository.index);
@@ -155,6 +155,7 @@ function ProjectCard({
 }) {
   const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
   const next = actions.filter((action) => action.status === "next").length;
+  const image = projectImageFile(services, project);
   const openMenu = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -190,6 +191,7 @@ function ProjectCard({
         if (event.key === "Enter") { event.preventDefault(); onOpen(); }
       }}
     >
+      {image && <div class="dg-project-card-image"><img src={services.app.vault.getResourcePath(image)} alt="" loading="lazy" /></div>}
       <div class="dg-card-title-row">
         <button class="dg-card-title" title={breadcrumb} onClick={onOpen}>{project.title}</button>
         <button class="dg-icon-button" aria-label={`Actions for ${project.title}`} onClick={openMenu}>•••</button>
@@ -239,6 +241,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const [supportNoteTitle, setSupportNoteTitle] = useState("");
   const [creatingSupportNote, setCreatingSupportNote] = useState(false);
   const [newSupportNotePath, setNewSupportNotePath] = useState("");
+  const image = projectImageFile(services, project);
   useEffect(() => {
     let active = true;
     void services.repository.readDesiredOutcome(project).then((value) => { if (active) setOutcome(value); });
@@ -319,6 +322,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
         </div>
       </header>
       <main class="dg-project-detail-content">
+        {image && <div class="dg-project-main-image"><img src={services.app.vault.getResourcePath(image)} alt={`Main image for ${project.title}`} /></div>}
         <div class={`dg-project-overview-grid${hasParent ? "" : " is-single"}`}>
           <section class="dg-detail-section dg-project-outcome-panel">
             <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Outcome</span><h3>Desired outcome</h3></div></div>
@@ -597,7 +601,12 @@ function isEditableSupportNote(services: GtdServices, file: TFile): boolean {
 }
 
 function isSupportImage(file: TFile): boolean {
-  return IMAGE_EXTENSIONS.has(file.extension.toLocaleLowerCase());
+  return isVaultImage(file);
+}
+
+function projectImageFile(services: GtdServices, project: Project): TFile | null {
+  const path = project.image ?? services.getSettings().defaultProjectImage;
+  return resolveVaultImage(services.app, path, project.file.path);
 }
 
 function supportFileLabel(file: TFile, supportPath?: string): string {

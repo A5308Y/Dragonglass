@@ -58,6 +58,7 @@ export interface Project {
   reviewed?: string;
   completed?: string;
   supportPath?: string;
+  image?: string;
   parentProjectId?: string;
   parentProjectLink?: string;
 }
@@ -77,6 +78,7 @@ export interface ProjectInput {
   title: string;
   status?: ProjectStatus;
   area?: string;
+  image?: string;
   parentProjectId?: string;
 }
 
@@ -94,7 +96,7 @@ export type ActionChanges = Partial<
 >;
 
 export type ProjectChanges = Partial<
-  Pick<Project, "title" | "status" | "area" | "reviewed" | "supportPath" | "parentProjectId">
+  Pick<Project, "title" | "status" | "area" | "reviewed" | "supportPath" | "image" | "parentProjectId">
 >;
 
 export interface IndexIssue {
@@ -176,6 +178,7 @@ export interface GtdSettings {
   referenceDirectory: string;
   projectsDirectory: string;
   actionsDirectory: string;
+  defaultProjectImage: string;
   defaultActionStatus: ActionStatus;
   showDoneColumn: boolean;
   savedViews: SavedView[];

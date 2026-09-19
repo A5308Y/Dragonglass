@@ -11,7 +11,9 @@ import {
 import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
 import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../domain/project-hierarchy";
 import { parseActionList } from "../domain/action-import";
+import { normalizeVaultPath } from "../utils/path";
 import { confirmDeleteProject } from "./delete-project";
+import { addImagePathSetting, resolveVaultImage } from "./image-input";
 import type { GtdServices } from "./services";
 
 abstract class FormModal extends Modal {
@@ -358,6 +360,7 @@ export class ImportActionsModal extends FormModal {
 
 export class NewProjectModal extends FormModal {
   private title = "";
+  private image = "";
   private parentProjectId: string;
   private parentProjectQuery: string;
 
@@ -379,6 +382,14 @@ export class NewProjectModal extends FormModal {
       text.setPlaceholder("Project title").onChange((value) => (this.title = value));
       window.setTimeout(() => text.inputEl.focus(), 0);
     });
+    addImagePathSetting(
+      this.formEl,
+      this.services.app,
+      this.image,
+      (value) => (this.image = value),
+      (suggest) => this.registerPopover(suggest),
+      { description: "Optional. Overrides the Default project image." },
+    );
     addProjectSearch(
       this.formEl,
       this.services.app,
@@ -397,10 +408,13 @@ export class NewProjectModal extends FormModal {
 
   protected async submit(): Promise<void> {
     if (!this.title.trim()) return void new Notice("A Project title is required.");
+    const image = normalizeVaultPath(this.image);
+    if (image && !resolveVaultImage(this.services.app, image, "")) return void new Notice("Select an image file from the vault.");
     if (!validateProjectSelection(this.parentProjectId, this.parentProjectQuery)) return;
     try {
       const file = await this.services.repository.createProject({
         title: this.title.trim(),
+        ...(image ? { image } : {}),
         ...(this.parentProjectId ? { parentProjectId: this.parentProjectId } : {}),
       });
       await this.onCreated(file);
@@ -415,6 +429,7 @@ export class ProjectEditorModal extends FormModal {
   private title: string;
   private status: ProjectStatus;
   private area: string;
+  private image: string;
   private reviewed: string;
   private parentProjectId: string;
   private parentProjectQuery: string;
@@ -427,6 +442,7 @@ export class ProjectEditorModal extends FormModal {
     this.title = project.title;
     this.status = project.status;
     this.area = project.area ?? "";
+    this.image = project.image ?? "";
     this.reviewed = project.reviewed ?? "";
     const snapshot = services.repository.index.getSnapshot();
     const parent = project.parentProjectId ? snapshot.projectsById.get(project.parentProjectId) : undefined;
@@ -444,6 +460,14 @@ export class ProjectEditorModal extends FormModal {
       dropdown.setValue(this.status).onChange((value) => (this.status = value as ProjectStatus));
     });
     addText(this.formEl, "Area", this.area, (value) => (this.area = value));
+    addImagePathSetting(
+      this.formEl,
+      this.services.app,
+      this.image,
+      (value) => (this.image = value),
+      (suggest) => this.registerPopover(suggest),
+      { description: "Optional. Overrides the Default project image." },
+    );
     const snapshot = this.services.repository.index.getSnapshot();
     const excluded = projectDescendantIds(this.project.id, snapshot.projects);
     excluded.add(this.project.id);
@@ -506,6 +530,11 @@ export class ProjectEditorModal extends FormModal {
       new Notice("A title is required.");
       return;
     }
+    const image = normalizeVaultPath(this.image);
+    if (image && !resolveVaultImage(this.services.app, image, this.project.file.path)) {
+      new Notice("Select an image file from the vault.");
+      return;
+    }
     if (!validateProjectSelection(this.parentProjectId, this.parentProjectQuery)) return;
     try {
       // Establish the original value before comparing, including when Save is
@@ -515,6 +544,7 @@ export class ProjectEditorModal extends FormModal {
         title: this.title.trim(),
         status: this.status,
         area: this.area.trim(),
+        image,
         reviewed: this.reviewed,
         parentProjectId: this.parentProjectId,
       });
