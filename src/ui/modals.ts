@@ -6,12 +6,10 @@ import {
   Notice,
   prepareFuzzySearch,
   Setting,
-  TextAreaComponent,
   TextComponent,
 } from "obsidian";
 import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
 import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../domain/project-hierarchy";
-import type { DiaryEntry } from "../utils/markdown";
 import type { GtdServices } from "./services";
 
 abstract class FormModal extends Modal {
@@ -315,9 +313,6 @@ export class ProjectEditorModal extends FormModal {
   private reviewed: string;
   private parentProjectId: string;
   private parentProjectQuery: string;
-  private diaryEntries: DiaryEntry[] = [];
-  private diaryListEl: HTMLDivElement | null = null;
-  private addingDiaryEntry = false;
 
   constructor(private readonly services: GtdServices, private readonly project: Project) {
     super(services.app);
@@ -357,80 +352,8 @@ export class ProjectEditorModal extends FormModal {
       { name: "Parent Project", description: "Optional. Descendants are excluded to prevent hierarchy cycles." },
     );
     addDate(this.formEl, "Reviewed", this.reviewed, (value) => (this.reviewed = value));
-    this.renderDiary();
     this.formEl.appendChild(this.actionsEl);
     this.addSubmit();
-  }
-
-  private renderDiary(): void {
-    const section = this.formEl.createDiv({ cls: "dg-modal-diary" });
-    section.createEl("h3", { text: "Diary" });
-    this.diaryListEl = section.createDiv({ cls: "dg-diary-list" });
-    this.paintDiary("Loading…");
-    void this.services.repository.readProjectDiary(this.project)
-      .then((entries) => {
-        this.diaryEntries = entries;
-        this.paintDiary();
-      })
-      .catch(() => this.paintDiary("Could not read the Diary."));
-
-    let draft = "";
-    let input: TextAreaComponent | undefined;
-    // Entries are appended to the note straight away, independent of the fields above.
-    const addEntry = async (): Promise<void> => {
-      const text = draft.trim();
-      if (!text || this.addingDiaryEntry) return;
-      this.addingDiaryEntry = true;
-      try {
-        const entry = await this.services.repository.addProjectDiaryEntry(this.project.id, text);
-        this.diaryEntries = [entry, ...this.diaryEntries];
-        draft = "";
-        input?.setValue("");
-        this.paintDiary();
-      } catch (error) {
-        this.fail(error);
-      } finally {
-        this.addingDiaryEntry = false;
-      }
-    };
-
-    new Setting(section)
-      .setName("New entry")
-      .setDesc("Saved to the Project note immediately. Line breaks are kept; ⌘/Ctrl+Enter adds the entry.")
-      .addTextArea((text) => {
-        input = text;
-        text.setPlaceholder("Observation or decision…").onChange((value) => (draft = value));
-        text.inputEl.rows = 3;
-        text.inputEl.addEventListener("keydown", (event: KeyboardEvent) => {
-          // Enter stays a line break; the entry is added deliberately.
-          if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
-          event.preventDefault();
-          void addEntry();
-        });
-      })
-      .addButton((button) => {
-        button.buttonEl.type = "button";
-        button.setButtonText("Add entry").onClick(() => void addEntry());
-      });
-  }
-
-  private paintDiary(placeholder?: string): void {
-    const list = this.diaryListEl;
-    if (!list) return;
-    list.empty();
-    if (placeholder) {
-      list.createSpan({ cls: "dg-muted", text: placeholder });
-      return;
-    }
-    if (!this.diaryEntries.length) {
-      list.createSpan({ cls: "dg-muted", text: "No entries yet." });
-      return;
-    }
-    for (const entry of this.diaryEntries) {
-      const row = list.createDiv();
-      if (entry.timestamp) row.createSpan({ text: entry.timestamp });
-      row.createEl("p", { text: entry.text });
-    }
   }
 
   protected async submit(): Promise<void> {

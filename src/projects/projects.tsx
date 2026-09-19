@@ -1,6 +1,7 @@
 import { Component, MarkdownRenderer, Menu, Notice, Platform, type TFile } from "obsidian";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Action, Project, ProjectStatus } from "../domain/types";
+import type { DiaryEntry } from "../utils/markdown";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { ActionRows } from "../ui/action-rows";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -378,6 +379,8 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
           </div>}
         </section>
 
+        <ProjectDiary services={services} project={project} />
+
         <section class="dg-detail-section dg-support-panel">
           <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Project Support Material</h3></div><span class="dg-detail-count">{support.length}</span></div>
           <div class="dg-support-note-create">
@@ -421,6 +424,65 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
       </main>
     </div>
   );
+}
+
+function ProjectDiary({ services, project }: { services: GtdServices; project: Project }) {
+  const [entries, setEntries] = useState<DiaryEntry[] | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void services.repository.readProjectDiary(project)
+      .then((value) => { if (active) setEntries(value); })
+      .catch(() => { if (active) setEntries([]); });
+    return () => { active = false; };
+  }, [project.file.stat.mtime, project.file.path]);
+
+  const addEntry = async () => {
+    const text = draft.trim();
+    if (!text || saving) return;
+    setSaving(true);
+    try {
+      const entry = await services.repository.addProjectDiaryEntry(project.id, text);
+      setEntries((current) => [entry, ...(current ?? [])]);
+      setDraft("");
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not add the Diary entry.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <section class="dg-detail-section dg-project-diary-panel">
+    <div class="dg-detail-section-heading">
+      <div><span class="dg-detail-eyebrow">Log</span><h3>Diary</h3></div>
+      <span class="dg-detail-count">{entries?.length ?? 0}</span>
+    </div>
+    <div class="dg-diary-add">
+      <textarea
+        value={draft}
+        rows={3}
+        aria-label="New Diary entry"
+        placeholder="Observation or decision… (⌘/Ctrl+Enter to add)"
+        onInput={(event: Event) => setDraft((event.currentTarget as HTMLTextAreaElement).value)}
+        onKeyDown={(event: KeyboardEvent) => {
+          // Enter stays a line break so pasted formatting survives.
+          if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+          event.preventDefault();
+          void addEntry();
+        }}
+      />
+      <button class="mod-cta" disabled={!draft.trim() || saving} onClick={() => void addEntry()}>Add entry</button>
+    </div>
+    <div class="dg-diary-list">
+      {entries === null
+        ? <span class="dg-muted">Loading…</span>
+        : entries.length
+          ? entries.map((entry, index) => <div key={`${entry.timestamp ?? ""}-${index}`}><span>{entry.timestamp}</span><p>{entry.text}</p></div>)
+          : <span class="dg-muted">No entries yet.</span>}
+    </div>
+  </section>;
 }
 
 function SupportImage({ services, file, label: imageLabel }: {

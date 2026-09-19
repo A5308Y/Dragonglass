@@ -1175,6 +1175,21 @@
 .dg-diary-list { max-height: 240px; margin-top: 12px; overflow-y: auto; }
 .dg-diary-list > div { padding: 9px 2px; border-top: 1px solid var(--background-modifier-border); }
 .dg-diary-list > div:first-child { border-top: 0; }
+.dg-diary-add { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; }
+.dg-diary-add textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 66px;
+  padding: 8px 10px;
+  resize: vertical;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  background: var(--background-primary);
+  font-family: var(--font-text);
+  line-height: var(--line-height-normal);
+}
+.dg-diary-add button { min-height: 36px; }
 .dg-diary-list span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-diary-list p { margin: 2px 0 0; }
 .dg-review-stats { display: block; }
@@ -1289,12 +1304,6 @@
   max-width: none;
 }
 .dg-modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
-.dg-modal-diary { margin-top: 18px; padding-top: 6px; border-top: 1px solid var(--background-modifier-border); }
-.dg-modal-diary h3 { margin: 10px 0 0; font-size: var(--font-ui-medium); }
-.dg-modal-diary .dg-diary-list { max-height: 180px; }
-.dg-modal-diary .setting-item { align-items: start; }
-.dg-modal-diary .setting-item-control { display: flex; align-items: flex-start; gap: 8px; }
-.dg-modal-diary .setting-item-control textarea { flex: 1; width: 100%; min-height: 66px; resize: vertical; }
 .dg-diary-list p { white-space: pre-wrap; }
 
 .dg-project-suggestion-title { font-weight: var(--font-medium); }
@@ -1360,6 +1369,8 @@
   .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-columns { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-card { align-items: stretch; flex-direction: column; }
+  .dg-diary-add { align-items: stretch; flex-direction: column; }
+  .dg-diary-add button { min-height: 40px; }
   .dg-support-note-create { align-items: stretch; flex-direction: column; }
   .dg-support-note-create button { min-height: 40px; }
   .dg-support-note > header { align-items: flex-start; }
