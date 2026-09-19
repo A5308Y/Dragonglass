@@ -193,13 +193,15 @@ export function ProjectReview({ services }: { services: GtdServices }) {
           {needsNextAction && <span class="dg-no-next">{blockingProjects.length} without Next Action</span>}
         </section>
 
-        {subprojects.length > 0 && <section class="dg-review-panel dg-review-tree-panel">
+        <section class="dg-review-panel dg-review-tree-panel">
           <div class="dg-review-panel-heading dg-review-panel-heading-row">
             <span class="dg-review-panel-icon">⌘</span>
             <div><h3>Project tree</h3><p>Reviewed together as one outcome hierarchy.</p></div>
             <span class="dg-review-count">{subprojects.length}</span>
+            <button class="dg-review-tree-add" onClick={() => services.createProject(false, project.id)}>New sub-project</button>
           </div>
-          <div class="dg-review-tree-list">
+          {subprojects.length === 0 && <div class="dg-review-tree-empty">No sub-projects yet.</div>}
+          {subprojects.length > 0 && <div class="dg-review-tree-list">
             {subprojects.map((candidate) => {
               const actions = projectActions.filter((action) => action.projectId === candidate.id && action.status !== "done" && action.status !== "cancelled");
               const next = actions.filter((action) => action.status === "next").length;
@@ -211,8 +213,8 @@ export function ProjectReview({ services }: { services: GtdServices }) {
                 {missing && <strong>No Next Action</strong>}
               </div>;
             })}
-          </div>
-        </section>}
+          </div>}
+        </section>
 
         <section class="dg-review-grid">
           <div class="dg-review-panel dg-review-outcome-panel">
