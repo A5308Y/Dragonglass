@@ -19,7 +19,9 @@ import type { GtdServices } from "../ui/services";
 
 const BOARD_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
 type ProjectBoardStatus = (typeof BOARD_COLUMNS)[number];
-const SUBPROJECT_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
+const PRIMARY_SUBPROJECT_COLUMNS = ["active", "backlog"] as const satisfies readonly ProjectStatus[];
+const SECONDARY_SUBPROJECT_COLUMNS = ["someday", "completed"] as const satisfies readonly ProjectStatus[];
+const SUBPROJECT_COLUMNS = [...PRIMARY_SUBPROJECT_COLUMNS, ...SECONDARY_SUBPROJECT_COLUMNS] as const;
 type SubprojectColumnStatus = (typeof SUBPROJECT_COLUMNS)[number];
 const SUBPROJECT_COLUMN_LABELS: Record<SubprojectColumnStatus, string> = { active: "Active", backlog: "Backlog", someday: "Someday/Maybe", completed: "Done" };
 
@@ -310,6 +312,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const snapshot = useGtdSnapshot(services.repository.index);
   const [outcome, setOutcome] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
+  const [showSecondarySubprojects, setShowSecondarySubprojects] = useState(false);
   const [optimisticSubprojectPlacements, setOptimisticSubprojectPlacements] = useState<Map<string, ProjectPlacement & { operation: number }>>(new Map());
   const optimisticSubprojectPlacementsRef = useRef(optimisticSubprojectPlacements);
   const nextPlacementOperation = useRef(0);
@@ -320,6 +323,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const image = projectImageFile(services, project);
   useEffect(() => {
     setSubprojectTagFilters([]);
+    setShowSecondarySubprojects(false);
     optimisticSubprojectPlacementsRef.current = new Map();
     setOptimisticSubprojectPlacements(new Map());
   }, [project.id]);
@@ -361,6 +365,10 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
     ))
     : children;
   const childrenByStatus = new Map(SUBPROJECT_COLUMNS.map((status) => [status, visibleChildren.filter((child) => child.status === status)]));
+  const secondarySubprojectCount = SECONDARY_SUBPROJECT_COLUMNS.reduce(
+    (count, status) => count + (childrenByStatus.get(status)?.length ?? 0),
+    0,
+  );
   const otherChildren = visibleChildren.filter((child) => !SUBPROJECT_COLUMNS.includes(child.status as SubprojectColumnStatus));
   const hasParent = Boolean(parent || project.parentProjectId);
 
@@ -485,8 +493,8 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             >#{tag}</button>)}
             {subprojectTagFilters.length > 0 && <button onClick={() => setSubprojectTagFilters([])}>Clear</button>}
           </div>}
-          <div class="dg-subproject-columns">
-            {SUBPROJECT_COLUMNS.map((status) => <SubprojectColumn
+          <div class="dg-subproject-columns dg-subproject-columns-primary">
+            {PRIMARY_SUBPROJECT_COLUMNS.map((status) => <SubprojectColumn
               key={status}
               status={status}
               projects={childrenByStatus.get(status) ?? []}
@@ -496,6 +504,28 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
               onMove={moveSubproject}
               onMovePriority={moveSubprojectPriority}
             />)}
+          </div>
+          <div class={`dg-subproject-secondary${showSecondarySubprojects ? " is-open" : ""}`}>
+            <button
+              class="dg-disclosure dg-subproject-secondary-toggle"
+              aria-expanded={showSecondarySubprojects}
+              onClick={() => setShowSecondarySubprojects((current) => !current)}
+            >
+              <span>{showSecondarySubprojects ? "▾" : "▸"} Someday/Maybe and Done</span>
+              <span class="dg-detail-count">{secondarySubprojectCount}</span>
+            </button>
+            {showSecondarySubprojects && <div class="dg-subproject-columns dg-subproject-columns-secondary">
+              {SECONDARY_SUBPROJECT_COLUMNS.map((status) => <SubprojectColumn
+                key={status}
+                status={status}
+                projects={childrenByStatus.get(status) ?? []}
+                projectsById={snapshot.projectsById}
+                services={services}
+                onSelect={onSelect}
+                onMove={moveSubproject}
+                onMovePriority={moveSubprojectPriority}
+              />)}
+            </div>}
           </div>
           {otherChildren.length > 0 && <div class="dg-subproject-other">
             <span>Other statuses</span>

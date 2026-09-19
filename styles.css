@@ -728,10 +728,22 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 .dg-subproject-columns {
   display: grid;
-  grid-template-columns: repeat(4, minmax(210px, 1fr));
+  grid-template-columns: repeat(2, minmax(210px, 1fr));
   gap: 12px;
   overflow-x: auto;
 }
+.dg-subproject-secondary {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.dg-subproject-secondary-toggle {
+  padding: 3px 2px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.dg-subproject-secondary.is-open .dg-subproject-secondary-toggle { color: var(--text-normal); }
+.dg-subproject-columns-secondary { margin-top: 10px; }
 .dg-subproject-toolbar {
   display: flex;
   align-items: center;
