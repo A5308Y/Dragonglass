@@ -43,6 +43,8 @@ export interface Action {
   due?: string;
   deferUntil?: string;
   completed?: string;
+  /** Marks the Action as work, independent of its context. */
+  work?: boolean;
 }
 
 export interface Project {
@@ -68,6 +70,7 @@ export interface ActionInput {
   energy?: string;
   due?: string;
   deferUntil?: string;
+  work?: boolean;
 }
 
 export interface ProjectInput {
@@ -83,10 +86,11 @@ export interface InboxProcessingInput {
   desiredOutcome?: string;
   nextAction?: string;
   context?: string;
+  work?: boolean;
 }
 
 export type ActionChanges = Partial<
-  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "deferUntil">
+  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "deferUntil" | "work">
 >;
 
 export type ProjectChanges = Partial<
@@ -136,7 +140,12 @@ export interface AvailabilityFilter {
   operator: "available";
 }
 
-export type ActionFilter = ValueFilter | DueFilter | AvailabilityFilter;
+export interface WorkFilter {
+  kind: "work";
+  value: boolean;
+}
+
+export type ActionFilter = ValueFilter | DueFilter | AvailabilityFilter | WorkFilter;
 export type GroupBy = "status" | "project" | "context" | "energy";
 export type SortField = "created" | "due" | "title" | "project";
 export type SortDirection = "asc" | "desc";

@@ -91,6 +91,7 @@ export class NewActionModal extends FormModal {
   private projectId: string;
   private projectQuery: string;
   private context = "";
+  private work = false;
 
   constructor(private readonly services: GtdServices, projectId = "") {
     super(services.app);
@@ -130,6 +131,7 @@ export class NewActionModal extends FormModal {
       for (const status of ACTION_STATUSES) dropdown.addOption(status, label(status));
       dropdown.setValue(this.status).onChange((value) => (this.status = value as ActionStatus));
     });
+    addWorkToggle(this.formEl, this.work, (value) => (this.work = value));
     this.formEl.appendChild(this.actionsEl);
     this.addSubmit("Create Action");
   }
@@ -143,6 +145,7 @@ export class NewActionModal extends FormModal {
         status: this.status,
         ...(this.projectId ? { projectId: this.projectId } : {}),
         ...(this.context.trim() ? { context: this.context.trim() } : {}),
+        work: this.work,
       });
       new Notice("Action created.");
       this.close();
@@ -161,6 +164,7 @@ export class ActionEditorModal extends FormModal {
   private energy: string;
   private due: string;
   private deferUntil: string;
+  private work: boolean;
 
   constructor(private readonly services: GtdServices, private readonly action: Action, private readonly allowProjectConversion = false) {
     super(services.app);
@@ -175,6 +179,7 @@ export class ActionEditorModal extends FormModal {
     this.energy = action.energy ?? "";
     this.due = action.due ?? "";
     this.deferUntil = action.deferUntil ?? "";
+    this.work = action.work ?? false;
   }
 
   protected renderForm(): void {
@@ -199,6 +204,7 @@ export class ActionEditorModal extends FormModal {
     addText(this.formEl, "Energy", this.energy, (value) => (this.energy = value), "medium");
     addDate(this.formEl, "Due", this.due, (value) => (this.due = value));
     addDate(this.formEl, "Defer until", this.deferUntil, (value) => (this.deferUntil = value));
+    addWorkToggle(this.formEl, this.work, (value) => (this.work = value));
     this.formEl.appendChild(this.actionsEl);
     if (this.allowProjectConversion && this.action.projectId) {
       const convert = new ButtonComponent(this.actionsEl)
@@ -244,6 +250,7 @@ export class ActionEditorModal extends FormModal {
         energy: this.energy.trim(),
         due: this.due,
         deferUntil: this.deferUntil,
+        work: this.work,
       });
       this.close();
     } catch (error) {
@@ -388,6 +395,13 @@ export class ProjectEditorModal extends FormModal {
 
 function addText(container: HTMLElement, name: string, value: string, onChange: (value: string) => void, placeholder = ""): void {
   new Setting(container).setName(name).addText((text: TextComponent) => text.setValue(value).setPlaceholder(placeholder).onChange(onChange));
+}
+
+function addWorkToggle(container: HTMLElement, value: boolean, onChange: (value: boolean) => void): void {
+  new Setting(container)
+    .setName("Work")
+    .setDesc("Independent of the Action's context.")
+    .addToggle((toggle) => toggle.setValue(value).onChange(onChange));
 }
 
 function addDate(container: HTMLElement, name: string, value: string, onChange: (value: string) => void): void {

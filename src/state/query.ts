@@ -19,6 +19,7 @@ export function matchesFilter(action: Action, filter: ActionFilter, today = loca
   if (filter.kind === "availability") {
     return !action.deferUntil || action.deferUntil <= today;
   }
+  if (filter.kind === "work") return Boolean(action.work) === filter.value;
   if (filter.kind === "value") {
     const matched = filter.values.includes(valueFor(action, filter.field));
     return filter.operator === "in" ? matched : !matched;

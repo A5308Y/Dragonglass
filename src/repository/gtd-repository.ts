@@ -68,7 +68,7 @@ export class GtdRepository {
     const title = input.title.trim();
     if (!title) throw new Error("An Action title is required.");
     if (item.file.extension !== "md") {
-      await this.createNextActionFile(title, input.context ?? "", item.created, project);
+      await this.createNextActionFile(title, input.context ?? "", item.created, project, input.work ?? false);
       if (project) await this.fileInboxItemToProject(item, project);
       else await this.fileInboxItemToGeneralReference(item);
       return;
@@ -87,6 +87,7 @@ export class GtdRepository {
         frontmatter.energy = input.energy || null;
         frontmatter.due = input.due || null;
         frontmatter.defer_until = input.deferUntil || null;
+        frontmatter.work = input.work ?? false;
         frontmatter.captured = item.created;
         frontmatter.created = localDate();
         frontmatter.completed = null;
@@ -192,7 +193,7 @@ export class GtdRepository {
     const title = requiredProcessingValue(input.nextAction, "A Next Action is required.");
     const context = requiredProcessingValue(input.context, "A context is required.");
     const project = await this.prepareProcessingProject(input, "active");
-    await this.convertInboxItemToAction(item, actionInput(title, context, project), project);
+    await this.convertInboxItemToAction(item, actionInput(title, context, project, input.work), project);
   }
 
   async processInboxAsReference(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
@@ -202,7 +203,7 @@ export class GtdRepository {
     if (title && !context) throw new Error("A context is required when creating a Next Action.");
     const project = await this.prepareProcessingProject(input, "active");
 
-    if (title) await this.createNextActionFile(title, context, item.created, project);
+    if (title) await this.createNextActionFile(title, context, item.created, project, input.work ?? false);
     if (project) await this.fileInboxItemToProject(item, project);
     else await this.fileInboxItemToGeneralReference(item);
   }
@@ -216,7 +217,7 @@ export class GtdRepository {
     const project = await this.prepareProcessingProject(input, "someday", title || item.title, true);
     if (!project) throw new Error("Could not create the Someday/Maybe Project.");
 
-    if (title) await this.createNextActionFile(title, context, item.created, project);
+    if (title) await this.createNextActionFile(title, context, item.created, project, input.work ?? false);
     await this.fileInboxItemToProject(item, project);
   }
 
@@ -284,6 +285,7 @@ export class GtdRepository {
         if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
         if (changes.due !== undefined) frontmatter.due = changes.due || null;
         if (changes.deferUntil !== undefined) frontmatter.defer_until = changes.deferUntil || null;
+        if (changes.work !== undefined) frontmatter.work = changes.work;
       });
       if (changes.title && changes.title.trim() !== oldTitle) {
         await this.updateGeneratedHeading(action.file, oldTitle, changes.title.trim());
@@ -426,7 +428,7 @@ export class GtdRepository {
     return this.createInboxItem(`Brainstorm - ${cleanTopic}`, `## Ideas\n\n${cleanIdeas}`);
   }
 
-  private async createNextActionFile(title: string, context: string, captured: string, project?: Project): Promise<TFile> {
+  private async createNextActionFile(title: string, context: string, captured: string, project?: Project, work = false): Promise<TFile> {
     const id = createUlid();
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions");
     const path = this.uniqueMarkdownPath(directory, title, id);
@@ -441,6 +443,7 @@ export class GtdRepository {
       energy: null,
       due: null,
       defer_until: null,
+      work,
       captured,
       created: localDate(),
       completed: null,
@@ -762,11 +765,12 @@ function requiredProcessingValue(value: string | undefined, message: string): st
   return clean;
 }
 
-function actionInput(title: string, context: string, project?: Project): ActionInput {
+function actionInput(title: string, context: string, project?: Project, work = false): ActionInput {
   return {
     title,
     status: "next",
     context,
+    work,
     ...(project ? { projectId: project.id } : {}),
   };
 }

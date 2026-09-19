@@ -315,6 +315,7 @@ function FilterBuilder({ services, filters, onChange }: { services: GtdServices;
   };
   const add = () => {
     if (field === "available") onChange([...filters, { kind: "availability", operator: "available" }]);
+    else if (field === "work") onChange([...filters, { kind: "work", value: operator === "in" }]);
     else if (field === "due") onChange([...filters, {
       kind: "due",
       operator: dueOperator,
@@ -326,10 +327,12 @@ function FilterBuilder({ services, filters, onChange }: { services: GtdServices;
     <div class="dg-panel dg-filter-builder">
       <select value={field} onChange={(event: Event) => changeField((event.currentTarget as HTMLSelectElement).value)}>
         <option value="status">Status</option><option value="project">Project</option><option value="context">Context</option><option value="energy">Energy</option>
-        <option value="due">Due date</option><option value="available">Available now</option>
+        <option value="due">Due date</option><option value="available">Available now</option><option value="work">Work</option>
       </select>
-      {field !== "due" && field !== "available" && <select value={operator} onChange={(event: Event) => setOperator((event.currentTarget as HTMLSelectElement).value as "in" | "notIn")}><option value="in">is</option><option value="notIn">is not</option></select>}
-      {field !== "due" && field !== "available" && <select value={value} onChange={(event: Event) => setValue((event.currentTarget as HTMLSelectElement).value)}>{values.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>}
+      {field !== "due" && field !== "available" && <select value={operator} onChange={(event: Event) => setOperator((event.currentTarget as HTMLSelectElement).value as "in" | "notIn")}>
+        <option value="in">is</option><option value="notIn">is not</option>
+      </select>}
+      {field !== "due" && field !== "available" && field !== "work" && <select value={value} onChange={(event: Event) => setValue((event.currentTarget as HTMLSelectElement).value)}>{values.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>}
       {field === "due" && <select value={dueOperator} onChange={(event: Event) => {
         const next = (event.currentTarget as HTMLSelectElement).value as typeof dueOperator;
         setDueOperator(next);
@@ -361,6 +364,7 @@ function ColumnPicker({ snapshotGroups, configuration, onChange }: { snapshotGro
 
 function describeFilter(filter: ActionFilter, snapshot: ReturnType<GtdServices["repository"]["index"]["getSnapshot"]>): string {
   if (filter.kind === "availability") return "Available now";
+  if (filter.kind === "work") return filter.value ? "Work" : "Not work";
   if (filter.kind === "due") return filter.operator === "withinNextDays" ? `Due within ${filter.value} days` : `Due ${filter.operator}`;
   const labels = filter.values.map((value) => {
     if (filter.field !== "project") return value;

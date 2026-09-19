@@ -848,6 +848,16 @@
   flex-direction: column;
   gap: 6px;
 }
+.dg-processing-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 2px 8px;
+  align-content: center;
+}
+.dg-processing-toggle > span { order: 2; justify-self: start; }
+.dg-processing-toggle > input { order: 1; width: 16px; height: 16px; margin: 0; }
+.dg-processing-toggle > small { order: 3; grid-column: 1 / -1; }
 
 .dg-processing-field.is-wide { grid-column: 1 / -1; }
 .dg-processing-field > span {

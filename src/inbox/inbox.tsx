@@ -140,6 +140,7 @@ function InboxProcessor({
   const [desiredOutcome, setDesiredOutcome] = useState("");
   const [nextAction, setNextAction] = useState("");
   const [context, setContext] = useState("");
+  const [work, setWork] = useState(false);
   const [busy, setBusy] = useState(false);
   const projectLabels = useMemo(() => projectBreadcrumbs(projects), [projects]);
 
@@ -151,6 +152,7 @@ function InboxProcessor({
     setDesiredOutcome("");
     setNextAction("");
     setContext("");
+    setWork(false);
     setBusy(false);
     if (item) void services.repository.readInboxBody(item).then((value) => { if (!cancelled) setBody(value); });
     return () => { cancelled = true; };
@@ -173,6 +175,7 @@ function InboxProcessor({
     ...(desiredOutcome.trim() ? { desiredOutcome: desiredOutcome.trim() } : {}),
     ...(nextAction.trim() ? { nextAction: nextAction.trim() } : {}),
     ...(context.trim() ? { context: context.trim() } : {}),
+    work,
   });
   const run = async (operation: () => Promise<void>, message: string) => {
     if (busy) return;
@@ -260,6 +263,12 @@ function InboxProcessor({
               onChoose={(option) => setContext(option.label)}
             />
           </ProcessingField>
+
+          <label class="dg-processing-field dg-processing-toggle">
+            <span>Work</span>
+            <input type="checkbox" checked={work} onChange={(event: Event) => setWork((event.currentTarget as HTMLInputElement).checked)} />
+            <small>Independent of the context. Applied to any Action created here.</small>
+          </label>
         </div>
       </section>
 

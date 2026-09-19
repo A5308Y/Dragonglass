@@ -8,7 +8,7 @@ import { createDefaultViews } from "../src/state/defaults";
 const file = (path: string) => ({ path } as TFile);
 const project: Project = { type: "gtd-project", id: "P1", title: "Heating", file: file("GTD/Projects/Heating.md"), status: "active", created: "2026-09-01" };
 const actions: Action[] = [
-  { type: "gtd-action", id: "A1", title: "Compare offers", file: file("A1.md"), status: "next", projectId: "P1", context: "computer", energy: "medium", due: "2026-09-20", created: "2026-09-18" },
+  { type: "gtd-action", id: "A1", title: "Compare offers", file: file("A1.md"), status: "next", projectId: "P1", context: "computer", energy: "medium", due: "2026-09-20", created: "2026-09-18", work: true },
   { type: "gtd-action", id: "A2", title: "Call installer", file: file("A2.md"), status: "waiting", projectId: "P1", context: "phone", due: "2026-09-25", created: "2026-09-17" },
   { type: "gtd-action", id: "A3", title: "Future research", file: file("A3.md"), status: "next", deferUntil: "2026-10-01", created: "2026-09-16" },
 ];
@@ -80,5 +80,16 @@ describe("query model", () => {
     };
     const groups = buildBoard(snapshot, { filters: [], groupBy: "project", sort: { field: "title", direction: "asc" }, visibleColumns: null });
     expect(groups.map((group) => group.label)).toEqual(["Heating", "No project"]);
+  });
+
+  it("filters Actions by the work flag, independent of context", () => {
+    expect(actions.filter((action) => matchesFilter(action, { kind: "work", value: true })).map((action) => action.id)).toEqual(["A1"]);
+    expect(actions.filter((action) => matchesFilter(action, { kind: "work", value: false })).map((action) => action.id)).toEqual(["A2", "A3"]);
+  });
+
+  it("reads the work flag from frontmatter", () => {
+    const parsed = parseAction({ id: "A9", title: "Draft budget", status: "next", created: "2026-09-19", work: true }, file("A9.md"));
+    expect(parsed.work).toBe(true);
+    expect(parseAction({ id: "A8", title: "Buy milk", status: "next", created: "2026-09-19" }, file("A8.md")).work).toBeUndefined();
   });
 });
