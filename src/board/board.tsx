@@ -254,7 +254,6 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
     const contexts = [...new Set(snapshot.actions.map((item) => item.context).filter((value): value is string => Boolean(value)))].sort();
     if (contexts.length) {
       menu.addSeparator();
-      menu.addItem((item) => item.setTitle("Clear context").onClick(() => void safely(services.repository.updateAction(action.id, { context: "" }))));
       for (const context of contexts) menu.addItem((item) => item.setTitle(`${context === action.context ? "✓ " : ""}@${context}`).onClick(() => void safely(services.repository.updateAction(action.id, { context }))));
     }
     menu.addSeparator();

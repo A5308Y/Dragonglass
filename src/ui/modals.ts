@@ -139,13 +139,14 @@ export class NewActionModal extends FormModal {
 
   protected async submit(): Promise<void> {
     if (!this.title.trim()) return void new Notice("An Action title is required.");
+    if (!this.context.trim()) return void new Notice("A context is required.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
     try {
       await this.services.repository.createClarifiedAction({
         title: this.title.trim(),
         status: this.status,
         ...(this.projectId ? { projectId: this.projectId } : {}),
-        ...(this.context.trim() ? { context: this.context.trim() } : {}),
+        context: this.context.trim(),
         work: this.work,
       });
       new Notice("Action created.");
@@ -201,7 +202,14 @@ export class ActionEditorModal extends FormModal {
       },
       (popover) => this.registerPopover(popover),
     );
-    addText(this.formEl, "Context", this.context, (value) => (this.context = value), "computer");
+    addContextSearch(
+      this.formEl,
+      this.services.app,
+      this.services.repository.index.getSnapshot().actions,
+      this.context,
+      (value) => (this.context = value),
+      (popover) => this.registerPopover(popover),
+    );
     addText(this.formEl, "Energy", this.energy, (value) => (this.energy = value), "medium");
     addDate(this.formEl, "Due", this.due, (value) => (this.due = value));
     addDate(this.formEl, "Defer until", this.deferUntil, (value) => (this.deferUntil = value));
@@ -241,6 +249,7 @@ export class ActionEditorModal extends FormModal {
       new Notice("A title is required.");
       return;
     }
+    if (!this.context.trim()) return void new Notice("A context is required.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
     try {
       await this.services.repository.updateAction(this.action.id, {
@@ -325,6 +334,7 @@ export class ImportActionsModal extends FormModal {
     if (this.importing) return;
     const parsed = parseActionList(this.text);
     if (!parsed.length) return void new Notice("Paste a list of Actions first.");
+    if (parsed.some((action) => !action.contexts[0])) return void new Notice("Every imported Action needs a context tag.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
 
     this.importing = true;
@@ -333,7 +343,7 @@ export class ImportActionsModal extends FormModal {
         title: action.title,
         status: action.done ? "done" as const : "next" as const,
         work: action.work,
-        ...(action.contexts[0] ? { context: action.contexts[0] } : {}),
+        context: action.contexts[0] ?? "",
         ...(this.projectId ? { projectId: this.projectId } : {}),
       })));
       new Notice(`Imported ${created} Action${created === 1 ? "" : "s"}.`);
@@ -547,7 +557,7 @@ function addContextSearch(
   const contexts = [...new Set(actions.map((action) => action.context).filter((context): context is string => Boolean(context)))].sort();
   new Setting(container)
     .setName("Context")
-    .setDesc("Optional. Select an existing Context or type a new one.")
+    .setDesc("Required. Select an existing Context or type a new one.")
     .addText((text) => {
       text.setValue(value).setPlaceholder(contexts.length ? "Search or name a Context…" : "Name a Context…").onChange(onChange);
       const suggest = new ContextInputSuggest(app, text.inputEl, contexts, onChange);

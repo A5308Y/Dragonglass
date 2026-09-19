@@ -92,6 +92,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
   const addAction = async () => {
     const title = actionTitle.trim();
     if (!title) return;
+    if (!context.trim()) return void new Notice("A context is required.");
     setSaving(true);
     try {
       const targetProject = reviewProjects.find((candidate) => candidate.id === actionProjectId);
@@ -100,7 +101,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
         title,
         status: "next",
         projectId: targetProject.id,
-        ...(context.trim() ? { context: context.trim() } : {}),
+        context: context.trim(),
         work,
       });
       setActionTitle("");
@@ -277,7 +278,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
               <input type="checkbox" checked={work} onChange={(event: Event) => setWork((event.currentTarget as HTMLInputElement).checked)} />
               <span>Work</span>
             </label>
-            <button class="mod-cta" disabled={!actionTitle.trim() || !actionProjectId || saving} onClick={() => void addAction()}>Add</button>
+            <button class="mod-cta" disabled={!actionTitle.trim() || !actionProjectId || !context.trim() || saving} onClick={() => void addAction()}>Add</button>
           </div>
         </section>
 

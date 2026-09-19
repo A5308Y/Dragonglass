@@ -612,6 +612,14 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   box-shadow: none;
 }
 .dg-action-row-actions { display: flex; align-items: center; gap: 3px; }
+.dg-action-row-kind {
+  margin-right: 3px;
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: var(--font-semibold);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
 .dg-action-row-delete {
   min-height: 30px;
   padding: 4px 7px;

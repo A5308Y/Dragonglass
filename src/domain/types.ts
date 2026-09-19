@@ -66,7 +66,7 @@ export interface ActionInput {
   title: string;
   status: ActionStatus;
   projectId?: string;
-  context?: string;
+  context: string;
   energy?: string;
   due?: string;
   deferUntil?: string;
