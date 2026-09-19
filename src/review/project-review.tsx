@@ -4,6 +4,7 @@ import type { Project } from "../domain/types";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { activeProjectsWithoutNextAction, projectReviewMembers, projectReviewQueue, projectsBlockingReview } from "../domain/project-review";
 import { ActionRows } from "../ui/action-rows";
+import { confirmDeleteProject } from "../ui/delete-project";
 import { FuzzyField } from "../ui/fuzzy-field";
 import type { DiaryEntry } from "../utils/markdown";
 import { localDate } from "../utils/date";
@@ -155,27 +156,9 @@ export function ProjectReview({ services }: { services: GtdServices }) {
   };
 
   const deleteProject = async () => {
-    const children = snapshot.projects.filter((candidate) => candidate.parentProjectId === project.id);
-    if (children.length) {
-      new Notice(`Move or delete ${children.length} sub-project${children.length === 1 ? "" : "s"} first.`);
-      return;
-    }
-    const linkedActions = projectActions.filter((action) => action.projectId === project.id).length;
-    const supportFiles = services.repository.supportFiles(project).length;
-    const supportDescription = project.supportPath
-      ? `${supportFiles} support file${supportFiles === 1 ? "" : "s"} in “${project.supportPath}”`
-      : "no configured support folder";
-    if (!window.confirm(
-      `Delete “${project.title}”?\n\nThis moves the Project note, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, and ${supportDescription} to Obsidian's trash.`,
-    )) return;
-
     setSaving(true);
     try {
-      await services.repository.trashProject(project.id);
-      setQueue((current) => current.slice(1));
-      new Notice(`Deleted Project, ${linkedActions} Action${linkedActions === 1 ? "" : "s"}, and its support material.`);
-    } catch (error) {
-      new Notice(message(error));
+      if (await confirmDeleteProject(services, project.id)) setQueue((current) => current.slice(1));
     } finally {
       setSaving(false);
     }

@@ -10,6 +10,7 @@ import {
 } from "obsidian";
 import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
 import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../domain/project-hierarchy";
+import { confirmDeleteProject } from "./delete-project";
 import type { GtdServices } from "./services";
 
 abstract class FormModal extends Modal {
@@ -353,7 +354,15 @@ export class ProjectEditorModal extends FormModal {
     );
     addDate(this.formEl, "Reviewed", this.reviewed, (value) => (this.reviewed = value));
     this.formEl.appendChild(this.actionsEl);
+    const remove = new ButtonComponent(this.actionsEl).setButtonText("Delete Project").setWarning();
+    remove.buttonEl.type = "button";
+    remove.buttonEl.addClass("dg-modal-delete");
+    remove.onClick(() => void this.deleteProject());
     this.addSubmit();
+  }
+
+  private async deleteProject(): Promise<void> {
+    if (await confirmDeleteProject(this.services, this.project.id)) this.close();
   }
 
   protected async submit(): Promise<void> {
