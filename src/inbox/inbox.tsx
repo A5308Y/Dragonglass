@@ -2,6 +2,7 @@ import { Notice } from "obsidian";
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { InboxItem, InboxProcessingInput, Project } from "../domain/types";
+import { inboxProcessingPrefill } from "../domain/inbox-processing";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { FuzzyField } from "../ui/fuzzy-field";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -146,11 +147,12 @@ function InboxProcessor({
 
   useEffect(() => {
     let cancelled = false;
+    const prefill = item ? inboxProcessingPrefill(item.title) : "";
     setBody("");
-    setProjectQuery("");
+    setProjectQuery(prefill);
     setProjectId("");
     setDesiredOutcome("");
-    setNextAction("");
+    setNextAction(prefill);
     setContext("");
     setWork(false);
     setBusy(false);
