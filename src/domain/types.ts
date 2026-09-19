@@ -181,6 +181,7 @@ export interface GtdSettings {
   defaultProjectImage: string;
   defaultActionStatus: ActionStatus;
   showDoneColumn: boolean;
+  projectBoardColumns: ProjectStatus[];
   savedViews: SavedView[];
   activeSavedViewId: string | null;
   schemaVersion: number;

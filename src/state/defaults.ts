@@ -54,8 +54,9 @@ export function defaultSettings(): GtdSettings {
     defaultProjectImage: "",
     defaultActionStatus: "next",
     showDoneColumn: true,
+    projectBoardColumns: ["active", "backlog", "someday", "completed"],
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
-    schemaVersion: 6,
+    schemaVersion: 7,
   };
 }

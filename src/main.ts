@@ -1,5 +1,5 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
-import { isActionStatus } from "./domain/validation";
+import { isActionStatus, isProjectStatus } from "./domain/validation";
 import type { GtdSettings, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
@@ -25,10 +25,10 @@ export default class DragonglassGtdPlugin extends Plugin {
       app: this.app,
       repository: this.repository,
       getSettings: () => this.settings,
-      saveSettings: async (settings) => {
+      saveSettings: async (settings, refreshViews = true) => {
         this.settings = settings;
-        await this.saveSettings();
-        this.index.reindex();
+        await this.saveSettings(refreshViews);
+        if (refreshViews) this.index.reindex();
       },
       openFile: (file) => this.openFile(file),
       quickCapture: () => this.quickCapture(),
@@ -79,12 +79,16 @@ export default class DragonglassGtdPlugin extends Plugin {
         : defaults.defaultProjectImage,
       savedViews: Array.isArray(saved?.savedViews) ? migrateSavedViews(saved.savedViews) : defaults.savedViews,
       defaultActionStatus: isActionStatus(saved?.defaultActionStatus) ? saved.defaultActionStatus : defaults.defaultActionStatus,
+      projectBoardColumns: Array.isArray(saved?.projectBoardColumns)
+        ? saved.projectBoardColumns.filter((status) => isProjectStatus(status) && status !== "cancelled")
+        : defaults.projectBoardColumns,
       schemaVersion: defaults.schemaVersion,
     };
   }
 
-  async saveSettings(): Promise<void> {
+  async saveSettings(refreshViews = true): Promise<void> {
     await this.saveData(this.settings);
+    if (!refreshViews) return;
     for (const leaf of this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE)) {
       if (leaf.view instanceof ActionBoardView) leaf.view.refresh();
     }

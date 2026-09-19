@@ -21,6 +21,12 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
   const [optimistic, setOptimistic] = useState<Map<string, ProjectStatus>>(new Map());
   const [search, setSearch] = useState("");
   const [showSubprojects, setShowSubprojects] = useState(true);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<ProjectBoardStatus[]>(() => {
+    const configured = services.getSettings().projectBoardColumns;
+    const valid = configured.filter((status): status is ProjectBoardStatus => BOARD_COLUMNS.includes(status as ProjectBoardStatus));
+    return valid.length ? valid : [...BOARD_COLUMNS];
+  });
   useEffect(() => setSelectedId(initialProjectId), [initialProjectId]);
   const selected = selectedId ? snapshot.projectsById.get(selectedId) : undefined;
 
@@ -67,6 +73,18 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     }
   };
 
+  const changeVisibleColumns = async (columns: ProjectBoardStatus[]) => {
+    if (!columns.length) return;
+    const previous = visibleColumns;
+    setVisibleColumns(columns);
+    try {
+      await services.saveSettings({ ...services.getSettings(), projectBoardColumns: columns }, false);
+    } catch (error) {
+      setVisibleColumns(previous);
+      new Notice(error instanceof Error ? error.message : "Could not save the Project board columns.");
+    }
+  };
+
   return (
     <div class="dg-view dg-projects-view">
       <header class="dg-view-header">
@@ -83,6 +101,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
           value={search}
           onInput={(event: Event) => setSearch((event.currentTarget as HTMLInputElement).value)}
         />
+        <button class={columnsOpen ? "is-active" : ""} onClick={() => setColumnsOpen(!columnsOpen)}>Columns</button>
         <label class="dg-toolbar-toggle" title="Show sub-projects on the board">
           <input
             type="checkbox"
@@ -92,8 +111,9 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
           <span>Sub-projects</span>
         </label>
       </div>
+      {columnsOpen && <ProjectColumnPicker visible={visibleColumns} onChange={(columns) => void changeVisibleColumns(columns)} />}
       <div class="dg-board dg-project-board" role="list">
-        {BOARD_COLUMNS.map((status) => {
+        {BOARD_COLUMNS.filter((status) => visibleColumns.includes(status)).map((status) => {
           const columnProjects = projects
             .filter((project) => projectColumn(project.status) === status
               && matchesSearch(project)
@@ -133,6 +153,29 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
       </div>
     </div>
   );
+}
+
+function ProjectColumnPicker({ visible, onChange }: {
+  visible: readonly ProjectBoardStatus[];
+  onChange: (columns: ProjectBoardStatus[]) => void;
+}) {
+  const selected = new Set(visible);
+  return <div class="dg-panel dg-column-picker">{BOARD_COLUMNS.map((status) => {
+    const checked = selected.has(status);
+    return <label key={status}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={checked && selected.size === 1}
+        onChange={() => {
+          if (checked) selected.delete(status);
+          else selected.add(status);
+          onChange(BOARD_COLUMNS.filter((candidate) => selected.has(candidate)));
+        }}
+      />
+      {projectStatusLabel(status)}
+    </label>;
+  })}</div>;
 }
 
 function ProjectCard({

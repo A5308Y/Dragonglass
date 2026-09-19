@@ -6,7 +6,7 @@ export interface GtdServices {
   app: App;
   repository: GtdRepository;
   getSettings: () => GtdSettings;
-  saveSettings: (settings: GtdSettings) => Promise<void>;
+  saveSettings: (settings: GtdSettings, refreshViews?: boolean) => Promise<void>;
   openFile: (file: TFile) => Promise<void>;
   quickCapture: () => void;
   openInbox: () => void;
