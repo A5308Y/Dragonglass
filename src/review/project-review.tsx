@@ -33,6 +33,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
   const [actionProjectId, setActionProjectId] = useState("");
   const [actionProjectQuery, setActionProjectQuery] = useState("");
   const [context, setContext] = useState("");
+  const [work, setWork] = useState(false);
   const [saving, setSaving] = useState(false);
   const timers = useReviewTimers(total, project?.id);
 
@@ -64,6 +65,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
     setActionProjectId(defaultActionProject?.id ?? "");
     setActionProjectQuery(defaultActionProject ? reviewProjectLabels.get(defaultActionProject.id) ?? defaultActionProject.title : "");
     setContext("");
+    setWork(false);
     if (project) {
       void Promise.all([
         services.repository.readDesiredOutcome(project),
@@ -99,6 +101,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
         status: "next",
         projectId: targetProject.id,
         ...(context.trim() ? { context: context.trim() } : {}),
+        work,
       });
       setActionTitle("");
       setContext("");
@@ -270,6 +273,10 @@ export function ProjectReview({ services }: { services: GtdServices }) {
               onChange={setContext}
               onChoose={(option) => setContext(option.label)}
             />
+            <label class="dg-capture-toggle" title="Mark as work, independent of the context">
+              <input type="checkbox" checked={work} onChange={(event: Event) => setWork((event.currentTarget as HTMLInputElement).checked)} />
+              <span>Work</span>
+            </label>
             <button class="mod-cta" disabled={!actionTitle.trim() || !actionProjectId || saving} onClick={() => void addAction()}>Add</button>
           </div>
         </section>
