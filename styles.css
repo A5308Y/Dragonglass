@@ -680,6 +680,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.dg-subproject-column[data-subproject-column="completed"] { grid-column: 1 / -1; }
 .dg-subproject-column {
   min-width: 0;
   overflow: hidden;

@@ -8,6 +8,9 @@ import type { GtdServices } from "../ui/services";
 
 const BOARD_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
 type ProjectBoardStatus = (typeof BOARD_COLUMNS)[number];
+const SUBPROJECT_COLUMNS = ["active", "backlog", "completed"] as const satisfies readonly ProjectStatus[];
+type SubprojectColumnStatus = (typeof SUBPROJECT_COLUMNS)[number];
+const SUBPROJECT_COLUMN_LABELS: Record<SubprojectColumnStatus, string> = { active: "Active", backlog: "Backlog", completed: "Done" };
 const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "jpeg", "jpg", "png", "svg", "webp"]);
 
 export function ProjectsView({ services, initialProjectId = null }: { services: GtdServices; initialProjectId?: string | null }) {
@@ -275,10 +278,11 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
     .sort((left, right) => (breadcrumbs.get(left.id) ?? left.title).localeCompare(breadcrumbs.get(right.id) ?? right.title));
   const activeChildren = children.filter((child) => child.status === "active");
   const backlogChildren = children.filter((child) => child.status === "backlog");
-  const otherChildren = children.filter((child) => child.status !== "active" && child.status !== "backlog");
+  const completedChildren = children.filter((child) => child.status === "completed");
+  const otherChildren = children.filter((child) => !SUBPROJECT_COLUMNS.includes(child.status as SubprojectColumnStatus));
   const hasParent = Boolean(parent || project.parentProjectId);
 
-  const moveSubproject = async (id: string, status: "active" | "backlog") => {
+  const moveSubproject = async (id: string, status: SubprojectColumnStatus) => {
     const previous = snapshot.projectsById.get(id)?.status;
     if (!previous || previous === status) return;
     setOptimisticSubprojectStatuses((current) => new Map(current).set(id, status));
@@ -366,6 +370,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
           <div class="dg-subproject-columns">
             <SubprojectColumn status="active" projects={activeChildren} onSelect={onSelect} onMove={moveSubproject} />
             <SubprojectColumn status="backlog" projects={backlogChildren} onSelect={onSelect} onMove={moveSubproject} />
+            <SubprojectColumn status="completed" projects={completedChildren} onSelect={onSelect} onMove={moveSubproject} />
           </div>
           {otherChildren.length > 0 && <div class="dg-subproject-other">
             <span>Other statuses</span>
@@ -550,14 +555,15 @@ function supportFileLabel(file: TFile, supportPath?: string): string {
 }
 
 function SubprojectColumn({ status, projects, onSelect, onMove }: {
-  status: "active" | "backlog";
+  status: SubprojectColumnStatus;
   projects: Project[];
   onSelect: (id: string) => void;
-  onMove: (id: string, status: "active" | "backlog") => Promise<void>;
+  onMove: (id: string, status: SubprojectColumnStatus) => Promise<void>;
 }) {
-  const columnTitle = projectStatusLabel(status);
+  const columnTitle = SUBPROJECT_COLUMN_LABELS[status];
   return <div
     class="dg-subproject-column"
+    data-subproject-column={status}
     onDragOver={(event: DragEvent) => event.preventDefault()}
     onDrop={(event: DragEvent) => {
       event.preventDefault();
