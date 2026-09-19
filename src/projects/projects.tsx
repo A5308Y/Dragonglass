@@ -334,6 +334,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             <div><span class="dg-detail-eyebrow">Work</span><h3>Open Actions</h3></div>
             <div class="dg-detail-section-actions">
               <span class="dg-detail-count">{open.length}</span>
+              <button onClick={() => services.importActions(project.id)}>Import…</button>
               <button class="mod-cta" onClick={() => services.createAction(project.id)}>New Action</button>
             </div>
           </div>

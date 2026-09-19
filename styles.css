@@ -1319,6 +1319,8 @@
 }
 .dg-modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .dg-modal-delete { margin-right: auto; }
+.dg-modal .dg-import-input { width: 100%; min-height: 190px; resize: vertical; font-family: var(--font-monospace); }
+.dg-import-summary { margin-top: 10px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-diary-list p { white-space: pre-wrap; }
 
 .dg-project-suggestion-title { font-weight: var(--font-medium); }

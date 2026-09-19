@@ -44,6 +44,21 @@ export class GtdRepository {
     await this.convertInboxItemToAction(item, input);
   }
 
+  /** Creates Action files straight from a pasted list. Returns how many were written. */
+  async importActions(inputs: readonly ActionInput[]): Promise<number> {
+    const captured = localDate();
+    let created = 0;
+    for (const input of inputs) {
+      const title = input.title.trim();
+      if (!title) continue;
+      const project = input.projectId ? this.index.getSnapshot().projectsById.get(input.projectId) : undefined;
+      if (input.projectId && !project) throw new Error("The selected Project no longer exists.");
+      await this.createActionFile(title, input, captured, project);
+      created += 1;
+    }
+    return created;
+  }
+
   private async createInboxRecord(title: string, details = ""): Promise<InboxItem> {
     const id = createUlid();
     const cleanTitle = title.trim();
@@ -429,24 +444,29 @@ export class GtdRepository {
   }
 
   private async createNextActionFile(title: string, context: string, captured: string, project?: Project, work = false): Promise<TFile> {
+    return this.createActionFile(title, { title, status: "next", context, work }, captured, project);
+  }
+
+  private async createActionFile(title: string, input: ActionInput, captured: string, project?: Project): Promise<TFile> {
     const id = createUlid();
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions");
     const path = this.uniqueMarkdownPath(directory, title, id);
+    const status = input.status ?? "next";
     const frontmatter: Record<string, unknown> = {
       type: "gtd-action",
       id,
       title,
-      status: "next",
+      status,
       project_id: project?.id ?? null,
       project: project ? wikiLink(project) : null,
-      context,
-      energy: null,
-      due: null,
-      defer_until: null,
-      work,
+      context: input.context ?? "",
+      energy: input.energy || null,
+      due: input.due || null,
+      defer_until: input.deferUntil || null,
+      work: input.work ?? false,
       captured,
       created: localDate(),
-      completed: null,
+      completed: status === "done" ? new Date().toISOString() : null,
     };
     return this.app.vault.create(path, markdown(frontmatter, `# ${title}\n\n## Done when\n\n`));
   }

@@ -10,6 +10,7 @@ import {
 } from "obsidian";
 import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
 import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../domain/project-hierarchy";
+import { parseActionList } from "../domain/action-import";
 import { confirmDeleteProject } from "./delete-project";
 import type { GtdServices } from "./services";
 
@@ -255,6 +256,92 @@ export class ActionEditorModal extends FormModal {
       this.close();
     } catch (error) {
       this.fail(error);
+    }
+  }
+}
+
+export class ImportActionsModal extends FormModal {
+  private text = "";
+  private projectId: string;
+  private projectQuery: string;
+  private summaryEl!: HTMLElement;
+  private importing = false;
+
+  constructor(private readonly services: GtdServices, projectId = "") {
+    super(services.app);
+    const snapshot = services.repository.index.getSnapshot();
+    const project = projectId ? snapshot.projectsById.get(projectId) : undefined;
+    this.projectId = project?.id ?? "";
+    this.projectQuery = project ? projectBreadcrumb(project, snapshot.projectsById) : "";
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: "Import Actions" });
+    addProjectSearch(
+      this.formEl,
+      this.services.app,
+      this.services.repository.index.getSnapshot().projects,
+      this.projectQuery,
+      (projectId, query) => {
+        this.projectId = projectId;
+        this.projectQuery = query;
+      },
+      (popover) => this.registerPopover(popover),
+      { name: "Project", description: "Leave empty to import the Actions without a Project." },
+    );
+    new Setting(this.formEl)
+      .setName("Pasted list")
+      .setDesc("One Action per line. “#Work” sets the work flag, any other #tag becomes the context.")
+      .addTextArea((text) => {
+        text.setPlaceholder("- [ ] Draft the proposal #Laptop #Work").onChange((value) => {
+          this.text = value;
+          this.paintSummary();
+        });
+        text.inputEl.rows = 10;
+        text.inputEl.addClass("dg-import-input");
+        window.setTimeout(() => text.inputEl.focus(), 0);
+      });
+    this.summaryEl = this.formEl.createDiv({ cls: "dg-import-summary" });
+    this.paintSummary();
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit("Import");
+  }
+
+  private paintSummary(): void {
+    const parsed = parseActionList(this.text);
+    const work = parsed.filter((action) => action.work).length;
+    const contexts = [...new Set(parsed.flatMap((action) => action.contexts.slice(0, 1)))];
+    this.summaryEl.empty();
+    if (!parsed.length) {
+      this.summaryEl.createSpan({ cls: "dg-muted", text: "Nothing to import yet." });
+      return;
+    }
+    const parts = [`${parsed.length} Action${parsed.length === 1 ? "" : "s"}`, `${work} marked Work`];
+    if (contexts.length) parts.push(`contexts: ${contexts.join(", ")}`);
+    this.summaryEl.createSpan({ text: parts.join(" · ") });
+  }
+
+  protected async submit(): Promise<void> {
+    if (this.importing) return;
+    const parsed = parseActionList(this.text);
+    if (!parsed.length) return void new Notice("Paste a list of Actions first.");
+    if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
+
+    this.importing = true;
+    try {
+      const created = await this.services.repository.importActions(parsed.map((action) => ({
+        title: action.title,
+        status: action.done ? "done" as const : "next" as const,
+        work: action.work,
+        ...(action.contexts[0] ? { context: action.contexts[0] } : {}),
+        ...(this.projectId ? { projectId: this.projectId } : {}),
+      })));
+      new Notice(`Imported ${created} Action${created === 1 ? "" : "s"}.`);
+      this.close();
+    } catch (error) {
+      this.fail(error);
+    } finally {
+      this.importing = false;
     }
   }
 }
