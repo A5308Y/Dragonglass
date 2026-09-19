@@ -436,6 +436,7 @@ export class ImportActionsModal extends FormModal {
 
 export class NewProjectModal extends FormModal {
   private title = "";
+  private area = "";
   private image = "";
   private tags = "";
   private parentProjectId: string;
@@ -459,6 +460,7 @@ export class NewProjectModal extends FormModal {
       text.setPlaceholder("Project title").onChange((value) => (this.title = value));
       window.setTimeout(() => text.inputEl.focus(), 0);
     });
+    addText(this.formEl, "Area", this.area, (value) => (this.area = value));
     addImagePathSetting(
       this.formEl,
       this.services.app,
@@ -493,6 +495,7 @@ export class NewProjectModal extends FormModal {
     try {
       const file = await this.services.repository.createProject({
         title: this.title.trim(),
+        ...(this.area.trim() ? { area: this.area.trim() } : {}),
         ...(image ? { image } : {}),
         ...(tags.length ? { tags } : {}),
         ...(this.parentProjectId ? { parentProjectId: this.parentProjectId } : {}),
