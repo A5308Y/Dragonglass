@@ -13,7 +13,15 @@ function doPost(event) {
     if (request.version !== BRIDGE_VERSION) throw new Error("Unsupported bridge version.");
     if (typeof request.sourceId !== "string" || !/^[0-9A-Za-z_-]{10,128}$/.test(request.sourceId)) throw new Error("Invalid Dragonglass source ID.");
 
-    const calendar = Calendar.Calendars.get(calendarId);
+    let calendar;
+    try {
+      calendar = Calendar.Calendars.get(calendarId);
+    } catch (calendarError) {
+      if (/not found/i.test(String(calendarError && calendarError.message ? calendarError.message : calendarError))) {
+        throw new Error("Calendar not found. Check that CALENDAR_ID is the calendar ID—not its name—and that the deploying Google account can access it.");
+      }
+      throw calendarError;
+    }
     if (request.operation === "test") return jsonResponse({ ok: true, calendar: calendar.summary });
     if (request.operation !== "reconcile" || !Array.isArray(request.events)) throw new Error("Invalid bridge operation.");
     if (request.events.length > 5000) throw new Error("Too many events in one request.");

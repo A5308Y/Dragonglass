@@ -30,7 +30,7 @@ export type CalendarBridgeRequest = (request: {
   contentType: string;
   body: string;
   throw: boolean;
-}) => Promise<{ status: number; json: unknown }>;
+}) => Promise<{ status: number; json: unknown; text?: string }>;
 
 export class GoogleCalendarSync {
   private status: CalendarSyncStatus = { state: "disabled" };
@@ -135,6 +135,9 @@ export class GoogleCalendarSync {
       throw new Error("The Apps Script URL is invalid.");
     }
     if (endpoint.protocol !== "https:") throw new Error("The Apps Script URL must use HTTPS.");
+    if (endpoint.hostname !== "script.google.com" || !endpoint.pathname.includes("/macros/") || !/\/exec\/?$/.test(endpoint.pathname)) {
+      throw new Error("Use the deployed Apps Script web-app URL ending in /exec, not the editor, project, or /dev URL.");
+    }
     return settings;
   }
 
@@ -150,9 +153,15 @@ export class GoogleCalendarSync {
     try {
       payload = response.json as BridgeResponse;
     } catch {
-      throw new Error(`Calendar bridge returned an unreadable response (${response.status}).`);
+      if (response.status === 404 || /not found/i.test(response.text ?? "")) {
+        throw new Error("Apps Script deployment not found. Check the /exec deployment URL and that the web app is deployed for Anyone.");
+      }
+      throw new Error(`Calendar bridge returned an unreadable response (${response.status}). Check the deployment URL and web-app access.`);
     }
     if (response.status < 200 || response.status >= 300 || payload.ok !== true) {
+      if (response.status === 404) {
+        throw new Error("Apps Script deployment not found. Check the /exec deployment URL and that the web app is deployed for Anyone.");
+      }
       throw new Error(payload.error || `Calendar bridge request failed (${response.status}).`);
     }
     return {
