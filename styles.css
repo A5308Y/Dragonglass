@@ -936,11 +936,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dg-processor-heading button:hover:not(:disabled),
-.dg-processor-actions button:not(.mod-cta):not(.mod-warning):hover:not(:disabled) {
-  border-color: var(--background-modifier-border-hover);
-  background: var(--interactive-hover);
-}
 
 .dg-workflow-complete {
   margin: auto;
@@ -1310,6 +1305,25 @@
   font-size: var(--font-ui-smaller);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Every button lights up on hover the way the primary button does: an accent tint
+   over the normal button surface, which stays visible in light and dark themes.
+   !important is needed because several buttons here force a transparent background. */
+.dg-view button:not(:disabled):not(.is-active):hover,
+.dg-modal button:not(:disabled):not(.is-active):hover,
+.dg-fuzzy-results button:not(:disabled):hover {
+  background: color-mix(in srgb, var(--interactive-accent) 18%, var(--interactive-normal)) !important;
+  border-color: color-mix(in srgb, var(--interactive-accent) 35%, var(--background-modifier-border)) !important;
+}
+.dg-view button.mod-cta:not(:disabled):hover,
+.dg-modal button.mod-cta:not(:disabled):hover {
+  background: var(--interactive-accent-hover) !important;
+  color: var(--text-on-accent);
+}
+.dg-view button.mod-warning:not(:disabled):hover,
+.dg-modal button.mod-warning:not(:disabled):hover {
+  background: color-mix(in srgb, var(--text-error) 22%, var(--interactive-normal)) !important;
 }
 
 @media (max-width: 600px) {
