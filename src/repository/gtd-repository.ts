@@ -561,8 +561,87 @@ export class GtdRepository {
 
   supportFiles(project: Project): TFile[] {
     if (!project.supportPath) return [];
-    const prefix = `${project.supportPath}/`;
-    return this.app.vault.getFiles().filter((file) => file.path.startsWith(prefix));
+    const supportPath = normalizeVaultPath(project.supportPath);
+    const nestedProjectPaths = this.index.getSnapshot().projects
+      .filter((candidate) => candidate.id !== project.id && candidate.supportPath)
+      .map((candidate) => normalizeVaultPath(candidate.supportPath!))
+      .filter((candidatePath) => candidatePath !== supportPath && pathIsWithin(candidatePath, supportPath));
+    return this.app.vault.getFiles().filter((file) =>
+      pathIsWithin(file.path, supportPath)
+      && !nestedProjectPaths.some((nestedPath) => pathIsWithin(file.path, nestedPath))
+    );
+  }
+
+  /** Repairs generated support folders so their physical nesting matches the Project hierarchy. */
+  async reconcileProjectSupportPaths(): Promise<{ corrected: number; failed: number }> {
+    const snapshot = this.index.getSnapshot();
+    const validProjects = snapshot.projects.filter((project) => !projectHierarchyIssue(project, snapshot.projectsById));
+    const originalPaths = new Map(validProjects.flatMap((project) => {
+      const path = normalizeVaultPath(project.supportPath ?? "");
+      return path ? [[project.id, path] as const] : [];
+    }));
+    const actualPaths = new Map(originalPaths);
+    const generatedProjects = new Set(validProjects
+      .filter((project) => {
+        const path = originalPaths.get(project.id);
+        return !path || this.isGeneratedSupportFolder(path, project.title, project.id);
+      })
+      .map((project) => project.id));
+    const supportRoot = await this.ensureFolder(PROJECT_SUPPORT_ROOT);
+    const failedProjects = new Set<string>();
+
+    for (const project of [...validProjects].sort((left, right) =>
+      projectDepth(left, snapshot.projectsById) - projectDepth(right, snapshot.projectsById)
+    )) {
+      if (!generatedProjects.has(project.id)) continue;
+      const desiredRoot = project.parentProjectId ? actualPaths.get(project.parentProjectId) : supportRoot;
+      if (!desiredRoot) {
+        failedProjects.add(project.id);
+        continue;
+      }
+      const currentPath = actualPaths.get(project.id);
+      const desiredPath = this.uniqueFolderPath(desiredRoot, project.title, project.id, currentPath);
+      try {
+        if (!currentPath) {
+          actualPaths.set(project.id, await this.ensureFolder(desiredPath));
+          continue;
+        }
+        if (currentPath === desiredPath) {
+          await this.ensureFolder(currentPath);
+          continue;
+        }
+
+        const currentFolder = this.app.vault.getAbstractFileByPath(currentPath);
+        const movedPath = currentFolder instanceof TFolder
+          ? await this.moveSupportFolder(currentPath, desiredPath)
+          : await this.ensureFolder(desiredPath);
+        for (const [candidateId, candidatePath] of actualPaths) {
+          if (candidateId !== project.id && pathIsWithin(candidatePath, currentPath)) {
+            actualPaths.set(candidateId, normalizePath(`${movedPath}/${candidatePath.slice(currentPath.length + 1)}`));
+          }
+        }
+        actualPaths.set(project.id, movedPath);
+      } catch {
+        failedProjects.add(project.id);
+      }
+    }
+
+    let corrected = 0;
+    for (const project of validProjects) {
+      const oldPath = originalPaths.get(project.id);
+      const newPath = actualPaths.get(project.id);
+      if (!newPath || newPath === oldPath || failedProjects.has(project.id)) continue;
+      try {
+        await this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
+          frontmatter.support_path = newPath;
+        });
+        if (oldPath) await this.updateSupportPathInBody(project.file, oldPath, newPath);
+        corrected += 1;
+      } catch {
+        failedProjects.add(project.id);
+      }
+    }
+    return { corrected, failed: failedProjects.size };
   }
 
   async createProjectSupportNote(projectId: string, title: string): Promise<TFile> {
@@ -840,4 +919,18 @@ function actionInput(title: string, context: string, project?: Project, work = f
 
 function pathIsWithin(path: string, folderPath: string): boolean {
   return path === folderPath || path.startsWith(`${folderPath}/`);
+}
+
+function projectDepth(project: Project, projectsById: ReadonlyMap<string, Project>): number {
+  let depth = 0;
+  let current = project;
+  const seen = new Set([project.id]);
+  while (current.parentProjectId) {
+    const parent = projectsById.get(current.parentProjectId);
+    if (!parent || seen.has(parent.id)) return Number.MAX_SAFE_INTEGER;
+    seen.add(parent.id);
+    current = parent;
+    depth += 1;
+  }
+  return depth;
 }

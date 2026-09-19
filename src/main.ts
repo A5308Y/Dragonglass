@@ -160,10 +160,21 @@ export default class DragonglassGtdPlugin extends Plugin {
     }
 
     this.index.initialize(this);
+    let correctedSupportPaths = 0;
+    let failedSupportPaths = 0;
+    try {
+      const result = await this.repository.reconcileProjectSupportPaths();
+      correctedSupportPaths = result.corrected;
+      failedSupportPaths = result.failed;
+    } catch {
+      failedSupportPaths = 1;
+    }
     if (migratedProjects) new Notice(`Migrated ${migratedProjects} waiting Project${migratedProjects === 1 ? "" : "s"} to Active.`);
     if (failedProjects) new Notice(`Could not migrate ${failedProjects} waiting Project${failedProjects === 1 ? "" : "s"}.`);
     if (migratedActions) new Notice(`Migrated ${migratedActions} Someday Action${migratedActions === 1 ? "" : "s"} to Next.`);
     if (failedActions) new Notice(`Could not migrate ${failedActions} Someday Action${failedActions === 1 ? "" : "s"}.`);
+    if (correctedSupportPaths) new Notice(`Nested support material for ${correctedSupportPaths} Project${correctedSupportPaths === 1 ? "" : "s"}.`);
+    if (failedSupportPaths) new Notice(`Could not correct support material for ${failedSupportPaths} Project${failedSupportPaths === 1 ? "" : "s"}.`);
     const count = this.index.getSnapshot().issues.length;
     if (count) new Notice(`Dragonglass GTD found ${count} file${count === 1 ? "" : "s"} with invalid or duplicate metadata.`);
   }

@@ -38,7 +38,7 @@ New files use these default destinations:
 GTD/Inbox/
 GTD/Actions/
 GTD/Projects/
-Project Support Material/<project title>/
+Project Support Material/<root project>/<sub-project>/
 General Reference/
 ```
 
@@ -80,7 +80,7 @@ completed:
 
 `project_id` is authoritative. The `project` link is only a human- and Bases-friendly convenience.
 
-A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, `image`, `tags`, `order`, `blocked_by_project_ids`, and `support_path`. The `image` value is a vault-relative image path selected in the Project editor; when absent, the configured default Project image is used. `tags` supplies custom board filters, `order` persists board priority, and `blocked_by_project_ids` records stable-ID dependencies. Supported Project statuses are `active`, `backlog`, `someday`, `completed`, and `cancelled`; the UI labels `someday` as Someday/Maybe. Normal notes, PDFs, and other files can live beneath that support path.
+A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, `image`, `tags`, `order`, `blocked_by_project_ids`, and `support_path`. The `image` value is a vault-relative image path selected in the Project editor; when absent, the configured default Project image is used. `tags` supplies custom board filters, `order` persists board priority, and `blocked_by_project_ids` records stable-ID dependencies. Supported Project statuses are `active`, `backlog`, `someday`, `completed`, and `cancelled`; the UI labels `someday` as Someday/Maybe. Normal notes, PDFs, and other files can live beneath that support path. Generated support folders mirror the full Project hierarchy, for example `Project Support Material/Dragonglass/Project Board`.
 
 Sub-projects use the same Project files and add an optional stable-ID relationship:
 
