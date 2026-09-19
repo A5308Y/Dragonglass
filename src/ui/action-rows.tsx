@@ -3,14 +3,14 @@ import { useEffect, useState } from "preact/hooks";
 import type { Action } from "../domain/types";
 import type { GtdServices } from "./services";
 
-export function ActionRows({ actions, services, projectLabels, allowProjectConversion = false }: { actions: Action[]; services: GtdServices; projectLabels?: ReadonlyMap<string, string>; allowProjectConversion?: boolean }) {
+export function ActionRows({ actions, services, projectLabels, allowProjectConversion = false, linkTitles = true }: { actions: Action[]; services: GtdServices; projectLabels?: ReadonlyMap<string, string>; allowProjectConversion?: boolean; linkTitles?: boolean }) {
   if (!actions.length) return null;
   return <div class="dg-action-rows">{actions.sort((a, b) => a.title.localeCompare(b.title)).map((action) => (
-    <ActionRow key={action.id} action={action} services={services} allowProjectConversion={allowProjectConversion} {...(projectLabels ? { projectLabels } : {})} />
+    <ActionRow key={action.id} action={action} services={services} allowProjectConversion={allowProjectConversion} linkTitle={linkTitles} {...(projectLabels ? { projectLabels } : {})} />
   ))}</div>;
 }
 
-function ActionRow({ action, services, projectLabels, allowProjectConversion }: { key?: string; action: Action; services: GtdServices; projectLabels?: ReadonlyMap<string, string>; allowProjectConversion: boolean }) {
+function ActionRow({ action, services, projectLabels, allowProjectConversion, linkTitle }: { key?: string; action: Action; services: GtdServices; projectLabels?: ReadonlyMap<string, string>; allowProjectConversion: boolean; linkTitle: boolean }) {
   const done = action.status === "done";
   const [checked, setChecked] = useState(done);
   const [updating, setUpdating] = useState(false);
@@ -51,7 +51,9 @@ function ActionRow({ action, services, projectLabels, allowProjectConversion }: 
         onChange={(event) => void changeCompletion(event.currentTarget.checked)}
       />
       <div class="dg-action-row-main">
-        <button class="dg-action-row-title" title={action.title} onClick={() => void services.openFile(action.file)}>{action.title}</button>
+        {linkTitle
+          ? <button class="dg-action-row-title" title={action.title} onClick={() => void services.openFile(action.file)}>{action.title}</button>
+          : <span class="dg-action-row-title" title={action.title}>{action.title}</span>}
         <div class="dg-action-row-meta">
           {action.status !== "next" && <span class={`dg-action-status dg-action-status-${action.status}`}>{label(action.status)}</span>}
           {action.projectId && projectLabels?.has(action.projectId) && <span class="dg-action-project-label">{projectLabels.get(action.projectId)}</span>}

@@ -340,14 +340,14 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
               <button class="mod-cta" onClick={() => services.createAction(project.id)}>New Action</button>
             </div>
           </div>
-          <ActionRows actions={open} services={services} allowProjectConversion />
+          <ActionRows actions={open} services={services} allowProjectConversion linkTitles={false} />
         </section>
 
         {completed.length > 0 && <section class="dg-detail-section dg-completed-actions-panel">
           <button class="dg-disclosure" onClick={() => setShowCompleted(!showCompleted)}>
             <span>{showCompleted ? "▾" : "▸"} Completed Actions</span><span class="dg-detail-count">{completed.length}</span>
           </button>
-          {showCompleted && <ActionRows actions={completed} services={services} allowProjectConversion />}
+          {showCompleted && <ActionRows actions={completed} services={services} allowProjectConversion linkTitles={false} />}
         </section>}
 
         <section class="dg-detail-section dg-subprojects-panel">
