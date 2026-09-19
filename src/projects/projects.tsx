@@ -83,12 +83,14 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
           value={search}
           onInput={(event: Event) => setSearch((event.currentTarget as HTMLInputElement).value)}
         />
-        <button
-          class={showSubprojects ? "is-active" : ""}
-          aria-pressed={showSubprojects}
-          title={showSubprojects ? "Hide sub-projects" : "Show sub-projects"}
-          onClick={() => setShowSubprojects(!showSubprojects)}
-        >Sub-projects</button>
+        <label class="dg-toolbar-toggle" title="Show sub-projects on the board">
+          <input
+            type="checkbox"
+            checked={showSubprojects}
+            onChange={(event: Event) => setShowSubprojects((event.currentTarget as HTMLInputElement).checked)}
+          />
+          <span>Sub-projects</span>
+        </label>
       </div>
       <div class="dg-board dg-project-board" role="list" aria-label="Project board">
         {BOARD_COLUMNS.map((status) => {

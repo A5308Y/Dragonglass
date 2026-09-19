@@ -112,6 +112,16 @@
   min-width: 150px;
 }
 .dg-project-toolbar input[type="search"] { width: min(420px, 100%); }
+.dg-toolbar-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+}
+.dg-toolbar-toggle input { width: 16px; height: 16px; margin: 0; }
 
 .dg-toolbar button,
 .dg-toolbar select,
