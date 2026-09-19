@@ -105,22 +105,50 @@ export class GtdSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings(false);
         }));
 
+    let secretInput: HTMLInputElement;
     new Setting(containerEl)
       .setName("Shared secret")
-      .setDesc("Must match the SHARED_SECRET Script Property.")
+      .setDesc("Must match the SHARED_SECRET Script Property. Use Show or Copy to transfer it to Apps Script.")
       .addText((text) => {
+        secretInput = text.inputEl;
         text.inputEl.type = "password";
         text.setValue(this.plugin.settings.googleCalendar.sharedSecret).onChange(async (value) => {
           this.plugin.settings.googleCalendar.sharedSecret = value.trim();
           await this.plugin.saveSettings(false);
         });
       })
+      .addButton((button) => button.setButtonText("Show").onClick(() => {
+        const visible = secretInput.type === "text";
+        secretInput.type = visible ? "password" : "text";
+        button.setButtonText(visible ? "Show" : "Hide");
+      }))
+      .addButton((button) => button.setButtonText("Copy").onClick(async () => {
+        const secret = this.plugin.settings.googleCalendar.sharedSecret;
+        if (!secret) {
+          new Notice("Generate or enter a shared secret first.");
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(secret);
+          new Notice("Shared secret copied.");
+        } catch {
+          secretInput.type = "text";
+          secretInput.focus();
+          secretInput.select();
+          new Notice("Could not copy automatically. The shared secret is selected for copying.");
+        }
+      }))
       .addButton((button) => button.setButtonText("Generate").onClick(async () => {
         if (this.plugin.settings.googleCalendar.sharedSecret
           && !window.confirm("Replace the current shared secret? You will also need to update the SHARED_SECRET Script Property.")) return;
-        this.plugin.settings.googleCalendar.sharedSecret = randomSecret();
+        const secret = randomSecret();
+        this.plugin.settings.googleCalendar.sharedSecret = secret;
         await this.plugin.saveSettings(false);
-        this.display();
+        secretInput.value = secret;
+        secretInput.type = "text";
+        secretInput.focus();
+        secretInput.select();
+        new Notice("Shared secret generated and selected. Copy it to the SHARED_SECRET Script Property.");
       }));
 
     new Setting(containerEl)

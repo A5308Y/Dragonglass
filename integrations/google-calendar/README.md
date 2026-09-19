@@ -6,7 +6,7 @@ This bridge mirrors Dragonglass Scheduled Actions into one dedicated Google Cale
 2. Create a standalone project at [script.google.com](https://script.google.com/), replace `Code.gs` with the file in this directory, and enable **Show appsscript.json manifest file** in Project Settings before replacing the manifest too.
 3. In the Apps Script editor, open **Project Settings → Script Properties** and add:
    - `CALENDAR_ID`: the dedicated calendar ID.
-   - `SHARED_SECRET`: the value generated in Dragonglass settings.
+   - `SHARED_SECRET`: the value generated in Dragonglass settings. Use **Show** or **Copy** beside the Shared secret field to retrieve it.
 4. Choose **Deploy → New deployment → Web app**. Run it as **Me** and allow access to **Anyone**. Authorize the requested Calendar access.
 5. Copy the deployment URL ending in `/exec` into Dragonglass settings, enable sync, and use **Test**.
 
