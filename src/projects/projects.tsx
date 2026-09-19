@@ -3,7 +3,13 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Action, Project, ProjectStatus } from "../domain/types";
 import type { DiaryEntry } from "../utils/markdown";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
-import { activeProjectBlockers, compareProjectPriority, normalizeProjectTags, priorityOrderBefore } from "../domain/project-board";
+import {
+  activeProjectBlockers,
+  compareProjectPriority,
+  normalizeProjectTags,
+  projectPlacementsAfterMove,
+  type ProjectPlacement,
+} from "../domain/project-board";
 import { ActionRows } from "../ui/action-rows";
 import { confirmDeleteProject } from "../ui/delete-project";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -279,10 +285,13 @@ function waitForProjectStatus(services: GtdServices, id: string, status: Project
   });
 }
 
-function waitForProjectPlacement(services: GtdServices, id: string, status: ProjectStatus, order: number): Promise<void> {
+function waitForProjectPlacements(services: GtdServices, placements: ReadonlyMap<string, ProjectPlacement>): Promise<void> {
   const matches = () => {
-    const project = services.repository.index.getSnapshot().projectsById.get(id);
-    return project?.status === status && project.order === order;
+    const projectsById = services.repository.index.getSnapshot().projectsById;
+    return [...placements].every(([id, placement]) => {
+      const project = projectsById.get(id);
+      return project?.status === placement.status && project.order === placement.order;
+    });
   };
   if (matches()) return Promise.resolve();
   return new Promise((resolve) => {
@@ -301,13 +310,19 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const snapshot = useGtdSnapshot(services.repository.index);
   const [outcome, setOutcome] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
-  const [optimisticSubprojectPlacements, setOptimisticSubprojectPlacements] = useState<Map<string, { status: ProjectStatus; order: number }>>(new Map());
+  const [optimisticSubprojectPlacements, setOptimisticSubprojectPlacements] = useState<Map<string, ProjectPlacement & { operation: number }>>(new Map());
+  const optimisticSubprojectPlacementsRef = useRef(optimisticSubprojectPlacements);
+  const nextPlacementOperation = useRef(0);
   const [subprojectTagFilters, setSubprojectTagFilters] = useState<string[]>([]);
   const [supportNoteTitle, setSupportNoteTitle] = useState("");
   const [creatingSupportNote, setCreatingSupportNote] = useState(false);
   const [newSupportNotePath, setNewSupportNotePath] = useState("");
   const image = projectImageFile(services, project);
-  useEffect(() => setSubprojectTagFilters([]), [project.id]);
+  useEffect(() => {
+    setSubprojectTagFilters([]);
+    optimisticSubprojectPlacementsRef.current = new Map();
+    setOptimisticSubprojectPlacements(new Map());
+  }, [project.id]);
   useEffect(() => {
     let active = true;
     void services.repository.readDesiredOutcome(project).then((value) => { if (active) setOutcome(value); });
@@ -332,7 +347,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
     .filter((candidate) => candidate.parentProjectId === project.id)
     .map((child) => {
       const placement = optimisticSubprojectPlacements.get(child.id);
-      return placement ? { ...child, ...placement } : child;
+      return placement ? { ...child, status: placement.status, order: placement.order } : child;
     })
     .sort(compareProjectPriority);
   const availableSubprojectTags = normalizeProjectTags(children.flatMap((child) => child.tags ?? []));
@@ -350,22 +365,33 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const hasParent = Boolean(parent || project.parentProjectId);
 
   const moveSubproject = async (id: string, status: SubprojectColumnStatus, beforeId?: string) => {
-    const currentProject = children.find((child) => child.id === id);
-    if (!currentProject) return;
-    const targetProjects = children.filter((child) => child.id !== id && child.status === status);
-    const order = priorityOrderBefore(targetProjects, beforeId);
-    setOptimisticSubprojectPlacements((current) => new Map(current).set(id, { status, order }));
-    try {
-      await services.repository.updateProject(id, { status, order });
-      await waitForProjectPlacement(services, id, status, order);
-    } catch (error) {
-      new Notice(error instanceof Error ? error.message : "Could not change the sub-project status.");
-    } finally {
-      setOptimisticSubprojectPlacements((current) => {
-        const next = new Map(current);
-        next.delete(id);
-        return next;
+    const currentChildren = snapshot.projects
+      .filter((candidate) => candidate.parentProjectId === project.id)
+      .map((child) => {
+        const placement = optimisticSubprojectPlacementsRef.current.get(child.id);
+        return placement ? { ...child, status: placement.status, order: placement.order } : child;
       });
+    const placements = projectPlacementsAfterMove(currentChildren, id, status, beforeId);
+    if (!placements.size) return;
+    const operation = ++nextPlacementOperation.current;
+    for (const [projectId, placement] of placements) {
+      optimisticSubprojectPlacementsRef.current.set(projectId, { ...placement, operation });
+    }
+    setOptimisticSubprojectPlacements(new Map(optimisticSubprojectPlacementsRef.current));
+    try {
+      await Promise.all([...placements].map(([projectId, placement]) =>
+        services.repository.updateProject(projectId, placement)
+      ));
+      await waitForProjectPlacements(services, placements);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not reorder the sub-projects.");
+    } finally {
+      for (const projectId of placements.keys()) {
+        if (optimisticSubprojectPlacementsRef.current.get(projectId)?.operation === operation) {
+          optimisticSubprojectPlacementsRef.current.delete(projectId);
+        }
+      }
+      setOptimisticSubprojectPlacements(new Map(optimisticSubprojectPlacementsRef.current));
     }
   };
 
@@ -377,7 +403,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
     const index = column.findIndex((candidate) => candidate.id === id);
     if (index < 0) return;
     const beforeId = direction < 0 ? column[index - 1]?.id : column[index + 2]?.id;
-    if (direction < 0 && index === 0 || direction > 0 && index === column.length - 1) return;
+    if ((direction < 0 && index === 0) || (direction > 0 && index === column.length - 1)) return;
     void moveSubproject(id, status, beforeId);
   };
 
@@ -728,15 +754,29 @@ function SubprojectColumn({ status, projects, projectsById, services, onSelect, 
   onMove: (id: string, status: SubprojectColumnStatus, beforeId?: string) => Promise<void>;
   onMovePriority: (id: string, direction: -1 | 1) => void;
 }) {
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
   const columnTitle = SUBPROJECT_COLUMN_LABELS[status];
+  const insertionIndexAtCard = (event: DragEvent, index: number): number => {
+    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    return event.clientY < bounds.top + bounds.height / 2 ? index : index + 1;
+  };
   return <div
     class="dg-subproject-column"
     data-subproject-column={status}
-    onDragOver={(event: DragEvent) => event.preventDefault()}
+    onDragOver={(event: DragEvent) => {
+      event.preventDefault();
+      if (!(event.target as Element | null)?.closest?.(".dg-subproject-card")) setDropIndex(projects.length);
+    }}
+    onDragLeave={(event: DragEvent) => {
+      const nextTarget = event.relatedTarget as Node | null;
+      if (!nextTarget || !(event.currentTarget as HTMLElement).contains(nextTarget)) setDropIndex(null);
+    }}
     onDrop={(event: DragEvent) => {
       event.preventDefault();
       const id = event.dataTransfer?.getData("text/dragonglass-subproject");
-      if (id) void onMove(id, status);
+      const beforeId = projects[dropIndex ?? projects.length]?.id;
+      setDropIndex(null);
+      if (id) void onMove(id, status, beforeId);
     }}
   >
     <header><strong>{columnTitle}</strong><span>{projects.length}</span></header>
@@ -771,17 +811,29 @@ function SubprojectColumn({ status, projects, projectsById, services, onSelect, 
           menu.showAtMouseEvent(event);
         };
         return <article
-          class={`dg-subproject-card${blockers.length ? " is-blocked" : ""}`}
+          class={`dg-subproject-card${blockers.length ? " is-blocked" : ""}${dropIndex === index ? " is-drop-before" : ""}`}
           key={child.id}
           data-subproject-card={child.id}
           draggable={!Platform.isMobile}
-          onDragStart={(event: DragEvent) => event.dataTransfer?.setData("text/dragonglass-subproject", child.id)}
-          onDragOver={(event: DragEvent) => { event.preventDefault(); event.stopPropagation(); }}
+          onDragStart={(event: DragEvent) => {
+            event.dataTransfer?.setData("text/dragonglass-subproject", child.id);
+            if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+          }}
+          onDragEnd={() => setDropIndex(null)}
+          onDragOver={(event: DragEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+            setDropIndex(insertionIndexAtCard(event, index));
+          }}
           onDrop={(event: DragEvent) => {
             event.preventDefault();
             event.stopPropagation();
             const id = event.dataTransfer?.getData("text/dragonglass-subproject");
-            if (id && id !== child.id) void onMove(id, status, child.id);
+            const insertionIndex = insertionIndexAtCard(event, index);
+            const beforeId = projects[insertionIndex]?.id;
+            setDropIndex(null);
+            if (id) void onMove(id, status, beforeId);
           }}
         >
           <div class="dg-subproject-card-heading">
@@ -794,6 +846,7 @@ function SubprojectColumn({ status, projects, projectsById, services, onSelect, 
           </div>}
         </article>;
       })}
+      {dropIndex === projects.length && <div class="dg-subproject-drop-line" aria-hidden="true" />}
       {projects.length === 0 && <div class="dg-subproject-empty">No {columnTitle.toLocaleLowerCase()} sub-projects.</div>}
     </div>
   </div>;

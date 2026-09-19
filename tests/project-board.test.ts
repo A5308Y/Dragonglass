@@ -4,7 +4,7 @@ import type { Project } from "../src/domain/types";
 import {
   activeProjectBlockers,
   normalizeProjectTags,
-  priorityOrderBefore,
+  projectPlacementsAfterMove,
   wouldCreateProjectDependencyCycle,
 } from "../src/domain/project-board";
 
@@ -24,11 +24,32 @@ describe("Sub-project board metadata", () => {
     expect(normalizeProjectTags([" #Home ", "planning", "home", ""])).toEqual(["Home", "planning"]);
   });
 
-  it("calculates stable priority positions before and after cards", () => {
-    const projects = [project("A", "A", { order: 1_000 }), project("B", "B", { order: 2_000 })];
-    expect(priorityOrderBefore(projects, "A")).toBe(0);
-    expect(priorityOrderBefore(projects, "B")).toBe(1_500);
-    expect(priorityOrderBefore(projects)).toBe(3_000);
+  it("re-ranks a whole column when moving a card", () => {
+    const projects = [
+      project("A", "A", { order: 1_000 }),
+      project("B", "B", { order: 1_000 }),
+      project("C", "C", { order: 1_000 }),
+    ];
+
+    expect([...projectPlacementsAfterMove(projects, "C", "active", "A")]).toEqual([
+      ["C", { status: "active", order: 1_000 }],
+      ["A", { status: "active", order: 2_000 }],
+      ["B", { status: "active", order: 3_000 }],
+    ]);
+  });
+
+  it("re-ranks both columns when moving between statuses", () => {
+    const projects = [
+      project("A", "A", { order: 1_000 }),
+      project("B", "B", { order: 2_000 }),
+      project("C", "C", { status: "backlog", order: 1_000 }),
+    ];
+
+    expect([...projectPlacementsAfterMove(projects, "B", "backlog", "C")]).toEqual([
+      ["B", { status: "backlog", order: 1_000 }],
+      ["C", { status: "backlog", order: 2_000 }],
+      ["A", { status: "active", order: 1_000 }],
+    ]);
   });
 
   it("rejects dependency cycles and ignores completed blockers", () => {

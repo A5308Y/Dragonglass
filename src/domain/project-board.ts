@@ -1,4 +1,9 @@
-import type { Project } from "./types";
+import type { Project, ProjectStatus } from "./types";
+
+export interface ProjectPlacement {
+  status: ProjectStatus;
+  order: number;
+}
 
 export function normalizeProjectTags(values: readonly string[]): string[] {
   const tags = new Map<string, string>();
@@ -15,22 +20,54 @@ export function parseProjectTags(value: string): string[] {
 }
 
 export function compareProjectPriority(left: Project, right: Project): number {
-  if (left.order !== undefined && right.order !== undefined && left.order !== right.order) return left.order - right.order;
+  if (left.order !== undefined && right.order !== undefined) {
+    if (left.order !== right.order) return left.order - right.order;
+    return left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
+  }
   if (left.order !== undefined) return -1;
   if (right.order !== undefined) return 1;
-  return left.title.localeCompare(right.title);
+  return left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
 }
 
-export function priorityOrderBefore(projects: readonly Project[], beforeId?: string): number {
-  const ordered = [...projects].sort(compareProjectPriority);
-  if (!ordered.length) return 1_000;
-  const maxStored = Math.max(0, ...ordered.flatMap((project) => project.order === undefined ? [] : [project.order]));
-  const fallbackStart = maxStored + 1_000;
-  const effective = ordered.map((project, index) => project.order ?? fallbackStart + index * 1_000);
-  const nextIndex = beforeId ? ordered.findIndex((project) => project.id === beforeId) : ordered.length;
-  if (nextIndex <= 0) return effective[0]! - 1_000;
-  if (nextIndex >= ordered.length) return effective[effective.length - 1]! + 1_000;
-  return (effective[nextIndex - 1]! + effective[nextIndex]!) / 2;
+export function projectPlacementsAfterMove(
+  projects: readonly Project[],
+  projectId: string,
+  targetStatus: ProjectStatus,
+  beforeId?: string,
+): Map<string, ProjectPlacement> {
+  const moving = projects.find((project) => project.id === projectId);
+  if (!moving) return new Map();
+
+  const sourceStatus = moving.status;
+  const target = projects
+    .filter((project) => project.status === targetStatus)
+    .sort(compareProjectPriority);
+
+  if (sourceStatus === targetStatus && beforeId === projectId) {
+    return rankedPlacements(target, targetStatus);
+  }
+
+  const targetWithoutMoving = target.filter((project) => project.id !== projectId);
+  const requestedIndex = beforeId
+    ? targetWithoutMoving.findIndex((project) => project.id === beforeId)
+    : targetWithoutMoving.length;
+  const insertionIndex = requestedIndex < 0 ? targetWithoutMoving.length : requestedIndex;
+  targetWithoutMoving.splice(insertionIndex, 0, moving);
+
+  const placements = rankedPlacements(targetWithoutMoving, targetStatus);
+  if (sourceStatus !== targetStatus) {
+    const sourceWithoutMoving = projects
+      .filter((project) => project.status === sourceStatus && project.id !== projectId)
+      .sort(compareProjectPriority);
+    for (const [id, placement] of rankedPlacements(sourceWithoutMoving, sourceStatus)) {
+      placements.set(id, placement);
+    }
+  }
+  return placements;
+}
+
+function rankedPlacements(projects: readonly Project[], status: ProjectStatus): Map<string, ProjectPlacement> {
+  return new Map(projects.map((project, index) => [project.id, { status, order: (index + 1) * 1_000 }]));
 }
 
 export function wouldCreateProjectDependencyCycle(
