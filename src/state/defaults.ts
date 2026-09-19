@@ -57,6 +57,13 @@ export function defaultSettings(): GtdSettings {
     projectBoardColumns: ["active", "backlog", "someday", "completed"],
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
-    schemaVersion: 7,
+    googleCalendar: {
+      enabled: false,
+      endpointUrl: "",
+      sharedSecret: "",
+      sourceId: "",
+      defaultDurationMinutes: 30,
+    },
+    schemaVersion: 8,
   };
 }

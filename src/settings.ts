@@ -1,15 +1,19 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
 import { addImagePathSetting } from "./ui/image-input";
 import { normalizeVaultPath } from "./utils/path";
 
 export class GtdSettingTab extends PluginSettingTab {
+  private unsubscribeCalendarStatus: (() => void) | undefined;
+
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
   }
 
   display(): void {
+    this.unsubscribeCalendarStatus?.();
+    this.unsubscribeCalendarStatus = undefined;
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Dragonglass GTD" });
@@ -76,5 +80,111 @@ export class GtdSettingTab extends PluginSettingTab {
         this.plugin.settings.showDoneColumn = value;
         await this.plugin.saveSettings();
       }));
+
+    containerEl.createEl("h3", { text: "Google Calendar" });
+    containerEl.createEl("p", {
+      text: "One-way sync for Scheduled Actions through a user-owned Apps Script bridge. The endpoint and secret are stored as plain text in this plugin's data file.",
+    });
+
+    new Setting(containerEl)
+      .setName("Enable Google Calendar sync")
+      .setDesc("Automatically reconcile Scheduled Actions after changes and every five minutes.")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.googleCalendar.enabled).onChange(async (value) => {
+        this.plugin.settings.googleCalendar.enabled = value;
+        await this.plugin.saveSettings(false);
+      }));
+
+    new Setting(containerEl)
+      .setName("Apps Script URL")
+      .setDesc("HTTPS web-app deployment URL ending in /exec.")
+      .addText((text) => text
+        .setPlaceholder("https://script.google.com/macros/s/…/exec")
+        .setValue(this.plugin.settings.googleCalendar.endpointUrl)
+        .onChange(async (value) => {
+          this.plugin.settings.googleCalendar.endpointUrl = value.trim();
+          await this.plugin.saveSettings(false);
+        }));
+
+    new Setting(containerEl)
+      .setName("Shared secret")
+      .setDesc("Must match the SHARED_SECRET Script Property.")
+      .addText((text) => {
+        text.inputEl.type = "password";
+        text.setValue(this.plugin.settings.googleCalendar.sharedSecret).onChange(async (value) => {
+          this.plugin.settings.googleCalendar.sharedSecret = value.trim();
+          await this.plugin.saveSettings(false);
+        });
+      })
+      .addButton((button) => button.setButtonText("Generate").onClick(async () => {
+        if (this.plugin.settings.googleCalendar.sharedSecret
+          && !window.confirm("Replace the current shared secret? You will also need to update the SHARED_SECRET Script Property.")) return;
+        this.plugin.settings.googleCalendar.sharedSecret = randomSecret();
+        await this.plugin.saveSettings(false);
+        this.display();
+      }));
+
+    new Setting(containerEl)
+      .setName("Default scheduled duration")
+      .setDesc("Minutes suggested when an Action is first scheduled.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "1";
+        text.inputEl.step = "5";
+        text.setValue(String(this.plugin.settings.googleCalendar.defaultDurationMinutes)).onChange(async (value) => {
+          const duration = Number(value);
+          if (!Number.isInteger(duration) || duration <= 0) return;
+          this.plugin.settings.googleCalendar.defaultDurationMinutes = duration;
+          await this.plugin.saveSettings(false);
+        });
+      });
+
+    const connectionSetting = new Setting(containerEl)
+      .setName("Connection and sync")
+      .addButton((button) => button.setButtonText("Test").onClick(async () => {
+        button.setDisabled(true);
+        try {
+          const result = await this.plugin.testGoogleCalendar();
+          new Notice(`Connected to ${result.calendar ?? "Google Calendar"}.`);
+        } catch (error) {
+          new Notice(error instanceof Error ? error.message : "Could not connect to Google Calendar.");
+        } finally {
+          button.setDisabled(false);
+          this.display();
+        }
+      }))
+      .addButton((button) => button.setButtonText("Sync now").setCta().onClick(async () => {
+        button.setDisabled(true);
+        try {
+          const result = await this.plugin.syncGoogleCalendar();
+          new Notice(`Calendar synced: ${result.created} created, ${result.updated} updated, ${result.deleted} deleted.`);
+        } catch (error) {
+          new Notice(error instanceof Error ? error.message : "Could not sync Google Calendar.");
+        } finally {
+          button.setDisabled(false);
+          this.display();
+        }
+      }));
+    const refreshStatus = () => connectionSetting.setDesc(calendarStatusText(this.plugin.getGoogleCalendarStatus()));
+    refreshStatus();
+    this.unsubscribeCalendarStatus = this.plugin.subscribeGoogleCalendarStatus(refreshStatus);
   }
+
+  hide(): void {
+    this.unsubscribeCalendarStatus?.();
+    this.unsubscribeCalendarStatus = undefined;
+    super.hide();
+  }
+}
+
+function randomSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function calendarStatusText(status: ReturnType<DragonglassGtdPlugin["getGoogleCalendarStatus"]>): string {
+  if (status.state === "success") return `Last synced ${status.lastSuccess ? new Date(status.lastSuccess).toLocaleString() : "successfully"}.`;
+  if (status.state === "error") return status.error ?? "The last sync failed.";
+  if (status.state === "syncing") return "Syncing…";
+  if (status.state === "disabled") return "Sync is disabled.";
+  return "Ready to sync.";
 }

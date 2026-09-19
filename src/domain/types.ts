@@ -42,6 +42,8 @@ export interface Action {
   energy?: string;
   due?: string;
   deferUntil?: string;
+  scheduledStart?: string;
+  durationMinutes?: number;
   completed?: string;
   /** Marks the Action as work, independent of its context. */
   work?: boolean;
@@ -74,6 +76,8 @@ export interface ActionInput {
   energy?: string;
   due?: string;
   deferUntil?: string;
+  scheduledStart?: string;
+  durationMinutes?: number;
   work?: boolean;
 }
 
@@ -96,7 +100,7 @@ export interface InboxProcessingInput {
 }
 
 export type ActionChanges = Partial<
-  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "deferUntil" | "work">
+  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "deferUntil" | "scheduledStart" | "durationMinutes" | "work">
 >;
 
 export type ProjectChanges = Partial<
@@ -188,5 +192,14 @@ export interface GtdSettings {
   projectBoardColumns: ProjectStatus[];
   savedViews: SavedView[];
   activeSavedViewId: string | null;
+  googleCalendar: GoogleCalendarSettings;
   schemaVersion: number;
+}
+
+export interface GoogleCalendarSettings {
+  enabled: boolean;
+  endpointUrl: string;
+  sharedSecret: string;
+  sourceId: string;
+  defaultDurationMinutes: number;
 }

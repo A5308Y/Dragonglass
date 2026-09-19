@@ -113,8 +113,13 @@ export function ActionBoard({ services }: { services: GtdServices }) {
   };
 
   const moveAction = async (id: string, status: ActionStatus) => {
-    const previous = snapshot.actionsById.get(id)?.status;
+    const action = snapshot.actionsById.get(id);
+    const previous = action?.status;
     if (!previous || previous === status) return;
+    if (status === "scheduled" && (!action.scheduledStart || !action.durationMinutes)) {
+      services.scheduleAction(id);
+      return;
+    }
     setOptimistic((current) => new Map(current).set(id, status));
     try {
       await services.repository.setActionStatus(id, status);
@@ -289,6 +294,8 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
         {action.context && <span>@{action.context}</span>}
         {action.energy && <span>{action.energy}</span>}
         {action.due && <span class={isOverdue(action.due) && action.status !== "done" ? "is-overdue" : ""}>{action.due}</span>}
+        {action.scheduledStart && <span>{new Date(action.scheduledStart).toLocaleString()}{action.durationMinutes ? ` · ${action.durationMinutes} min` : ""}</span>}
+        {action.status === "scheduled" && (!action.scheduledStart || !action.durationMinutes) && <span class="is-overdue">Missing schedule</span>}
       </div>
     </article>
   );

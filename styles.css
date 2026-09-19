@@ -1444,6 +1444,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   width: 100%;
   justify-content: stretch;
 }
+.dg-schedule-setting.is-hidden { display: none; }
 .dg-modal input:not([type="checkbox"]),
 .dg-modal select {
   width: 100%;

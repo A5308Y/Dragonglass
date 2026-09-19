@@ -67,18 +67,22 @@ An Action contains clean YAML such as:
 type: gtd-action
 id: 01K5XYZABC1234567890123456
 title: Compare heat pump installers
-status: next
+status: scheduled
 project_id: 01K5ABCDEF1234567890123456
 project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 context: computer
 energy: medium
 due: 2026-09-23
 defer_until:
+scheduled_start: 2026-09-22T12:00:00.000Z
+duration_minutes: 45
 created: 2026-09-18
 completed:
 ```
 
 `project_id` is authoritative. The `project` link is only a human- and Bases-friendly convenience.
+
+Scheduled Actions use `scheduled_start` as an absolute RFC3339 timestamp and `duration_minutes` as a positive whole number. `due` remains a deadline rather than a calendar time. Moving an Action to Scheduled asks for these values when they are missing.
 
 A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, `image`, `tags`, `order`, `blocked_by_project_ids`, and `support_path`. The `image` value is a vault-relative image path selected in the Project editor; when absent, the configured default Project image is used. `tags` supplies custom board filters, `order` persists board priority, and `blocked_by_project_ids` records stable-ID dependencies. Supported Project statuses are `active`, `backlog`, `someday`, `completed`, and `cancelled`; the UI labels `someday` as Someday/Maybe. Normal notes, PDFs, and other files can live beneath that support path. Generated support folders mirror the full Project hierarchy, for example `Project Support Material/Dragonglass/Project Board`.
 
@@ -114,6 +118,12 @@ On desktop, drag an Action between status columns. On mobile, or whenever drag-a
 Keyboard navigation inside the board uses Up/Down to move between cards and `D` to mark the focused Action done.
 
 Marking an Action done writes `status: done` and an ISO completion timestamp. Reopening through the quick action sets `status: next` and clears `completed`. Dates never change statuses automatically.
+
+## Google Calendar
+
+Google Calendar integration is an optional one-way mirror for Scheduled Actions. It uses a user-owned Apps Script bridge and a dedicated calendar, so Dragonglass never stores a Google OAuth refresh token. Configure the bridge using [the setup guide](integrations/google-calendar/README.md), then enter its deployment URL and shared secret in plugin settings.
+
+Each valid Scheduled Action becomes a busy calendar event containing its title, Project breadcrumb, Context, and an Obsidian deep link. Leaving Scheduled or deleting the Action removes its managed event. Calendar-side changes are overwritten by the next reconciliation; unrelated calendar events are never touched. Sync runs after local index changes, at startup, every five minutes, and through **Sync now** in settings. The bridge URL and shared secret are stored as plain text in the plugin data file.
 
 ## Projects
 

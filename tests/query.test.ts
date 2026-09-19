@@ -92,4 +92,44 @@ describe("query model", () => {
     expect(parsed.work).toBe(true);
     expect(parseAction({ id: "A8", title: "Buy milk", status: "next", created: "2026-09-19" }, file("A8.md")).work).toBeUndefined();
   });
+
+  it("reads and normalizes scheduled Action timing", () => {
+    const parsed = parseAction({
+      id: "A10",
+      title: "Plan the sprint",
+      status: "scheduled",
+      created: "2026-09-19",
+      scheduled_start: "2026-09-20T14:00:00+02:00",
+      duration_minutes: 45,
+    }, file("A10.md"));
+    expect(parsed.scheduledStart).toBe("2026-09-20T12:00:00.000Z");
+    expect(parsed.durationMinutes).toBe(45);
+    expect(() => parseAction({
+      id: "A11",
+      title: "Broken schedule",
+      status: "scheduled",
+      created: "2026-09-19",
+      scheduled_start: "not-a-date",
+      duration_minutes: 0,
+    }, file("A11.md"))).toThrow("scheduled_start");
+    expect(() => parseAction({
+      id: "A12",
+      title: "Ambiguous local schedule",
+      status: "scheduled",
+      created: "2026-09-19",
+      scheduled_start: "2026-09-20T14:00",
+      duration_minutes: 30,
+    }, file("A12.md"))).toThrow("scheduled_start");
+  });
+
+  it("keeps legacy Scheduled Actions without timing readable", () => {
+    const parsed = parseAction({
+      id: "A13",
+      title: "Legacy calendar item",
+      status: "scheduled",
+      created: "2026-09-19",
+    }, file("A13.md"));
+    expect(parsed.scheduledStart).toBeUndefined();
+    expect(parsed.durationMinutes).toBeUndefined();
+  });
 });

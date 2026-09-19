@@ -95,6 +95,8 @@ export class NewActionModal extends FormModal {
   private projectId: string;
   private projectQuery: string;
   private context = "";
+  private scheduledStart = "";
+  private durationMinutes: string;
   private work = false;
 
   constructor(private readonly services: GtdServices, projectId = "") {
@@ -102,6 +104,7 @@ export class NewActionModal extends FormModal {
     const snapshot = services.repository.index.getSnapshot();
     const project = projectId ? snapshot.projectsById.get(projectId) : undefined;
     this.status = services.getSettings().defaultActionStatus;
+    this.durationMinutes = String(services.getSettings().googleCalendar.defaultDurationMinutes);
     this.projectId = project?.id ?? "";
     this.projectQuery = project ? projectBreadcrumb(project, snapshot.projectsById) : "";
   }
@@ -131,10 +134,23 @@ export class NewActionModal extends FormModal {
       (value) => (this.context = value),
       (popover) => this.registerPopover(popover),
     );
+    let updateScheduleVisibility: () => void = () => undefined;
     new Setting(this.formEl).setName("Status").addDropdown((dropdown) => {
       for (const status of ACTION_STATUSES) dropdown.addOption(status, label(status));
-      dropdown.setValue(this.status).onChange((value) => (this.status = value as ActionStatus));
+      dropdown.setValue(this.status).onChange((value) => {
+        this.status = value as ActionStatus;
+        updateScheduleVisibility();
+      });
     });
+    const scheduleSettings = addScheduleFields(
+      this.formEl,
+      this.scheduledStart,
+      this.durationMinutes,
+      (value) => (this.scheduledStart = value),
+      (value) => (this.durationMinutes = value),
+    );
+    updateScheduleVisibility = () => setScheduleVisibility(scheduleSettings, this.status === "scheduled");
+    updateScheduleVisibility();
     addWorkToggle(this.formEl, this.work, (value) => (this.work = value));
     this.formEl.appendChild(this.actionsEl);
     this.addSubmit("Create Action");
@@ -144,12 +160,15 @@ export class NewActionModal extends FormModal {
     if (!this.title.trim()) return void new Notice("An Action title is required.");
     if (!this.context.trim()) return void new Notice("A context is required.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
+    const schedule = scheduleValues(this.status, this.scheduledStart, this.durationMinutes);
+    if (!schedule) return;
     try {
       await this.services.repository.createClarifiedAction({
         title: this.title.trim(),
         status: this.status,
         ...(this.projectId ? { projectId: this.projectId } : {}),
         context: this.context.trim(),
+        ...schedule,
         work: this.work,
       });
       new Notice("Action created.");
@@ -169,6 +188,8 @@ export class ActionEditorModal extends FormModal {
   private energy: string;
   private due: string;
   private deferUntil: string;
+  private scheduledStart: string;
+  private durationMinutes: string;
   private work: boolean;
 
   constructor(private readonly services: GtdServices, private readonly action: Action, private readonly allowProjectConversion = false) {
@@ -184,15 +205,21 @@ export class ActionEditorModal extends FormModal {
     this.energy = action.energy ?? "";
     this.due = action.due ?? "";
     this.deferUntil = action.deferUntil ?? "";
+    this.scheduledStart = dateTimeLocalValue(action.scheduledStart);
+    this.durationMinutes = String(action.durationMinutes ?? services.getSettings().googleCalendar.defaultDurationMinutes);
     this.work = action.work ?? false;
   }
 
   protected renderForm(): void {
     this.formEl.createEl("h2", { text: "Edit Action" });
     addText(this.formEl, "Title", this.title, (value) => (this.title = value));
+    let updateScheduleVisibility: () => void = () => undefined;
     new Setting(this.formEl).setName("Status").addDropdown((dropdown) => {
       for (const status of ACTION_STATUSES) dropdown.addOption(status, label(status));
-      dropdown.setValue(this.status).onChange((value) => (this.status = value as ActionStatus));
+      dropdown.setValue(this.status).onChange((value) => {
+        this.status = value as ActionStatus;
+        updateScheduleVisibility();
+      });
     });
     addProjectSearch(
       this.formEl,
@@ -216,6 +243,15 @@ export class ActionEditorModal extends FormModal {
     addText(this.formEl, "Energy", this.energy, (value) => (this.energy = value), "medium");
     addDate(this.formEl, "Due", this.due, (value) => (this.due = value));
     addDate(this.formEl, "Defer until", this.deferUntil, (value) => (this.deferUntil = value));
+    const scheduleSettings = addScheduleFields(
+      this.formEl,
+      this.scheduledStart,
+      this.durationMinutes,
+      (value) => (this.scheduledStart = value),
+      (value) => (this.durationMinutes = value),
+    );
+    updateScheduleVisibility = () => setScheduleVisibility(scheduleSettings, this.status === "scheduled");
+    updateScheduleVisibility();
     addWorkToggle(this.formEl, this.work, (value) => (this.work = value));
     this.formEl.appendChild(this.actionsEl);
     if (this.allowProjectConversion && this.action.projectId) {
@@ -254,6 +290,8 @@ export class ActionEditorModal extends FormModal {
     }
     if (!this.context.trim()) return void new Notice("A context is required.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
+    const schedule = scheduleValues(this.status, this.scheduledStart, this.durationMinutes);
+    if (!schedule) return;
     try {
       await this.services.repository.updateAction(this.action.id, {
         title: this.title.trim(),
@@ -263,8 +301,45 @@ export class ActionEditorModal extends FormModal {
         energy: this.energy.trim(),
         due: this.due,
         deferUntil: this.deferUntil,
+        ...schedule,
         work: this.work,
       });
+      this.close();
+    } catch (error) {
+      this.fail(error);
+    }
+  }
+}
+
+export class ScheduleActionModal extends FormModal {
+  private scheduledStart: string;
+  private durationMinutes: string;
+
+  constructor(private readonly services: GtdServices, private readonly action: Action) {
+    super(services.app);
+    this.scheduledStart = dateTimeLocalValue(action.scheduledStart);
+    this.durationMinutes = String(action.durationMinutes ?? services.getSettings().googleCalendar.defaultDurationMinutes);
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: `Schedule — ${this.action.title}` });
+    this.formEl.createEl("p", { cls: "dg-muted", text: "Choose when this Action should occupy time on your calendar." });
+    addScheduleFields(
+      this.formEl,
+      this.scheduledStart,
+      this.durationMinutes,
+      (value) => (this.scheduledStart = value),
+      (value) => (this.durationMinutes = value),
+    );
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit("Schedule Action");
+  }
+
+  protected async submit(): Promise<void> {
+    const schedule = scheduleValues("scheduled", this.scheduledStart, this.durationMinutes);
+    if (!schedule) return;
+    try {
+      await this.services.repository.updateAction(this.action.id, { status: "scheduled", ...schedule });
       this.close();
     } catch (error) {
       this.fail(error);
@@ -639,6 +714,59 @@ function addDate(container: HTMLElement, name: string, value: string, onChange: 
     text.inputEl.type = "date";
     text.setValue(value).onChange(onChange);
   });
+}
+
+function addScheduleFields(
+  container: HTMLElement,
+  start: string,
+  duration: string,
+  onStartChange: (value: string) => void,
+  onDurationChange: (value: string) => void,
+): HTMLElement[] {
+  const startSetting = new Setting(container).setName("Scheduled start").setDesc("Local date and time.").addText((text) => {
+    text.inputEl.type = "datetime-local";
+    text.setValue(start).onChange(onStartChange);
+  });
+  startSetting.settingEl.addClass("dg-schedule-setting");
+  const durationSetting = new Setting(container).setName("Duration").setDesc("Minutes reserved on the calendar.").addText((text) => {
+    text.inputEl.type = "number";
+    text.inputEl.min = "1";
+    text.inputEl.step = "5";
+    text.setValue(duration).onChange(onDurationChange);
+  });
+  durationSetting.settingEl.addClass("dg-schedule-setting");
+  return [startSetting.settingEl, durationSetting.settingEl];
+}
+
+function setScheduleVisibility(settings: HTMLElement[], visible: boolean): void {
+  for (const setting of settings) setting.toggleClass("is-hidden", !visible);
+}
+
+function scheduleValues(status: ActionStatus, localStart: string, durationValue: string): Pick<Action, "scheduledStart" | "durationMinutes"> | {} | null {
+  if (status !== "scheduled" && !localStart) return {};
+  if (!localStart) {
+    new Notice("Choose a scheduled start time.");
+    return null;
+  }
+  const start = new Date(localStart);
+  if (Number.isNaN(start.getTime()) || dateTimeLocalValue(start.toISOString()) !== localStart.slice(0, 16)) {
+    new Notice("Choose a valid scheduled start time.");
+    return null;
+  }
+  const durationMinutes = Number(durationValue);
+  if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+    new Notice("Duration must be a positive whole number of minutes.");
+    return null;
+  }
+  return { scheduledStart: start.toISOString(), durationMinutes };
+}
+
+function dateTimeLocalValue(value?: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function addContextSearch(

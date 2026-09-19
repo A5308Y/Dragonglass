@@ -1,26 +1,30 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { GoogleCalendarSync, type CalendarSyncStatus, type CalendarSyncResult } from "./calendar/calendar-sync";
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import type { GtdSettings, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
 import { GtdSettingTab } from "./settings";
-import { ActionEditorModal, ImportActionsModal, NewActionModal, NewProjectModal, ProjectEditorModal, TextPromptModal } from "./ui/modals";
+import { ActionEditorModal, ImportActionsModal, NewActionModal, NewProjectModal, ProjectEditorModal, ScheduleActionModal, TextPromptModal } from "./ui/modals";
 import { OpenProjectModal } from "./ui/open-project";
 import type { GtdServices } from "./ui/services";
 import { normalizeVaultPath } from "./utils/path";
+import { createUlid } from "./utils/ulid";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, GtdBrainstormView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
 
 export default class DragonglassGtdPlugin extends Plugin {
   declare settings: GtdSettings;
   private index!: GtdIndex;
   private repository!: GtdRepository;
+  private calendarSync!: GoogleCalendarSync;
   private services!: GtdServices;
 
   async onload(): Promise<void> {
     await this.loadSettings();
     this.index = new GtdIndex(this.app.vault, this.app.metadataCache, () => this.settings.inboxDirectory);
     this.repository = new GtdRepository(this.app, this.index, () => this.settings);
+    this.calendarSync = new GoogleCalendarSync(this.app, this.index, () => this.settings.googleCalendar);
     this.services = {
       app: this.app,
       repository: this.repository,
@@ -34,6 +38,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       quickCapture: () => this.quickCapture(),
       openInbox: () => void this.activateView(INBOX_VIEW_TYPE),
       createAction: (projectId) => this.createAction(projectId),
+      scheduleAction: (id) => this.scheduleAction(id),
       importActions: (projectId) => this.importActions(projectId),
       createProject: (openAfterCreate = true, parentProjectId) => this.createProject(openAfterCreate, parentProjectId),
       editAction: (id, allowProjectConversion) => this.editAction(id, allowProjectConversion),
@@ -83,11 +88,24 @@ export default class DragonglassGtdPlugin extends Plugin {
         ? saved.projectBoardColumns.filter((status) => isProjectStatus(status) && status !== "cancelled")
         : defaults.projectBoardColumns,
       schemaVersion: defaults.schemaVersion,
+      googleCalendar: {
+        ...defaults.googleCalendar,
+        ...(saved?.googleCalendar ?? {}),
+        sourceId: typeof saved?.googleCalendar?.sourceId === "string" && saved.googleCalendar.sourceId.trim()
+          ? saved.googleCalendar.sourceId.trim()
+          : createUlid(),
+        defaultDurationMinutes: Number.isInteger(saved?.googleCalendar?.defaultDurationMinutes)
+          && saved!.googleCalendar!.defaultDurationMinutes > 0
+          ? saved!.googleCalendar!.defaultDurationMinutes
+          : defaults.googleCalendar.defaultDurationMinutes,
+      },
     };
+    if (!saved?.googleCalendar?.sourceId) await this.saveData(this.settings);
   }
 
   async saveSettings(refreshViews = true): Promise<void> {
     await this.saveData(this.settings);
+    this.calendarSync?.schedule(0);
     if (!refreshViews) return;
     for (const leaf of this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE)) {
       if (leaf.view instanceof ActionBoardView) leaf.view.refresh();
@@ -104,6 +122,22 @@ export default class DragonglassGtdPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(BRAINSTORM_VIEW_TYPE)) {
       if (leaf.view instanceof GtdBrainstormView) leaf.view.refresh();
     }
+  }
+
+  getGoogleCalendarStatus(): CalendarSyncStatus {
+    return this.calendarSync.getStatus();
+  }
+
+  subscribeGoogleCalendarStatus(listener: () => void): () => void {
+    return this.calendarSync.subscribe(listener);
+  }
+
+  async testGoogleCalendar(): Promise<CalendarSyncResult> {
+    return this.calendarSync.testConnection();
+  }
+
+  async syncGoogleCalendar(): Promise<CalendarSyncResult> {
+    return this.calendarSync.syncNow();
   }
 
   private registerCommands(): void {
@@ -169,6 +203,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     } catch {
       failedSupportPaths = 1;
     }
+    this.register(this.calendarSync.start());
+    this.registerInterval(window.setInterval(() => this.calendarSync.schedule(0), 5 * 60_000));
     if (migratedProjects) new Notice(`Migrated ${migratedProjects} waiting Project${migratedProjects === 1 ? "" : "s"} to Active.`);
     if (failedProjects) new Notice(`Could not migrate ${failedProjects} waiting Project${failedProjects === 1 ? "" : "s"}.`);
     if (migratedActions) new Notice(`Migrated ${migratedActions} Someday Action${migratedActions === 1 ? "" : "s"} to Next.`);
@@ -198,6 +234,12 @@ export default class DragonglassGtdPlugin extends Plugin {
 
   private importActions(projectId = ""): void {
     new ImportActionsModal(this.services, projectId).open();
+  }
+
+  private scheduleAction(id: string): void {
+    const action = this.index.getSnapshot().actionsById.get(id);
+    if (!action) return void new Notice("This Action is missing or has a duplicate ID.");
+    new ScheduleActionModal(this.services, action).open();
   }
 
   private editAction(id: string, allowProjectConversion = false): void {

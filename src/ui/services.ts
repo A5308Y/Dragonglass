@@ -11,6 +11,7 @@ export interface GtdServices {
   quickCapture: () => void;
   openInbox: () => void;
   createAction: (projectId?: string) => void;
+  scheduleAction: (id: string) => void;
   importActions: (projectId?: string) => void;
   createProject: (openAfterCreate?: boolean, parentProjectId?: string) => void;
   editAction: (id: string, allowProjectConversion?: boolean) => void;

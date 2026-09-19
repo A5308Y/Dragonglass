@@ -19,6 +19,7 @@ import type {
 } from "../domain/types";
 import { normalizeProjectTags, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
+import { normalizeTimestamp } from "../domain/validation";
 import { localDate } from "../utils/date";
 import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
 import { baseName, generatedFolderNames, normalizeVaultPath, parentPath, safeName } from "../utils/path";
@@ -42,6 +43,7 @@ export class GtdRepository {
 
   async createClarifiedAction(input: ActionInput): Promise<void> {
     if (!input.context.trim()) throw new Error("A context is required.");
+    validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
     const item = await this.createInboxRecord(input.title);
     await this.convertInboxItemToAction(item, input);
   }
@@ -51,6 +53,7 @@ export class GtdRepository {
     if (inputs.some((input) => input.title.trim() && !input.context.trim())) {
       throw new Error("Every imported Action needs a context.");
     }
+    for (const input of inputs) validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
     const captured = localDate();
     let created = 0;
     for (const input of inputs) {
@@ -109,6 +112,8 @@ export class GtdRepository {
         frontmatter.energy = input.energy || null;
         frontmatter.due = input.due || null;
         frontmatter.defer_until = input.deferUntil || null;
+        frontmatter.scheduled_start = input.scheduledStart || null;
+        frontmatter.duration_minutes = input.durationMinutes ?? null;
         frontmatter.work = input.work ?? false;
         frontmatter.captured = item.created;
         frontmatter.created = localDate();
@@ -307,6 +312,11 @@ export class GtdRepository {
   async updateAction(id: string, changes: ActionChanges): Promise<void> {
     const action = this.requireAction(id);
     if (changes.context !== undefined && !changes.context.trim()) throw new Error("A context is required.");
+    validateActionSchedule(
+      changes.status ?? action.status,
+      changes.scheduledStart ?? action.scheduledStart,
+      changes.durationMinutes ?? action.durationMinutes,
+    );
     await this.enqueue(action.file.path, async () => {
       const oldTitle = action.title;
       const project = changes.projectId ? this.index.getSnapshot().projectsById.get(changes.projectId) : undefined;
@@ -325,6 +335,8 @@ export class GtdRepository {
         if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
         if (changes.due !== undefined) frontmatter.due = changes.due || null;
         if (changes.deferUntil !== undefined) frontmatter.defer_until = changes.deferUntil || null;
+        if (changes.scheduledStart !== undefined) frontmatter.scheduled_start = changes.scheduledStart || null;
+        if (changes.durationMinutes !== undefined) frontmatter.duration_minutes = changes.durationMinutes;
         if (changes.work !== undefined) frontmatter.work = changes.work;
       });
       if (changes.title && changes.title.trim() !== oldTitle) {
@@ -506,6 +518,8 @@ export class GtdRepository {
       energy: input.energy || null,
       due: input.due || null,
       defer_until: input.deferUntil || null,
+      scheduled_start: input.scheduledStart || null,
+      duration_minutes: input.durationMinutes ?? null,
       work: input.work ?? false,
       captured,
       created: localDate(),
@@ -887,6 +901,8 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
     "energy",
     "due",
     "defer_until",
+    "scheduled_start",
+    "duration_minutes",
     "completed",
     "area",
     "reviewed",
@@ -905,6 +921,16 @@ function requiredProcessingValue(value: string | undefined, message: string): st
   const clean = value?.trim() ?? "";
   if (!clean) throw new Error(message);
   return clean;
+}
+
+function validateActionSchedule(status: Action["status"], scheduledStart?: string, durationMinutes?: number): void {
+  if (scheduledStart) normalizeTimestamp(scheduledStart, "scheduled_start");
+  if (durationMinutes !== undefined && (!Number.isInteger(durationMinutes) || durationMinutes <= 0)) {
+    throw new Error("Duration must be a positive whole number of minutes.");
+  }
+  if (status === "scheduled" && (!scheduledStart || durationMinutes === undefined)) {
+    throw new Error("Scheduled Actions require a start time and duration.");
+  }
 }
 
 function actionInput(title: string, context: string, project?: Project, work = false): ActionInput {

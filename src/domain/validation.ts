@@ -48,6 +48,12 @@ function dateOnly(value: string, key: string): string {
   return value;
 }
 
+export function normalizeTimestamp(value: string, key: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    || Number.isNaN(Date.parse(value))) throw new Error(`Invalid '${key}' timestamp`);
+  return new Date(value).toISOString();
+}
+
 export function isActionStatus(value: unknown): value is ActionStatus {
   return typeof value === "string" && ACTION_STATUSES.includes(value as ActionStatus);
 }
@@ -73,6 +79,8 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const energy = optionalString(frontmatter, "energy");
   const due = optionalString(frontmatter, "due");
   const deferUntil = optionalString(frontmatter, "defer_until");
+  const scheduledStart = optionalString(frontmatter, "scheduled_start");
+  const durationMinutes = optionalNumber(frontmatter, "duration_minutes");
   const completed = optionalString(frontmatter, "completed");
   if (projectId) action.projectId = projectId;
   if (projectLink) action.projectLink = projectLink;
@@ -80,6 +88,13 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (energy) action.energy = energy;
   if (due) action.due = dateOnly(due, "due");
   if (deferUntil) action.deferUntil = dateOnly(deferUntil, "defer_until");
+  if (scheduledStart) {
+    action.scheduledStart = normalizeTimestamp(scheduledStart, "scheduled_start");
+  }
+  if (durationMinutes !== undefined) {
+    if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) throw new Error("Invalid 'duration_minutes'");
+    action.durationMinutes = durationMinutes;
+  }
   if (completed) {
     if (Number.isNaN(Date.parse(completed))) throw new Error("Invalid 'completed' timestamp");
     action.completed = completed;
