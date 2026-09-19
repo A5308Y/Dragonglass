@@ -284,7 +284,7 @@
   min-width: 28px;
   padding: 0 4px;
   color: var(--text-faint);
-  background: transparent;
+  background: transparent !important;
   box-shadow: none;
 }
 
@@ -479,7 +479,7 @@
   min-height: 28px;
   padding: 3px 8px;
   color: var(--text-muted);
-  background: transparent;
+  background: transparent !important;
   box-shadow: none;
 }
 .dg-support-note-toggle {
@@ -528,7 +528,7 @@
 .dg-support-attachments > span,
 .dg-support-empty { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-support-attachments > div { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-top: 5px; }
-.dg-support-attachments button { padding: 3px 0; color: var(--text-accent); background: transparent; box-shadow: none; }
+.dg-support-attachments button { padding: 3px 0; color: var(--text-accent); background: transparent !important; box-shadow: none; }
 .dg-support-empty { display: block; margin-top: 12px; }
 .dg-disclosure {
   width: 100%;
@@ -597,7 +597,7 @@
   min-height: 30px;
   padding: 4px 9px;
   color: var(--text-muted);
-  background: transparent;
+  background: transparent !important;
   box-shadow: none;
 }
 .dg-action-row-actions { display: flex; align-items: center; gap: 3px; }
@@ -605,7 +605,7 @@
   min-height: 30px;
   padding: 4px 7px;
   color: var(--text-error);
-  background: transparent;
+  background: transparent !important;
   box-shadow: none;
 }
 .dg-project-board { align-items: flex-start; }
@@ -670,7 +670,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-accent);
-  background: transparent;
+  background: transparent !important;
   box-shadow: none;
 }
 .dg-subproject-columns {
@@ -913,7 +913,7 @@
 }
 .dg-fuzzy-results button:hover,
 .dg-fuzzy-results button:focus,
-.dg-fuzzy-results button.is-active { background: var(--background-modifier-hover); }
+.dg-fuzzy-results button.is-active { background: var(--background-modifier-hover) !important; }
 .dg-fuzzy-results button > span {
   min-width: 0;
   overflow: hidden;
@@ -1317,22 +1317,21 @@
   white-space: nowrap;
 }
 
-/* Every button simply lightens on hover. !important is needed because several
-   buttons here force a transparent background. */
+/* Buttons with a surface lighten on hover. Flat, text-style buttons opt out by
+   declaring `background: transparent !important`, which wins over this rule. */
 .dg-view button:not(:disabled):not(.is-active):hover,
-.dg-modal button:not(:disabled):not(.is-active):hover,
-.dg-fuzzy-results button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--interactive-normal) 86%, white) !important;
-  border-color: color-mix(in srgb, var(--background-modifier-border) 75%, white) !important;
+.dg-modal button:not(:disabled):not(.is-active):hover {
+  background: color-mix(in srgb, var(--interactive-normal) 86%, white);
+  border-color: color-mix(in srgb, var(--background-modifier-border) 75%, white);
 }
 .dg-view button.mod-cta:not(:disabled):hover,
 .dg-modal button.mod-cta:not(:disabled):hover {
-  background: var(--interactive-accent-hover) !important;
+  background: var(--interactive-accent-hover);
   color: var(--text-on-accent);
 }
 .dg-view button.mod-warning:not(:disabled):hover,
 .dg-modal button.mod-warning:not(:disabled):hover {
-  background: color-mix(in srgb, var(--background-modifier-error) 86%, white) !important;
+  background: color-mix(in srgb, var(--background-modifier-error) 86%, white);
 }
 
 @media (max-width: 600px) {

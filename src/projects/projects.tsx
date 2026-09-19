@@ -20,6 +20,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
   const [selectedId, setSelectedId] = useState<string | null>(initialProjectId);
   const [optimistic, setOptimistic] = useState<Map<string, ProjectStatus>>(new Map());
   const [search, setSearch] = useState("");
+  const [showSubprojects, setShowSubprojects] = useState(true);
   useEffect(() => setSelectedId(initialProjectId), [initialProjectId]);
   const selected = selectedId ? snapshot.projectsById.get(selectedId) : undefined;
 
@@ -82,11 +83,19 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
           value={search}
           onInput={(event: Event) => setSearch((event.currentTarget as HTMLInputElement).value)}
         />
+        <button
+          class={showSubprojects ? "is-active" : ""}
+          aria-pressed={showSubprojects}
+          title={showSubprojects ? "Hide sub-projects" : "Show sub-projects"}
+          onClick={() => setShowSubprojects(!showSubprojects)}
+        >Sub-projects</button>
       </div>
       <div class="dg-board dg-project-board" role="list" aria-label="Project board">
         {BOARD_COLUMNS.map((status) => {
           const columnProjects = projects
-            .filter((project) => projectColumn(project.status) === status && matchesSearch(project))
+            .filter((project) => projectColumn(project.status) === status
+              && matchesSearch(project)
+              && (showSubprojects || !project.parentProjectId))
             .sort((a, b) => (breadcrumbs.get(a.id) ?? a.title).localeCompare(breadcrumbs.get(b.id) ?? b.title));
           return (
             <section
