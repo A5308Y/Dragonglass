@@ -1,10 +1,11 @@
-import { prepareFuzzySearch } from "obsidian";
+import { prepareFuzzySearch, sortSearchResults, type SearchResult } from "obsidian";
 import { useMemo, useState } from "preact/hooks";
 
 export interface FuzzyOption {
   id: string;
   label: string;
   meta?: string;
+  aliases?: readonly string[];
 }
 
 export function FuzzyField({
@@ -26,7 +27,23 @@ export function FuzzyField({
     const query = value.trim();
     if (!query) return options.slice(0, 8);
     const fuzzy = prepareFuzzySearch(query);
-    return options.filter((option) => fuzzy(`${option.label} ${option.meta ?? ""}`) !== null).slice(0, 8);
+    const matches: Array<{ option: FuzzyOption; match: SearchResult; tier: number; shortestMatch: number }> = [];
+    for (const option of options) {
+      const labels = [option.label, ...(option.aliases ?? [])];
+      const match = fuzzy(`${labels.join(" ")} ${option.meta ?? ""}`);
+      if (!match) continue;
+      const tiers = labels.map((label) => matchTier(label, query));
+      const tier = Math.min(...tiers);
+      matches.push({
+        option,
+        match,
+        tier,
+        shortestMatch: Math.min(...labels.filter((_, index) => tiers[index] === tier).map((label) => label.length)),
+      });
+    }
+    sortSearchResults(matches);
+    matches.sort((left, right) => left.tier - right.tier || left.shortestMatch - right.shortestMatch);
+    return matches.slice(0, 8).map(({ option }) => option);
   }, [value, options]);
 
   return (
@@ -77,4 +94,12 @@ export function FuzzyField({
       )}
     </div>
   );
+}
+
+function matchTier(label: string, query: string): number {
+  const normalizedLabel = label.trim().toLocaleLowerCase();
+  const normalizedQuery = query.toLocaleLowerCase();
+  if (normalizedLabel === normalizedQuery) return 0;
+  if (normalizedLabel.startsWith(normalizedQuery)) return 1;
+  return 2;
 }

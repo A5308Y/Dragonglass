@@ -256,7 +256,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
             <FuzzyField
               value={actionProjectQuery}
               placeholder="Project"
-              options={reviewProjects.map((candidate) => ({ id: candidate.id, label: reviewProjectLabels.get(candidate.id) ?? candidate.title, meta: candidate.status }))}
+              options={reviewProjects.map((candidate) => ({ id: candidate.id, label: reviewProjectLabels.get(candidate.id) ?? candidate.title, aliases: [candidate.title], meta: candidate.status }))}
               onChange={(value) => {
                 setActionProjectQuery(value);
                 const match = reviewProjects.find((candidate) => (reviewProjectLabels.get(candidate.id) ?? candidate.title) === value);

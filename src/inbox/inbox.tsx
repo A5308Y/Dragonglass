@@ -236,7 +236,7 @@ function InboxProcessor({
             <FuzzyField
               value={projectQuery}
               placeholder="Search or name a Project…"
-              options={projects.map((project) => ({ id: project.id, label: projectLabels.get(project.id) ?? project.title, ...(project.area ? { meta: project.area } : {}) }))}
+              options={projects.map((project) => ({ id: project.id, label: projectLabels.get(project.id) ?? project.title, aliases: [project.title], ...(project.area ? { meta: project.area } : {}) }))}
               onChange={(value) => {
                 setProjectQuery(value);
                 if (value !== selectedProjectLabel) setProjectId("");
