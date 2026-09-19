@@ -268,7 +268,7 @@ export function ProjectReview({ services }: { services: GtdServices }) {
               onChange={setContext}
               onChoose={(option) => setContext(option.label)}
             />
-            <button class="mod-cta" disabled={!actionTitle.trim() || !actionProjectId || saving} onClick={() => void addAction()}>Add Next Action</button>
+            <button class="mod-cta" disabled={!actionTitle.trim() || !actionProjectId || saving} onClick={() => void addAction()}>Add</button>
           </div>
         </section>
 

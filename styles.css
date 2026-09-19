@@ -1161,9 +1161,11 @@
   gap: 7px;
   margin-top: 10px;
 }
-.dg-inline-form input,
-.dg-action-capture input:first-child { flex: 1; min-width: 0; }
-.dg-action-capture > .dg-fuzzy-field { width: 180px; flex: 0 1 180px; }
+.dg-inline-form input { flex: 1; min-width: 0; }
+/* The Action title and the Project field share the free space evenly; Context stays compact. */
+.dg-action-capture input:first-child { flex: 1 1 0; min-width: 0; }
+.dg-action-capture > .dg-fuzzy-field { width: auto; min-width: 0; flex: 1 1 0; }
+.dg-action-capture > .dg-fuzzy-field ~ .dg-fuzzy-field { width: 180px; flex: 0 1 180px; }
 .dg-action-capture > .dg-fuzzy-field input { width: 100%; }
 .dg-review-actions-panel .dg-action-rows { margin-top: 12px; }
 .dg-action-capture {
