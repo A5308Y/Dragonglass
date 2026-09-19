@@ -20,7 +20,7 @@ import type {
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { localDate } from "../utils/date";
 import { noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
-import { normalizeVaultPath, parentPath, safeName } from "../utils/path";
+import { baseName, generatedFolderNames, normalizeVaultPath, parentPath, safeName } from "../utils/path";
 import { createUlid } from "../utils/ulid";
 import { GtdIndex } from "./gtd-index";
 
@@ -233,7 +233,7 @@ export class GtdRepository {
     }
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects");
     const path = this.uniqueMarkdownPath(directory, title, id);
-    const supportRoot = await this.ensureFolder(PROJECT_SUPPORT_ROOT);
+    const supportRoot = parent ? await this.ensureProjectSupportPath(parent) : await this.ensureFolder(PROJECT_SUPPORT_ROOT);
     const supportPath = this.uniqueFolderPath(supportRoot, title, id);
     await this.ensureFolder(supportPath);
     const status = input.status ?? "active";
@@ -312,16 +312,20 @@ export class GtdRepository {
     }
     await this.enqueue(project.file.path, async () => {
       const oldTitle = project.title;
+      const newTitle = changes.title?.trim() || oldTitle;
       let supportPath = changes.supportPath ?? project.supportPath;
-      if (changes.title && changes.title.trim() !== oldTitle && project.supportPath) {
-        const generatedOldPaths = [PROJECT_SUPPORT_ROOT, "Projects"].map((root) => normalizePath(`${root}/${safeName(oldTitle)}`));
-        if (generatedOldPaths.includes(project.supportPath)) {
-          const target = this.uniqueFolderPath(PROJECT_SUPPORT_ROOT, changes.title.trim(), project.id, project.supportPath);
-          const folder = this.app.vault.getAbstractFileByPath(project.supportPath);
-          if (folder instanceof TFolder && target !== project.supportPath) {
-            await this.app.vault.rename(folder, target);
-            supportPath = target;
-          }
+      // Only folders this plugin generated follow the Project; a hand-picked one stays put.
+      const generated = Boolean(supportPath)
+        && changes.supportPath === undefined
+        && this.isGeneratedSupportFolder(supportPath!, oldTitle, project.id);
+
+      if (generated && newTitle !== oldTitle) {
+        supportPath = await this.moveSupportFolder(supportPath!, this.uniqueFolderPath(parentPath(supportPath!), newTitle, project.id, supportPath!));
+      }
+      if (generated && changes.parentProjectId !== undefined && (parent?.id ?? "") !== (project.parentProjectId ?? "")) {
+        const desiredRoot = parent ? await this.ensureProjectSupportPath(parent) : await this.ensureFolder(PROJECT_SUPPORT_ROOT);
+        if (parentPath(supportPath!) !== desiredRoot) {
+          supportPath = await this.moveSupportFolder(supportPath!, this.uniqueFolderPath(desiredRoot, newTitle, project.id, supportPath!));
         }
       }
       await this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
@@ -512,16 +516,48 @@ export class GtdRepository {
     await this.enqueue(file.path, () => this.app.vault.process(file, (content) => replaceNoteBody(content, body)));
   }
 
-  private async ensureProjectSupportPath(project: Project): Promise<string> {
-    const supportRoot = await this.ensureFolder(PROJECT_SUPPORT_ROOT);
-    const requestedPath = project.supportPath || this.uniqueFolderPath(supportRoot, project.title, project.id);
-    const supportPath = await this.ensureFolder(requestedPath);
-    if (!project.supportPath) {
-      await this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
-        frontmatter.support_path = supportPath;
+  /** A Project's support folder, created on demand inside its parent Project's own support folder. */
+  private async ensureProjectSupportPath(project: Project, seen: ReadonlySet<string> = new Set()): Promise<string> {
+    if (project.supportPath) return this.ensureFolder(project.supportPath);
+    if (seen.has(project.id)) throw new Error("The Project hierarchy contains a cycle.");
+    const supportRoot = await this.projectSupportRoot(project, new Set([...seen, project.id]));
+    const supportPath = await this.ensureFolder(this.uniqueFolderPath(supportRoot, project.title, project.id));
+    await this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
+      frontmatter.support_path = supportPath;
+    });
+    return supportPath;
+  }
+
+  /** Where a Project's own support folder belongs: inside its parent's, or the shared root. */
+  private async projectSupportRoot(project: { parentProjectId?: string }, seen: ReadonlySet<string> = new Set()): Promise<string> {
+    const parent = project.parentProjectId ? this.index.getSnapshot().projectsById.get(project.parentProjectId) : undefined;
+    return parent ? this.ensureProjectSupportPath(parent, seen) : this.ensureFolder(PROJECT_SUPPORT_ROOT);
+  }
+
+  /** Moves a generated support folder, keeping the support paths of nested sub-projects correct. */
+  private async moveSupportFolder(from: string, to: string): Promise<string> {
+    if (!from || to === from) return from;
+    const folder = this.app.vault.getAbstractFileByPath(from);
+    if (!(folder instanceof TFolder)) return from;
+    const nested = this.index.getSnapshot().projects.filter((candidate) =>
+      candidate.supportPath && candidate.supportPath !== from && pathIsWithin(candidate.supportPath, from)
+    );
+    await this.app.vault.rename(folder, to);
+    for (const candidate of nested) {
+      const moved = normalizePath(`${to}/${candidate.supportPath!.slice(from.length + 1)}`);
+      await this.app.fileManager.processFrontMatter(candidate.file, (frontmatter) => {
+        frontmatter.support_path = moved;
       });
     }
-    return supportPath;
+    return to;
+  }
+
+  /** True when the folder is one this plugin generated for the Project, rather than a hand-picked one. */
+  private isGeneratedSupportFolder(supportPath: string, title: string, id: string): boolean {
+    if (!generatedFolderNames(title, id).includes(baseName(supportPath))) return false;
+    const root = parentPath(supportPath);
+    if (root === PROJECT_SUPPORT_ROOT || root === "Projects") return true;
+    return this.index.getSnapshot().projects.some((candidate) => candidate.id !== id && candidate.supportPath === root);
   }
 
   private async clearEntityFrontmatter(file: TFile): Promise<void> {
@@ -645,10 +681,10 @@ export class GtdRepository {
   }
 
   private uniqueFolderPath(root: string, title: string, id: string, currentPath?: string): string {
-    const clean = safeName(title);
-    const first = normalizePath(`${root}/${clean}`);
+    const [preferred, fallback] = generatedFolderNames(title, id);
+    const first = normalizePath(`${root}/${preferred}`);
     if (first === currentPath || !this.app.vault.getAbstractFileByPath(first)) return first;
-    return normalizePath(`${root}/${clean} - ${id.slice(-4)}`);
+    return normalizePath(`${root}/${fallback}`);
   }
 
   private async renameMarkdownFile(file: TFile, title: string, id: string): Promise<void> {

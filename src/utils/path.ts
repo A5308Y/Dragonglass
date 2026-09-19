@@ -18,6 +18,12 @@ export function safeName(title: string, fallback = "Untitled"): string {
   return result || fallback;
 }
 
+/** The folder names this plugin generates for a Project, in the order it tries them. */
+export function generatedFolderNames(title: string, id: string): [string, string] {
+  const clean = safeName(title);
+  return [clean, `${clean} - ${id.slice(-4)}`];
+}
+
 export function parentPath(path: string): string {
   const index = path.lastIndexOf("/");
   return index < 0 ? "" : path.slice(0, index);

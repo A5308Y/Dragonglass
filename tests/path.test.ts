@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPathInDirectory, normalizeVaultPath, rawInboxId, safeName } from "../src/utils/path";
+import { generatedFolderNames, isPathInDirectory, normalizeVaultPath, rawInboxId, safeName } from "../src/utils/path";
 
 describe("vault paths", () => {
   it("creates portable human filenames", () => {
@@ -18,5 +18,9 @@ describe("vault paths", () => {
   it("gives raw Inbox files deterministic disposable IDs", () => {
     expect(rawInboxId("GTD/Inbox/receipt.pdf")).toBe(rawInboxId("GTD/Inbox/receipt.pdf"));
     expect(rawInboxId("GTD/Inbox/other.pdf")).not.toBe(rawInboxId("GTD/Inbox/receipt.pdf"));
+  });
+
+  it("names generated support folders after the Project, with an ID fallback", () => {
+    expect(generatedFolderNames("Greenhouse: phase 2", "01JABCDEF9XYZ")).toEqual(["Greenhouse- phase 2", "Greenhouse- phase 2 - 9XYZ"]);
   });
 });
