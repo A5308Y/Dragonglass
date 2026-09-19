@@ -1291,6 +1291,11 @@
   max-width: none;
 }
 .dg-modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.dg-modal-diary { margin-top: 18px; padding-top: 6px; border-top: 1px solid var(--background-modifier-border); }
+.dg-modal-diary h3 { margin: 10px 0 0; font-size: var(--font-ui-medium); }
+.dg-modal-diary .dg-diary-list { max-height: 180px; }
+.dg-modal-diary .setting-item-control { display: flex; gap: 8px; }
+.dg-modal-diary .setting-item-control input { flex: 1; }
 
 .dg-project-suggestion-title { font-weight: var(--font-medium); }
 .dg-project-suggestion-meta {
