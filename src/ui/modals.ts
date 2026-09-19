@@ -734,7 +734,7 @@ function addScheduleFields(
   const durationSetting = new Setting(container).setName("Duration").setDesc("Minutes reserved on the calendar.").addText((text) => {
     text.inputEl.type = "number";
     text.inputEl.min = "1";
-    text.inputEl.step = "5";
+    text.inputEl.step = "1";
     text.setValue(duration).onChange(onDurationChange);
   });
   durationSetting.settingEl.addClass("dg-schedule-setting");

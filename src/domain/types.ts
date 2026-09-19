@@ -187,6 +187,7 @@ export interface GtdSettings {
   projectsDirectory: string;
   actionsDirectory: string;
   defaultProjectImage: string;
+  showProjectBoardImages: boolean;
   defaultActionStatus: ActionStatus;
   showDoneColumn: boolean;
   projectBoardColumns: ProjectStatus[];

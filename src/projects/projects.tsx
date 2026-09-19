@@ -31,6 +31,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
   const [optimistic, setOptimistic] = useState<Map<string, ProjectStatus>>(new Map());
   const [search, setSearch] = useState("");
   const [showSubprojects, setShowSubprojects] = useState(true);
+  const [showImages, setShowImages] = useState(() => services.getSettings().showProjectBoardImages);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<ProjectBoardStatus[]>(() => {
     const configured = services.getSettings().projectBoardColumns;
@@ -95,6 +96,17 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     }
   };
 
+  const changeShowImages = async (visible: boolean) => {
+    const previous = showImages;
+    setShowImages(visible);
+    try {
+      await services.saveSettings({ ...services.getSettings(), showProjectBoardImages: visible }, false);
+    } catch (error) {
+      setShowImages(previous);
+      new Notice(error instanceof Error ? error.message : "Could not save the Project board image preference.");
+    }
+  };
+
   return (
     <div class="dg-view dg-projects-view">
       <header class="dg-view-header">
@@ -112,6 +124,14 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
           onInput={(event: Event) => setSearch((event.currentTarget as HTMLInputElement).value)}
         />
         <button class={columnsOpen ? "is-active" : ""} onClick={() => setColumnsOpen(!columnsOpen)}>Columns</button>
+        <label class="dg-toolbar-toggle" title="Show project images on board cards">
+          <input
+            type="checkbox"
+            checked={showImages}
+            onChange={(event: Event) => void changeShowImages((event.currentTarget as HTMLInputElement).checked)}
+          />
+          <span>Images</span>
+        </label>
         <label class="dg-toolbar-toggle" title="Show sub-projects on the board">
           <input
             type="checkbox"
@@ -149,6 +169,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
                     project={project}
                     actions={actionsByProject.get(project.id) ?? []}
                     services={services}
+                    showImage={showImages}
                     breadcrumb={breadcrumbs.get(project.id) ?? project.title}
                     onOpen={() => setSelectedId(project.id)}
                     onMove={moveProject}
@@ -192,6 +213,7 @@ function ProjectCard({
   project,
   actions,
   services,
+  showImage,
   breadcrumb,
   onOpen,
   onMove,
@@ -201,6 +223,7 @@ function ProjectCard({
   project: Project;
   actions: Action[];
   services: GtdServices;
+  showImage: boolean;
   breadcrumb: string;
   onOpen: () => void;
   onMove: (id: string, status: ProjectBoardStatus) => Promise<void>;
@@ -208,7 +231,7 @@ function ProjectCard({
 }) {
   const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
   const next = actions.filter((action) => action.status === "next").length;
-  const image = projectImageFile(services, project);
+  const image = showImage ? projectImageFile(services, project) : null;
   const openMenu = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();

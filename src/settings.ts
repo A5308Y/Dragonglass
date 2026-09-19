@@ -157,7 +157,7 @@ export class GtdSettingTab extends PluginSettingTab {
       .addText((text) => {
         text.inputEl.type = "number";
         text.inputEl.min = "1";
-        text.inputEl.step = "5";
+        text.inputEl.step = "1";
         text.setValue(String(this.plugin.settings.googleCalendar.defaultDurationMinutes)).onChange(async (value) => {
           const duration = Number(value);
           if (!Number.isInteger(duration) || duration <= 0) return;

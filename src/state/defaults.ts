@@ -52,6 +52,7 @@ export function defaultSettings(): GtdSettings {
     projectsDirectory: "GTD/Projects",
     actionsDirectory: "GTD/Actions",
     defaultProjectImage: "",
+    showProjectBoardImages: true,
     defaultActionStatus: "next",
     showDoneColumn: true,
     projectBoardColumns: ["active", "backlog", "someday", "completed"],
@@ -64,6 +65,6 @@ export function defaultSettings(): GtdSettings {
       sourceId: "",
       defaultDurationMinutes: 30,
     },
-    schemaVersion: 8,
+    schemaVersion: 9,
   };
 }

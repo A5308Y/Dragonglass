@@ -5,4 +5,8 @@ describe("Default settings", () => {
   it("shows every Project board column initially", () => {
     expect(defaultSettings().projectBoardColumns).toEqual(["active", "backlog", "someday", "completed"]);
   });
+
+  it("shows Project card images initially", () => {
+    expect(defaultSettings().showProjectBoardImages).toBe(true);
+  });
 });
