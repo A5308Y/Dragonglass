@@ -612,14 +612,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   box-shadow: none;
 }
 .dg-action-row-actions { display: flex; align-items: center; gap: 3px; }
-.dg-action-row-kind {
-  margin-right: 3px;
-  color: var(--text-faint);
-  font-size: 9px;
-  font-weight: var(--font-semibold);
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
 .dg-action-row-delete {
   min-height: 30px;
   padding: 4px 7px;
@@ -627,6 +619,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   background: transparent !important;
   box-shadow: none;
 }
+.dg-action-row-edit:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover) !important;
+}
+.dg-action-row-delete:hover { background: color-mix(in srgb, var(--color-red) 10%, transparent) !important; }
 .dg-project-board { align-items: flex-start; }
 .dg-project-board .dg-project-column {
   flex: 1 0 290px;

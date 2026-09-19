@@ -63,7 +63,6 @@ function ActionRow({ action, services, projectLabels, allowProjectConversion, li
         </div>
       </div>
       <div class="dg-action-row-actions">
-        <span class="dg-action-row-kind">Action</span>
         <button class="dg-action-row-edit" aria-label={`Edit ${action.title}`} onClick={() => services.editAction(action.id, allowProjectConversion)}>Edit</button>
         <button class="dg-action-row-delete" aria-label={`Delete ${action.title}`} onClick={() => void deleteAction()}>Delete</button>
       </div>
