@@ -257,7 +257,29 @@ export class GtdRepository {
     return (await this.createProjectRecord(input)).file;
   }
 
-  private async createProjectRecord(input: ProjectInput & { desiredOutcome?: string; notes?: string }): Promise<Project> {
+  /** Creates immediate children in list order. Returns how many were written. */
+  async importSubprojects(parentProjectId: string, inputs: readonly ProjectInput[]): Promise<number> {
+    const snapshot = this.index.getSnapshot();
+    const parent = snapshot.projectsById.get(parentProjectId);
+    if (!parent) throw new Error("The selected parent Project no longer exists.");
+    if (projectHierarchyIssue(parent, snapshot.projectsById)) {
+      throw new Error("The selected parent Project has an invalid hierarchy.");
+    }
+    const siblingOrders = snapshot.projects
+      .filter((candidate) => candidate.parentProjectId === parent.id)
+      .map((candidate) => candidate.order ?? 0);
+    let order = Math.max(0, ...siblingOrders) + 1_000;
+    let created = 0;
+    for (const input of inputs) {
+      if (!input.title.trim()) continue;
+      await this.createProjectRecord({ ...input, parentProjectId: parent.id, order });
+      order += 1_000;
+      created += 1;
+    }
+    return created;
+  }
+
+  private async createProjectRecord(input: ProjectInput & { desiredOutcome?: string; notes?: string; order?: number }): Promise<Project> {
     const id = createUlid();
     const title = input.title.trim();
     if (!title) throw new Error("A Project title is required.");
@@ -277,7 +299,7 @@ export class GtdRepository {
     const siblingOrders = parent
       ? this.index.getSnapshot().projects.filter((candidate) => candidate.parentProjectId === parent.id).map((candidate) => candidate.order ?? 0)
       : [];
-    const order = parent ? Math.max(0, ...siblingOrders) + 1_000 : undefined;
+    const order = parent ? input.order ?? Math.max(0, ...siblingOrders) + 1_000 : undefined;
     const frontmatter: Record<string, unknown> = {
       type: "gtd-project",
       id,
@@ -286,7 +308,7 @@ export class GtdRepository {
       area: input.area || null,
       created,
       reviewed: null,
-      completed: null,
+      completed: status === "completed" ? new Date().toISOString() : null,
       support_path: supportPath,
       image: input.image?.trim() || null,
       tags: tags.length ? tags : null,
@@ -298,6 +320,7 @@ export class GtdRepository {
     const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n${input.notes?.trim() ?? ""}\n\n## Support material\n\n\`${supportPath}/\`\n`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
+    if (status === "completed") project.completed = String(frontmatter.completed);
     if (input.area?.trim()) project.area = input.area.trim();
     if (input.image?.trim()) project.image = input.image.trim();
     if (tags.length) project.tags = tags;
