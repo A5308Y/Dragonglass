@@ -100,6 +100,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private registerCommands(): void {
     this.addCommand({ id: "open-action-board", name: "Open Action Board", callback: () => void this.activateView(BOARD_VIEW_TYPE) });
     this.addCommand({ id: "open-inbox", name: "Open Inbox", callback: () => void this.activateView(INBOX_VIEW_TYPE) });
+    this.addCommand({ id: "process-inbox", name: "Process Inbox", callback: () => void this.processInbox() });
     this.addCommand({ id: "open-projects", name: "Open Projects", callback: () => void this.activateView(PROJECTS_VIEW_TYPE) });
     this.addCommand({
       id: "open-project",
@@ -204,6 +205,11 @@ export default class DragonglassGtdPlugin extends Plugin {
     }
     await this.app.workspace.revealLeaf(leaf);
     return leaf;
+  }
+
+  private async processInbox(): Promise<void> {
+    const leaf = await this.activateView(INBOX_VIEW_TYPE);
+    if (leaf.view instanceof GtdInboxView) leaf.view.startProcessing();
   }
 
   private async openProjectDetail(id: string): Promise<void> {

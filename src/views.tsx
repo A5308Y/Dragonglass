@@ -34,6 +34,8 @@ export class GtdProjectReviewView extends ItemView {
 }
 
 export class GtdInboxView extends ItemView {
+  private processing = false;
+
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
     super(leaf);
   }
@@ -45,9 +47,14 @@ export class GtdInboxView extends ItemView {
   async onOpen(): Promise<void> { this.refresh(); }
   async onClose(): Promise<void> { render(null, this.contentEl); }
 
+  startProcessing(): void {
+    this.processing = true;
+    this.refresh();
+  }
+
   refresh(): void {
     render(null, this.contentEl);
-    render(<InboxView services={this.services} />, this.contentEl);
+    render(<InboxView services={this.services} initialProcessing={this.processing} />, this.contentEl);
   }
 }
 

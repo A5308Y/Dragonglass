@@ -1,13 +1,13 @@
 import { Notice } from "obsidian";
 import type { ComponentChildren } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { InboxItem, InboxProcessingInput, Project } from "../domain/types";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { FuzzyField } from "../ui/fuzzy-field";
 import { useGtdSnapshot } from "../ui/hooks";
 import type { GtdServices } from "../ui/services";
 
-export function InboxView({ services }: { services: GtdServices }) {
+export function InboxView({ services, initialProcessing = false }: { services: GtdServices; initialProcessing?: boolean }) {
   const snapshot = useGtdSnapshot(services.repository.index);
   const [search, setSearch] = useState("");
   const [processing, setProcessing] = useState(false);
@@ -30,6 +30,14 @@ export function InboxView({ services }: { services: GtdServices }) {
     setSessionTotal(allItems.length);
     setProcessing(true);
   };
+
+  // Entering from the command palette: start the session once the Inbox has something to process.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!initialProcessing || autoStarted.current || !allItems.length) return;
+    autoStarted.current = true;
+    startProcessing();
+  }, [initialProcessing, allItems.length]);
 
   const deleteItem = async (item: InboxItem) => {
     if (deletingId) return;
