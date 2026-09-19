@@ -187,7 +187,7 @@ export function ActionBoard({ services }: { services: GtdServices }) {
       {columnsOpen && <ColumnPicker snapshotGroups={allGroups} configuration={configuration} onChange={setConfiguration} />}
       <FilterChips filters={configuration.filters} snapshot={snapshot} onRemove={(index) => setConfiguration({ ...configuration, filters: configuration.filters.filter((_, candidate) => candidate !== index) })} />
 
-      <div class="dg-board" role="list" aria-label="Action board">
+      <div class="dg-board" role="list">
         {groups.map((group) => (
           <BoardColumn
             key={group.key}

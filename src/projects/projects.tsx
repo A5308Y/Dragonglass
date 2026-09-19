@@ -92,7 +92,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
           <span>Sub-projects</span>
         </label>
       </div>
-      <div class="dg-board dg-project-board" role="list" aria-label="Project board">
+      <div class="dg-board dg-project-board" role="list">
         {BOARD_COLUMNS.map((status) => {
           const columnProjects = projects
             .filter((project) => projectColumn(project.status) === status
