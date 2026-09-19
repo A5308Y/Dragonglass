@@ -979,7 +979,15 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   align-content: center;
 }
 .dg-processing-toggle > span { order: 2; justify-self: start; }
-.dg-processing-toggle > input { order: 1; width: 16px; height: 16px; margin: 0; }
+.dg-processing-toggle > input {
+  order: 1;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+}
 .dg-processing-toggle > small { order: 3; grid-column: 1 / -1; }
 
 .dg-processing-field.is-wide { grid-column: 1 / -1; }
@@ -992,7 +1000,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   font-size: var(--font-ui-smaller);
   line-height: 1.25;
 }
-.dg-processing-field input,
+.dg-processing-field input:not([type="checkbox"]),
 .dg-processing-field textarea {
   width: 100%;
   min-width: 0;
@@ -1004,13 +1012,13 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   box-shadow: none;
   appearance: none;
 }
-.dg-processing-field input { min-height: 40px; }
+.dg-processing-field input:not([type="checkbox"]) { min-height: 40px; }
 .dg-processing-field textarea {
   min-height: 78px;
   resize: vertical;
   line-height: var(--line-height-normal);
 }
-.dg-processing-field input:focus,
+.dg-processing-field input:not([type="checkbox"]):focus,
 .dg-processing-field textarea:focus {
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 15%, transparent);
@@ -1561,7 +1569,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .modal.dg-modal-shell { width: calc(100vw - 12px); max-width: none; }
   .dg-modal .setting-item { display: flex; align-items: stretch; flex-direction: column; gap: 6px; }
   .dg-modal .setting-item-control { width: 100%; }
-  .dg-modal input,
+  .dg-modal input:not([type="checkbox"]),
   .dg-modal select { width: 100%; min-height: 42px; }
 }
 
