@@ -624,6 +624,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   background: var(--background-modifier-hover) !important;
 }
 .dg-action-row-delete:hover { background: color-mix(in srgb, var(--color-red) 10%, transparent) !important; }
+.dg-board-view .dg-board,
 .dg-project-board { align-items: flex-start; }
 .dg-project-board .dg-project-column {
   flex: 1 0 290px;
