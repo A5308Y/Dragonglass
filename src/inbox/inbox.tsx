@@ -203,7 +203,8 @@ function InboxProcessor({
     : `File as General Reference${nextAction.trim() ? " + Next Action" : ""}`;
   const somedayLabel = selectedProject ? `Move ${selectedProject.title} to Someday/Maybe` : "Create Someday/Maybe Project";
   const actionReady = Boolean(nextAction.trim() && context.trim());
-  const referenceReady = Boolean(!nextAction.trim() || context.trim());
+  // Dispositions where a Next Action is optional still need a context once one is typed.
+  const optionalActionReady = Boolean(!nextAction.trim() || context.trim());
 
   return (
     <div class="dg-processor">
@@ -264,8 +265,8 @@ function InboxProcessor({
 
       <section class="dg-processor-actions">
         <button class="mod-cta" title={actionLabel} disabled={!actionReady || busy} onClick={() => void run(() => services.repository.processInboxAsNextAction(item, input()), "Next Action created.")}>{actionLabel}</button>
-        <button title={referenceLabel} disabled={!referenceReady || busy} onClick={() => void run(() => services.repository.processInboxAsReference(item, input()), projectName ? "Filed with Project." : "Filed as General Reference.")}>{referenceLabel}</button>
-        <button title={somedayLabel} disabled={!actionReady || busy} onClick={() => void run(() => services.repository.processInboxAsSomedayProject(item, input()), "Filed as a Someday/Maybe Project.")}>{somedayLabel}</button>
+        <button title={referenceLabel} disabled={!optionalActionReady || busy} onClick={() => void run(() => services.repository.processInboxAsReference(item, input()), projectName ? "Filed with Project." : "Filed as General Reference.")}>{referenceLabel}</button>
+        <button title={somedayLabel} disabled={!optionalActionReady || busy} onClick={() => void run(() => services.repository.processInboxAsSomedayProject(item, input()), "Filed as a Someday/Maybe Project.")}>{somedayLabel}</button>
         <button class="mod-warning" disabled={busy} onClick={() => void run(() => services.repository.trashInboxItem(item), "Inbox Item deleted.")}>Delete</button>
       </section>
 

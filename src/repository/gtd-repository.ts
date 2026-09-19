@@ -209,12 +209,14 @@ export class GtdRepository {
 
   async processInboxAsSomedayProject(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
     const item = this.resolveInboxItem(itemOrId);
-    const title = requiredProcessingValue(input.nextAction, "A Next Action is required.");
-    const context = requiredProcessingValue(input.context, "A context is required.");
-    const project = await this.prepareProcessingProject(input, "someday", title, true);
+    const title = input.nextAction?.trim() ?? "";
+    const context = input.context?.trim() ?? "";
+    if (title && !context) throw new Error("A context is required when creating a Next Action.");
+    // Someday/Maybe is for what is not actionable yet, so the Item's own title names the Project.
+    const project = await this.prepareProcessingProject(input, "someday", title || item.title, true);
     if (!project) throw new Error("Could not create the Someday/Maybe Project.");
 
-    await this.createNextActionFile(title, context, item.created, project);
+    if (title) await this.createNextActionFile(title, context, item.created, project);
     await this.fileInboxItemToProject(item, project);
   }
 

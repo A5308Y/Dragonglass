@@ -936,6 +936,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.dg-processor-heading button:hover:not(:disabled),
+.dg-processor-actions button:not(.mod-cta):not(.mod-warning):hover:not(:disabled) {
+  border-color: var(--background-modifier-border-hover);
+  background: var(--interactive-hover);
+}
 
 .dg-workflow-complete {
   margin: auto;
