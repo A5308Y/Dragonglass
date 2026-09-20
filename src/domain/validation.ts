@@ -10,6 +10,7 @@ import {
 import type { TFile } from "obsidian";
 import { normalizeProjectTags } from "./project-board";
 import { isAllDaySchedule } from "./schedule";
+import { parseDateOnly } from "../utils/date";
 
 type Frontmatter = Record<string, unknown>;
 
@@ -45,7 +46,7 @@ function optionalNumber(frontmatter: Frontmatter, key: string): number | undefin
 }
 
 function dateOnly(value: string, key: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00`).getTime())) throw new Error(`Invalid '${key}' date`);
+  if (!parseDateOnly(value)) throw new Error(`Invalid '${key}' date`);
   return value;
 }
 
@@ -136,6 +137,7 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   };
   const area = optionalString(frontmatter, "area");
   const reviewed = optionalString(frontmatter, "reviewed");
+  const activateAt = optionalString(frontmatter, "activate_at");
   const completed = optionalString(frontmatter, "completed");
   const supportPath = optionalString(frontmatter, "support_path");
   const image = optionalString(frontmatter, "image");
@@ -146,6 +148,7 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   const parentProjectLink = optionalString(frontmatter, "parent_project");
   if (area) project.area = area;
   if (reviewed) project.reviewed = dateOnly(reviewed, "reviewed");
+  if (activateAt) project.activateAt = dateOnly(activateAt, "activate_at");
   if (completed) {
     if (Number.isNaN(Date.parse(completed))) throw new Error("Invalid 'completed' timestamp");
     project.completed = completed;

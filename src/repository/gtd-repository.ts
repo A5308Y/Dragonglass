@@ -22,7 +22,7 @@ import { waitingSinceFor } from "../domain/action-status";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
-import { localDate } from "../utils/date";
+import { localDate, parseDateOnly } from "../utils/date";
 import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
 import { baseName, generatedFolderNames, normalizeVaultPath, parentPath, safeName } from "../utils/path";
 import { createUlid } from "../utils/ulid";
@@ -299,6 +299,8 @@ export class GtdRepository {
     const supportPath = this.uniqueFolderPath(supportRoot, title, id);
     await this.ensureFolder(supportPath);
     const status = input.status ?? "active";
+    if (input.activateAt && !parseDateOnly(input.activateAt)) throw new Error("Choose a valid activation date.");
+    if (input.activateAt && status !== "someday") throw new Error("Only Someday/Maybe Projects can schedule activation.");
     const created = localDate();
     const completed = status === "completed" ? new Date().toISOString() : undefined;
     const tags = normalizeProjectTags(input.tags ?? []);
@@ -314,6 +316,7 @@ export class GtdRepository {
       area: input.area || null,
       created,
       reviewed: null,
+      activate_at: input.activateAt || null,
       completed: completed ?? null,
       support_path: supportPath,
       image: input.image?.trim() || null,
@@ -326,6 +329,7 @@ export class GtdRepository {
     const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n${input.notes?.trim() ?? ""}\n\n## Support material\n\n\`${supportPath}/\`\n`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
+    if (input.activateAt) project.activateAt = input.activateAt;
     if (completed) project.completed = completed;
     if (input.area?.trim()) project.area = input.area.trim();
     if (input.image?.trim()) project.image = input.image.trim();
@@ -403,6 +407,7 @@ export class GtdRepository {
       throw new Error("A Project cannot be its own parent or a descendant of itself.");
     }
     const tags = changes.tags === undefined ? undefined : normalizeProjectTags(changes.tags);
+    if (changes.activateAt && !parseDateOnly(changes.activateAt)) throw new Error("Choose a valid activation date.");
     if (changes.order !== undefined && !Number.isFinite(changes.order)) throw new Error("Project order must be a finite number.");
     const blockers = changes.blockedByProjectIds === undefined
       ? undefined
@@ -439,6 +444,7 @@ export class GtdRepository {
         }
         if (changes.area !== undefined) frontmatter.area = changes.area || null;
         if (changes.reviewed !== undefined) frontmatter.reviewed = changes.reviewed || null;
+        if (changes.activateAt !== undefined) frontmatter.activate_at = changes.activateAt || null;
         if (changes.image !== undefined) frontmatter.image = changes.image.trim() || null;
         if (tags !== undefined) frontmatter.tags = tags.length ? tags : null;
         if (changes.order !== undefined) frontmatter.order = changes.order;
@@ -460,7 +466,7 @@ export class GtdRepository {
   }
 
   async setProjectStatus(id: string, status: Project["status"]): Promise<void> {
-    return this.updateProject(id, { status });
+    return this.updateProject(id, { status, ...(status === "someday" ? {} : { activateAt: "" }) });
   }
 
   async readDesiredOutcome(project: Project): Promise<string> {
@@ -954,6 +960,7 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
     "completed",
     "area",
     "reviewed",
+    "activate_at",
     "support_path",
     "parent_project_id",
     "parent_project",

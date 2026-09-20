@@ -216,6 +216,10 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
       <div ref={boardRef} class="dg-board dg-project-board" role="list">
         {BOARD_COLUMNS.filter((status) => visibleColumns.includes(status)).map((status) => {
           const column = columnProjects.get(status) ?? [];
+          const noOpenActions = status === "active"
+            ? column.filter((project) => !(actionsByProject.get(project.id) ?? [])
+              .some((action) => action.status !== "done" && action.status !== "cancelled")).length
+            : null;
           return (
             <section
               class="dg-column dg-project-column"
@@ -228,7 +232,13 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
                 if (id) void moveProject(id, status);
               }}
             >
-              <header class="dg-column-header"><span>{projectStatusLabel(status)}</span><span>{column.length}</span></header>
+              <header class="dg-column-header">
+                <span>{projectStatusLabel(status)}</span>
+                <span class="dg-project-column-counts">
+                  <span title="Projects in column">{column.length}</span>
+                  {noOpenActions !== null && <span class="dg-project-column-health" title="Active Projects with no open Actions">{noOpenActions} no open</span>}
+                </span>
+              </header>
               <div class="dg-card-list">
                 {column.map((project) => (
                   <ProjectCard
@@ -332,6 +342,7 @@ function ProjectCard({
 }) {
   const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
   const next = actions.filter((action) => action.status === "next").length;
+  const scheduled = actions.filter((action) => action.status === "scheduled").length;
   const image = showImage ? projectImageFile(services, project) : null;
   const openMenu = (event: MouseEvent) => {
     event.preventDefault();
@@ -394,8 +405,9 @@ function ProjectCard({
         <span title="Project support material files"><strong>{supportFiles}</strong> files</span>
       </div>
       {project.reviewed && <div class="dg-project-reviewed">Reviewed {project.reviewed}</div>}
+      {project.status === "someday" && project.activateAt && <div class="dg-project-reviewed">Activates {project.activateAt}</div>}
       {open === 0 && project.status === "active" && <div class="dg-project-health">No open Actions</div>}
-      {open > 0 && next === 0 && project.status === "active" && <div class="dg-project-health">No Next Action</div>}
+      {open > 0 && next === 0 && scheduled === 0 && project.status === "active" && <div class="dg-project-health">No Next Action</div>}
     </article>
   );
 }

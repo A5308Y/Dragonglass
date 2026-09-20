@@ -53,4 +53,25 @@ describe("Project statuses", () => {
     expect(project.order).toBe(2_000);
     expect(project.blockedByProjectIds).toEqual(["P1", "P2"]);
   });
+
+  it("reads and validates a scheduled activation date", () => {
+    const project = parseProject({
+      type: "gtd-project",
+      id: "01KACTIVATEPROJECT",
+      title: "Future Project",
+      status: "someday",
+      created: "2026-09-19",
+      activate_at: "2026-10-01",
+    }, file);
+
+    expect(project.activateAt).toBe("2026-10-01");
+    expect(() => parseProject({
+      type: "gtd-project",
+      id: "01KBADACTIVATION",
+      title: "Bad date",
+      status: "someday",
+      created: "2026-09-19",
+      activate_at: "2026-02-30",
+    }, file)).toThrow("activate_at");
+  });
 });

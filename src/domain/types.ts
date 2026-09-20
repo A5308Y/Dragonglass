@@ -60,6 +60,8 @@ export interface Project {
   created: string;
   area?: string;
   reviewed?: string;
+  /** Local date on which a Someday/Maybe Project should become Active. */
+  activateAt?: string;
   completed?: string;
   supportPath?: string;
   image?: string;
@@ -87,6 +89,7 @@ export interface ActionInput {
 export interface ProjectInput {
   title: string;
   status?: ProjectStatus;
+  activateAt?: string;
   area?: string;
   image?: string;
   tags?: string[];
@@ -109,7 +112,7 @@ export type ActionChanges = Partial<
 >;
 
 export type ProjectChanges = Partial<
-  Pick<Project, "title" | "status" | "area" | "reviewed" | "supportPath" | "image" | "tags" | "order" | "blockedByProjectIds" | "parentProjectId">
+  Pick<Project, "title" | "status" | "area" | "reviewed" | "activateAt" | "supportPath" | "image" | "tags" | "order" | "blockedByProjectIds" | "parentProjectId">
 >;
 
 export interface IndexIssue {

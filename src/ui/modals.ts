@@ -631,6 +631,7 @@ export class ProjectEditorModal extends FormModal {
   private image: string;
   private tags: string;
   private reviewed: string;
+  private activateAt: string;
   private parentProjectId: string;
   private parentProjectQuery: string;
 
@@ -642,6 +643,7 @@ export class ProjectEditorModal extends FormModal {
     this.image = project.image ?? "";
     this.tags = (project.tags ?? []).join(", ");
     this.reviewed = project.reviewed ?? "";
+    this.activateAt = project.activateAt ?? "";
     const snapshot = services.repository.index.getSnapshot();
     const parent = project.parentProjectId ? snapshot.projectsById.get(project.parentProjectId) : undefined;
     this.parentProjectId = parent?.id ?? "";
@@ -653,10 +655,23 @@ export class ProjectEditorModal extends FormModal {
   protected renderForm(): void {
     this.formEl.createEl("h2", { text: "Edit Project" });
     addText(this.formEl, "Title", this.title, (value) => (this.title = value));
+    let activateSetting: HTMLElement | undefined;
     new Setting(this.formEl).setName("Status").addDropdown((dropdown) => {
       for (const status of PROJECT_STATUSES) dropdown.addOption(status, status === "someday" ? "Someday/Maybe" : label(status));
-      dropdown.setValue(this.status).onChange((value) => (this.status = value as ProjectStatus));
+      dropdown.setValue(this.status).onChange((value) => {
+        this.status = value as ProjectStatus;
+        activateSetting?.toggleClass("is-hidden", this.status !== "someday");
+      });
     });
+    const activation = new Setting(this.formEl)
+      .setName("Activate at")
+      .setDesc("On this date, move the Someday/Maybe Project to Active and show the activation on the calendar.")
+      .addText((text) => {
+        text.inputEl.type = "date";
+        text.setValue(this.activateAt).onChange((value) => (this.activateAt = value));
+      });
+    activateSetting = activation.settingEl;
+    activateSetting.toggleClass("is-hidden", this.status !== "someday");
     addText(this.formEl, "Area", this.area, (value) => (this.area = value));
     addImagePathSetting(
       this.formEl,
@@ -710,6 +725,7 @@ export class ProjectEditorModal extends FormModal {
       await this.services.repository.updateProject(this.project.id, {
         title: this.title.trim(),
         status: this.status,
+        activateAt: this.status === "someday" ? this.activateAt : "",
         area: this.area.trim(),
         image,
         tags: parseProjectTags(this.tags),

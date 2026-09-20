@@ -25,15 +25,15 @@ const scheduled: Action = {
   durationMinutes: 45,
 };
 
-function snapshot(actions: Action[]): GtdSnapshot {
+function snapshot(actions: Action[], projects: Project[] = [project]): GtdSnapshot {
   return {
     revision: 1,
     inboxItems: [],
     actions,
-    projects: [project],
+    projects,
     inboxItemsById: new Map(),
     actionsById: new Map(actions.map((action) => [action.id, action])),
-    projectsById: new Map([[project.id, project]]),
+    projectsById: new Map(projects.map((candidate) => [candidate.id, candidate])),
     issues: [],
   };
 }
@@ -88,5 +88,23 @@ describe("Google Calendar event projection", () => {
   it("sorts exported events deterministically", () => {
     const later = { ...scheduled, id: "A2", scheduledStart: "2026-09-21T12:00:00.000Z" };
     expect(buildCalendarSyncEvents(snapshot([later, scheduled]), "Vault").map((event) => event.actionId)).toEqual(["A1", "A2"]);
+  });
+
+  it("exports scheduled Project activation as an all-day event", () => {
+    const someday = { ...project, status: "someday" as const, activateAt: "2026-10-01" };
+
+    expect(buildCalendarSyncEvents(snapshot([], [someday]), "Personal Vault")).toEqual([{
+      actionId: "project:P1",
+      summary: "Activate Project: Dragonglass",
+      description: [
+        "Project: Dragonglass",
+        "Open in Obsidian: obsidian://open?vault=Personal%20Vault&file=GTD%2FProjects%2FDragonglass.md",
+        "Managed by Dragonglass. Calendar changes will be overwritten.",
+      ].join("\n"),
+      start: "2026-10-01",
+      end: "2026-10-02",
+      allDay: true,
+      reminderMinutes: 900,
+    }]);
   });
 });

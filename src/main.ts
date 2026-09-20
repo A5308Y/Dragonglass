@@ -1,6 +1,7 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { GoogleCalendarSync, type CalendarSyncStatus, type CalendarSyncResult } from "./calendar/calendar-sync";
 import { isActionStatus, isProjectStatus } from "./domain/validation";
+import { projectsDueForActivation } from "./domain/project-activation";
 import type { GtdSettings, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
@@ -20,6 +21,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private repository!: GtdRepository;
   private calendarSync!: GoogleCalendarSync;
   private services!: GtdServices;
+  private activationRun: Promise<void> | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -221,8 +223,10 @@ export default class DragonglassGtdPlugin extends Plugin {
     } catch {
       failedSupportPaths = 1;
     }
+    await this.activateScheduledProjects();
     this.register(this.calendarSync.start());
     this.registerInterval(window.setInterval(() => this.calendarSync.schedule(0), 5 * 60_000));
+    this.registerInterval(window.setInterval(() => void this.activateScheduledProjects(), 60_000));
     if (migratedProjects) new Notice(`Migrated ${migratedProjects} waiting Project${migratedProjects === 1 ? "" : "s"} to Active.`);
     if (failedProjects) new Notice(`Could not migrate ${failedProjects} waiting Project${failedProjects === 1 ? "" : "s"}.`);
     if (migratedActions) new Notice(`Migrated ${migratedActions} Someday Action${migratedActions === 1 ? "" : "s"} to Next.`);
@@ -233,6 +237,29 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (failedSupportPaths) new Notice(`Could not correct support material for ${failedSupportPaths} Project${failedSupportPaths === 1 ? "" : "s"}.`);
     const count = this.index.getSnapshot().issues.length;
     if (count) new Notice(`Dragonglass GTD found ${count} file${count === 1 ? "" : "s"} with invalid or duplicate metadata.`);
+  }
+
+  private async activateScheduledProjects(): Promise<void> {
+    if (this.activationRun) return this.activationRun;
+    const run = (async () => {
+      let activated = 0;
+      let failed = 0;
+      for (const project of projectsDueForActivation(this.index.getSnapshot().projects)) {
+        try {
+          // Keep activate_at as the calendar record of the automatic transition.
+          await this.repository.updateProject(project.id, { status: "active" });
+          activated += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      if (activated) new Notice(`Activated ${activated} scheduled Project${activated === 1 ? "" : "s"}.`);
+      if (failed) new Notice(`Could not activate ${failed} scheduled Project${failed === 1 ? "" : "s"}.`);
+    })().finally(() => {
+      this.activationRun = null;
+    });
+    this.activationRun = run;
+    return run;
   }
 
   private quickCapture(): void {

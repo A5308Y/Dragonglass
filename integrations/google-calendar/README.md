@@ -1,6 +1,6 @@
 # Google Calendar bridge setup
 
-This bridge mirrors Dragonglass Scheduled Actions into one dedicated Google Calendar. It runs as your Google account; Dragonglass never receives a Google OAuth token.
+This bridge mirrors Dragonglass Scheduled Actions and scheduled Project activations into one dedicated Google Calendar. It runs as your Google account; Dragonglass never receives a Google OAuth token.
 
 1. In Google Calendar, create a dedicated calendar such as **Dragonglass**. Open **Settings and sharing → Integrate calendar** and copy the full **Calendar ID**. Do not use the calendar's display name.
 2. Create a standalone project at [script.google.com](https://script.google.com/), replace `Code.gs` with the file in this directory, and enable **Show appsscript.json manifest file** in Project Settings before replacing the manifest too.

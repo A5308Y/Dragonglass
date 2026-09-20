@@ -4,6 +4,7 @@ import type { GtdSnapshot } from "../domain/types";
 import { addLocalDays } from "../utils/date";
 
 export interface CalendarSyncEvent {
+  /** Stable reconciliation key. Action IDs stay unprefixed for bridge compatibility. */
   actionId: string;
   summary: string;
   description: string;
@@ -17,7 +18,7 @@ export interface CalendarSyncEvent {
 }
 
 export function buildCalendarSyncEvents(snapshot: GtdSnapshot, vaultName: string): CalendarSyncEvent[] {
-  return snapshot.actions.flatMap((action) => {
+  const actionEvents = snapshot.actions.flatMap((action): CalendarSyncEvent[] => {
     if (snapshot.actionsById.get(action.id)?.file.path !== action.file.path) return [];
     if (action.status !== "scheduled") return [];
     const schedule = actionSchedule(action.scheduledStart, action.durationMinutes);
@@ -44,7 +45,25 @@ export function buildCalendarSyncEvents(snapshot: GtdSnapshot, vaultName: string
       ...span,
       reminderMinutes: scheduleReminderMinutes(schedule),
     }];
-  }).sort((left, right) => left.start.localeCompare(right.start) || left.actionId.localeCompare(right.actionId));
+  });
+  const projectEvents = snapshot.projects.flatMap((project): CalendarSyncEvent[] => {
+    if (snapshot.projectsById.get(project.id)?.file.path !== project.file.path || !project.activateAt) return [];
+    return [{
+      actionId: `project:${project.id}`,
+      summary: `Activate Project: ${project.title}`,
+      description: [
+        `Project: ${projectBreadcrumb(project, snapshot.projectsById)}`,
+        `Open in Obsidian: ${obsidianOpenUrl(vaultName, project.file.path)}`,
+        "Managed by Dragonglass. Calendar changes will be overwritten.",
+      ].join("\n"),
+      start: project.activateAt,
+      end: addLocalDays(project.activateAt, 1),
+      allDay: true,
+      reminderMinutes: 900,
+    }];
+  });
+  return [...actionEvents, ...projectEvents]
+    .sort((left, right) => left.start.localeCompare(right.start) || left.actionId.localeCompare(right.actionId));
 }
 
 function obsidianOpenUrl(vaultName: string, path: string): string {
