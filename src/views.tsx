@@ -1,8 +1,8 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { render } from "preact";
 import { ElmActionBoardHost } from "./adapter/elm-action-board";
+import { ElmInboxHost } from "./adapter/elm-inbox";
 import { BrainstormView } from "./brainstorm/brainstorm";
-import { InboxView } from "./inbox/inbox";
 import { ProjectsView } from "./projects/projects";
 import { ProjectReview } from "./review/project-review";
 import type { GtdServices } from "./ui/services";
@@ -35,6 +35,7 @@ export class GtdProjectReviewView extends ItemView {
 
 export class GtdInboxView extends ItemView {
   private processing = false;
+  private host: ElmInboxHost | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
     super(leaf);
@@ -45,7 +46,11 @@ export class GtdInboxView extends ItemView {
   getIcon(): string { return "inbox"; }
 
   async onOpen(): Promise<void> { this.refresh(); }
-  async onClose(): Promise<void> { render(null, this.contentEl); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
 
   startProcessing(): void {
     this.processing = true;
@@ -53,8 +58,14 @@ export class GtdInboxView extends ItemView {
   }
 
   refresh(): void {
-    render(null, this.contentEl);
-    render(<InboxView services={this.services} initialProcessing={this.processing} />, this.contentEl);
+    if (this.host) {
+      this.host.refresh(this.processing);
+      this.processing = false;
+      return;
+    }
+    this.contentEl.empty();
+    this.host = new ElmInboxHost(this.contentEl, this.services, this.processing);
+    this.processing = false;
   }
 }
 

@@ -17,7 +17,7 @@ describe("Elm adapter protocol", () => {
   it("serializes snapshots without leaking Obsidian file objects", () => {
     const snapshot: GtdSnapshot = {
       revision: 7,
-      inboxItems: [],
+      inboxItems: [{ type: "gtd-inbox-item", id: "I1", title: "Voice note", file, created: "2026-09-20", raw: true }],
       actions: [{ type: "gtd-action", id: "A1", title: "Test", file, status: "next", created: "2026-09-20", context: "computer" }],
       projects: [],
       inboxItemsById: new Map(),
@@ -26,7 +26,7 @@ describe("Elm adapter protocol", () => {
       issues: [],
     };
 
-    const encoded = elmSnapshot(snapshot, defaultSettings(), "2026-09-20");
+    const encoded = elmSnapshot(snapshot, defaultSettings(), "2026-09-20", () => "app://resource/Test.md");
 
     expect(encoded.protocolVersion).toBe(ELM_PROTOCOL_VERSION);
     expect(encoded.actions[0]?.file).toEqual({
@@ -36,6 +36,11 @@ describe("Elm adapter protocol", () => {
       extension: "md",
     });
     expect(JSON.stringify(encoded)).not.toContain("forbidden");
+    expect(encoded.inboxItems[0]).toMatchObject({
+      id: "I1",
+      resourceUrl: "app://resource/Test.md",
+      file: { path: "GTD/Actions/Test.md", extension: "md" },
+    });
   });
 
   it("copies settings so Elm flags cannot mutate plugin state", () => {
@@ -61,6 +66,11 @@ describe("Elm adapter protocol", () => {
     expect(parseElmCommand(null)).toBeNull();
     expect(parseElmCommand({ protocolVersion: 999, requestId: "1", command: { type: "quick-capture" } })).toBeNull();
     expect(parseElmCommand({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "1", command: {} })).toBeNull();
+    expect(parseElmCommand({
+      protocolVersion: ELM_PROTOCOL_VERSION,
+      requestId: "1",
+      command: { type: "process-inbox", itemId: "I1", operation: "unknown", input: {} },
+    })).toBeNull();
     expect(parseElmCommand({
       protocolVersion: ELM_PROTOCOL_VERSION,
       requestId: "1",

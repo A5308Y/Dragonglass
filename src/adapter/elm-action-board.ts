@@ -128,6 +128,8 @@ export class ElmActionBoardHost {
       case "show-menu":
         this.showMenu(command.x, command.y, command.entries);
         return;
+      default:
+        throw new Error(`Unsupported Action Board command '${command.type}'.`);
     }
   }
 
