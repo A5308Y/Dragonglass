@@ -507,7 +507,6 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
     0,
   );
   const otherChildren = visibleChildren.filter((child) => !SUBPROJECT_COLUMNS.includes(child.status as SubprojectColumnStatus));
-  const hasParent = Boolean(parent || project.parentProjectId);
 
   const moveSubproject = async (id: string, status: SubprojectColumnStatus, beforeId?: string) => {
     const currentChildren = snapshot.projects
@@ -571,6 +570,12 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
     <div class="dg-view dg-project-detail">
       <header class="dg-view-header">
         <div class="dg-detail-heading">
+          {parent && <button
+            class="dg-parent-back"
+            title={`Back to ${parent.title}`}
+            onClick={() => onSelect(parent.id)}
+          >← {parent.title}</button>}
+          {!parent && project.parentProjectId && <span class="dg-missing">Missing parent Project: {project.parentProjectId}</span>}
           <button onClick={onBack}>← Projects</button>
           <h2>{project.title}</h2>
           <span class={`dg-status dg-status-${project.status}`}>{projectStatusLabel(project.status)}</span>
@@ -582,17 +587,10 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
       </header>
       <main class="dg-project-detail-content">
         {image && <div class="dg-project-main-image"><img src={services.app.vault.getResourcePath(image)} alt={`Main image for ${project.title}`} /></div>}
-        <div class={`dg-project-overview-grid${hasParent ? "" : " is-single"}`}>
-          <section class="dg-detail-section dg-project-outcome-panel">
-            <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Outcome</span><h3>Desired outcome</h3></div></div>
-            {outcome ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} /> : <div class="dg-detail-empty">No desired outcome written yet.</div>}
-          </section>
-          {hasParent && <section class="dg-detail-section dg-project-parent-panel">
-            {parent
-              ? <div><span>Parent</span><button onClick={() => onSelect(parent.id)}>{parent.title}</button></div>
-              : project.parentProjectId && <div class="dg-missing">Missing parent Project: {project.parentProjectId}</div>}
-          </section>}
-        </div>
+        <section class="dg-detail-section dg-project-outcome-panel">
+          <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Outcome</span><h3>Desired outcome</h3></div></div>
+          {outcome ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} /> : <div class="dg-detail-empty">No desired outcome written yet.</div>}
+        </section>
 
         <section class="dg-detail-section dg-project-actions-panel">
           <div class="dg-detail-section-heading">

@@ -409,6 +409,14 @@
 
 .dg-project-detail { overflow: hidden; }
 .dg-detail-heading { min-width: 0; flex-wrap: wrap; }
+.dg-parent-back {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(240px, 35%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dg-detail-heading h2 {
   min-width: 0;
   overflow: hidden;
@@ -430,12 +438,6 @@
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
 }
-.dg-project-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-.dg-project-overview-grid.is-single { grid-template-columns: minmax(0, 1fr); }
 .dg-detail-section {
   min-width: 0;
   margin: 0;
@@ -737,25 +739,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   font-size: var(--font-ui-smaller);
 }
 
-.dg-project-parent-panel > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: start;
-  gap: 4px;
-}
-.dg-project-parent-panel > div > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
-.dg-project-parent-panel button {
-  min-width: 0;
-  padding: 0;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-accent);
-  background: transparent !important;
-  box-shadow: none;
-}
 .dg-subproject-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(210px, 1fr));
@@ -1585,7 +1568,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-action-row { grid-template-columns: auto minmax(0, 1fr) auto; }
   .dg-project-detail-content { padding: 8px; gap: 8px; }
   .dg-project-main-image { height: min(220px, 42vw); }
-  .dg-project-overview-grid { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-columns { grid-template-columns: 1fr; gap: 8px; }
   .dg-subproject-card { align-items: stretch; flex-direction: column; }
   .dg-diary-add { align-items: stretch; flex-direction: column; }
