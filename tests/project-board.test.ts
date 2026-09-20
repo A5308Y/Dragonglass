@@ -4,7 +4,10 @@ import type { Project } from "../src/domain/types";
 import {
   activeProjectBlockers,
   normalizeProjectTags,
+  planProjectDeletion,
+  planProjectParentChange,
   projectPlacementsAfterMove,
+  projectTagAdditions,
   wouldCreateProjectDependencyCycle,
 } from "../src/domain/project-board";
 
@@ -60,5 +63,70 @@ describe("Sub-project board metadata", () => {
 
     expect(wouldCreateProjectDependencyCycle("B", ["A"], byId)).toBe(true);
     expect(activeProjectBlockers({ ...first, blockedByProjectIds: ["B", "C"] }, byId)).toEqual([second]);
+  });
+});
+
+describe("Batch Project edits", () => {
+  it("adds tags without disturbing the ones a Project already carries", () => {
+    const untagged = project("A", "A");
+    const tagged = project("B", "B", { tags: ["planning"] });
+    const complete = project("C", "C", { tags: ["Home", "planning"] });
+
+    const { updates, unchanged } = projectTagAdditions([untagged, tagged, complete], [" #home "]);
+
+    expect([...updates]).toEqual([["A", ["home"]], ["B", ["home", "planning"]]]);
+    expect(unchanged).toEqual(["C"]);
+  });
+
+  it("splits a parent change into moves, no-ops, and cycles", () => {
+    const root = project("A", "A");
+    const child = project("B", "B", { parentProjectId: "A" });
+    const grandchild = project("C", "C", { parentProjectId: "B" });
+    const outsider = project("D", "D");
+    const byId = new Map([root, child, grandchild, outsider].map((candidate) => [candidate.id, candidate]));
+
+    // Moving under B makes A an ancestor of its own ancestor, and B its own parent.
+    expect(planProjectParentChange(["A", "B", "C", "D"], "B", byId)).toEqual({
+      changing: ["D"],
+      unchanged: ["C"],
+      blocked: ["A", "B"],
+    });
+  });
+
+  it("clears the parent of every selected Project", () => {
+    const root = project("A", "A");
+    const child = project("B", "B", { parentProjectId: "A" });
+    const byId = new Map([root, child].map((candidate) => [candidate.id, candidate]));
+
+    expect(planProjectParentChange(["A", "B"], "", byId)).toEqual({
+      changing: ["B"],
+      unchanged: ["A"],
+      blocked: [],
+    });
+  });
+
+  it("deletes sub-projects before their parents", () => {
+    const projects = [
+      project("A", "A"),
+      project("B", "B", { parentProjectId: "A" }),
+      project("C", "C", { parentProjectId: "B" }),
+    ];
+
+    expect(planProjectDeletion(["A", "B", "C"], projects)).toEqual({ order: ["C", "B", "A"], blocked: [] });
+  });
+
+  it("keeps Projects whose sub-projects stay behind", () => {
+    const projects = [
+      project("A", "A"),
+      project("B", "B", { parentProjectId: "A" }),
+      project("C", "C", { parentProjectId: "B" }),
+      project("D", "D"),
+    ];
+
+    // B survives because C stays, and A survives in turn because B does.
+    expect(planProjectDeletion(["A", "B", "D", "missing"], projects)).toEqual({
+      order: ["D"],
+      blocked: ["B", "A"],
+    });
   });
 });

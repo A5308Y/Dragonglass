@@ -11,10 +11,10 @@ import {
   type ProjectPlacement,
 } from "../domain/project-board";
 import { ActionRows } from "../ui/action-rows";
-import { confirmDeleteProject } from "../ui/delete-project";
+import { confirmDeleteProject, confirmDeleteProjects } from "../ui/delete-project";
 import { useGtdSnapshot } from "../ui/hooks";
 import { isVaultImage, resolveVaultImage } from "../ui/image-input";
-import { ProjectDependenciesModal } from "../ui/modals";
+import { BatchProjectParentModal, BatchProjectTagsModal, ProjectDependenciesModal } from "../ui/modals";
 import type { GtdServices } from "../ui/services";
 
 const BOARD_COLUMNS = ["active", "backlog", "someday", "completed"] as const satisfies readonly ProjectStatus[];
@@ -34,6 +34,8 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
   const [showSubprojects, setShowSubprojects] = useState(true);
   const [showImages, setShowImages] = useState(() => services.getSettings().showProjectBoardImages);
   const [columnsOpen, setColumnsOpen] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const boardRef = useRef<HTMLDivElement>(null);
   const [visibleColumns, setVisibleColumns] = useState<ProjectBoardStatus[]>(() => {
     const configured = services.getSettings().projectBoardColumns;
@@ -71,11 +73,33 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
   }), [snapshot, optimistic]);
   const breadcrumbs = useMemo(() => projectBreadcrumbs(projects), [projects]);
   const searchQuery = search.trim().toLocaleLowerCase();
-  const matchesSearch = (project: Project) => !searchQuery || [
-    project.title,
-    breadcrumbs.get(project.id) ?? "",
-    project.area ?? "",
-  ].some((value) => value.toLocaleLowerCase().includes(searchQuery));
+
+  const columnProjects = useMemo(() => {
+    const matchesSearch = (project: Project) => !searchQuery || [
+      project.title,
+      breadcrumbs.get(project.id) ?? "",
+      project.area ?? "",
+    ].some((value) => value.toLocaleLowerCase().includes(searchQuery));
+    const result = new Map<ProjectBoardStatus, Project[]>(BOARD_COLUMNS.map((status) => [status, []]));
+    for (const project of projects) {
+      const column = projectColumn(project.status);
+      if (!column || !visibleColumns.includes(column)) continue;
+      if (!matchesSearch(project) || (!showSubprojects && project.parentProjectId)) continue;
+      result.get(column)!.push(project);
+    }
+    for (const column of result.values()) {
+      column.sort((a, b) => (breadcrumbs.get(a.id) ?? a.title).localeCompare(breadcrumbs.get(b.id) ?? b.title));
+    }
+    return result;
+  }, [projects, breadcrumbs, searchQuery, visibleColumns, showSubprojects]);
+
+  // Selections survive searching and column changes, but never a deleted Project.
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => snapshot.projectsById.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [snapshot]);
 
   if (selected) return <ProjectDetail services={services} project={selected} onBack={() => {
     setReturnProjectId(selected.id);
@@ -98,6 +122,23 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
         return next;
       });
     }
+  };
+
+  const toggleSelected = (id: string) => setSelectedIds((current) => {
+    const next = new Set(current);
+    if (!next.delete(id)) next.add(id);
+    return next;
+  });
+
+  const changeSelecting = (active: boolean) => {
+    setSelecting(active);
+    if (!active) setSelectedIds(new Set());
+  };
+
+  const batchIds = [...selectedIds];
+  const clearSelection = () => setSelectedIds(new Set());
+  const deleteSelected = async () => {
+    if (await confirmDeleteProjects(services, batchIds)) clearSelection();
   };
 
   const changeVisibleColumns = async (columns: ProjectBoardStatus[]) => {
@@ -140,6 +181,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
           onInput={(event: Event) => setSearch((event.currentTarget as HTMLInputElement).value)}
         />
         <button class={columnsOpen ? "is-active" : ""} onClick={() => setColumnsOpen(!columnsOpen)}>Columns</button>
+        <button class={selecting ? "is-active" : ""} aria-pressed={selecting} onClick={() => changeSelecting(!selecting)}>Select</button>
         <label class="dg-toolbar-toggle" title="Show project images on board cards">
           <input
             type="checkbox"
@@ -158,13 +200,17 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
         </label>
       </div>
       {columnsOpen && <ProjectColumnPicker visible={visibleColumns} onChange={(columns) => void changeVisibleColumns(columns)} />}
+      {selecting && <ProjectBatchBar
+        count={batchIds.length}
+        onSelectAll={() => setSelectedIds(new Set([...columnProjects.values()].flat().map((project) => project.id)))}
+        onClear={clearSelection}
+        onAddTags={() => new BatchProjectTagsModal(services, batchIds, clearSelection).open()}
+        onSetParent={() => new BatchProjectParentModal(services, batchIds, clearSelection).open()}
+        onDelete={() => void deleteSelected()}
+      />}
       <div ref={boardRef} class="dg-board dg-project-board" role="list">
         {BOARD_COLUMNS.filter((status) => visibleColumns.includes(status)).map((status) => {
-          const columnProjects = projects
-            .filter((project) => projectColumn(project.status) === status
-              && matchesSearch(project)
-              && (showSubprojects || !project.parentProjectId))
-            .sort((a, b) => (breadcrumbs.get(a.id) ?? a.title).localeCompare(breadcrumbs.get(b.id) ?? b.title));
+          const column = columnProjects.get(status) ?? [];
           return (
             <section
               class="dg-column dg-project-column"
@@ -177,9 +223,9 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
                 if (id) void moveProject(id, status);
               }}
             >
-              <header class="dg-column-header"><span>{projectStatusLabel(status)}</span><span>{columnProjects.length}</span></header>
+              <header class="dg-column-header"><span>{projectStatusLabel(status)}</span><span>{column.length}</span></header>
               <div class="dg-card-list">
-                {columnProjects.map((project) => (
+                {column.map((project) => (
                   <ProjectCard
                     key={`${project.id}-${project.file.path}`}
                     project={project}
@@ -187,12 +233,15 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
                     services={services}
                     showImage={showImages}
                     breadcrumb={breadcrumbs.get(project.id) ?? project.title}
+                    selecting={selecting}
+                    selected={selectedIds.has(project.id)}
+                    onToggleSelected={() => toggleSelected(project.id)}
                     onOpen={() => setSelectedId(project.id)}
                     onMove={moveProject}
                     onCreateSubproject={() => services.createProject(false, project.id)}
                   />
                 ))}
-                {columnProjects.length === 0 && <div class="dg-empty-row">No {projectStatusLabel(status).toLocaleLowerCase()} Projects.</div>}
+                {column.length === 0 && <div class="dg-empty-row">No {projectStatusLabel(status).toLocaleLowerCase()} Projects.</div>}
               </div>
             </section>
           );
@@ -200,6 +249,25 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
       </div>
     </div>
   );
+}
+
+function ProjectBatchBar({ count, onSelectAll, onClear, onAddTags, onSetParent, onDelete }: {
+  count: number;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onAddTags: () => void;
+  onSetParent: () => void;
+  onDelete: () => void;
+}) {
+  return <div class="dg-panel dg-batch-bar" role="toolbar" aria-label="Batch Project actions">
+    <span class="dg-batch-count"><strong>{count}</strong> selected</span>
+    <button disabled={!count} onClick={onAddTags}>Add tag…</button>
+    <button disabled={!count} onClick={onSetParent}>Set parent…</button>
+    <button class="dg-batch-delete" disabled={!count} onClick={onDelete}>Delete…</button>
+    <span class="dg-batch-spacer" />
+    <button onClick={onSelectAll}>Select all shown</button>
+    <button disabled={!count} onClick={onClear}>Clear</button>
+  </div>;
 }
 
 function ProjectColumnPicker({ visible, onChange }: {
@@ -231,6 +299,9 @@ function ProjectCard({
   services,
   showImage,
   breadcrumb,
+  selecting,
+  selected,
+  onToggleSelected,
   onOpen,
   onMove,
   onCreateSubproject,
@@ -241,6 +312,9 @@ function ProjectCard({
   services: GtdServices;
   showImage: boolean;
   breadcrumb: string;
+  selecting: boolean;
+  selected: boolean;
+  onToggleSelected: () => void;
   onOpen: () => void;
   onMove: (id: string, status: ProjectBoardStatus) => Promise<void>;
   onCreateSubproject: () => void;
@@ -273,19 +347,31 @@ function ProjectCard({
 
   return (
     <article
-      class="dg-card dg-project-card"
+      class={`dg-card dg-project-card${selecting ? " is-selectable" : ""}${selecting && selected ? " is-selected" : ""}`}
       role="listitem"
       data-project-card={project.id}
       tabIndex={0}
-      draggable={!Platform.isMobile}
+      draggable={!Platform.isMobile && !selecting}
       onDragStart={(event: DragEvent) => event.dataTransfer?.setData("text/dragonglass-project", project.id)}
+      onClick={() => { if (selecting) onToggleSelected(); }}
       onKeyDown={(event: KeyboardEvent) => {
-        if (event.key === "Enter") { event.preventDefault(); onOpen(); }
+        if (event.key !== "Enter" && !(selecting && event.key === " ")) return;
+        event.preventDefault();
+        if (selecting) onToggleSelected();
+        else onOpen();
       }}
     >
       {image && <div class="dg-project-card-image"><img src={services.app.vault.getResourcePath(image)} alt="" loading="lazy" /></div>}
       <div class="dg-card-title-row">
-        <button class="dg-card-title" title={breadcrumb} onClick={onOpen}>{project.title}</button>
+        {selecting && <input
+          class="dg-batch-checkbox"
+          type="checkbox"
+          checked={selected}
+          aria-label={`Select ${project.title}`}
+          onClick={(event: MouseEvent) => event.stopPropagation()}
+          onChange={onToggleSelected}
+        />}
+        <button class="dg-card-title" title={breadcrumb} onClick={() => { if (!selecting) onOpen(); }}>{project.title}</button>
         <button class="dg-icon-button" aria-label={`Actions for ${project.title}`} onClick={openMenu}>•••</button>
       </div>
       {breadcrumb !== project.title && <div class="dg-project-lineage" title={breadcrumb}>{breadcrumb}</div>}
@@ -293,7 +379,6 @@ function ProjectCard({
       {Boolean(project.tags?.length) && <div class="dg-project-tags">{project.tags!.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
       <div class="dg-project-metrics">
         <span><strong>{open}</strong> open</span>
-        <span><strong>{next}</strong> next</span>
       </div>
       {project.reviewed && <div class="dg-project-reviewed">Reviewed {project.reviewed}</div>}
       {open === 0 && project.status === "active" && <div class="dg-project-health">No open Actions</div>}

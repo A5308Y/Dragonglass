@@ -8,11 +8,11 @@ import {
   Setting,
   TextComponent,
 } from "obsidian";
-import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectStatus } from "../domain/types";
+import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectChanges, type ProjectStatus } from "../domain/types";
 import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../domain/project-hierarchy";
 import { parseActionList } from "../domain/action-import";
 import { parseSubprojectList } from "../domain/project-import";
-import { parseProjectTags } from "../domain/project-board";
+import { parseProjectTags, planProjectParentChange, projectTagAdditions } from "../domain/project-board";
 import { normalizeVaultPath } from "../utils/path";
 import { confirmDeleteProject } from "./delete-project";
 import { addImagePathSetting, resolveVaultImage } from "./image-input";
@@ -732,6 +732,148 @@ export class ProjectEditorModal extends FormModal {
       this.fail(error);
     }
   }
+}
+
+export class BatchProjectTagsModal extends FormModal {
+  private tags = "";
+  private applying = false;
+
+  constructor(
+    private readonly services: GtdServices,
+    private readonly projectIds: readonly string[],
+    private readonly onApplied: () => void,
+  ) {
+    super(services.app);
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: `Add tags — ${projectCount(this.projectIds.length)}` });
+    this.formEl.createEl("p", {
+      cls: "dg-muted",
+      text: "Existing tags are kept. Projects that already carry a tag are left untouched.",
+    });
+    addTags(this.formEl, this.tags, (value) => (this.tags = value));
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit("Add tags");
+  }
+
+  protected async submit(): Promise<void> {
+    if (this.applying) return;
+    const tags = parseProjectTags(this.tags);
+    if (!tags.length) return void new Notice("Name at least one tag.");
+    const snapshot = this.services.repository.index.getSnapshot();
+    const projects = this.projectIds
+      .map((id) => snapshot.projectsById.get(id))
+      .filter((project): project is Project => Boolean(project));
+    const { updates, unchanged } = projectTagAdditions(projects, tags);
+    if (!updates.size) {
+      return void new Notice(unchanged.length
+        ? `Every selected Project already has ${tags.length === 1 ? "that tag" : "those tags"}.`
+        : "These Projects no longer exist.");
+    }
+
+    this.applying = true;
+    const result = await applyProjectChanges(this.services, [...updates].map(([id, next]) => [id, { tags: next }]));
+    this.applying = false;
+    if (!result.applied && result.failure) return void new Notice(result.failure);
+    new Notice([
+      `Tagged ${projectCount(result.applied)}`,
+      unchanged.length ? `${unchanged.length} already tagged` : "",
+      result.failure ? `${updates.size - result.applied} failed — ${result.failure}` : "",
+    ].filter(Boolean).join(" · "));
+    this.onApplied();
+    this.close();
+  }
+}
+
+export class BatchProjectParentModal extends FormModal {
+  private parentProjectId = "";
+  private parentProjectQuery = "";
+  private applying = false;
+
+  constructor(
+    private readonly services: GtdServices,
+    private readonly projectIds: readonly string[],
+    private readonly onApplied: () => void,
+  ) {
+    super(services.app);
+  }
+
+  protected renderForm(): void {
+    this.formEl.createEl("h2", { text: `Set parent Project — ${projectCount(this.projectIds.length)}` });
+    const snapshot = this.services.repository.index.getSnapshot();
+    const excluded = new Set(this.projectIds);
+    for (const id of this.projectIds) {
+      for (const descendant of projectDescendantIds(id, snapshot.projects)) excluded.add(descendant);
+    }
+    addProjectSearch(
+      this.formEl,
+      this.services.app,
+      snapshot.projects.filter((candidate) => !excluded.has(candidate.id)),
+      this.parentProjectQuery,
+      (projectId, query) => {
+        this.parentProjectId = projectId;
+        this.parentProjectQuery = query;
+      },
+      (popover) => this.registerPopover(popover),
+      {
+        name: "Parent Project",
+        description: "Clear the field to make the selection top-level. The selected Projects and their descendants are excluded.",
+      },
+    );
+    this.formEl.appendChild(this.actionsEl);
+    this.addSubmit("Move Projects");
+  }
+
+  protected async submit(): Promise<void> {
+    if (this.applying) return;
+    if (!validateProjectSelection(this.parentProjectId, this.parentProjectQuery)) return;
+    const snapshot = this.services.repository.index.getSnapshot();
+    const plan = planProjectParentChange(this.projectIds, this.parentProjectId, snapshot.projectsById);
+    if (!plan.changing.length) {
+      return void new Notice(plan.blocked.length
+        ? "That parent would create a hierarchy cycle."
+        : plan.unchanged.length ? "The selected Projects already have that parent." : "These Projects no longer exist.");
+    }
+    const parentTitle = this.parentProjectId ? snapshot.projectsById.get(this.parentProjectId)?.title ?? "" : "";
+
+    this.applying = true;
+    const result = await applyProjectChanges(
+      this.services,
+      plan.changing.map((id) => [id, { parentProjectId: this.parentProjectId }]),
+    );
+    this.applying = false;
+    if (!result.applied && result.failure) return void new Notice(result.failure);
+    new Notice([
+      parentTitle ? `Moved ${projectCount(result.applied)} under “${parentTitle}”` : `Moved ${projectCount(result.applied)} to the top level`,
+      plan.blocked.length ? `${plan.blocked.length} would cycle` : "",
+      result.failure ? `${plan.changing.length - result.applied} failed — ${result.failure}` : "",
+    ].filter(Boolean).join(" · "));
+    this.onApplied();
+    this.close();
+  }
+}
+
+/** Applies Project edits one file at a time so a single failure cannot abandon the rest. */
+async function applyProjectChanges(
+  services: GtdServices,
+  changes: readonly (readonly [string, ProjectChanges])[],
+): Promise<{ applied: number; failure: string | undefined }> {
+  let applied = 0;
+  let failure: string | undefined;
+  for (const [id, change] of changes) {
+    try {
+      await services.repository.updateProject(id, change);
+      applied += 1;
+    } catch (error) {
+      failure ??= error instanceof Error ? error.message : "The Project could not be updated.";
+    }
+  }
+  return { applied, failure };
+}
+
+function projectCount(count: number): string {
+  return `${count} Project${count === 1 ? "" : "s"}`;
 }
 
 export class ProjectDependenciesModal extends FormModal {

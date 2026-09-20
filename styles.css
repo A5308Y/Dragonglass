@@ -150,6 +150,25 @@
   background: var(--background-secondary-alt);
 }
 
+.dg-batch-bar { gap: 6px; }
+.dg-batch-count { color: var(--text-muted); font-size: var(--font-ui-small); white-space: nowrap; }
+.dg-batch-count strong { color: var(--text-normal); }
+.dg-batch-spacer { flex: 1 1 auto; }
+.dg-batch-delete:not(:disabled) { color: var(--text-error); }
+.dg-batch-delete:not(:disabled):hover { background: color-mix(in srgb, var(--color-red) 12%, transparent) !important; }
+.dg-batch-checkbox {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 2px 2px 0 0;
+}
+.dg-project-card.is-selectable { cursor: pointer; }
+.dg-project-card.is-selectable .dg-card-title { cursor: pointer; }
+.dg-project-card.is-selected {
+  border-color: var(--interactive-accent);
+  box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
 .dg-column-picker label {
   display: flex;
   align-items: center;
@@ -692,8 +711,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   font-size: 10px;
 }
 .dg-project-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
 }
