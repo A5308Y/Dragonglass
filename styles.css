@@ -886,6 +886,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-subproject-card-heading .dg-icon-button { flex: 0 0 28px; }
 .dg-subproject-title {
   flex: 1 1 auto;
+  display: flex;
   align-items: center;
   justify-content: flex-start;
   min-width: 0;
