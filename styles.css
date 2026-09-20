@@ -474,6 +474,22 @@
   font-variant-numeric: tabular-nums;
 }
 .dg-project-outcome-panel { min-height: 150px; }
+.dg-outcome-edit { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.dg-outcome-input {
+  width: 100%;
+  min-height: 110px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  color: var(--text-normal);
+  background: var(--background-primary);
+  font-family: var(--font-text);
+  line-height: var(--line-height-normal);
+}
+.dg-outcome-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dg-outcome-edit-actions button { min-height: 32px; }
 .dg-outcome { line-height: var(--line-height-normal); }
 .dg-outcome > :first-child { margin-top: 0; }
 .dg-outcome > :last-child { margin-bottom: 0; }
@@ -1504,7 +1520,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .dg-modal-delete { margin-right: auto; }
 .dg-modal .dg-import-input { width: 100%; min-height: 190px; resize: vertical; font-family: var(--font-monospace); }
-.dg-modal .dg-outcome-input { width: 100%; min-height: 84px; resize: vertical; font-family: var(--font-text); }
+
 .dg-import-summary { margin-top: 10px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-diary-list p { white-space: pre-wrap; }
 

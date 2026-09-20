@@ -633,9 +633,6 @@ export class ProjectEditorModal extends FormModal {
   private reviewed: string;
   private parentProjectId: string;
   private parentProjectQuery: string;
-  private desiredOutcome = "";
-  private loadedOutcome = "";
-  private outcomeLoad: Promise<void> = Promise.resolve();
 
   constructor(private readonly services: GtdServices, private readonly project: Project) {
     super(services.app);
@@ -686,7 +683,6 @@ export class ProjectEditorModal extends FormModal {
       { name: "Parent Project", description: "Optional. Descendants are excluded to prevent hierarchy cycles." },
     );
     addDate(this.formEl, "Reviewed", this.reviewed, (value) => (this.reviewed = value));
-    this.renderDesiredOutcome();
     this.formEl.appendChild(this.actionsEl);
     const remove = new ButtonComponent(this.actionsEl).setButtonText("Delete Project").setWarning();
     remove.buttonEl.type = "button";
@@ -697,34 +693,6 @@ export class ProjectEditorModal extends FormModal {
 
   private async deleteProject(): Promise<void> {
     if (await confirmDeleteProject(this.services, this.project.id)) this.close();
-  }
-
-  /** The outcome lives in the note body, so it loads after the form is on screen. */
-  private renderDesiredOutcome(): void {
-    let edited = false;
-    new Setting(this.formEl)
-      .setName("Desired outcome")
-      .setDesc("What will be true when this Project is complete?")
-      .addTextArea((text) => {
-        text.inputEl.rows = 4;
-        text.inputEl.addClass("dg-outcome-input");
-        text.setPlaceholder("Loading…").onChange((value) => {
-          edited = true;
-          this.desiredOutcome = value;
-        });
-        this.outcomeLoad = this.services.repository.readDesiredOutcome(this.project)
-          .then((value) => {
-            this.loadedOutcome = value;
-            text.setPlaceholder("What does done look like?");
-            // Do not clobber anything typed while the note was being read.
-            if (edited) return;
-            this.desiredOutcome = value;
-            text.setValue(value);
-          })
-          .catch(() => {
-            text.setPlaceholder("Could not read the Desired outcome.");
-          });
-      });
   }
 
   protected async submit(): Promise<void> {
@@ -739,9 +707,6 @@ export class ProjectEditorModal extends FormModal {
     }
     if (!validateProjectSelection(this.parentProjectId, this.parentProjectQuery)) return;
     try {
-      // Establish the original value before comparing, including when Save is
-      // pressed while the note is still loading.
-      await this.outcomeLoad;
       await this.services.repository.updateProject(this.project.id, {
         title: this.title.trim(),
         status: this.status,
@@ -751,9 +716,6 @@ export class ProjectEditorModal extends FormModal {
         reviewed: this.reviewed,
         parentProjectId: this.parentProjectId,
       });
-      if (this.desiredOutcome.trim() !== this.loadedOutcome.trim()) {
-        await this.services.repository.setDesiredOutcome(this.project.id, this.desiredOutcome.trim());
-      }
       this.close();
     } catch (error) {
       this.fail(error);

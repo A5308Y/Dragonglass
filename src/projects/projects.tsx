@@ -447,7 +447,6 @@ function waitForProjectPlacements(services: GtdServices, placements: ReadonlyMap
 
 function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdServices; project: Project; onBack: () => void; onSelect: (id: string) => void }) {
   const snapshot = useGtdSnapshot(services.repository.index);
-  const [outcome, setOutcome] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
   const [showSecondarySubprojects, setShowSecondarySubprojects] = useState(false);
   const [optimisticSubprojectPlacements, setOptimisticSubprojectPlacements] = useState<Map<string, ProjectPlacement & { operation: number }>>(new Map());
@@ -464,11 +463,6 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
     optimisticSubprojectPlacementsRef.current = new Map();
     setOptimisticSubprojectPlacements(new Map());
   }, [project.id]);
-  useEffect(() => {
-    let active = true;
-    void services.repository.readDesiredOutcome(project).then((value) => { if (active) setOutcome(value); });
-    return () => { active = false; };
-  }, [project.file.stat.mtime, project.file.path]);
   const all = snapshot.actions.filter((action) => action.projectId === project.id);
   const open = all.filter((action) => action.status !== "done" && action.status !== "cancelled");
   const completed = all.filter((action) => action.status === "done");
@@ -587,10 +581,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
       </header>
       <main class="dg-project-detail-content">
         {image && <div class="dg-project-main-image"><img src={services.app.vault.getResourcePath(image)} alt={`Main image for ${project.title}`} /></div>}
-        <section class="dg-detail-section dg-project-outcome-panel">
-          <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Outcome</span><h3>Desired outcome</h3></div></div>
-          {outcome ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} /> : <div class="dg-detail-empty">No desired outcome written yet.</div>}
-        </section>
+        <ProjectOutcome services={services} project={project} />
 
         <section class="dg-detail-section dg-project-actions-panel">
           <div class="dg-detail-section-heading">
@@ -714,6 +705,92 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
       </main>
     </div>
   );
+}
+
+function ProjectOutcome({ services, project }: { services: GtdServices; project: Project }) {
+  const [outcome, setOutcome] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const editingRef = useRef(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  editingRef.current = editing;
+
+  useEffect(() => {
+    let active = true;
+    void services.repository.readDesiredOutcome(project)
+      .then((value) => {
+        if (!active) return;
+        setOutcome(value);
+        // Saving touches the note, so re-reading it must not overwrite what is still being typed.
+        if (!editingRef.current) setDraft(value);
+      })
+      .catch(() => { if (active) setOutcome(""); });
+    return () => { active = false; };
+  }, [project.file.stat.mtime, project.file.path]);
+
+  useEffect(() => setEditing(false), [project.id]);
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  const beginEditing = () => {
+    setDraft(outcome ?? "");
+    setEditing(true);
+  };
+  const cancel = () => {
+    setDraft(outcome ?? "");
+    setEditing(false);
+  };
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const saved = draft.trim();
+      await services.repository.setDesiredOutcome(project.id, saved);
+      setOutcome(saved);
+      setEditing(false);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not save the Desired outcome.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <section class="dg-detail-section dg-project-outcome-panel">
+    <div class="dg-detail-section-heading">
+      <div><span class="dg-detail-eyebrow">Outcome</span><h3>Desired outcome</h3></div>
+      {!editing && outcome !== null && <div class="dg-detail-section-actions">
+        <button onClick={beginEditing}>{outcome ? "Edit" : "Write outcome"}</button>
+      </div>}
+    </div>
+    {outcome === null
+      ? <span class="dg-muted">Loading…</span>
+      : editing
+        ? <div class="dg-outcome-edit">
+          <textarea
+            ref={inputRef}
+            class="dg-outcome-input"
+            value={draft}
+            rows={5}
+            aria-label={`Desired outcome for ${project.title}`}
+            placeholder="What will be true when this Project is complete? (⌘/Ctrl+Enter to save)"
+            onInput={(event: Event) => setDraft((event.currentTarget as HTMLTextAreaElement).value)}
+            onKeyDown={(event: KeyboardEvent) => {
+              if (event.key === "Escape") { event.preventDefault(); cancel(); return; }
+              // Enter stays a line break so pasted formatting survives.
+              if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+              event.preventDefault();
+              void save();
+            }}
+          />
+          <div class="dg-outcome-edit-actions">
+            <button disabled={saving} onClick={cancel}>Cancel</button>
+            <button class="mod-cta" disabled={saving} onClick={() => void save()}>Save outcome</button>
+          </div>
+        </div>
+        : outcome
+          ? <MarkdownText services={services} markdown={outcome} sourcePath={project.file.path} />
+          : <div class="dg-detail-empty">No desired outcome written yet.</div>}
+  </section>;
 }
 
 function ProjectDiary({ services, project }: { services: GtdServices; project: Project }) {
