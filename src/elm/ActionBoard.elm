@@ -3,12 +3,30 @@ port module ActionBoard exposing (main)
 import Browser
 import Browser.Dom
 import Dict exposing (Dict)
+import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
+import Gtd.Command as Command exposing (Command, MenuEntry(..))
+import Gtd.Data as Data exposing (Action, Project, Snapshot)
+import Gtd.Hierarchy as Hierarchy
+import Gtd.Host as Host exposing (Requests)
+import Gtd.Id exposing (ActionId, ProjectId)
+import Gtd.ProjectStatus as ProjectStatus
+import Gtd.Settings as Settings
+    exposing
+        ( BoardConfiguration
+        , DueRange(..)
+        , Filter(..)
+        , GroupBy(..)
+        , MatchOperator(..)
+        , SortDirection(..)
+        , SortField(..)
+        , VisibleColumns(..)
+        )
+import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, button, div, h2, header, input, label, option, section, select, span, text)
 import Html.Attributes exposing (attribute, checked, class, classList, disabled, draggable, id, placeholder, selected, tabindex, title, type_, value)
-import Html.Events exposing (custom, on, onCheck, onClick, onInput)
+import Html.Events exposing (on, onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
-import Set exposing (Set)
 import Task
 
 
@@ -18,133 +36,72 @@ port toHost : Encode.Value -> Cmd msg
 port fromHost : (Decode.Value -> msg) -> Sub msg
 
 
-protocolVersion : Int
-protocolVersion =
-    1
-
-
-type alias File =
-    { path : String, name : String, basename : String, extension : String }
-
-
-type alias Action =
-    { id : String
-    , title : String
-    , file : File
-    , status : String
-    , created : String
-    , projectId : Maybe String
-    , context : Maybe String
-    , energy : Maybe String
-    , due : Maybe String
-    , deferUntil : Maybe String
-    , waitingSince : Maybe String
-    , scheduledStart : Maybe String
-    , durationMinutes : Maybe Int
-    , work : Bool
-    }
-
-
-type alias Project =
-    { id : String, title : String, status : String, parentProjectId : Maybe String }
-
-
-type Filter
-    = ValueFilter String String (List String)
-    | DueFilter String (Maybe DueValue)
-    | AvailabilityFilter
-    | WorkFilter Bool
-
-
-type DueValue
-    = DateValue String
-    | DaysValue Int
-
-
-type alias SortSpec =
-    { field : String, direction : String }
-
-
-type alias Configuration =
-    { filters : List Filter
-    , groupBy : String
-    , sort : SortSpec
-    , visibleColumns : Maybe (List String)
-    }
-
-
-type alias SavedView =
-    { id : String
-    , name : String
-    , configuration : Configuration
-    }
-
-
-type alias GoogleCalendarSettings =
-    { enabled : Bool
-    , endpointUrl : String
-    , sharedSecret : String
-    , sourceId : String
-    , defaultDurationMinutes : Int
-    }
-
-
-type alias Settings =
-    { inboxDirectory : String
-    , referenceDirectory : String
-    , projectsDirectory : String
-    , actionsDirectory : String
-    , defaultProjectImage : String
-    , showProjectBoardImages : Bool
-    , defaultActionStatus : String
-    , showDoneColumn : Bool
-    , projectBoardColumns : List String
-    , savedViews : List SavedView
-    , activeSavedViewId : Maybe String
-    , googleCalendar : GoogleCalendarSettings
-    , schemaVersion : Int
-    }
-
-
-type alias Issue =
-    { path : String, message : String }
-
-
-type alias Snapshot =
-    { revision : Int
-    , today : String
-    , actions : List Action
-    , projects : List Project
-    , issues : List Issue
-    , settings : Settings
-    }
+{-| Which bucket an Action falls into under the current grouping.
+-}
+type GroupKey
+    = StatusGroup ActionStatus
+    | ProjectGroup (Maybe ProjectId)
+    | ContextGroup (Maybe String)
+    | EnergyGroup (Maybe String)
 
 
 type alias Group =
-    { key : String, label : String, actions : List Action }
+    { key : GroupKey, actions : List Action }
 
 
-type alias Pending =
-    { actionId : String, status : String }
+{-| The field a new filter asks about, as chosen in the builder.
+-}
+type FilterField
+    = FieldStatus
+    | FieldProject
+    | FieldContext
+    | FieldEnergy
+    | FieldDue
+    | FieldAvailable
+    | FieldWork
+
+
+{-| The comparison a due-date filter draft is set to, before it is given an operand.
+-}
+type DueOperator
+    = OpBefore
+    | OpOnOrBefore
+    | OpAfter
+    | OpOnOrAfter
+    | OpWithinNextDays
+    | OpIsEmpty
+    | OpIsNotEmpty
+
+
+type alias FilterDraft =
+    { field : FilterField
+    , operator : MatchOperator
+    , value : String
+    , dueOperator : DueOperator
+    , dueValue : String
+    }
+
+
+{-| What a host reply should finish.
+-}
+type Pending
+    = IgnoreReply
+    | CreateSavedView
+    | MoveAction ActionId ActionStatus
 
 
 type alias Model =
     { snapshot : Snapshot
     , activeViewId : Maybe String
-    , configuration : Configuration
+    , configuration : BoardConfiguration
     , search : String
     , filterOpen : Bool
     , columnsOpen : Bool
-    , filterField : String
-    , filterOperator : String
-    , filterValue : String
-    , dueOperator : String
-    , dueValue : String
-    , dragged : Maybe String
-    , optimistic : Dict String String
-    , pending : Dict String Pending
-    , promptRequests : Dict String Bool
-    , nextRequest : Int
+    , draft : FilterDraft
+    , dragged : Maybe ActionId
+    , optimistic : Dict ActionId ActionStatus
+    , savedViewSeed : Int
+    , requests : Requests Pending
     , fatalError : Maybe String
     }
 
@@ -155,27 +112,27 @@ type Msg
     | ToggleFilters
     | ToggleColumns
     | SelectSavedView String
-    | SetGroupBy String
-    | SetSortField String
+    | SetGroupBy GroupBy
+    | SetSortField SortField
     | ReverseSort
     | SaveView
     | SaveViewAs
     | DeleteView
-    | SetFilterField String
-    | SetFilterOperator String
+    | SetFilterField FilterField
+    | SetFilterOperator MatchOperator
     | SetFilterValue String
-    | SetDueOperator String
+    | SetDueOperator DueOperator
     | SetDueValue String
     | AddFilter
     | RemoveFilter Int
-    | ToggleColumn String
-    | DragStarted String
+    | ToggleColumn GroupKey
+    | DragStarted ActionId
     | DragOver
-    | DropOn String
-    | CardKey String String
+    | DropOn ActionStatus
+    | CardKey ActionId Key
     | Focused (Result Browser.Dom.Error ())
-    | HostCommand (Maybe Pending) Encode.Value
-    | OpenMenu Float Float Action
+    | Send Pending Command
+    | NoOp
 
 
 main : Program Decode.Value Model Msg
@@ -190,7 +147,7 @@ main =
 
 init : Decode.Value -> ( Model, Cmd Msg )
 init flags =
-    case Decode.decodeValue snapshotDecoder flags of
+    case Decode.decodeValue Data.snapshotDecoder flags of
         Ok snapshot ->
             let
                 active =
@@ -198,24 +155,21 @@ init flags =
 
                 configuration =
                     active
-                        |> Maybe.andThen (findSavedView snapshot.settings.savedViews)
+                        |> Maybe.andThen (Settings.findSavedView snapshot.settings.savedViews)
                         |> Maybe.map .configuration
-                        |> Maybe.withDefault (defaultConfiguration snapshot.settings)
+                        |> Maybe.withDefault (Settings.defaultConfiguration snapshot.settings)
             in
             ( initialModel snapshot active configuration, Cmd.none )
 
         Err error ->
             let
                 fallback =
-                    emptySnapshot
-
-                fallbackModel =
-                    initialModel fallback Nothing (defaultConfiguration fallback.settings)
+                    initialModel Data.empty Nothing (Settings.defaultConfiguration Settings.empty)
             in
-            ( { fallbackModel | fatalError = Just (Decode.errorToString error) }, Cmd.none )
+            ( { fallback | fatalError = Just (Decode.errorToString error) }, Cmd.none )
 
 
-initialModel : Snapshot -> Maybe String -> Configuration -> Model
+initialModel : Snapshot -> Maybe String -> BoardConfiguration -> Model
 initialModel snapshot active configuration =
     { snapshot = snapshot
     , activeViewId = active
@@ -223,25 +177,30 @@ initialModel snapshot active configuration =
     , search = ""
     , filterOpen = False
     , columnsOpen = False
-    , filterField = "status"
-    , filterOperator = "in"
-    , filterValue = "next"
-    , dueOperator = "onOrBefore"
-    , dueValue = snapshot.today
+    , draft = initialDraft snapshot.today
     , dragged = Nothing
     , optimistic = Dict.empty
-    , pending = Dict.empty
-    , promptRequests = Dict.empty
-    , nextRequest = 1
+    , savedViewSeed = 1
+    , requests = Host.noRequests
     , fatalError = Nothing
+    }
+
+
+initialDraft : String -> FilterDraft
+initialDraft today =
+    { field = FieldStatus
+    , operator = Is
+    , value = ActionStatus.key ActionStatus.Next
+    , dueOperator = OpOnOrBefore
+    , dueValue = today
     }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotHost value_ ->
-            receiveHost value_ model
+        GotHost value ->
+            receiveHost value model
 
         SearchChanged query ->
             ( { model | search = query }, Cmd.none )
@@ -254,56 +213,42 @@ update msg model =
 
         SelectSavedView savedId ->
             let
-                selected =
-                    findSavedView model.snapshot.settings.savedViews savedId
+                selectedView =
+                    Settings.findSavedView model.snapshot.settings.savedViews savedId
 
                 nextId =
-                    if String.isEmpty savedId then
-                        Nothing
-
-                    else
-                        Just savedId
+                    Maybe.map .id selectedView
 
                 configuration =
-                    Maybe.map .configuration selected |> Maybe.withDefault (defaultConfiguration model.snapshot.settings)
+                    Maybe.map .configuration selectedView
+                        |> Maybe.withDefault (Settings.defaultConfiguration model.snapshot.settings)
 
                 settings =
                     model.snapshot.settings
-
-                nextSettings =
-                    { settings | activeSavedViewId = nextId }
             in
-            issue Nothing (saveSettingsCommand nextSettings) { model | activeViewId = nextId, configuration = configuration }
+            send IgnoreReply
+                (Command.SaveSettings { settings | activeSavedViewId = nextId })
+                { model | activeViewId = nextId, configuration = configuration }
 
         SetGroupBy groupBy ->
-            ( { model | configuration = updateConfiguration model.configuration groupBy }, Cmd.none )
+            ( { model | configuration = withConfiguration model (\config -> { config | groupBy = groupBy, visibleColumns = AllColumns }) }, Cmd.none )
 
         SetSortField field ->
-            let
-                config =
-                    model.configuration
-
-                sort_ =
-                    config.sort
-            in
-            ( { model | configuration = { config | sort = { sort_ | field = field } } }, Cmd.none )
+            ( { model
+                | configuration =
+                    withConfiguration model (\config -> { config | sort = { field = field, direction = config.sort.direction } })
+              }
+            , Cmd.none
+            )
 
         ReverseSort ->
-            let
-                config =
-                    model.configuration
-
-                sort_ =
-                    config.sort
-
-                direction =
-                    if sort_.direction == "asc" then
-                        "desc"
-
-                    else
-                        "asc"
-            in
-            ( { model | configuration = { config | sort = { sort_ | direction = direction } } }, Cmd.none )
+            ( { model
+                | configuration =
+                    withConfiguration model
+                        (\config -> { config | sort = { field = config.sort.field, direction = Settings.reverse config.sort.direction } })
+              }
+            , Cmd.none
+            )
 
         SaveView ->
             case model.activeViewId of
@@ -320,76 +265,88 @@ update msg model =
             deleteCurrentView model
 
         SetFilterField field ->
+            let
+                draft =
+                    model.draft
+            in
             ( { model
-                | filterField = field
-                , filterValue =
-                    if field == "status" then
-                        "next"
+                | draft =
+                    { draft
+                        | field = field
+                        , value =
+                            if field == FieldStatus then
+                                ActionStatus.key ActionStatus.Next
 
-                    else
-                        ""
+                            else
+                                ""
+                    }
               }
             , Cmd.none
             )
 
         SetFilterOperator operator ->
-            ( { model | filterOperator = operator }, Cmd.none )
+            ( { model | draft = withDraft model (\draft -> { draft | operator = operator }) }, Cmd.none )
 
         SetFilterValue next ->
-            ( { model | filterValue = next }, Cmd.none )
+            ( { model | draft = withDraft model (\draft -> { draft | value = next }) }, Cmd.none )
 
         SetDueOperator operator ->
             ( { model
-                | dueOperator = operator
-                , dueValue =
-                    if operator == "withinNextDays" then
-                        "7"
+                | draft =
+                    withDraft model
+                        (\draft ->
+                            { draft
+                                | dueOperator = operator
+                                , dueValue =
+                                    if operator == OpWithinNextDays then
+                                        "7"
 
-                    else
-                        model.snapshot.today
+                                    else
+                                        model.snapshot.today
+                            }
+                        )
               }
             , Cmd.none
             )
 
         SetDueValue next ->
-            ( { model | dueValue = next }, Cmd.none )
+            ( { model | draft = withDraft model (\draft -> { draft | dueValue = next }) }, Cmd.none )
 
         AddFilter ->
-            let
-                filter =
-                    newFilter model
+            case draftFilter model of
+                Just filter ->
+                    ( { model | configuration = withConfiguration model (\config -> { config | filters = config.filters ++ [ filter ] }) }, Cmd.none )
 
-                config =
-                    model.configuration
-            in
-            ( { model | configuration = { config | filters = config.filters ++ [ filter ] } }, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
 
-        RemoveFilter index_ ->
-            let
-                config =
-                    model.configuration
-            in
-            ( { model | configuration = { config | filters = removeAt index_ config.filters } }, Cmd.none )
+        RemoveFilter index ->
+            ( { model | configuration = withConfiguration model (\config -> { config | filters = removeAt index config.filters }) }, Cmd.none )
 
         ToggleColumn key ->
             let
-                config =
-                    model.configuration
-
-                candidates =
-                    columnCandidates model
+                shown =
+                    columnCandidates model |> List.map groupKeyString
 
                 visible =
-                    Set.fromList (Maybe.withDefault candidates config.visibleColumns)
+                    case model.configuration.visibleColumns of
+                        AllColumns ->
+                            shown
+
+                        OnlyColumns columns ->
+                            columns
+
+                wanted =
+                    groupKeyString key
 
                 next =
-                    if Set.member key visible then
-                        Set.remove key visible
+                    if List.member wanted visible then
+                        List.filter ((/=) wanted) visible
 
                     else
-                        Set.insert key visible
+                        List.filter (\candidate -> candidate == wanted || List.member candidate visible) shown
             in
-            ( { model | configuration = { config | visibleColumns = Just (Set.toList next) } }, Cmd.none )
+            ( { model | configuration = withConfiguration model (\config -> { config | visibleColumns = OnlyColumns next }) }, Cmd.none )
 
         DragStarted actionId ->
             ( { model | dragged = Just actionId }, Cmd.none )
@@ -406,119 +363,99 @@ update msg model =
                     ( model, Cmd.none )
 
         CardKey actionId key ->
-            if String.toLower key == "d" then
-                moveAction actionId "done" model
+            case key of
+                Character "d" ->
+                    moveAction actionId ActionStatus.Done model
 
-            else if key == "ArrowDown" || key == "ArrowUp" then
-                let
-                    ids =
-                        visibleActionIds model
+                ArrowDown ->
+                    ( model, focusAdjacent 1 actionId model )
 
-                    target =
-                        adjacent key actionId ids
-                in
-                ( model, Maybe.map (\next -> Browser.Dom.focus (cardDomId next) |> Task.attempt Focused) target |> Maybe.withDefault Cmd.none )
+                ArrowUp ->
+                    ( model, focusAdjacent -1 actionId model )
 
-            else
-                ( model, Cmd.none )
+                _ ->
+                    ( model, Cmd.none )
 
         Focused _ ->
             ( model, Cmd.none )
 
-        HostCommand pending command ->
-            issue pending command model
+        Send pending command ->
+            send pending command model
 
-        OpenMenu x y action ->
-            issue Nothing (menuCommand x y model action) model
-
-
-updateConfiguration : Configuration -> String -> Configuration
-updateConfiguration config groupBy =
-    { config | groupBy = groupBy, visibleColumns = Nothing }
+        NoOp ->
+            ( model, Cmd.none )
 
 
-receiveHost : Decode.Value -> Model -> ( Model, Cmd Msg )
-receiveHost value_ model =
-    case Decode.decodeValue hostEventDecoder value_ of
-        Ok (SnapshotEvent snapshot) ->
-            let
-                converged pending =
-                    List.any (\action -> action.id == pending.actionId && action.status == pending.status) snapshot.actions
-
-                remainingPending =
-                    Dict.filter (\_ pending -> not (converged pending)) model.pending
-
-                optimistic =
-                    remainingPending |> Dict.values |> List.map (\pending -> ( pending.actionId, pending.status )) |> Dict.fromList
-            in
-            ( { model | snapshot = snapshot, pending = remainingPending, optimistic = optimistic, fatalError = Nothing }, Cmd.none )
-
-        Ok (CommandResult requestId succeeded error resultValue) ->
-            if succeeded then
-                case ( Dict.get requestId model.promptRequests, resultValue ) of
-                    ( Just _, Just name ) ->
-                        createSavedView name { model | promptRequests = Dict.remove requestId model.promptRequests }
-
-                    _ ->
-                        ( model, Cmd.none )
-
-            else
-                let
-                    pending =
-                        Dict.remove requestId model.pending
-
-                    optimistic =
-                        pending |> Dict.values |> List.map (\item -> ( item.actionId, item.status )) |> Dict.fromList
-                in
-                ( { model | pending = pending, optimistic = optimistic, fatalError = error }, Cmd.none )
-
-        Err error ->
-            ( { model | fatalError = Just (Decode.errorToString error) }, Cmd.none )
+withConfiguration : Model -> (BoardConfiguration -> BoardConfiguration) -> BoardConfiguration
+withConfiguration model change =
+    change model.configuration
 
 
-type HostEvent
-    = SnapshotEvent Snapshot
-    | CommandResult String Bool (Maybe String) (Maybe String)
+withDraft : Model -> (FilterDraft -> FilterDraft) -> FilterDraft
+withDraft model change =
+    change model.draft
 
 
-issue : Maybe Pending -> Encode.Value -> Model -> ( Model, Cmd Msg )
-issue pending command model =
+send : Pending -> Command -> Model -> ( Model, Cmd Msg )
+send pending command model =
     let
-        requestId =
-            "elm-" ++ String.fromInt model.nextRequest
-
-        nextPending =
-            Maybe.map (\item -> Dict.insert requestId item model.pending) pending |> Maybe.withDefault model.pending
+        ( requestId, requests ) =
+            Host.issue pending model.requests
 
         optimistic =
-            Maybe.map (\item -> Dict.insert item.actionId item.status model.optimistic) pending |> Maybe.withDefault model.optimistic
+            case pending of
+                MoveAction actionId status ->
+                    Dict.insert actionId status model.optimistic
 
-        envelope =
-            Encode.object [ ( "protocolVersion", Encode.int protocolVersion ), ( "requestId", Encode.string requestId ), ( "command", command ) ]
+                _ ->
+                    model.optimistic
     in
-    ( { model | nextRequest = model.nextRequest + 1, pending = nextPending, optimistic = optimistic }, toHost envelope )
+    ( { model | requests = requests, optimistic = optimistic }
+    , toHost (Host.envelope requestId (Command.encode command))
+    )
 
 
-moveAction : String -> String -> Model -> ( Model, Cmd Msg )
+{-| Moves a card straight away and lets the host correct it if the write fails.
+A move to Scheduled that still needs a time opens the scheduler instead, so no
+card is shown in a column its file has not reached.
+-}
+moveAction : ActionId -> ActionStatus -> Model -> ( Model, Cmd Msg )
 moveAction actionId status model =
-    case findAction actionId model.snapshot.actions of
+    case Data.findAction actionId model.snapshot.actions of
+        Nothing ->
+            ( model, Cmd.none )
+
         Just action ->
             if action.status == status then
                 ( model, Cmd.none )
 
             else
-                issue
-                    (if status == "scheduled" && not (hasSchedule action) then
-                        Nothing
+                send
+                    (if status == ActionStatus.Scheduled && Data.schedule action == Nothing then
+                        IgnoreReply
 
                      else
-                        Just { actionId = actionId, status = status }
+                        MoveAction actionId status
                     )
-                    (Encode.object [ ( "type", Encode.string "set-action-status" ), ( "actionId", Encode.string actionId ), ( "status", Encode.string status ) ])
+                    (Command.SetActionStatus actionId status)
                     model
 
+
+focusAdjacent : Int -> ActionId -> Model -> Cmd Msg
+focusAdjacent offset actionId model =
+    let
+        ids =
+            buildGroups model |> List.concatMap (.actions >> List.map .id)
+
+        position =
+            ids |> List.indexedMap Tuple.pair |> List.filter (\( _, id ) -> id == actionId) |> List.head |> Maybe.map Tuple.first
+    in
+    case position |> Maybe.andThen (\index -> List.drop (index + offset) ids |> List.head) of
+        Just target ->
+            Browser.Dom.focus (cardDomId target) |> Task.attempt Focused
+
         Nothing ->
-            ( model, Cmd.none )
+            Cmd.none
 
 
 saveCurrentView : Model -> ( Model, Cmd Msg )
@@ -543,62 +480,52 @@ saveCurrentView model =
                         )
                         settings.savedViews
             in
-            issue Nothing (saveSettingsCommand { settings | savedViews = views }) model
+            send IgnoreReply (Command.SaveSettings { settings | savedViews = views }) model
 
 
 promptForView : Bool -> Model -> ( Model, Cmd Msg )
 promptForView saveAs model =
     let
-        requestId =
-            "elm-" ++ String.fromInt model.nextRequest
-
         activeName =
-            model.activeViewId |> Maybe.andThen (findSavedView model.snapshot.settings.savedViews) |> Maybe.map .name
-
-        placeholder_ =
-            if saveAs then
-                Maybe.map ((++) " copy") activeName |> Maybe.withDefault "View name"
-
-            else
-                "View name"
-
-        command =
-            Encode.object
-                [ ( "type", Encode.string "prompt" )
-                , ( "title"
-                  , Encode.string
-                        (if saveAs then
-                            "Save board view as"
-
-                         else
-                            "Save board view"
-                        )
-                  )
-                , ( "placeholder", Encode.string placeholder_ )
-                ]
-
-        envelope =
-            Encode.object [ ( "protocolVersion", Encode.int protocolVersion ), ( "requestId", Encode.string requestId ), ( "command", command ) ]
+            model.activeViewId
+                |> Maybe.andThen (Settings.findSavedView model.snapshot.settings.savedViews)
+                |> Maybe.map .name
     in
-    ( { model | nextRequest = model.nextRequest + 1, promptRequests = Dict.insert requestId saveAs model.promptRequests }, toHost envelope )
+    send CreateSavedView
+        (Command.Prompt
+            { title =
+                if saveAs then
+                    "Save board view as"
+
+                else
+                    "Save board view"
+            , placeholder =
+                if saveAs then
+                    Maybe.map (\name -> name ++ " copy") activeName |> Maybe.withDefault "View name"
+
+                else
+                    "View name"
+            }
+        )
+        model
 
 
 createSavedView : String -> Model -> ( Model, Cmd Msg )
 createSavedView name model =
     let
+        -- The seed only ever grows, so two views saved before a snapshot lands still differ.
         viewId =
-            "view-" ++ String.fromInt model.snapshot.revision ++ "-" ++ String.fromInt model.nextRequest
-
-        saved =
-            { id = viewId, name = name, configuration = model.configuration }
+            "view-" ++ String.fromInt model.snapshot.revision ++ "-" ++ String.fromInt model.savedViewSeed
 
         settings =
             model.snapshot.settings
 
-        nextSettings =
-            { settings | savedViews = settings.savedViews ++ [ saved ], activeSavedViewId = Just viewId }
+        saved =
+            { id = viewId, name = name, configuration = model.configuration }
     in
-    issue Nothing (saveSettingsCommand nextSettings) { model | activeViewId = Just viewId }
+    send IgnoreReply
+        (Command.SaveSettings { settings | savedViews = settings.savedViews ++ [ saved ], activeSavedViewId = Just viewId })
+        { model | activeViewId = Just viewId, savedViewSeed = model.savedViewSeed + 1 }
 
 
 deleteCurrentView : Model -> ( Model, Cmd Msg )
@@ -611,11 +538,79 @@ deleteCurrentView model =
             let
                 settings =
                     model.snapshot.settings
-
-                nextSettings =
-                    { settings | savedViews = List.filter (\saved -> saved.id /= activeId) settings.savedViews, activeSavedViewId = Nothing }
             in
-            issue Nothing (saveSettingsCommand nextSettings) { model | activeViewId = Nothing, configuration = defaultConfiguration settings }
+            send IgnoreReply
+                (Command.SaveSettings
+                    { settings
+                        | savedViews = List.filter (\saved -> saved.id /= activeId) settings.savedViews
+                        , activeSavedViewId = Nothing
+                    }
+                )
+                { model | activeViewId = Nothing, configuration = Settings.defaultConfiguration settings }
+
+
+
+-- HOST EVENTS
+
+
+type HostEvent
+    = SnapshotEvent Snapshot
+    | Replied Host.Outcome
+
+
+receiveHost : Decode.Value -> Model -> ( Model, Cmd Msg )
+receiveHost value model =
+    case Decode.decodeValue hostEventDecoder value of
+        Ok (SnapshotEvent snapshot) ->
+            ( { model
+                | snapshot = snapshot
+                , optimistic = Dict.filter (\actionId status -> not (converged actionId status snapshot)) model.optimistic
+                , fatalError = Nothing
+              }
+            , Cmd.none
+            )
+
+        Ok (Replied outcome) ->
+            let
+                ( pending, requests ) =
+                    Host.resolve outcome.requestId model.requests
+
+                next =
+                    { model | requests = requests }
+            in
+            case ( outcome.result, Maybe.withDefault IgnoreReply pending ) of
+                ( Ok resultValue, CreateSavedView ) ->
+                    case Decode.decodeValue Decode.string resultValue of
+                        Ok name ->
+                            createSavedView name next
+
+                        Err _ ->
+                            ( next, Cmd.none )
+
+                ( Ok _, _ ) ->
+                    ( next, Cmd.none )
+
+                ( Err message, MoveAction actionId _ ) ->
+                    ( { next | optimistic = Dict.remove actionId next.optimistic, fatalError = Just message }, Cmd.none )
+
+                ( Err message, _ ) ->
+                    ( { next | fatalError = Just message }, Cmd.none )
+
+        Err error ->
+            ( { model | fatalError = Just (Decode.errorToString error) }, Cmd.none )
+
+
+{-| True once the vault agrees with a move the board already drew.
+-}
+converged : ActionId -> ActionStatus -> Snapshot -> Bool
+converged actionId status snapshot =
+    Data.findAction actionId snapshot.actions
+        |> Maybe.map (\action -> action.status == status)
+        |> Maybe.withDefault True
+
+
+
+-- VIEW
 
 
 view : Model -> Html Msg
@@ -641,12 +636,12 @@ boardView model =
         [ header [ class "dg-view-header" ]
             [ div [] [ h2 [] [ text "Actions" ], span [ class "dg-count" ] [ text (String.fromInt (List.length model.snapshot.actions)) ] ]
             , div [ class "dg-header-actions" ]
-                [ button [ class "mod-cta", onClick (HostCommand Nothing (simpleCommand "create-action")) ] [ text "New Action" ]
-                , button [ onClick (HostCommand Nothing (simpleCommand "quick-capture")) ] [ text "Quick Capture" ]
-                , button [ onClick (HostCommand Nothing (simpleCommand "open-inbox")) ] [ text "Open Inbox" ]
+                [ button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
+                , button [ onClick (Send IgnoreReply Command.QuickCapture) ] [ text "Quick Capture" ]
+                , button [ onClick (Send IgnoreReply Command.OpenInbox) ] [ text "Open Inbox" ]
                 ]
             ]
-        , issuesView model.snapshot.issues
+        , Ui.issuesView model.snapshot.issues
         , toolbar model
         , if model.filterOpen then
             filterBuilder model
@@ -669,44 +664,39 @@ boardView model =
         ]
 
 
-issuesView : List Issue -> Html Msg
-issuesView issues =
-    if List.isEmpty issues then
-        text ""
-
-    else
-        div [ class "dg-warning", title (String.join "\n" (List.map (\problem -> problem.path ++ ": " ++ problem.message) issues)) ]
-            [ text (String.fromInt (List.length issues) ++ " GTD files have metadata problems.") ]
-
-
 toolbar : Model -> Html Msg
 toolbar model =
     div [ class "dg-toolbar" ]
         [ select [ attribute "aria-label" "Saved view", onInput SelectSavedView ]
             (option [ value "", selected (model.activeViewId == Nothing) ] [ text "Board" ]
-                :: List.map (\saved -> option [ value saved.id, selected (model.activeViewId == Just saved.id) ] [ text saved.name ]) model.snapshot.settings.savedViews
+                :: List.map
+                    (\saved -> option [ value saved.id, selected (model.activeViewId == Just saved.id) ] [ text saved.name ])
+                    model.snapshot.settings.savedViews
             )
         , input [ type_ "search", placeholder "Search Actions or Projects", value model.search, onInput SearchChanged ] []
         , button [ classList [ ( "is-active", model.filterOpen ) ], onClick ToggleFilters ] [ text "Filter" ]
-        , select [ attribute "aria-label" "Group by", value model.configuration.groupBy, onInput SetGroupBy ]
-            [ option [ value "status" ] [ text "Group: Status" ]
-            , option [ value "project" ] [ text "Group: Project" ]
-            , option [ value "context" ] [ text "Group: Context" ]
-            , option [ value "energy" ] [ text "Group: Energy" ]
-            ]
-        , select [ attribute "aria-label" "Sort by", value model.configuration.sort.field, onInput SetSortField ]
-            [ option [ value "created" ] [ text "Sort: Created" ]
-            , option [ value "due" ] [ text "Sort: Due" ]
-            , option [ value "title" ] [ text "Sort: Title" ]
-            , option [ value "project" ] [ text "Sort: Project" ]
-            ]
+        , choices [ attribute "aria-label" "Group by" ]
+            groupByKey
+            SetGroupBy
+            model.configuration.groupBy
+            (List.map (\groupBy -> ( groupBy, "Group: " ++ Settings.groupByLabel groupBy ))
+                [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+            )
+        , choices [ attribute "aria-label" "Sort by" ]
+            sortFieldKey
+            SetSortField
+            model.configuration.sort.field
+            (List.map (\field -> ( field, "Sort: " ++ Settings.sortFieldLabel field ))
+                [ SortByCreated, SortByDue, SortByTitle, SortByProject ]
+            )
         , button [ attribute "aria-label" "Reverse sort", onClick ReverseSort ]
             [ text
-                (if model.configuration.sort.direction == "asc" then
-                    "↑"
+                (case model.configuration.sort.direction of
+                    Ascending ->
+                        "↑"
 
-                 else
-                    "↓"
+                    Descending ->
+                        "↓"
                 )
             ]
         , button [ classList [ ( "is-active", model.columnsOpen ) ], onClick ToggleColumns ] [ text "Columns" ]
@@ -720,36 +710,50 @@ toolbar model =
         ]
 
 
+{-| A `select` over a union: the options are the union's values, and a choice can
+only ever be one of them.
+-}
+choices : List (Html.Attribute msg) -> (a -> String) -> (a -> msg) -> a -> List ( a, String ) -> Html msg
+choices attributes toKey toMessage current options =
+    select
+        (value (toKey current)
+            :: onInput (\raw -> List.filter (\( candidate, _ ) -> toKey candidate == raw) options |> List.head |> Maybe.map (Tuple.first >> toMessage) |> Maybe.withDefault (toMessage current))
+            :: attributes
+        )
+        (List.map (\( candidate, label ) -> option [ value (toKey candidate) ] [ text label ]) options)
+
+
 filterBuilder : Model -> Html Msg
 filterBuilder model =
     let
-        values =
-            filterValues model
-
-        valueControl =
-            if List.member model.filterField [ "due", "available", "work" ] then
-                text ""
-
-            else
-                select [ value model.filterValue, onInput SetFilterValue ] (List.map (\( key, name ) -> option [ value key ] [ text name ]) values)
+        draft =
+            model.draft
     in
     div [ class "dg-panel dg-filter-builder" ]
-        [ select [ value model.filterField, onInput SetFilterField ]
-            [ option [ value "status" ] [ text "Status" ]
-            , option [ value "project" ] [ text "Project" ]
-            , option [ value "context" ] [ text "Context" ]
-            , option [ value "energy" ] [ text "Energy" ]
-            , option [ value "due" ] [ text "Due date" ]
-            , option [ value "available" ] [ text "Available now" ]
-            , option [ value "work" ] [ text "Work" ]
+        [ choices []
+            filterFieldKey
+            SetFilterField
+            draft.field
+            [ ( FieldStatus, "Status" )
+            , ( FieldProject, "Project" )
+            , ( FieldContext, "Context" )
+            , ( FieldEnergy, "Energy" )
+            , ( FieldDue, "Due date" )
+            , ( FieldAvailable, "Available now" )
+            , ( FieldWork, "Work" )
             ]
-        , if List.member model.filterField [ "due", "available" ] then
+        , if List.member draft.field [ FieldDue, FieldAvailable ] then
             text ""
 
           else
-            select [ value model.filterOperator, onInput SetFilterOperator ] [ option [ value "in" ] [ text "is" ], option [ value "notIn" ] [ text "is not" ] ]
-        , valueControl
-        , if model.filterField == "due" then
+            choices [] operatorKey SetFilterOperator draft.operator [ ( Is, "is" ), ( IsNot, "is not" ) ]
+        , if List.member draft.field [ FieldDue, FieldAvailable, FieldWork ] then
+            text ""
+
+          else
+            select [ value draft.value, onInput SetFilterValue ]
+                (List.map (\( key, name ) -> option [ value key ] [ text name ]) (filterValues model))
+        , if draft.field == FieldDue then
             dueControls model
 
           else
@@ -761,28 +765,31 @@ filterBuilder model =
 dueControls : Model -> Html Msg
 dueControls model =
     span []
-        [ select [ value model.dueOperator, onInput SetDueOperator ]
-            [ option [ value "before" ] [ text "before" ]
-            , option [ value "onOrBefore" ] [ text "on or before" ]
-            , option [ value "after" ] [ text "after" ]
-            , option [ value "onOrAfter" ] [ text "on or after" ]
-            , option [ value "withinNextDays" ] [ text "within next days" ]
-            , option [ value "isEmpty" ] [ text "is empty" ]
-            , option [ value "isNotEmpty" ] [ text "is not empty" ]
+        [ choices []
+            dueOperatorKey
+            SetDueOperator
+            model.draft.dueOperator
+            [ ( OpBefore, "before" )
+            , ( OpOnOrBefore, "on or before" )
+            , ( OpAfter, "after" )
+            , ( OpOnOrAfter, "on or after" )
+            , ( OpWithinNextDays, "within next days" )
+            , ( OpIsEmpty, "is empty" )
+            , ( OpIsNotEmpty, "is not empty" )
             ]
-        , if List.member model.dueOperator [ "isEmpty", "isNotEmpty" ] then
+        , if List.member model.draft.dueOperator [ OpIsEmpty, OpIsNotEmpty ] then
             text ""
 
           else
             input
                 [ type_
-                    (if model.dueOperator == "withinNextDays" then
+                    (if model.draft.dueOperator == OpWithinNextDays then
                         "number"
 
                      else
                         "date"
                     )
-                , value model.dueValue
+                , value model.draft.dueValue
                 , onInput SetDueValue
                 ]
                 []
@@ -796,7 +803,10 @@ filterChips model =
 
     else
         div [ class "dg-filter-chips" ]
-            (List.indexedMap (\index_ filter -> button [ class "dg-chip", onClick (RemoveFilter index_) ] [ text (describeFilter model filter ++ " ×") ]) model.configuration.filters)
+            (List.indexedMap
+                (\index filter -> button [ class "dg-chip", onClick (RemoveFilter index) ] [ text (describeFilter model filter ++ " ×") ])
+                model.configuration.filters
+            )
 
 
 columnPicker : Model -> Html Msg
@@ -806,28 +816,51 @@ columnPicker model =
             columnCandidates model
 
         visible =
-            Set.fromList (Maybe.withDefault candidates model.configuration.visibleColumns)
+            case model.configuration.visibleColumns of
+                AllColumns ->
+                    List.map groupKeyString candidates
+
+                OnlyColumns columns ->
+                    columns
     in
     div [ class "dg-panel dg-column-picker" ]
-        (List.map (\key -> label [] [ input [ type_ "checkbox", checked (Set.member key visible), onCheck (\_ -> ToggleColumn key) ] [], text (" " ++ displayLabel key) ]) candidates)
+        (List.map
+            (\key ->
+                label []
+                    [ input
+                        [ type_ "checkbox"
+                        , checked (List.member (groupKeyString key) visible)
+                        , onCheck (\_ -> ToggleColumn key)
+                        ]
+                        []
+                    , text (" " ++ groupLabel model key)
+                    ]
+            )
+            candidates
+        )
 
 
 groupView : Model -> Group -> Html Msg
 groupView model group =
     let
-        canDrop =
-            model.configuration.groupBy == "status" && List.member group.key [ "next", "waiting", "scheduled", "done" ]
+        dropAttributes =
+            case ( model.configuration.groupBy, group.key ) of
+                ( GroupByStatus, StatusGroup status ) ->
+                    if status == ActionStatus.Cancelled then
+                        []
+
+                    else
+                        [ Ui.preventDefaultOn "dragover" DragOver, Ui.preventDefaultOn "drop" (DropOn status) ]
+
+                _ ->
+                    []
     in
     section
-        ([ class "dg-column", attribute "data-column" group.key ]
-            ++ (if canDrop then
-                    [ preventDefault "dragover" DragOver, preventDefault "drop" (DropOn group.key) ]
-
-                else
-                    []
-               )
-        )
-        [ header [ class "dg-column-header" ] [ span [] [ text group.label ], span [] [ text (String.fromInt (List.length group.actions)) ] ]
+        (class "dg-column" :: attribute "data-column" (groupKeyString group.key) :: dropAttributes)
+        [ header [ class "dg-column-header" ]
+            [ span [] [ text (groupLabel model group.key) ]
+            , span [] [ text (String.fromInt (List.length group.actions)) ]
+            ]
         , div [ class "dg-card-list" ] (List.map (cardView model) group.actions)
         ]
 
@@ -835,17 +868,12 @@ groupView model group =
 cardView : Model -> Action -> Html Msg
 cardView model action =
     let
-        project =
-            action.projectId |> Maybe.andThen (\projectId -> findProject projectId model.snapshot.projects)
-
         breadcrumb =
-            Maybe.map (projectBreadcrumb model.snapshot.projects) project
+            action.projectId |> Maybe.andThen (Hierarchy.breadcrumbFor model.snapshot.projects)
 
         overdue =
-            Maybe.map (\due -> due < model.snapshot.today && action.status /= "done") action.due |> Maybe.withDefault False
-
-        schedule =
-            scheduleText action
+            Maybe.map (\due -> due < model.snapshot.today && action.status /= ActionStatus.Done) action.due
+                |> Maybe.withDefault False
     in
     article
         [ class "dg-card"
@@ -855,53 +883,47 @@ cardView model action =
         , tabindex 0
         , draggable "true"
         , on "dragstart" (Decode.succeed (DragStarted action.id))
-        , on "keydown" (Decode.field "key" Decode.string |> Decode.map (CardKey action.id))
+        , Ui.onKeyDown (CardKey action.id)
         ]
         [ div [ class "dg-card-title-row" ]
             [ span [ class "dg-card-title dg-action-card-title", title action.title ] [ text action.title ]
             , button
                 [ class "dg-icon-button"
                 , attribute "aria-label" ("Actions for " ++ action.title)
-                , on "click" (Decode.map2 (\x y -> OpenMenu x y action) (Decode.field "clientX" Decode.float) (Decode.field "clientY" Decode.float))
+                , Ui.onPointer (\x y -> Send IgnoreReply (actionMenu x y model action))
                 ]
                 [ text "•••" ]
             ]
         , case ( action.projectId, breadcrumb ) of
-            ( Just _, Just name ) ->
-                button [ class "dg-project-link", title name, onClick (HostCommand Nothing (showProjectCommand (Maybe.withDefault "" action.projectId))) ] [ text name ]
+            ( Just projectId, Just name ) ->
+                button [ class "dg-project-link", title name, onClick (Send IgnoreReply (Command.ShowProject projectId)) ] [ text name ]
 
             ( Just _, Nothing ) ->
                 span [ class "dg-missing" ] [ text "Missing project" ]
 
-            _ ->
+            ( Nothing, _ ) ->
                 text ""
         , div [ class "dg-card-meta" ]
-            [ maybeSpan (Maybe.map ((++) "@") action.context)
-            , maybeSpan action.energy
-            , case action.due of
-                Just due ->
-                    span [ classList [ ( "is-overdue", overdue ) ] ] [ text due ]
-
-                Nothing ->
-                    text ""
-            , if action.status == "waiting" then
+            [ Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
+            , Ui.maybeView action.energy (\energy -> span [] [ text energy ])
+            , Ui.maybeView action.due (\due -> span [ classList [ ( "is-overdue", overdue ) ] ] [ text due ])
+            , if action.status == ActionStatus.Waiting then
                 span [] [ text ("Waiting since " ++ Maybe.withDefault "—" action.waitingSince) ]
 
               else
                 text ""
-            , maybeSpan schedule
+            , Ui.maybeView (Data.scheduleText action) (\schedule -> span [] [ text schedule ])
             ]
         ]
 
 
-maybeSpan : Maybe String -> Html msg
-maybeSpan maybeText =
-    Maybe.map (\value_ -> span [] [ text value_ ]) maybeText |> Maybe.withDefault (text "")
+cardDomId : ActionId -> String
+cardDomId actionId =
+    "dg-action-" ++ actionId
 
 
-preventDefault : String -> msg -> Html.Attribute msg
-preventDefault eventName message =
-    custom eventName (Decode.succeed { message = message, stopPropagation = False, preventDefault = True })
+
+-- GROUPING
 
 
 buildGroups : Model -> List Group
@@ -915,103 +937,222 @@ buildGroups model =
 
         grouped =
             List.foldl
-                (\action groups ->
+                (\action buckets ->
                     let
                         key =
-                            groupKey model action
+                            groupKeyOf model.configuration.groupBy action
                     in
-                    Dict.update key (\existing -> Just (action :: Maybe.withDefault [] existing)) groups
+                    Dict.update (groupKeyString key)
+                        (\existing ->
+                            Just ( key, action :: (Maybe.map Tuple.second existing |> Maybe.withDefault []) )
+                        )
+                        buckets
                 )
                 Dict.empty
                 actions
 
         keys =
-            if model.configuration.groupBy == "status" then
-                Maybe.withDefault (statusColumns model.snapshot.settings) model.configuration.visibleColumns
+            case model.configuration.groupBy of
+                GroupByStatus ->
+                    statusColumnKeys model |> List.map StatusGroup
 
-            else
-                Dict.keys grouped |> applyVisible model.configuration.visibleColumns
+                _ ->
+                    Dict.values grouped
+                        |> List.map Tuple.first
+                        |> applyVisible model.configuration.visibleColumns
     in
-    List.map (\key -> { key = key, label = groupLabel model key, actions = Dict.get key grouped |> Maybe.withDefault [] |> List.reverse }) keys
+    List.map
+        (\key ->
+            { key = key
+            , actions = Dict.get (groupKeyString key) grouped |> Maybe.map (Tuple.second >> List.reverse) |> Maybe.withDefault []
+            }
+        )
+        keys
+
+
+{-| The status columns a status-grouped board lays out: the saved choice when the
+view has one, and otherwise every status the settings put on the board.
+-}
+statusColumnKeys : Model -> List ActionStatus
+statusColumnKeys model =
+    case model.configuration.visibleColumns of
+        AllColumns ->
+            Settings.statusColumns model.snapshot.settings
+
+        OnlyColumns columns ->
+            List.filterMap statusFromKey columns
+
+
+statusFromKey : String -> Maybe ActionStatus
+statusFromKey raw =
+    List.filter (\status -> ActionStatus.key status == raw) ActionStatus.all |> List.head
+
+
+applyVisible : VisibleColumns -> List GroupKey -> List GroupKey
+applyVisible visible keys =
+    case visible of
+        AllColumns ->
+            keys
+
+        OnlyColumns allowed ->
+            List.filter (\key -> List.member (groupKeyString key) allowed) keys
+
+
+groupKeyOf : GroupBy -> Action -> GroupKey
+groupKeyOf groupBy action =
+    case groupBy of
+        GroupByStatus ->
+            StatusGroup action.status
+
+        GroupByProject ->
+            ProjectGroup action.projectId
+
+        GroupByContext ->
+            ContextGroup action.context
+
+        GroupByEnergy ->
+            EnergyGroup action.energy
+
+
+{-| The key a column is stored under, in the group buckets and in a saved view.
+-}
+groupKeyString : GroupKey -> String
+groupKeyString key =
+    case key of
+        StatusGroup status ->
+            ActionStatus.key status
+
+        ProjectGroup projectId ->
+            Maybe.withDefault "" projectId
+
+        ContextGroup context ->
+            Maybe.withDefault "" context
+
+        EnergyGroup energy ->
+            Maybe.withDefault "" energy
+
+
+groupLabel : Model -> GroupKey -> String
+groupLabel model key =
+    case key of
+        StatusGroup status ->
+            ActionStatus.label status
+
+        ProjectGroup Nothing ->
+            "No project"
+
+        ProjectGroup (Just projectId) ->
+            Hierarchy.breadcrumbFor model.snapshot.projects projectId |> Maybe.withDefault "Missing project"
+
+        ContextGroup Nothing ->
+            "No context"
+
+        ContextGroup (Just context) ->
+            capitalized context
+
+        EnergyGroup Nothing ->
+            "No energy"
+
+        EnergyGroup (Just energy) ->
+            capitalized energy
+
+
+capitalized : String -> String
+capitalized value =
+    String.toUpper (String.left 1 value) ++ String.dropLeft 1 value
+
+
+columnCandidates : Model -> List GroupKey
+columnCandidates model =
+    case model.configuration.groupBy of
+        GroupByStatus ->
+            Settings.statusColumns model.snapshot.settings |> List.map StatusGroup
+
+        _ ->
+            let
+                config =
+                    model.configuration
+            in
+            buildGroups { model | configuration = { config | visibleColumns = AllColumns } } |> List.map .key
+
+
+
+-- FILTERING
 
 
 matchesAll : Model -> Action -> Bool
 matchesAll model action =
     let
-        query =
-            String.toLower (String.trim model.search)
-
         projectText =
-            action.projectId |> Maybe.andThen (\id_ -> findProject id_ model.snapshot.projects) |> Maybe.map (projectBreadcrumb model.snapshot.projects) |> Maybe.withDefault ""
-
-        searched =
-            String.isEmpty query || String.contains query (String.toLower action.title) || String.contains query (String.toLower projectText)
+            action.projectId
+                |> Maybe.andThen (Hierarchy.breadcrumbFor model.snapshot.projects)
+                |> Maybe.withDefault ""
     in
-    searched && List.all (matchesFilter model action) model.configuration.filters
+    Ui.matches model.search [ action.title, projectText ]
+        && List.all (matchesFilter model action) model.configuration.filters
 
 
 matchesFilter : Model -> Action -> Filter -> Bool
 matchesFilter model action filter =
     case filter of
-        ValueFilter field operator values ->
-            let
-                actual =
-                    case field of
-                        "status" ->
-                            action.status
+        ByStatus operator values ->
+            applyOperator operator (List.member action.status values)
 
-                        "project" ->
-                            Maybe.withDefault "" action.projectId
+        ByProject operator values ->
+            applyOperator operator (List.member action.projectId values)
 
-                        "context" ->
-                            Maybe.withDefault "" action.context
+        ByContext operator values ->
+            applyOperator operator (List.member (Maybe.withDefault "" action.context) values)
 
-                        "energy" ->
-                            Maybe.withDefault "" action.energy
+        ByEnergy operator values ->
+            applyOperator operator (List.member (Maybe.withDefault "" action.energy) values)
 
-                        _ ->
-                            ""
-
-                contains =
-                    List.member actual values
-            in
-            if operator == "in" then
-                contains
-
-            else
-                not contains
-
-        AvailabilityFilter ->
+        ByAvailability ->
             Maybe.map (\date -> date <= model.snapshot.today) action.deferUntil |> Maybe.withDefault True
 
-        WorkFilter expected ->
+        ByWork expected ->
             action.work == expected
 
-        DueFilter operator dueValue ->
-            case ( operator, action.due, dueValue ) of
-                ( "isEmpty", Nothing, _ ) ->
-                    True
+        ByDue range ->
+            matchesDue model range action.due
 
-                ( "isNotEmpty", Just _, _ ) ->
-                    True
 
-                ( "before", Just due, Just (DateValue expected) ) ->
-                    due < expected
+applyOperator : MatchOperator -> Bool -> Bool
+applyOperator operator contains =
+    case operator of
+        Is ->
+            contains
 
-                ( "onOrBefore", Just due, Just (DateValue expected) ) ->
-                    due <= expected
+        IsNot ->
+            not contains
 
-                ( "after", Just due, Just (DateValue expected) ) ->
-                    due > expected
 
-                ( "onOrAfter", Just due, Just (DateValue expected) ) ->
-                    due >= expected
+matchesDue : Model -> DueRange -> Maybe String -> Bool
+matchesDue model range maybeDue =
+    case ( range, maybeDue ) of
+        ( DueIsEmpty, Nothing ) ->
+            True
 
-                ( "withinNextDays", Just due, Just (DaysValue days) ) ->
-                    due >= model.snapshot.today && due <= addDays model.snapshot.today days
+        ( DueIsNotEmpty, Just _ ) ->
+            True
 
-                _ ->
-                    False
+        ( DueBefore expected, Just due ) ->
+            due < expected
+
+        ( DueOnOrBefore expected, Just due ) ->
+            due <= expected
+
+        ( DueAfter expected, Just due ) ->
+            due > expected
+
+        ( DueOnOrAfter expected, Just due ) ->
+            due >= expected
+
+        ( DueWithinDays days, Just due ) ->
+            due >= model.snapshot.today && due <= addDays model.snapshot.today days
+
+        _ ->
+            False
 
 
 sortActions : Model -> List Action -> List Action
@@ -1019,20 +1160,27 @@ sortActions model actions =
     let
         key action =
             case model.configuration.sort.field of
-                "due" ->
+                SortByDue ->
                     Maybe.withDefault "9999-99-99" action.due
 
-                "title" ->
+                SortByTitle ->
                     String.toLower action.title
 
-                "project" ->
-                    action.projectId |> Maybe.andThen (\id_ -> findProject id_ model.snapshot.projects) |> Maybe.map (projectBreadcrumb model.snapshot.projects >> String.toLower) |> Maybe.withDefault "zzzz"
+                SortByProject ->
+                    action.projectId
+                        |> Maybe.andThen (Hierarchy.breadcrumbFor model.snapshot.projects)
+                        |> Maybe.map String.toLower
+                        |> Maybe.withDefault "zzzz"
 
-                _ ->
+                SortByCreated ->
                     action.created
 
+        descending =
+            model.configuration.sort.direction == Descending
+
         compareActions left right =
-            if model.configuration.sort.field == "due" then
+            if model.configuration.sort.field == SortByDue then
+                -- An Action with no due date sorts last in both directions.
                 case ( left.due, right.due ) of
                     ( Nothing, Nothing ) ->
                         compare left.id right.id
@@ -1044,13 +1192,13 @@ sortActions model actions =
                         LT
 
                     ( Just leftDue, Just rightDue ) ->
-                        if model.configuration.sort.direction == "desc" then
+                        if descending then
                             compare ( rightDue, right.id ) ( leftDue, left.id )
 
                         else
                             compare ( leftDue, left.id ) ( rightDue, right.id )
 
-            else if model.configuration.sort.direction == "desc" then
+            else if descending then
                 compare ( key right, right.id ) ( key left, left.id )
 
             else
@@ -1059,617 +1207,344 @@ sortActions model actions =
     List.sortWith compareActions actions
 
 
-groupKey : Model -> Action -> String
-groupKey model action =
-    case model.configuration.groupBy of
-        "project" ->
-            Maybe.withDefault "" action.projectId
-
-        "context" ->
-            Maybe.withDefault "" action.context
-
-        "energy" ->
-            Maybe.withDefault "" action.energy
-
-        _ ->
-            action.status
-
-
-groupLabel : Model -> String -> String
-groupLabel model key =
-    if model.configuration.groupBy == "project" then
-        if String.isEmpty key then
-            "No project"
-
-        else
-            findProject key model.snapshot.projects |> Maybe.map (projectBreadcrumb model.snapshot.projects) |> Maybe.withDefault "Missing project"
-
-    else if String.isEmpty key then
-        "No " ++ model.configuration.groupBy
-
-    else
-        displayLabel key
-
-
-columnCandidates : Model -> List String
-columnCandidates model =
-    if model.configuration.groupBy == "status" then
-        statusColumns model.snapshot.settings
-
-    else
-        let
-            config =
-                model.configuration
-
-            allColumnsModel =
-                { model | configuration = { config | visibleColumns = Nothing } }
-        in
-        buildGroups allColumnsModel |> List.map .key
-
-
+{-| The options a value filter offers for the field the draft names.
+-}
 filterValues : Model -> List ( String, String )
 filterValues model =
-    case model.filterField of
-        "status" ->
-            List.map (\status -> ( status, displayLabel status )) [ "next", "waiting", "scheduled", "done", "cancelled" ]
+    case model.draft.field of
+        FieldStatus ->
+            List.map (\status -> ( ActionStatus.key status, ActionStatus.label status )) ActionStatus.all
 
-        "project" ->
-            ( "", "No project" ) :: (model.snapshot.projects |> List.map (\project -> ( project.id, projectBreadcrumb model.snapshot.projects project )) |> List.sortBy Tuple.second)
+        FieldProject ->
+            ( "", "No project" )
+                :: (model.snapshot.projects
+                        |> List.map (\project -> ( project.id, Hierarchy.breadcrumb model.snapshot.projects project ))
+                        |> List.sortBy Tuple.second
+                   )
 
-        "context" ->
-            uniqueSorted (List.filterMap .context model.snapshot.actions) |> List.map (\item -> ( item, item ))
+        FieldContext ->
+            Data.contexts model.snapshot.actions |> List.map (\item -> ( item, item ))
 
-        "energy" ->
-            uniqueSorted (List.filterMap .energy model.snapshot.actions) |> List.map (\item -> ( item, item ))
+        FieldEnergy ->
+            Data.energies model.snapshot.actions |> List.map (\item -> ( item, item ))
 
         _ ->
             []
 
 
-newFilter : Model -> Filter
-newFilter model =
-    case model.filterField of
-        "available" ->
-            AvailabilityFilter
+{-| The filter the builder would add, or nothing when its value never resolved.
+-}
+draftFilter : Model -> Maybe Filter
+draftFilter model =
+    let
+        draft =
+            model.draft
+    in
+    case draft.field of
+        FieldAvailable ->
+            Just ByAvailability
 
-        "work" ->
-            WorkFilter (model.filterOperator == "in")
+        FieldWork ->
+            Just (ByWork (draft.operator == Is))
 
-        "due" ->
-            if model.dueOperator == "withinNextDays" then
-                DueFilter model.dueOperator (Just (DaysValue (String.toInt model.dueValue |> Maybe.withDefault 7)))
+        FieldDue ->
+            Just (ByDue (dueRange draft))
 
-            else if List.member model.dueOperator [ "isEmpty", "isNotEmpty" ] then
-                DueFilter model.dueOperator Nothing
+        FieldStatus ->
+            statusFromKey draft.value |> Maybe.map (\status -> ByStatus draft.operator [ status ])
 
-            else
-                DueFilter model.dueOperator (Just (DateValue model.dueValue))
+        FieldProject ->
+            Just
+                (ByProject draft.operator
+                    [ if String.isEmpty draft.value then
+                        Nothing
 
-        field ->
-            ValueFilter field model.filterOperator [ model.filterValue ]
+                      else
+                        Just draft.value
+                    ]
+                )
+
+        FieldContext ->
+            Just (ByContext draft.operator [ draft.value ])
+
+        FieldEnergy ->
+            Just (ByEnergy draft.operator [ draft.value ])
+
+
+dueRange : FilterDraft -> DueRange
+dueRange draft =
+    case draft.dueOperator of
+        OpBefore ->
+            DueBefore draft.dueValue
+
+        OpOnOrBefore ->
+            DueOnOrBefore draft.dueValue
+
+        OpAfter ->
+            DueAfter draft.dueValue
+
+        OpOnOrAfter ->
+            DueOnOrAfter draft.dueValue
+
+        OpWithinNextDays ->
+            DueWithinDays (String.toInt draft.dueValue |> Maybe.withDefault 7)
+
+        OpIsEmpty ->
+            DueIsEmpty
+
+        OpIsNotEmpty ->
+            DueIsNotEmpty
 
 
 describeFilter : Model -> Filter -> String
 describeFilter model filter =
     case filter of
-        AvailabilityFilter ->
+        ByAvailability ->
             "Available now"
 
-        WorkFilter True ->
+        ByWork True ->
             "Work"
 
-        WorkFilter False ->
+        ByWork False ->
             "Not work"
 
-        DueFilter "withinNextDays" (Just (DaysValue days)) ->
+        ByDue range ->
+            describeDue range
+
+        ByStatus operator values ->
+            described "Status" operator (List.map ActionStatus.label values)
+
+        ByProject operator values ->
+            described "Project"
+                operator
+                (List.map
+                    (\maybeId ->
+                        case maybeId of
+                            Nothing ->
+                                "No project"
+
+                            Just projectId ->
+                                Hierarchy.breadcrumbFor model.snapshot.projects projectId |> Maybe.withDefault "Missing project"
+                    )
+                    values
+                )
+
+        ByContext operator values ->
+            described "Context" operator values
+
+        ByEnergy operator values ->
+            described "Energy" operator values
+
+
+described : String -> MatchOperator -> List String -> String
+described field operator names =
+    field
+        ++ (case operator of
+                Is ->
+                    " is "
+
+                IsNot ->
+                    " is not "
+           )
+        ++ String.join ", " names
+
+
+describeDue : DueRange -> String
+describeDue range =
+    case range of
+        DueBefore date ->
+            "Due before " ++ date
+
+        DueOnOrBefore date ->
+            "Due on or before " ++ date
+
+        DueAfter date ->
+            "Due after " ++ date
+
+        DueOnOrAfter date ->
+            "Due on or after " ++ date
+
+        DueWithinDays days ->
             "Due within " ++ String.fromInt days ++ " days"
 
-        DueFilter operator _ ->
-            "Due " ++ operator
+        DueIsEmpty ->
+            "Due is empty"
 
-        ValueFilter field operator values ->
-            let
-                names =
-                    if field == "project" then
-                        List.map
-                            (\id_ ->
-                                if String.isEmpty id_ then
-                                    "No project"
-
-                                else
-                                    findProject id_ model.snapshot.projects |> Maybe.map (projectBreadcrumb model.snapshot.projects) |> Maybe.withDefault "Missing project"
-                            )
-                            values
-
-                    else
-                        values
-            in
-            displayLabel field
-                ++ (if operator == "in" then
-                        " is "
-
-                    else
-                        " is not "
-                   )
-                ++ String.join ", " names
+        DueIsNotEmpty ->
+            "Due is not empty"
 
 
-menuCommand : Float -> Float -> Model -> Action -> Encode.Value
-menuCommand x y model action =
+
+-- MENU
+
+
+actionMenu : Float -> Float -> Model -> Action -> Command
+actionMenu x y model action =
     let
         statusEntries =
             List.map
-                (\status ->
-                    menuEntry
-                        ((if status == action.status then
-                            "✓ "
-
-                          else
-                            ""
-                         )
-                            ++ displayLabel status
-                        )
-                        (setStatusCommand action.id status)
-                )
-                [ "next", "waiting", "scheduled", "done", "cancelled" ]
+                (\status -> MenuItem (tick (status == action.status) ++ ActionStatus.label status) (Command.SetActionStatus action.id status))
+                ActionStatus.all
 
         projects =
-            model.snapshot.projects |> List.filter (\project -> not (List.member project.status [ "completed", "cancelled" ])) |> List.sortBy (projectBreadcrumb model.snapshot.projects)
+            model.snapshot.projects
+                |> List.filter (\project -> ProjectStatus.isOpen project.status)
+                |> List.sortBy (Hierarchy.breadcrumb model.snapshot.projects)
 
         projectEntries =
-            menuEntry "No project" (updateProjectCommand action.id "")
+            MenuItem "No project" (Command.SetActionProject action.id Nothing)
                 :: List.map
                     (\project ->
-                        menuEntry
-                            ((if action.projectId == Just project.id then
-                                "✓ "
-
-                              else
-                                ""
-                             )
-                                ++ projectBreadcrumb model.snapshot.projects project
-                            )
-                            (updateProjectCommand action.id project.id)
+                        MenuItem
+                            (tick (action.projectId == Just project.id) ++ Hierarchy.breadcrumb model.snapshot.projects project)
+                            (Command.SetActionProject action.id (Just project.id))
                     )
                     projects
 
         contexts =
-            uniqueSorted (List.filterMap .context model.snapshot.actions)
+            Data.contexts model.snapshot.actions
 
         contextEntries =
             List.map
                 (\context ->
-                    menuEntry
-                        ((if action.context == Just context then
-                            "✓ "
-
-                          else
-                            ""
-                         )
-                            ++ "@"
-                            ++ context
-                        )
-                        (updateContextCommand action.id context)
+                    MenuItem (tick (action.context == Just context) ++ "@" ++ context) (Command.SetActionContext action.id context)
                 )
                 contexts
-
-        entries =
-            statusEntries
-                ++ [ separator ]
-                ++ projectEntries
-                ++ (if List.isEmpty contexts then
-                        []
-
-                    else
-                        separator :: contextEntries
-                   )
-                ++ [ separator, menuEntry "Edit…" (editActionCommand action.id), menuEntry "Delete Action…" (trashActionCommand action.id) ]
     in
-    Encode.object [ ( "type", Encode.string "show-menu" ), ( "x", Encode.float x ), ( "y", Encode.float y ), ( "entries", Encode.list identity entries ) ]
-
-
-menuEntry : String -> Encode.Value -> Encode.Value
-menuEntry name command =
-    Encode.object [ ( "label", Encode.string name ), ( "command", command ) ]
-
-
-separator : Encode.Value
-separator =
-    Encode.object [ ( "separator", Encode.bool True ) ]
-
-
-simpleCommand : String -> Encode.Value
-simpleCommand commandType =
-    Encode.object [ ( "type", Encode.string commandType ) ]
-
-
-showProjectCommand : String -> Encode.Value
-showProjectCommand projectId =
-    Encode.object [ ( "type", Encode.string "show-project" ), ( "projectId", Encode.string projectId ) ]
-
-
-editActionCommand : String -> Encode.Value
-editActionCommand actionId =
-    Encode.object [ ( "type", Encode.string "edit-action" ), ( "actionId", Encode.string actionId ) ]
-
-
-trashActionCommand : String -> Encode.Value
-trashActionCommand actionId =
-    Encode.object [ ( "type", Encode.string "trash-action" ), ( "actionId", Encode.string actionId ) ]
-
-
-setStatusCommand : String -> String -> Encode.Value
-setStatusCommand actionId status =
-    Encode.object [ ( "type", Encode.string "set-action-status" ), ( "actionId", Encode.string actionId ), ( "status", Encode.string status ) ]
-
-
-updateProjectCommand : String -> String -> Encode.Value
-updateProjectCommand actionId projectId =
-    Encode.object [ ( "type", Encode.string "update-action" ), ( "actionId", Encode.string actionId ), ( "projectId", Encode.string projectId ) ]
-
-
-updateContextCommand : String -> String -> Encode.Value
-updateContextCommand actionId context =
-    Encode.object [ ( "type", Encode.string "update-action" ), ( "actionId", Encode.string actionId ), ( "context", Encode.string context ) ]
-
-
-saveSettingsCommand : Settings -> Encode.Value
-saveSettingsCommand settings =
-    Encode.object [ ( "type", Encode.string "save-settings" ), ( "settings", encodeSettings settings ) ]
-
-
-snapshotDecoder : Decoder Snapshot
-snapshotDecoder =
-    Decode.map6 Snapshot
-        (Decode.field "revision" Decode.int)
-        (Decode.field "today" Decode.string)
-        (Decode.field "actions" (Decode.list actionDecoder))
-        (Decode.field "projects" (Decode.list projectDecoder))
-        (Decode.field "issues" (Decode.list issueDecoder))
-        (Decode.field "settings" settingsDecoder)
-
-
-actionDecoder : Decoder Action
-actionDecoder =
-    Decode.succeed Action
-        |> required "id" Decode.string
-        |> required "title" Decode.string
-        |> required "file" fileDecoder
-        |> required "status" Decode.string
-        |> required "created" Decode.string
-        |> optional "projectId" (Decode.maybe Decode.string) Nothing
-        |> optional "context" (Decode.maybe Decode.string) Nothing
-        |> optional "energy" (Decode.maybe Decode.string) Nothing
-        |> optional "due" (Decode.maybe Decode.string) Nothing
-        |> optional "deferUntil" (Decode.maybe Decode.string) Nothing
-        |> optional "waitingSince" (Decode.maybe Decode.string) Nothing
-        |> optional "scheduledStart" (Decode.maybe Decode.string) Nothing
-        |> optional "durationMinutes" (Decode.maybe Decode.int) Nothing
-        |> optional "work" Decode.bool False
-
-
-fileDecoder : Decoder File
-fileDecoder =
-    Decode.map4 File (Decode.field "path" Decode.string) (Decode.field "name" Decode.string) (Decode.field "basename" Decode.string) (Decode.field "extension" Decode.string)
-
-
-projectDecoder : Decoder Project
-projectDecoder =
-    Decode.map4 Project (Decode.field "id" Decode.string) (Decode.field "title" Decode.string) (Decode.field "status" Decode.string) (optionalField "parentProjectId" (Decode.maybe Decode.string) Nothing)
-
-
-issueDecoder : Decoder Issue
-issueDecoder =
-    Decode.map2 Issue (Decode.field "path" Decode.string) (Decode.field "message" Decode.string)
-
-
-settingsDecoder : Decoder Settings
-settingsDecoder =
-    Decode.succeed Settings
-        |> required "inboxDirectory" Decode.string
-        |> required "referenceDirectory" Decode.string
-        |> required "projectsDirectory" Decode.string
-        |> required "actionsDirectory" Decode.string
-        |> required "defaultProjectImage" Decode.string
-        |> required "showProjectBoardImages" Decode.bool
-        |> required "defaultActionStatus" Decode.string
-        |> required "showDoneColumn" Decode.bool
-        |> required "projectBoardColumns" (Decode.list Decode.string)
-        |> required "savedViews" (Decode.list savedViewDecoder)
-        |> required "activeSavedViewId" (Decode.maybe Decode.string)
-        |> required "googleCalendar" googleCalendarDecoder
-        |> required "schemaVersion" Decode.int
-
-
-googleCalendarDecoder : Decoder GoogleCalendarSettings
-googleCalendarDecoder =
-    Decode.map5 GoogleCalendarSettings (Decode.field "enabled" Decode.bool) (Decode.field "endpointUrl" Decode.string) (Decode.field "sharedSecret" Decode.string) (Decode.field "sourceId" Decode.string) (Decode.field "defaultDurationMinutes" Decode.int)
-
-
-savedViewDecoder : Decoder SavedView
-savedViewDecoder =
-    Decode.map3 SavedView (Decode.field "id" Decode.string) (Decode.field "name" Decode.string) configurationDecoder
-
-
-configurationDecoder : Decoder Configuration
-configurationDecoder =
-    Decode.map4 Configuration (Decode.field "filters" (Decode.list filterDecoder)) (Decode.field "groupBy" Decode.string) (Decode.field "sort" sortDecoder) (Decode.field "visibleColumns" (Decode.maybe (Decode.list Decode.string)))
-
-
-sortDecoder : Decoder SortSpec
-sortDecoder =
-    Decode.map2 SortSpec (Decode.field "field" Decode.string) (Decode.field "direction" Decode.string)
-
-
-filterDecoder : Decoder Filter
-filterDecoder =
-    Decode.field "kind" Decode.string
-        |> Decode.andThen
-            (\kind ->
-                case kind of
-                    "value" ->
-                        Decode.map3 ValueFilter (Decode.field "field" Decode.string) (Decode.field "operator" Decode.string) (Decode.field "values" (Decode.list Decode.string))
-
-                    "due" ->
-                        Decode.map2 DueFilter (Decode.field "operator" Decode.string) (optionalField "value" (Decode.maybe dueValueDecoder) Nothing)
-
-                    "availability" ->
-                        Decode.succeed AvailabilityFilter
-
-                    "work" ->
-                        Decode.map WorkFilter (Decode.field "value" Decode.bool)
-
-                    _ ->
-                        Decode.fail ("Unknown filter kind: " ++ kind)
-            )
-
-
-dueValueDecoder : Decoder DueValue
-dueValueDecoder =
-    Decode.oneOf [ Decode.map DaysValue Decode.int, Decode.map DateValue Decode.string ]
-
-
-hostEventDecoder : Decoder HostEvent
-hostEventDecoder =
-    Decode.field "type" Decode.string
-        |> Decode.andThen
-            (\kind ->
-                case kind of
-                    "snapshot" ->
-                        Decode.map SnapshotEvent (Decode.field "snapshot" snapshotDecoder)
-
-                    "command-result" ->
-                        Decode.map4 CommandResult (Decode.field "requestId" Decode.string) (Decode.field "ok" Decode.bool) (optionalField "error" (Decode.maybe Decode.string) Nothing) (optionalField "value" (Decode.maybe Decode.string) Nothing)
-
-                    _ ->
-                        Decode.fail ("Unknown host event: " ++ kind)
-            )
-
-
-required : String -> Decoder a -> Decoder (a -> b) -> Decoder b
-required name decoder pipeline =
-    Decode.map2 (<|) pipeline (Decode.field name decoder)
-
-
-optional : String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
-optional name decoder fallback pipeline =
-    Decode.map2 (<|) pipeline (optionalField name decoder fallback)
-
-
-optionalField : String -> Decoder a -> a -> Decoder a
-optionalField name decoder fallback =
-    Decode.oneOf [ Decode.field name decoder, Decode.succeed fallback ]
-
-
-encodeSettings : Settings -> Encode.Value
-encodeSettings settings =
-    Encode.object
-        [ ( "inboxDirectory", Encode.string settings.inboxDirectory )
-        , ( "referenceDirectory", Encode.string settings.referenceDirectory )
-        , ( "projectsDirectory", Encode.string settings.projectsDirectory )
-        , ( "actionsDirectory", Encode.string settings.actionsDirectory )
-        , ( "defaultProjectImage", Encode.string settings.defaultProjectImage )
-        , ( "showProjectBoardImages", Encode.bool settings.showProjectBoardImages )
-        , ( "defaultActionStatus", Encode.string settings.defaultActionStatus )
-        , ( "showDoneColumn", Encode.bool settings.showDoneColumn )
-        , ( "projectBoardColumns", Encode.list Encode.string settings.projectBoardColumns )
-        , ( "savedViews", Encode.list encodeSavedView settings.savedViews )
-        , ( "activeSavedViewId", encodeMaybe Encode.string settings.activeSavedViewId )
-        , ( "googleCalendar", encodeGoogleCalendar settings.googleCalendar )
-        , ( "schemaVersion", Encode.int settings.schemaVersion )
-        ]
-
-
-encodeGoogleCalendar : GoogleCalendarSettings -> Encode.Value
-encodeGoogleCalendar settings =
-    Encode.object [ ( "enabled", Encode.bool settings.enabled ), ( "endpointUrl", Encode.string settings.endpointUrl ), ( "sharedSecret", Encode.string settings.sharedSecret ), ( "sourceId", Encode.string settings.sourceId ), ( "defaultDurationMinutes", Encode.int settings.defaultDurationMinutes ) ]
-
-
-encodeSavedView : SavedView -> Encode.Value
-encodeSavedView saved =
-    Encode.object ([ ( "id", Encode.string saved.id ), ( "name", Encode.string saved.name ) ] ++ encodeConfigurationFields saved.configuration)
-
-
-encodeConfigurationFields : Configuration -> List ( String, Encode.Value )
-encodeConfigurationFields config =
-    [ ( "filters", Encode.list encodeFilter config.filters ), ( "groupBy", Encode.string config.groupBy ), ( "sort", Encode.object [ ( "field", Encode.string config.sort.field ), ( "direction", Encode.string config.sort.direction ) ] ), ( "visibleColumns", encodeMaybe (Encode.list Encode.string) config.visibleColumns ) ]
-
-
-encodeFilter : Filter -> Encode.Value
-encodeFilter filter =
-    case filter of
-        ValueFilter field operator values ->
-            Encode.object [ ( "kind", Encode.string "value" ), ( "field", Encode.string field ), ( "operator", Encode.string operator ), ( "values", Encode.list Encode.string values ) ]
-
-        DueFilter operator maybeValue ->
-            let
-                valueField =
-                    case maybeValue of
-                        Just dueValue ->
-                            [ ( "value", encodeDueValue dueValue ) ]
-
-                        Nothing ->
-                            []
-            in
-            Encode.object ([ ( "kind", Encode.string "due" ), ( "operator", Encode.string operator ) ] ++ valueField)
-
-        AvailabilityFilter ->
-            Encode.object [ ( "kind", Encode.string "availability" ), ( "operator", Encode.string "available" ) ]
-
-        WorkFilter expected ->
-            Encode.object [ ( "kind", Encode.string "work" ), ( "value", Encode.bool expected ) ]
-
-
-encodeDueValue : DueValue -> Encode.Value
-encodeDueValue dueValue =
-    case dueValue of
-        DateValue date ->
-            Encode.string date
-
-        DaysValue days ->
-            Encode.int days
-
-
-encodeMaybe : (a -> Encode.Value) -> Maybe a -> Encode.Value
-encodeMaybe encoder maybeValue =
-    Maybe.map encoder maybeValue |> Maybe.withDefault Encode.null
-
-
-defaultConfiguration : Settings -> Configuration
-defaultConfiguration settings =
-    { filters = [], groupBy = "status", sort = { field = "created", direction = "desc" }, visibleColumns = Just (statusColumns settings) }
-
-
-statusColumns : Settings -> List String
-statusColumns settings =
-    [ "next", "waiting", "scheduled" ]
-        ++ (if settings.showDoneColumn then
-                [ "done" ]
-
-            else
-                []
-           )
-
-
-findSavedView : List SavedView -> String -> Maybe SavedView
-findSavedView views savedId =
-    List.filter (\saved -> saved.id == savedId) views |> List.head
-
-
-findAction : String -> List Action -> Maybe Action
-findAction actionId actions =
-    List.filter (\action -> action.id == actionId) actions |> List.head
-
-
-findProject : String -> List Project -> Maybe Project
-findProject projectId projects =
-    List.filter (\project -> project.id == projectId) projects |> List.head
-
-
-projectBreadcrumb : List Project -> Project -> String
-projectBreadcrumb projects project =
-    let
-        walk seen current =
-            if Set.member current.id seen then
-                [ current.title ]
-
-            else
-                case current.parentProjectId |> Maybe.andThen (\parentId -> findProject parentId projects) of
-                    Just parent ->
-                        walk (Set.insert current.id seen) parent ++ [ current.title ]
-
-                    Nothing ->
-                        [ current.title ]
-    in
-    String.join " > " (walk Set.empty project)
-
-
-scheduleText : Action -> Maybe String
-scheduleText action =
-    case action.scheduledStart of
-        Just start ->
-            if String.length start == 10 then
-                Just (start ++ " · all day")
-
-            else
-                Maybe.map (\minutes -> start ++ " · " ++ String.fromInt minutes ++ " min") action.durationMinutes
-
-        Nothing ->
-            if action.status == "scheduled" then
-                Just "Missing schedule"
-
-            else
-                Nothing
-
-
-hasSchedule : Action -> Bool
-hasSchedule action =
-    case action.scheduledStart of
-        Just start ->
-            String.length start == 10 || action.durationMinutes /= Nothing
-
-        Nothing ->
-            False
-
-
-displayLabel : String -> String
-displayLabel value_ =
-    if String.isEmpty value_ then
-        "None"
+    Command.ShowMenu x
+        y
+        (statusEntries
+            ++ (MenuSeparator :: projectEntries)
+            ++ (if List.isEmpty contexts then
+                    []
+
+                else
+                    MenuSeparator :: contextEntries
+               )
+            ++ [ MenuSeparator
+               , MenuItem "Edit…" (Command.EditActionModal action.id)
+               , MenuItem "Delete Action…" (Command.TrashAction action.id)
+               ]
+        )
+
+
+tick : Bool -> String
+tick marked =
+    if marked then
+        "✓ "
 
     else
-        String.toUpper (String.left 1 value_) ++ String.dropLeft 1 value_
+        ""
 
 
-applyVisible : Maybe (List String) -> List String -> List String
-applyVisible visible keys =
-    case visible of
-        Just allowed ->
-            List.filter (\key -> List.member key allowed) keys
 
-        Nothing ->
-            keys
+-- KEYS FOR SELECT CONTROLS
 
 
-uniqueSorted : List String -> List String
-uniqueSorted values =
-    values |> Set.fromList |> Set.toList |> List.sort
+groupByKey : GroupBy -> String
+groupByKey groupBy =
+    case groupBy of
+        GroupByStatus ->
+            "status"
+
+        GroupByProject ->
+            "project"
+
+        GroupByContext ->
+            "context"
+
+        GroupByEnergy ->
+            "energy"
+
+
+sortFieldKey : SortField -> String
+sortFieldKey field =
+    case field of
+        SortByCreated ->
+            "created"
+
+        SortByDue ->
+            "due"
+
+        SortByTitle ->
+            "title"
+
+        SortByProject ->
+            "project"
+
+
+operatorKey : MatchOperator -> String
+operatorKey operator =
+    case operator of
+        Is ->
+            "in"
+
+        IsNot ->
+            "notIn"
+
+
+filterFieldKey : FilterField -> String
+filterFieldKey field =
+    case field of
+        FieldStatus ->
+            "status"
+
+        FieldProject ->
+            "project"
+
+        FieldContext ->
+            "context"
+
+        FieldEnergy ->
+            "energy"
+
+        FieldDue ->
+            "due"
+
+        FieldAvailable ->
+            "available"
+
+        FieldWork ->
+            "work"
+
+
+dueOperatorKey : DueOperator -> String
+dueOperatorKey operator =
+    case operator of
+        OpBefore ->
+            "before"
+
+        OpOnOrBefore ->
+            "onOrBefore"
+
+        OpAfter ->
+            "after"
+
+        OpOnOrAfter ->
+            "onOrAfter"
+
+        OpWithinNextDays ->
+            "withinNextDays"
+
+        OpIsEmpty ->
+            "isEmpty"
+
+        OpIsNotEmpty ->
+            "isNotEmpty"
+
+
+
+-- HELPERS
 
 
 removeAt : Int -> List a -> List a
-removeAt index_ values =
-    List.indexedMap Tuple.pair values |> List.filter (\( candidate, _ ) -> candidate /= index_) |> List.map Tuple.second
+removeAt index values =
+    List.indexedMap Tuple.pair values |> List.filter (\( candidate, _ ) -> candidate /= index) |> List.map Tuple.second
 
 
-visibleActionIds : Model -> List String
-visibleActionIds model =
-    buildGroups model |> List.concatMap (.actions >> List.map .id)
-
-
-adjacent : String -> String -> List String -> Maybe String
-adjacent key current values =
-    let
-        indexed =
-            List.indexedMap Tuple.pair values
-
-        currentIndex =
-            List.filter (\( _, value_ ) -> value_ == current) indexed |> List.head |> Maybe.map Tuple.first
-
-        offset =
-            if key == "ArrowDown" then
-                1
-
-            else
-                -1
-    in
-    currentIndex |> Maybe.andThen (\index_ -> List.drop (index_ + offset) values |> List.head)
-
-
-cardDomId : String -> String
-cardDomId actionId =
-    "dg-action-" ++ actionId
-
-
+{-| Calendar arithmetic on `yyyy-mm-dd`, through the day number of the proleptic
+Gregorian calendar.
+-}
 addDays : String -> Int -> String
 addDays date amount =
     case String.split "-" date |> List.filterMap String.toInt of
@@ -1701,13 +1576,13 @@ ordinal year month day =
 
 
 dateFromOrdinal : Int -> String
-dateFromOrdinal value_ =
+dateFromOrdinal value =
     let
         era =
-            value_ // 146097
+            value // 146097
 
         dayOfEra =
-            value_ - era * 146097
+            value - era * 146097
 
         yearOfEra =
             (dayOfEra - dayOfEra // 1460 + dayOfEra // 36524 - dayOfEra // 146096) // 365
@@ -1748,26 +1623,22 @@ dateFromOrdinal value_ =
     String.fromInt year ++ "-" ++ pad month ++ "-" ++ pad day
 
 
-emptySnapshot : Snapshot
-emptySnapshot =
-    { revision = 0
-    , today = ""
-    , actions = []
-    , projects = []
-    , issues = []
-    , settings =
-        { inboxDirectory = ""
-        , referenceDirectory = ""
-        , projectsDirectory = ""
-        , actionsDirectory = ""
-        , defaultProjectImage = ""
-        , showProjectBoardImages = True
-        , defaultActionStatus = "next"
-        , showDoneColumn = True
-        , projectBoardColumns = []
-        , savedViews = []
-        , activeSavedViewId = Nothing
-        , googleCalendar = { enabled = False, endpointUrl = "", sharedSecret = "", sourceId = "", defaultDurationMinutes = 30 }
-        , schemaVersion = 0
-        }
-    }
+
+-- DECODING
+
+
+hostEventDecoder : Decoder HostEvent
+hostEventDecoder =
+    Decode.field "type" Decode.string
+        |> Decode.andThen
+            (\kind ->
+                case kind of
+                    "snapshot" ->
+                        Decode.map SnapshotEvent (Decode.field "snapshot" Data.snapshotDecoder)
+
+                    "command-result" ->
+                        Decode.map Replied Host.outcomeDecoder
+
+                    _ ->
+                        Decode.fail ("Unknown host event: " ++ kind)
+            )

@@ -1,10 +1,16 @@
 port module Inbox exposing (main)
 
 import Browser
-import Dict exposing (Dict)
-import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, option, p, section, select, small, span, text, textarea)
-import Html.Attributes exposing (attribute, checked, class, classList, controls, disabled, placeholder, preload, selected, src, style, title, type_, value)
-import Html.Events exposing (custom, onBlur, onCheck, onClick, onFocus, onInput, onMouseEnter)
+import Gtd.Command as Command exposing (Command, Disposition(..))
+import Gtd.Data as Data exposing (InboxItem, Project, Snapshot)
+import Gtd.Hierarchy as Hierarchy
+import Gtd.Host as Host exposing (Requests)
+import Gtd.Id exposing (InboxItemId)
+import Gtd.Picker as Picker exposing (Picker)
+import Gtd.Ui as Ui
+import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, p, section, small, span, text, textarea)
+import Html.Attributes exposing (attribute, checked, class, classList, controls, placeholder, preload, src, style, title, type_, value)
+import Html.Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -17,53 +23,19 @@ port inboxToHost : Encode.Value -> Cmd msg
 port inboxFromHost : (Decode.Value -> msg) -> Sub msg
 
 
-protocolVersion : Int
-protocolVersion =
-    1
+{-| The decision budget for one Inbox Item.
+-}
+decisionSeconds : Int
+decisionSeconds =
+    120
 
 
-type alias File =
-    { path : String, extension : String }
-
-
-type alias InboxItem =
-    { id : String
-    , title : String
-    , created : String
-    , file : File
-    , resourceUrl : String
-    , legacyAction : Bool
-    }
-
-
-type alias Action =
-    { context : Maybe String }
-
-
-type alias Project =
-    { id : String
-    , title : String
-    , status : String
-    , area : Maybe String
-    , parentProjectId : Maybe String
-    }
-
-
-type alias Issue =
-    { path : String, message : String }
-
-
-type alias Snapshot =
-    { revision : Int
-    , inboxItems : List InboxItem
-    , actions : List Action
-    , projects : List Project
-    , issues : List Issue
-    }
-
-
-type alias Flags =
-    { snapshot : Snapshot, initialProcessing : Bool }
+{-| What a host reply should finish, and for which Item.
+-}
+type Pending
+    = IgnoreReply
+    | LoadBody InboxItemId
+    | Working InboxItemId
 
 
 type alias Model =
@@ -73,23 +45,15 @@ type alias Model =
     , cursor : Int
     , sessionTotal : Int
     , seconds : Int
-    , body : String
-    , bodyFor : Maybe String
-    , projectQuery : String
-    , projectId : String
+    , body : Maybe { itemId : InboxItemId, text : String }
+    , project : Picker Project
+    , context : Picker String
     , desiredOutcome : String
     , nextAction : String
-    , context : String
     , work : Bool
     , someday : Bool
     , fileOriginal : Bool
-    , projectSuggestionsOpen : Bool
-    , contextSuggestionsOpen : Bool
-    , projectActiveIndex : Int
-    , contextActiveIndex : Int
-    , busyItems : Set String
-    , bodyRequests : Dict String String
-    , nextRequest : Int
+    , requests : Requests Pending
     , error : Maybe String
     }
 
@@ -98,27 +62,18 @@ type Msg
     = GotHost Decode.Value
     | Tick Time.Posix
     | SearchChanged String
-    | StartProcessing (Maybe String)
+    | StartProcessing (Maybe InboxItemId)
     | ShowList
-    | ProjectChanged String
-    | ChooseProject String String
-    | SetProjectSuggestions Bool
-    | ProjectKey String
-    | HoverProject Int
+    | ProjectPicker (Picker.PickerMsg Project)
+    | ContextPicker (Picker.PickerMsg String)
     | DesiredOutcomeChanged String
     | NextActionChanged String
-    | ContextChanged String
-    | ChooseContext String
-    | SetContextSuggestions Bool
-    | ContextKey String
-    | HoverContext Int
     | SetWork Bool
     | SetSomeday Bool
     | SetFileOriginal Bool
-    | DeleteItem String
+    | DeleteItem InboxItemId
     | ProcessItem
-    | OpenFile String
-    | Capture
+    | Send Pending Command
 
 
 main : Program Decode.Value Model Msg
@@ -131,13 +86,17 @@ main =
         }
 
 
+type alias Flags =
+    { snapshot : Snapshot, initialProcessing : Bool }
+
+
 init : Decode.Value -> ( Model, Cmd Msg )
 init flagsValue =
     case Decode.decodeValue flagsDecoder flagsValue of
         Ok flags ->
             let
                 model =
-                    initialModel flags
+                    initialModel flags.snapshot
             in
             if flags.initialProcessing && not (List.isEmpty flags.snapshot.inboxItems) then
                 enterProcessing Nothing model
@@ -146,40 +105,33 @@ init flagsValue =
                 ( model, Cmd.none )
 
         Err error ->
-            let
-                fallback =
-                    initialModel emptyFlags
-            in
-            ( { fallback | error = Just (Decode.errorToString error) }, Cmd.none )
+            ( { blank | error = Just (Decode.errorToString error) }, Cmd.none )
 
 
-initialModel : Flags -> Model
-initialModel flags =
-    { snapshot = flags.snapshot
+initialModel : Snapshot -> Model
+initialModel snapshot =
+    { snapshot = snapshot
     , search = ""
     , processing = False
     , cursor = 0
     , sessionTotal = 0
-    , seconds = 120
-    , body = ""
-    , bodyFor = Nothing
-    , projectQuery = ""
-    , projectId = ""
+    , seconds = decisionSeconds
+    , body = Nothing
+    , project = Picker.init "" Nothing
+    , context = Picker.init "" Nothing
     , desiredOutcome = ""
     , nextAction = ""
-    , context = ""
     , work = False
     , someday = False
     , fileOriginal = False
-    , projectSuggestionsOpen = False
-    , contextSuggestionsOpen = False
-    , projectActiveIndex = 0
-    , contextActiveIndex = 0
-    , busyItems = Set.empty
-    , bodyRequests = Dict.empty
-    , nextRequest = 1
+    , requests = Host.noRequests
     , error = Nothing
     }
+
+
+blank : Model
+blank =
+    initialModel Data.empty
 
 
 subscriptions : Model -> Sub Msg
@@ -197,8 +149,8 @@ subscriptions model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotHost value_ ->
-            receiveHost value_ model
+        GotHost value ->
+            receiveHost value model
 
         Tick _ ->
             ( { model | seconds = max 0 (model.seconds - 1) }, Cmd.none )
@@ -212,41 +164,22 @@ update msg model =
         ShowList ->
             ( { model | processing = False }, Cmd.none )
 
-        ProjectChanged query ->
-            ( { model | projectQuery = query, projectId = "", projectSuggestionsOpen = True, projectActiveIndex = 0 }, Cmd.none )
+        ProjectPicker pickerMsg ->
+            ( { model
+                | project =
+                    Picker.update pickerMsg (projectSuggestions model) (Hierarchy.breadcrumb model.snapshot.projects) model.project
+              }
+            , Cmd.none
+            )
 
-        ChooseProject projectId projectName ->
-            ( { model | projectId = projectId, projectQuery = projectName, projectSuggestionsOpen = False }, Cmd.none )
-
-        SetProjectSuggestions open ->
-            ( { model | projectSuggestionsOpen = open }, Cmd.none )
-
-        ProjectKey key ->
-            projectKey key model
-
-        HoverProject index_ ->
-            ( { model | projectActiveIndex = index_ }, Cmd.none )
+        ContextPicker pickerMsg ->
+            ( { model | context = Picker.update pickerMsg (contextSuggestions model) identity model.context }, Cmd.none )
 
         DesiredOutcomeChanged desiredOutcome ->
             ( { model | desiredOutcome = desiredOutcome }, Cmd.none )
 
         NextActionChanged nextAction ->
             ( { model | nextAction = nextAction }, Cmd.none )
-
-        ContextChanged context ->
-            ( { model | context = context, contextSuggestionsOpen = True, contextActiveIndex = 0 }, Cmd.none )
-
-        ChooseContext context ->
-            ( { model | context = context, contextSuggestionsOpen = False }, Cmd.none )
-
-        SetContextSuggestions open ->
-            ( { model | contextSuggestionsOpen = open }, Cmd.none )
-
-        ContextKey key ->
-            contextKey key model
-
-        HoverContext index_ ->
-            ( { model | contextActiveIndex = index_ }, Cmd.none )
 
         SetWork work ->
             ( { model | work = work }, Cmd.none )
@@ -258,7 +191,7 @@ update msg model =
             ( { model | fileOriginal = fileOriginal }, Cmd.none )
 
         DeleteItem itemId ->
-            sendBusy itemId (Encode.object [ ( "type", Encode.string "trash-inbox-item" ), ( "itemId", Encode.string itemId ) ]) model
+            sendForItem itemId (Command.TrashInboxItem itemId) model
 
         ProcessItem ->
             case currentItem model of
@@ -267,23 +200,20 @@ update msg model =
 
                 Just item ->
                     let
-                        disposition =
-                            primaryDisposition model
+                        decision =
+                            disposition model
                     in
-                    if not disposition.ready then
+                    if not decision.ready then
                         ( model, Cmd.none )
 
                     else
-                        sendBusy item.id (processCommand item.id disposition.operation model) model
+                        sendForItem item.id (Command.ProcessInbox item.id decision.operation (processingInput model)) model
 
-        OpenFile path ->
-            sendSimple (Encode.object [ ( "type", Encode.string "open-file" ), ( "path", Encode.string path ) ]) model
-
-        Capture ->
-            sendSimple (Encode.object [ ( "type", Encode.string "quick-capture" ) ]) model
+        Send pending command ->
+            send pending command model
 
 
-enterProcessing : Maybe String -> Model -> ( Model, Cmd Msg )
+enterProcessing : Maybe InboxItemId -> Model -> ( Model, Cmd Msg )
 enterProcessing maybeId model =
     let
         items =
@@ -293,186 +223,103 @@ enterProcessing maybeId model =
             maybeId
                 |> Maybe.andThen (\wanted -> indexOf wanted items)
                 |> Maybe.withDefault 0
-
-        processingModel =
-            { model | processing = True, cursor = cursor, sessionTotal = List.length items }
     in
-    resetCurrent processingModel
+    resetCurrent { model | processing = True, cursor = cursor, sessionTotal = List.length items }
 
 
 resetCurrent : Model -> ( Model, Cmd Msg )
 resetCurrent model =
     case currentItem model of
         Nothing ->
-            ( { model | body = "", bodyFor = Nothing }, Cmd.none )
+            ( { model | body = Nothing }, Cmd.none )
 
         Just item ->
             let
                 prefill =
                     String.left 50 item.title
-
-                reset =
-                    { model
-                        | seconds = 120
-                        , body = ""
-                        , bodyFor = Nothing
-                        , projectQuery = prefill
-                        , projectId = ""
-                        , desiredOutcome = ""
-                        , nextAction = prefill
-                        , context = ""
-                        , work = False
-                        , someday = False
-                        , fileOriginal = False
-                        , projectSuggestionsOpen = False
-                        , contextSuggestionsOpen = False
-                        , projectActiveIndex = 0
-                        , contextActiveIndex = 0
-                        , error = Nothing
-                    }
             in
-            requestBody item reset
+            send (LoadBody item.id)
+                (Command.ReadInboxBody item.id)
+                { model
+                    | seconds = decisionSeconds
+                    , body = Nothing
+                    , project = Picker.init prefill Nothing
+                    , context = Picker.init "" Nothing
+                    , desiredOutcome = ""
+                    , nextAction = prefill
+                    , work = False
+                    , someday = False
+                    , fileOriginal = False
+                    , error = Nothing
+                }
 
 
-requestBody : InboxItem -> Model -> ( Model, Cmd Msg )
-requestBody item model =
+send : Pending -> Command -> Model -> ( Model, Cmd Msg )
+send pending command model =
     let
-        requestId =
-            requestIdFor model
-
-        command =
-            Encode.object [ ( "type", Encode.string "read-inbox-body" ), ( "itemId", Encode.string item.id ) ]
+        ( requestId, requests ) =
+            Host.issue pending model.requests
     in
-    ( { model | nextRequest = model.nextRequest + 1, bodyRequests = Dict.insert requestId item.id model.bodyRequests }
-    , inboxToHost (envelope requestId command)
-    )
+    ( { model | requests = requests }, inboxToHost (Host.envelope requestId (Command.encode command)) )
 
 
-sendBusy : String -> Encode.Value -> Model -> ( Model, Cmd Msg )
-sendBusy itemId command model =
-    if Set.member itemId model.busyItems then
+{-| One command per Item at a time: a second click while a write is in flight is a slip.
+-}
+sendForItem : InboxItemId -> Command -> Model -> ( Model, Cmd Msg )
+sendForItem itemId command model =
+    if Set.member itemId (busyItems model) then
         ( model, Cmd.none )
 
     else
-        let
-            requestId =
-                requestIdFor model
-        in
-        ( { model | nextRequest = model.nextRequest + 1, busyItems = Set.insert itemId model.busyItems }
-        , inboxToHost (envelope requestId command)
-        )
+        send (Working itemId) command model
 
 
-sendSimple : Encode.Value -> Model -> ( Model, Cmd Msg )
-sendSimple command model =
-    let
-        requestId =
-            requestIdFor model
-    in
-    ( { model | nextRequest = model.nextRequest + 1 }, inboxToHost (envelope requestId command) )
+{-| The Items with a write in flight, read straight from the requests still open.
+-}
+busyItems : Model -> Set InboxItemId
+busyItems model =
+    Host.pending model.requests
+        |> List.filterMap
+            (\pending ->
+                case pending of
+                    Working itemId ->
+                        Just itemId
+
+                    _ ->
+                        Nothing
+            )
+        |> Set.fromList
 
 
-projectKey : String -> Model -> ( Model, Cmd Msg )
-projectKey key model =
-    let
-        suggestions =
-            projectSuggestions model
 
-        count =
-            List.length suggestions
-    in
-    case key of
-        "Escape" ->
-            ( { model | projectSuggestionsOpen = False }, Cmd.none )
-
-        "ArrowDown" ->
-            ( { model | projectSuggestionsOpen = True, projectActiveIndex = nextIndex 1 count model.projectActiveIndex }, Cmd.none )
-
-        "ArrowUp" ->
-            ( { model | projectSuggestionsOpen = True, projectActiveIndex = nextIndex -1 count model.projectActiveIndex }, Cmd.none )
-
-        "Enter" ->
-            if model.projectSuggestionsOpen then
-                case List.drop model.projectActiveIndex suggestions |> List.head of
-                    Just project ->
-                        ( { model | projectId = project.id, projectQuery = projectBreadcrumb model.snapshot.projects project, projectSuggestionsOpen = False }, Cmd.none )
-
-                    Nothing ->
-                        ( model, Cmd.none )
-
-            else
-                ( model, Cmd.none )
-
-        _ ->
-            ( model, Cmd.none )
+-- HOST EVENTS
 
 
-contextKey : String -> Model -> ( Model, Cmd Msg )
-contextKey key model =
-    let
-        suggestions =
-            contextSuggestions model
-
-        count =
-            List.length suggestions
-    in
-    case key of
-        "Escape" ->
-            ( { model | contextSuggestionsOpen = False }, Cmd.none )
-
-        "ArrowDown" ->
-            ( { model | contextSuggestionsOpen = True, contextActiveIndex = nextIndex 1 count model.contextActiveIndex }, Cmd.none )
-
-        "ArrowUp" ->
-            ( { model | contextSuggestionsOpen = True, contextActiveIndex = nextIndex -1 count model.contextActiveIndex }, Cmd.none )
-
-        "Enter" ->
-            if model.contextSuggestionsOpen then
-                case List.drop model.contextActiveIndex suggestions |> List.head of
-                    Just context ->
-                        ( { model | context = context, contextSuggestionsOpen = False }, Cmd.none )
-
-                    Nothing ->
-                        ( model, Cmd.none )
-
-            else
-                ( model, Cmd.none )
-
-        _ ->
-            ( model, Cmd.none )
-
-
-nextIndex : Int -> Int -> Int -> Int
-nextIndex direction count current =
-    if count == 0 then
-        0
-
-    else
-        modBy count (current + direction)
+type HostEvent
+    = SnapshotEvent Snapshot
+    | StartProcessingEvent
+    | Replied Host.Outcome
 
 
 receiveHost : Decode.Value -> Model -> ( Model, Cmd Msg )
-receiveHost value_ model =
-    case Decode.decodeValue hostEventDecoder value_ of
+receiveHost value model =
+    case Decode.decodeValue hostEventDecoder value of
         Ok (SnapshotEvent snapshot) ->
             let
                 previousId =
                     currentItem model |> Maybe.map .id
 
-                remainingIds =
-                    Set.fromList (List.map .id snapshot.inboxItems)
-
-                nextModel =
-                    { model | snapshot = snapshot, busyItems = Set.intersect model.busyItems remainingIds }
+                next =
+                    { model | snapshot = snapshot }
 
                 nextId =
-                    currentItem nextModel |> Maybe.map .id
+                    currentItem next |> Maybe.map .id
             in
             if model.processing && previousId /= nextId then
-                resetCurrent nextModel
+                resetCurrent next
 
             else
-                ( nextModel, Cmd.none )
+                ( next, Cmd.none )
 
         Ok StartProcessingEvent ->
             if model.processing then
@@ -481,34 +328,39 @@ receiveHost value_ model =
             else
                 enterProcessing Nothing model
 
-        Ok (CommandResult requestId succeeded error resultValue) ->
-            case Dict.get requestId model.bodyRequests of
-                Just itemId ->
-                    let
-                        next =
-                            { model | bodyRequests = Dict.remove requestId model.bodyRequests }
-                    in
-                    if succeeded && (currentItem model |> Maybe.map .id) == Just itemId then
-                        ( { next | body = Maybe.withDefault "" resultValue, bodyFor = Just itemId }, Cmd.none )
+        Ok (Replied outcome) ->
+            let
+                ( pending, requests ) =
+                    Host.resolve outcome.requestId model.requests
+
+                next =
+                    { model | requests = requests }
+            in
+            case ( outcome.result, Maybe.withDefault IgnoreReply pending ) of
+                ( Err message, _ ) ->
+                    ( { next | error = Just message }, Cmd.none )
+
+                ( Ok resultValue, LoadBody itemId ) ->
+                    if (currentItem model |> Maybe.map .id) == Just itemId then
+                        ( { next | body = Just { itemId = itemId, text = decodedString resultValue } }, Cmd.none )
 
                     else
                         ( next, Cmd.none )
 
-                Nothing ->
-                    if succeeded then
-                        ( model, Cmd.none )
-
-                    else
-                        ( { model | busyItems = Set.empty, error = error }, Cmd.none )
+                ( Ok _, _ ) ->
+                    ( { next | error = Nothing }, Cmd.none )
 
         Err error ->
             ( { model | error = Just (Decode.errorToString error) }, Cmd.none )
 
 
-type HostEvent
-    = SnapshotEvent Snapshot
-    | StartProcessingEvent
-    | CommandResult String Bool (Maybe String) (Maybe String)
+decodedString : Decode.Value -> String
+decodedString value =
+    Decode.decodeValue Decode.string value |> Result.withDefault ""
+
+
+
+-- VIEW
 
 
 view : Model -> Html Msg
@@ -532,12 +384,12 @@ view model =
                     button [ onClick ShowList ] [ text "List" ]
 
                   else
-                    button [ disabled (List.isEmpty model.snapshot.inboxItems), onClick (StartProcessing Nothing) ] [ text "Process Inbox" ]
-                , button [ class "mod-cta", onClick Capture ] [ text "Capture" ]
+                    button [ Html.Attributes.disabled (List.isEmpty model.snapshot.inboxItems), onClick (StartProcessing Nothing) ] [ text "Process Inbox" ]
+                , button [ class "mod-cta", onClick (Send IgnoreReply Command.QuickCapture) ] [ text "Capture" ]
                 ]
             ]
-        , issuesView model.snapshot.issues
-        , Maybe.map (\message -> div [ class "dg-warning" ] [ text message ]) model.error |> Maybe.withDefault (text "")
+        , Ui.issuesView model.snapshot.issues
+        , Ui.maybeView model.error (\message -> div [ class "dg-warning" ] [ text message ])
         , if model.processing then
             processorView model
 
@@ -546,30 +398,16 @@ view model =
         ]
 
 
-issuesView : List Issue -> Html Msg
-issuesView issues =
-    if List.isEmpty issues then
-        text ""
-
-    else
-        div
-            [ class "dg-warning"
-            , title (String.join "\n" (List.map (\problem -> problem.path ++ ": " ++ problem.message) issues))
-            ]
-            [ text (String.fromInt (List.length issues) ++ " GTD files have metadata problems.") ]
-
-
 listView : Model -> Html Msg
 listView model =
     let
-        needle =
-            String.toLower (String.trim model.search)
-
         items =
-            sortedItems model.snapshot.inboxItems |> List.filter (\item -> String.isEmpty needle || String.contains needle (String.toLower item.title))
+            sortedItems model.snapshot.inboxItems
+                |> List.filter (\item -> Ui.matches model.search [ item.title ])
     in
     div []
-        [ div [ class "dg-toolbar dg-inbox-toolbar" ] [ input [ type_ "search", placeholder "Search Inbox", value model.search, onInput SearchChanged ] [] ]
+        [ div [ class "dg-toolbar dg-inbox-toolbar" ]
+            [ input [ type_ "search", placeholder "Search Inbox", value model.search, onInput SearchChanged ] [] ]
         , div [ class "dg-inbox-list", attribute "role" "list", attribute "aria-label" "Inbox Items" ]
             (if List.isEmpty items then
                 [ div [ class "dg-empty-row" ]
@@ -584,55 +422,53 @@ listView model =
                 ]
 
              else
-                List.map (inboxRow model) items
+                List.map (inboxRow (busyItems model)) items
             )
         ]
 
 
-inboxRow : Model -> InboxItem -> Html Msg
-inboxRow model item =
-    let
-        busy =
-            Set.member item.id model.busyItems
-    in
+inboxRow : Set InboxItemId -> InboxItem -> Html Msg
+inboxRow busy item =
     article [ class "dg-inbox-row", attribute "role" "listitem" ]
         [ div [ class "dg-inbox-item-main" ]
-            [ button [ class "dg-project-title", onClick (OpenFile item.file.path) ] [ text item.title ]
-            , span [ class "dg-inbox-meta" ]
-                [ text
-                    (item.created
-                        ++ (if item.legacyAction then
-                                " · Legacy Inbox Action"
-
-                            else
-                                ""
-                           )
-                    )
-                ]
+            [ button [ class "dg-project-title", onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ] [ text item.title ]
+            , span [ class "dg-inbox-meta" ] [ text (itemMeta item) ]
             ]
         , div [ class "dg-inbox-row-actions" ]
-            [ button [ class "mod-cta", disabled busy, onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
-            , button [ class "mod-warning", disabled busy, onClick (DeleteItem item.id) ] [ text "Delete" ]
+            [ button [ class "mod-cta", Html.Attributes.disabled (Set.member item.id busy), onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
+            , button [ class "mod-warning", Html.Attributes.disabled (Set.member item.id busy), onClick (DeleteItem item.id) ] [ text "Delete" ]
             ]
         ]
+
+
+itemMeta : InboxItem -> String
+itemMeta item =
+    item.created
+        ++ (if item.legacyAction then
+                " · Legacy Inbox Action"
+
+            else
+                ""
+           )
 
 
 processorView : Model -> Html Msg
 processorView model =
     case currentItem model of
         Nothing ->
-            div [ class "dg-workflow-complete" ] [ span [] [ text "🎉" ], h3 [] [ text "Inbox zero" ], p [] [ text "Everything captured has been clarified." ] ]
+            div [ class "dg-workflow-complete" ]
+                [ span [] [ text "🎉" ], h3 [] [ text "Inbox zero" ], p [] [ text "Everything captured has been clarified." ] ]
 
         Just item ->
             let
                 processed =
                     max 0 (model.sessionTotal - List.length model.snapshot.inboxItems)
 
-                disposition =
-                    primaryDisposition model
+                decision =
+                    disposition model
 
                 busy =
-                    Set.member item.id model.busyItems
+                    Set.member item.id (busyItems model)
 
                 progress =
                     if model.sessionTotal == 0 then
@@ -644,14 +480,22 @@ processorView model =
             div [ class "dg-processor" ]
                 [ div [ class "dg-workflow-progress" ]
                     [ span [] [ text (String.fromInt processed ++ " / " ++ String.fromInt model.sessionTotal ++ " processed") ]
-                    , span [ classList [ ( "is-overdue", model.seconds == 0 ) ] ] [ text (formatTimer model.seconds) ]
+                    , span [ classList [ ( "is-overdue", model.seconds == 0 ) ] ] [ text (Ui.timer model.seconds) ]
                     ]
                 , div [ class "dg-progress-track" ] [ span [ style "width" (String.fromFloat progress ++ "%") ] [] ]
                 , itemCard model item
-                , section [ class "dg-processor-action" ] [ button [ class "mod-warning", disabled busy, onClick (DeleteItem item.id) ] [ text "Delete & Next" ] ]
+                , section [ class "dg-processor-action" ]
+                    [ button [ class "mod-warning", Html.Attributes.disabled busy, onClick (DeleteItem item.id) ] [ text "Delete & Next" ] ]
                 , processingForm model
                 , section [ class "dg-processor-action" ]
-                    [ button [ class "mod-cta", title disposition.label, disabled (not disposition.ready || busy), onClick ProcessItem ] [ text disposition.label ] ]
+                    [ button
+                        [ class "mod-cta"
+                        , title decision.label
+                        , Html.Attributes.disabled (not decision.ready || busy)
+                        , onClick ProcessItem
+                        ]
+                        [ text decision.label ]
+                    ]
                 , if model.seconds == 0 then
                     div [ class "dg-warning" ] [ text "Two minutes elapsed. Make the smallest clear decision and keep moving." ]
 
@@ -662,23 +506,23 @@ processorView model =
 
 itemCard : Model -> InboxItem -> Html Msg
 itemCard model item =
+    let
+        body =
+            case model.body of
+                Just loaded ->
+                    if loaded.itemId == item.id then
+                        loaded.text
+
+                    else
+                        ""
+
+                Nothing ->
+                    ""
+    in
     section [ class "dg-processor-card" ]
         [ div [ class "dg-processor-heading" ]
-            [ div []
-                [ h3 [] [ text item.title ]
-                , span []
-                    [ text
-                        (item.created
-                            ++ (if item.legacyAction then
-                                    " · Legacy Inbox Action"
-
-                                else
-                                    ""
-                               )
-                        )
-                    ]
-                ]
-            , button [ onClick (OpenFile item.file.path) ]
+            [ div [] [ h3 [] [ text item.title ], span [] [ text (itemMeta item) ] ]
+            , button [ onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ]
                 [ text
                     (if item.file.extension == "md" then
                         "Open note"
@@ -692,13 +536,13 @@ itemCard model item =
             audio [ class "dg-inbox-audio", controls True, preload "metadata", src item.resourceUrl ] []
 
           else
-            div [ classList [ ( "dg-inbox-preview", True ), ( "is-empty", String.isEmpty model.body ) ] ]
+            div [ classList [ ( "dg-inbox-preview", True ), ( "is-empty", String.isEmpty body ) ] ]
                 [ text
-                    (if String.isEmpty model.body then
+                    (if String.isEmpty body then
                         "No additional notes."
 
                      else
-                        model.body
+                        body
                     )
                 ]
         , label [ class "dg-processing-toggle dg-inbox-file-toggle" ]
@@ -716,7 +560,7 @@ processingForm model =
             [ processingField True
                 "Project"
                 "Optional. Select an existing Project, or type a new name or “Parent > New sub-project”."
-                [ fuzzyProject model
+                [ Picker.view (projectPicker model) (projectSuggestions model) model.project
                 , label [ class "dg-processing-inline-toggle", title "Parks the Project instead of activating it." ]
                     [ input [ type_ "checkbox", checked model.someday, onCheck SetSomeday ] [], span [] [ text "Someday/Maybe" ] ]
                 ]
@@ -734,7 +578,7 @@ processingForm model =
                     , label [ class "dg-processing-inline-toggle", title "Marks the Action as work, independent of its context." ]
                         [ input [ type_ "checkbox", checked model.work, onCheck SetWork ] [], span [] [ text "Work" ] ]
                     ]
-                , fuzzyContext model
+                , Picker.view (contextPicker model) (contextSuggestions model) model.context
                 , small [] [ text "Required when creating a Next Action." ]
                 ]
             ]
@@ -747,128 +591,82 @@ processingField wide name hint children =
         (div [ class "dg-processing-field-heading" ] [ span [] [ text name ] ] :: children ++ [ small [] [ text hint ] ])
 
 
-fuzzyProject : Model -> Html Msg
-fuzzyProject model =
-    let
-        suggestions =
-            projectSuggestions model
-    in
-    div [ class "dg-fuzzy-field" ]
-        [ input [ value model.projectQuery, placeholder "Search or name a Project…", attribute "autocomplete" "off", onFocus (SetProjectSuggestions True), onBlur (SetProjectSuggestions False), onInput ProjectChanged, fuzzyKeydown model.projectSuggestionsOpen ProjectKey ] []
-        , if not model.projectSuggestionsOpen || String.isEmpty (String.trim model.projectQuery) then
-            text ""
+projectPicker : Model -> Picker.Config Project Msg
+projectPicker model =
+    Picker.config
+        { placeholder = "Search or name a Project…"
+        , label = Hierarchy.breadcrumb model.snapshot.projects
+        , hint = .area
+        , tag = ProjectPicker
+        }
 
-          else
-            div [ class "dg-fuzzy-results", attribute "role" "listbox" ]
-                (List.indexedMap
-                    (\index_ project ->
-                        button
-                            [ type_ "button"
-                            , attribute "role" "option"
-                            , attribute "aria-selected"
-                                (if index_ == model.projectActiveIndex then
-                                    "true"
 
-                                 else
-                                    "false"
-                                )
-                            , classList [ ( "is-active", index_ == model.projectActiveIndex ) ]
-                            , onMouseEnter (HoverProject index_)
-                            , preventMouseDown (ChooseProject project.id (projectBreadcrumb model.snapshot.projects project))
-                            ]
-                            [ span [] [ text (projectBreadcrumb model.snapshot.projects project) ], Maybe.map (\area -> small [] [ text area ]) project.area |> Maybe.withDefault (text "") ]
-                    )
-                    suggestions
-                )
-        ]
+contextPicker : Model -> Picker.Config String Msg
+contextPicker _ =
+    Picker.config
+        { placeholder = "Search or name a context…"
+        , label = identity
+        , hint = always Nothing
+        , tag = ContextPicker
+        }
 
 
 projectSuggestions : Model -> List Project
 projectSuggestions model =
-    model.snapshot.projects
-        |> List.filter (\project -> fuzzyMatch model.projectQuery [ project.title, projectBreadcrumb model.snapshot.projects project, Maybe.withDefault "" project.area ])
-        |> List.sortBy (projectBreadcrumb model.snapshot.projects)
-        |> List.take 8
+    if String.isEmpty (Picker.query model.project) then
+        []
 
-
-fuzzyContext : Model -> Html Msg
-fuzzyContext model =
-    let
-        suggestions =
-            contextSuggestions model
-    in
-    div [ class "dg-fuzzy-field" ]
-        [ input [ value model.context, placeholder "Search or name a context…", attribute "autocomplete" "off", onFocus (SetContextSuggestions True), onBlur (SetContextSuggestions False), onInput ContextChanged, fuzzyKeydown model.contextSuggestionsOpen ContextKey ] []
-        , if not model.contextSuggestionsOpen || String.isEmpty (String.trim model.context) then
-            text ""
-
-          else
-            div [ class "dg-fuzzy-results", attribute "role" "listbox" ]
-                (List.indexedMap
-                    (\index_ candidate ->
-                        button
-                            [ type_ "button"
-                            , attribute "role" "option"
-                            , attribute "aria-selected"
-                                (if index_ == model.contextActiveIndex then
-                                    "true"
-
-                                 else
-                                    "false"
-                                )
-                            , classList [ ( "is-active", index_ == model.contextActiveIndex ) ]
-                            , onMouseEnter (HoverContext index_)
-                            , preventMouseDown (ChooseContext candidate)
-                            ]
-                            [ span [] [ text candidate ] ]
-                    )
-                    suggestions
+    else
+        model.snapshot.projects
+            |> List.filter
+                (\project ->
+                    Ui.matches model.project.query
+                        [ project.title
+                        , Hierarchy.breadcrumb model.snapshot.projects project
+                        , Maybe.withDefault "" project.area
+                        ]
                 )
-        ]
+            |> List.sortBy (Hierarchy.breadcrumb model.snapshot.projects)
+            |> List.take 8
 
 
 contextSuggestions : Model -> List String
 contextSuggestions model =
-    allContexts model.snapshot.actions |> List.filter (\candidate -> fuzzyMatch model.context [ candidate ]) |> List.take 8
+    if String.isEmpty (Picker.query model.context) then
+        []
+
+    else
+        Data.contexts model.snapshot.actions
+            |> List.filter (\candidate -> Ui.matches model.context.query [ candidate ])
+            |> List.take 8
 
 
-preventMouseDown : msg -> Html.Attribute msg
-preventMouseDown message =
-    custom "mousedown" (Decode.succeed { message = message, stopPropagation = False, preventDefault = True })
+
+-- DISPOSITION
 
 
-fuzzyKeydown : Bool -> (String -> msg) -> Html.Attribute msg
-fuzzyKeydown open toMessage =
-    custom "keydown"
-        (Decode.field "key" Decode.string
-            |> Decode.map
-                (\key ->
-                    { message = toMessage key
-                    , stopPropagation = False
-                    , preventDefault = open && List.member key [ "ArrowDown", "ArrowUp", "Enter" ]
-                    }
-                )
-        )
+type alias Decision =
+    { operation : Disposition, label : String, ready : Bool }
 
 
-type alias Disposition =
-    { operation : String, label : String, ready : Bool }
-
-
-primaryDisposition : Model -> Disposition
-primaryDisposition model =
+{-| The single primary button, and whether the form has said enough to press it.
+-}
+disposition : Model -> Decision
+disposition model =
     let
         action =
             String.trim model.nextAction
 
         context =
-            String.trim model.context
+            Picker.query model.context
 
         project =
             selectedProject model
 
         projectName =
-            project |> Maybe.map .title |> Maybe.withDefault (projectPathTitle model.projectQuery model.snapshot.projects)
+            project
+                |> Maybe.map .title
+                |> Maybe.withDefault (Hierarchy.leafTitle model.project.query model.snapshot.projects)
 
         actionSuffix =
             if String.isEmpty action then
@@ -881,22 +679,21 @@ primaryDisposition model =
             String.isEmpty action || not (String.isEmpty context)
     in
     if model.someday then
-        let
-            target =
-                case project of
-                    Just found ->
-                        "Move " ++ found.title ++ " to Someday/Maybe"
+        { operation = ParkAsSomeday
+        , label =
+            (case project of
+                Just found ->
+                    "Move " ++ found.title ++ " to Someday/Maybe"
 
-                    Nothing ->
-                        "Create Someday/Maybe Project"
-        in
-        { operation = "someday"
-        , label = target ++ actionSuffix
+                Nothing ->
+                    "Create Someday/Maybe Project"
+            )
+                ++ actionSuffix
         , ready = optionalReady
         }
 
     else if model.fileOriginal then
-        { operation = "file"
+        { operation = FileAsReference
         , label =
             (if String.isEmpty projectName then
                 "File as General Reference"
@@ -909,7 +706,7 @@ primaryDisposition model =
         }
 
     else
-        { operation = "next-action"
+        { operation = CreateNextAction
         , label =
             if String.isEmpty projectName then
                 "Create Next Action"
@@ -923,32 +720,44 @@ primaryDisposition model =
         }
 
 
-processCommand : String -> String -> Model -> Encode.Value
-processCommand itemId operation model =
-    let
-        inputFields =
-            optionalString "projectId" model.projectId
-                ++ optionalString "projectTitle" (String.trim model.projectQuery)
-                ++ optionalString "desiredOutcome" (String.trim model.desiredOutcome)
-                ++ optionalString "nextAction" (String.trim model.nextAction)
-                ++ optionalString "context" (String.trim model.context)
-                ++ [ ( "work", Encode.bool model.work ), ( "fileOriginal", Encode.bool model.fileOriginal ) ]
-    in
-    Encode.object
-        [ ( "type", Encode.string "process-inbox" )
-        , ( "itemId", Encode.string itemId )
-        , ( "operation", Encode.string operation )
-        , ( "input", Encode.object inputFields )
-        ]
+processingInput : Model -> Command.InboxInput
+processingInput model =
+    { projectId = Maybe.map .id (Picker.selection model.project)
+    , projectTitle = Picker.query model.project
+    , desiredOutcome = String.trim model.desiredOutcome
+    , nextAction = String.trim model.nextAction
+    , context = Picker.query model.context
+    , work = model.work
+    , fileOriginal = model.fileOriginal
+    }
 
 
-optionalString : String -> String -> List ( String, Encode.Value )
-optionalString key raw =
-    if String.isEmpty raw then
-        []
+{-| The chosen Project, or the one an exactly typed title or breadcrumb names.
+-}
+selectedProject : Model -> Maybe Project
+selectedProject model =
+    case Picker.selection model.project of
+        Just project ->
+            Just project
 
-    else
-        [ ( key, Encode.string raw ) ]
+        Nothing ->
+            let
+                typed =
+                    String.toLower (Picker.query model.project)
+            in
+            if String.isEmpty typed then
+                Nothing
+
+            else
+                model.snapshot.projects
+                    |> List.filter
+                        (\project ->
+                            String.toLower project.title
+                                == typed
+                                || String.toLower (Hierarchy.breadcrumb model.snapshot.projects project)
+                                == typed
+                        )
+                    |> List.head
 
 
 fileOriginalHint : Model -> InboxItem -> String
@@ -963,19 +772,8 @@ fileOriginalHint model item =
         "Keeps this file as support material, or in General Reference with no Project. Otherwise it goes to Obsidian's trash once processed."
 
 
-selectedProject : Model -> Maybe Project
-selectedProject model =
-    if not (String.isEmpty model.projectId) then
-        findProject model.projectId model.snapshot.projects
 
-    else
-        let
-            query =
-                String.toLower (String.trim model.projectQuery)
-        in
-        model.snapshot.projects
-            |> List.filter (\project -> String.toLower project.title == query || String.toLower (projectBreadcrumb model.snapshot.projects project) == query)
-            |> List.head
+-- QUERIES
 
 
 currentItem : Model -> Maybe InboxItem
@@ -984,14 +782,14 @@ currentItem model =
         items =
             sortedItems model.snapshot.inboxItems
 
-        length_ =
+        count =
             List.length items
     in
-    if length_ == 0 then
+    if count == 0 then
         Nothing
 
     else
-        List.drop (modBy length_ model.cursor) items |> List.head
+        List.drop (modBy count model.cursor) items |> List.head
 
 
 sortedItems : List InboxItem -> List InboxItem
@@ -999,142 +797,30 @@ sortedItems =
     List.sortBy (\item -> ( item.created, item.id ))
 
 
-indexOf : String -> List InboxItem -> Maybe Int
+indexOf : InboxItemId -> List InboxItem -> Maybe Int
 indexOf wanted items =
-    items |> List.indexedMap Tuple.pair |> List.filter (\( _, item ) -> item.id == wanted) |> List.head |> Maybe.map Tuple.first
-
-
-findProject : String -> List Project -> Maybe Project
-findProject projectId projects =
-    List.filter (\project -> project.id == projectId) projects |> List.head
-
-
-projectBreadcrumb : List Project -> Project -> String
-projectBreadcrumb projects project =
-    let
-        walk seen current =
-            if Set.member current.id seen then
-                [ current.title ]
-
-            else
-                case current.parentProjectId |> Maybe.andThen (\parentId -> findProject parentId projects) of
-                    Just parent ->
-                        walk (Set.insert current.id seen) parent ++ [ current.title ]
-
-                    Nothing ->
-                        [ current.title ]
-    in
-    String.join " > " (walk Set.empty project)
-
-
-projectPathTitle : String -> List Project -> String
-projectPathTitle query projects =
-    let
-        title_ =
-            String.trim query
-
-        separators =
-            String.indexes ">" title_
-    in
-    case List.reverse separators |> List.head of
-        Nothing ->
-            title_
-
-        Just separatorIndex ->
-            let
-                prefix =
-                    String.left separatorIndex title_ |> String.trim
-
-                leaf =
-                    String.dropLeft (separatorIndex + 1) title_ |> String.trim
-
-                normalized =
-                    String.toLower prefix
-
-                breadcrumbMatch =
-                    List.any (\project -> String.toLower (projectBreadcrumb projects project) == normalized) projects
-
-                titleMatches =
-                    List.filter (\project -> String.toLower project.title == normalized) projects |> List.length
-            in
-            if not (String.isEmpty prefix) && not (String.isEmpty leaf) && (breadcrumbMatch || titleMatches == 1) then
-                leaf
-
-            else
-                title_
-
-
-allContexts : List Action -> List String
-allContexts actions =
-    actions |> List.filterMap .context |> Set.fromList |> Set.toList |> List.sort
-
-
-fuzzyMatch : String -> List String -> Bool
-fuzzyMatch query candidates =
-    let
-        needle =
-            String.toLower (String.trim query)
-    in
-    String.isEmpty needle || List.any (String.toLower >> String.contains needle) candidates
+    items
+        |> List.indexedMap Tuple.pair
+        |> List.filter (\( _, item ) -> item.id == wanted)
+        |> List.head
+        |> Maybe.map Tuple.first
 
 
 isAudio : String -> Bool
 isAudio extension =
-    Set.member (String.toLower extension) (Set.fromList [ "3gp", "flac", "m4a", "mp3", "oga", "ogg", "opus", "wav", "webm" ])
+    List.member (String.toLower extension)
+        [ "3gp", "flac", "m4a", "mp3", "oga", "ogg", "opus", "wav", "webm" ]
 
 
-formatTimer : Int -> String
-formatTimer seconds =
-    String.fromInt (seconds // 60) ++ ":" ++ String.padLeft 2 '0' (String.fromInt (modBy 60 seconds))
 
-
-requestIdFor : Model -> String
-requestIdFor model =
-    "elm-inbox-" ++ String.fromInt model.nextRequest
-
-
-envelope : String -> Encode.Value -> Encode.Value
-envelope requestId command =
-    Encode.object [ ( "protocolVersion", Encode.int protocolVersion ), ( "requestId", Encode.string requestId ), ( "command", command ) ]
-
-
-type alias RawSnapshot =
-    { revision : Int, inboxItems : List InboxItem, actions : List Action, projects : List Project, issues : List Issue }
+-- DECODING
 
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map2 Flags (Decode.field "snapshot" snapshotDecoder) (Decode.field "initialProcessing" Decode.bool)
-
-
-snapshotDecoder : Decoder Snapshot
-snapshotDecoder =
-    Decode.map5 Snapshot (Decode.field "revision" Decode.int) (Decode.field "inboxItems" (Decode.list inboxItemDecoder)) (Decode.field "actions" (Decode.list actionDecoder)) (Decode.field "projects" (Decode.list projectDecoder)) (Decode.field "issues" (Decode.list issueDecoder))
-
-
-inboxItemDecoder : Decoder InboxItem
-inboxItemDecoder =
-    Decode.map6 InboxItem (Decode.field "id" Decode.string) (Decode.field "title" Decode.string) (Decode.field "created" Decode.string) (Decode.field "file" fileDecoder) (Decode.field "resourceUrl" Decode.string) (optionalField "legacyAction" Decode.bool False)
-
-
-fileDecoder : Decoder File
-fileDecoder =
-    Decode.map2 File (Decode.field "path" Decode.string) (Decode.field "extension" Decode.string)
-
-
-actionDecoder : Decoder Action
-actionDecoder =
-    Decode.map Action (optionalField "context" (Decode.maybe Decode.string) Nothing)
-
-
-projectDecoder : Decoder Project
-projectDecoder =
-    Decode.map5 Project (Decode.field "id" Decode.string) (Decode.field "title" Decode.string) (Decode.field "status" Decode.string) (optionalField "area" (Decode.maybe Decode.string) Nothing) (optionalField "parentProjectId" (Decode.maybe Decode.string) Nothing)
-
-
-issueDecoder : Decoder Issue
-issueDecoder =
-    Decode.map2 Issue (Decode.field "path" Decode.string) (Decode.field "message" Decode.string)
+    Decode.map2 Flags
+        (Decode.field "snapshot" Data.snapshotDecoder)
+        (Decode.field "initialProcessing" Decode.bool)
 
 
 hostEventDecoder : Decoder HostEvent
@@ -1144,24 +830,14 @@ hostEventDecoder =
             (\kind ->
                 case kind of
                     "snapshot" ->
-                        Decode.map SnapshotEvent (Decode.field "snapshot" snapshotDecoder)
+                        Decode.map SnapshotEvent (Decode.field "snapshot" Data.snapshotDecoder)
 
                     "start-processing" ->
                         Decode.succeed StartProcessingEvent
 
                     "command-result" ->
-                        Decode.map4 CommandResult (Decode.field "requestId" Decode.string) (Decode.field "ok" Decode.bool) (optionalField "error" (Decode.maybe Decode.string) Nothing) (optionalField "value" (Decode.maybe Decode.string) Nothing)
+                        Decode.map Replied Host.outcomeDecoder
 
                     _ ->
                         Decode.fail ("Unknown host event: " ++ kind)
             )
-
-
-optionalField : String -> Decoder a -> a -> Decoder a
-optionalField name decoder fallback =
-    Decode.oneOf [ Decode.field name decoder, Decode.succeed fallback ]
-
-
-emptyFlags : Flags
-emptyFlags =
-    { snapshot = { revision = 0, inboxItems = [], actions = [], projects = [], issues = [] }, initialProcessing = False }

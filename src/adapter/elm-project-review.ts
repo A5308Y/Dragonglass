@@ -40,10 +40,8 @@ export class ElmProjectReviewHost {
   refresh(): void {
     this.send({ type: "snapshot", snapshot: this.snapshot() });
     this.send({
-      type: "command-result",
-      requestId: "review-support-counts",
-      ok: true,
-      value: [...this.services.repository.supportFileCounts()].map(([projectId, count]) => ({ projectId, count })),
+      type: "support-counts",
+      counts: [...this.services.repository.supportFileCounts()].map(([projectId, count]) => ({ projectId, count })),
     });
   }
 

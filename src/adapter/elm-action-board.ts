@@ -5,7 +5,7 @@ import { Elm } from "../../.generated/elm-runtime.js";
 import { actionSchedule } from "../domain/schedule";
 import type { GtdSettings } from "../domain/types";
 import type { GtdServices } from "../ui/services";
-import { TextPromptModal } from "../ui/modals";
+import { ElmModal } from "./elm-modals";
 import { localDate } from "../utils/date";
 import {
   elmSnapshot,
@@ -123,7 +123,11 @@ export class ElmActionBoardHost {
         return;
       case "prompt":
         return new Promise<string>((resolve) => {
-          new TextPromptModal(this.services.app, command.title, command.placeholder, async (value) => resolve(value)).open();
+          new ElmModal(
+            this.services,
+            { kind: "prompt", title: command.title, placeholder: command.placeholder },
+            { onPrompt: resolve },
+          ).open();
         });
       case "show-menu":
         this.showMenu(command.x, command.y, command.entries);

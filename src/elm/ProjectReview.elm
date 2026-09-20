@@ -2,12 +2,21 @@ port module ProjectReview exposing (main)
 
 import Browser
 import Dict exposing (Dict)
-import Html exposing (Html, button, datalist, div, h2, h3, header, input, label, option, p, section, span, strong, text, textarea)
-import Html.Attributes exposing (attribute, checked, class, classList, disabled, id, list, placeholder, style, title, type_, value)
-import Html.Events exposing (on, onCheck, onClick, onInput)
+import Gtd.ActionStatus as ActionStatus
+import Gtd.Command as Command exposing (Command)
+import Gtd.Data as Data exposing (Action, Project, Snapshot)
+import Gtd.Hierarchy as Hierarchy
+import Gtd.Host as Host exposing (Requests)
+import Gtd.Id exposing (ProjectId)
+import Gtd.Picker as Picker exposing (Picker)
+import Gtd.ProjectStatus as ProjectStatus
+import Gtd.Ui as Ui
+import Html exposing (Html, button, div, h2, h3, header, input, label, p, section, span, strong, text, textarea)
+import Html.Attributes exposing (checked, class, classList, disabled, placeholder, style, title, type_, value)
+import Html.Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
-import Set exposing (Set)
+import Set
 import Time
 
 
@@ -17,39 +26,11 @@ port reviewToHost : Encode.Value -> Cmd msg
 port reviewFromHost : (Decode.Value -> msg) -> Sub msg
 
 
-protocolVersion : Int
-protocolVersion =
-    1
-
-
-type alias File =
-    { path : String }
-
-
-type alias Action =
-    { id : String
-    , title : String
-    , file : File
-    , status : String
-    , projectId : Maybe String
-    , context : Maybe String
-    , due : Maybe String
-    }
-
-
-type alias Project =
-    { id : String
-    , title : String
-    , file : File
-    , status : String
-    , area : Maybe String
-    , reviewed : Maybe String
-    , parentProjectId : Maybe String
-    }
-
-
-type alias Snapshot =
-    { revision : Int, today : String, actions : List Action, projects : List Project }
+{-| One hour of attention, split evenly across the trees waiting for review.
+-}
+sessionBudgetSeconds : Int
+sessionBudgetSeconds =
+    3600
 
 
 type alias DiaryEntry =
@@ -57,38 +38,34 @@ type alias DiaryEntry =
 
 
 type alias ReviewData =
-    { projectId : String, desiredOutcome : String, diary : List DiaryEntry }
+    { projectId : ProjectId, desiredOutcome : String, diary : List DiaryEntry }
 
 
-type alias SupportCount =
-    { projectId : String, count : Int }
-
-
+{-| What a host reply should finish.
+-}
 type Pending
-    = Ignore
-    | Advance String
-    | DeleteAndAdvance String
-    | AddDiary
-    | AddAction
+    = IgnoreReply
+    | Advance ProjectId
+    | DeleteAndAdvance ProjectId
+    | AppendDiary
+    | ClearCapture
 
 
 type alias Model =
     { snapshot : Snapshot
-    , queue : List String
+    , queue : List ProjectId
     , total : Int
-    , supportCounts : Dict String Int
+    , supportCounts : Dict ProjectId Int
     , reviewData : Maybe ReviewData
     , desiredOutcome : String
     , diaryInput : String
     , actionTitle : String
-    , actionProjectId : String
-    , actionProjectQuery : String
-    , context : String
+    , project : Picker Project
+    , context : Picker String
     , work : Bool
     , sessionSeconds : Int
     , projectSeconds : Int
-    , nextRequest : Int
-    , pending : Dict String Pending
+    , requests : Requests Pending
     , saving : Bool
     , error : Maybe String
     }
@@ -101,14 +78,14 @@ type Msg
     | DiaryChanged String
     | AddDiaryText String
     | ActionTitleChanged String
-    | ActionProjectChanged String
-    | ContextChanged String
+    | ProjectPicker (Picker.PickerMsg Project)
+    | ContextPicker (Picker.PickerMsg String)
     | WorkChanged Bool
     | AddActionNow
     | CompleteReview
     | MoveToSomeday
     | DeleteProject
-    | HostCommand Pending Encode.Value
+    | Send Pending Command
     | NoOp
 
 
@@ -122,43 +99,51 @@ main =
         }
 
 
+type alias SupportCount =
+    { projectId : ProjectId, count : Int }
+
+
+type alias Flags =
+    { snapshot : Snapshot, queue : List ProjectId, supportCounts : List SupportCount }
+
+
 init : Decode.Value -> ( Model, Cmd Msg )
 init flags =
     case Decode.decodeValue flagsDecoder flags of
         Ok decoded ->
-            let
-                model =
-                    { snapshot = decoded.snapshot
-                    , queue = decoded.queue
-                    , total = List.length decoded.queue
-                    , supportCounts = Dict.fromList (List.map (\item -> ( item.projectId, item.count )) decoded.supportCounts)
-                    , reviewData = Nothing
-                    , desiredOutcome = ""
-                    , diaryInput = ""
-                    , actionTitle = ""
-                    , actionProjectId = ""
-                    , actionProjectQuery = ""
-                    , context = ""
-                    , work = False
-                    , sessionSeconds = 0
-                    , projectSeconds = budget (List.length decoded.queue)
-                    , nextRequest = 1
-                    , pending = Dict.empty
-                    , saving = False
-                    , error = Nothing
-                    }
-            in
-            loadCurrent (resetProjectForm model)
+            loadCurrent
+                { snapshot = decoded.snapshot
+                , queue = decoded.queue
+                , total = List.length decoded.queue
+                , supportCounts = countsDict decoded.supportCounts
+                , reviewData = Nothing
+                , desiredOutcome = ""
+                , diaryInput = ""
+                , actionTitle = ""
+                , project = Picker.init "" Nothing
+                , context = Picker.init "" Nothing
+                , work = False
+                , sessionSeconds = 0
+                , projectSeconds = budget (List.length decoded.queue)
+                , requests = Host.noRequests
+                , saving = False
+                , error = Nothing
+                }
 
         Err error ->
             ( emptyModel (Decode.errorToString error), Cmd.none )
 
 
+countsDict : List SupportCount -> Dict ProjectId Int
+countsDict counts =
+    Dict.fromList (List.map (\item -> ( item.projectId, item.count )) counts)
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotHost value_ ->
-            receiveHost value_ model
+        GotHost value ->
+            receiveHost value model
 
         Tick _ ->
             ( { model | sessionSeconds = model.sessionSeconds + 1, projectSeconds = model.projectSeconds - 1 }, Cmd.none )
@@ -170,49 +155,40 @@ update msg model =
             ( { model | diaryInput = entry }, Cmd.none )
 
         AddDiaryText entry ->
-            case currentProject model of
-                Just project ->
-                    if String.isEmpty (String.trim entry) then
-                        ( model, Cmd.none )
+            case ( currentProject model, String.isEmpty (String.trim entry) ) of
+                ( Just project, False ) ->
+                    send AppendDiary (Command.AddDiaryEntry project.id entry) model
 
-                    else
-                        send AddDiary (bodyCommand "add-diary-entry" project.id entry) model
-
-                Nothing ->
+                _ ->
                     ( model, Cmd.none )
 
-        ActionTitleChanged title_ ->
-            ( { model | actionTitle = title_ }, Cmd.none )
+        ActionTitleChanged actionTitle ->
+            ( { model | actionTitle = actionTitle }, Cmd.none )
 
-        ActionProjectChanged query ->
-            let
-                projectId =
-                    reviewMembers model
-                        |> List.filter (\project -> projectLabel model project == query)
-                        |> List.head
-                        |> Maybe.map .id
-                        |> Maybe.withDefault ""
-            in
-            ( { model | actionProjectQuery = query, actionProjectId = projectId }, Cmd.none )
+        ProjectPicker pickerMsg ->
+            ( { model | project = Picker.update pickerMsg (projectSuggestions model) (projectLabel model) model.project }, Cmd.none )
 
-        ContextChanged context ->
-            ( { model | context = context }, Cmd.none )
+        ContextPicker pickerMsg ->
+            ( { model | context = Picker.update pickerMsg (contextSuggestions model) identity model.context }, Cmd.none )
 
         WorkChanged work ->
             ( { model | work = work }, Cmd.none )
 
         AddActionNow ->
-            if String.isEmpty (String.trim model.actionTitle) || String.isEmpty model.actionProjectId || String.isEmpty (String.trim model.context) then
-                ( model, Cmd.none )
+            case capture model of
+                Just fields ->
+                    send ClearCapture (Command.CreateReviewAction fields) { model | saving = True }
 
-            else
-                send AddAction (createActionCommand model) { model | saving = True }
+                Nothing ->
+                    ( model, Cmd.none )
 
         CompleteReview ->
             case currentProject model of
                 Just project ->
                     if List.isEmpty (blockingProjects model) then
-                        send (Advance project.id) (reviewCommand "complete-project-review" project.id model) { model | saving = True }
+                        send (Advance project.id)
+                            (Command.CompleteProjectReview project.id model.desiredOutcome (activeProjectIds model))
+                            { model | saving = True }
 
                     else
                         ( { model | error = Just "Add a Next Action or move this Project to Someday/Maybe before continuing." }, Cmd.none )
@@ -223,7 +199,9 @@ update msg model =
         MoveToSomeday ->
             case currentProject model of
                 Just project ->
-                    send (Advance project.id) (reviewCommand "move-review-to-someday" project.id model) { model | saving = True }
+                    send (Advance project.id)
+                        (Command.MoveReviewToSomeday project.id model.desiredOutcome (activeProjectIds model))
+                        { model | saving = True }
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -231,173 +209,196 @@ update msg model =
         DeleteProject ->
             case currentProject model of
                 Just project ->
-                    send (DeleteAndAdvance project.id) (projectCommand "trash-project" project.id) { model | saving = True }
+                    send (DeleteAndAdvance project.id) (Command.TrashProject project.id) { model | saving = True }
 
                 Nothing ->
                     ( model, Cmd.none )
 
-        HostCommand pending command ->
+        Send pending command ->
             send pending command model
 
         NoOp ->
             ( model, Cmd.none )
 
 
-type HostEvent
-    = SnapshotEvent Snapshot
-    | ReviewDataEvent ReviewData
-    | CommandResult String Bool (Maybe String) Decode.Value
+send : Pending -> Command -> Model -> ( Model, Cmd Msg )
+send pending command model =
+    let
+        ( requestId, requests ) =
+            Host.issue pending model.requests
+    in
+    ( { model | requests = requests, saving = hasSavingRequest requests }
+    , reviewToHost (Host.envelope requestId (Command.encode command))
+    )
 
 
-receiveHost : Decode.Value -> Model -> ( Model, Cmd Msg )
-receiveHost value_ model =
-    case Decode.decodeValue hostEventDecoder value_ of
-        Err _ ->
-            ( model, Cmd.none )
+hasSavingRequest : Requests Pending -> Bool
+hasSavingRequest requests =
+    Host.pending requests
+        |> List.any
+            (\pending ->
+                case pending of
+                    Advance _ ->
+                        True
 
-        Ok event ->
-            case event of
-                SnapshotEvent snapshot ->
-                    let
-                        ids =
-                            Set.fromList (List.map .id snapshot.projects)
+                    DeleteAndAdvance _ ->
+                        True
 
-                        nextQueue =
-                            List.filter (\id_ -> Set.member id_ ids) model.queue
-                    in
-                    ( { model | snapshot = snapshot, queue = nextQueue }, Cmd.none )
+                    ClearCapture ->
+                        True
 
-                ReviewDataEvent data ->
-                    if List.head model.queue == Just data.projectId then
-                        ( { model | reviewData = Just data, desiredOutcome = data.desiredOutcome }, Cmd.none )
+                    AppendDiary ->
+                        False
 
-                    else
-                        ( model, Cmd.none )
-
-                CommandResult requestId ok errorMessage resultValue ->
-                    if requestId == "review-support-counts" then
-                        case Decode.decodeValue (Decode.list supportCountDecoder) resultValue of
-                            Ok counts ->
-                                ( { model | supportCounts = Dict.fromList (List.map (\item -> ( item.projectId, item.count )) counts) }, Cmd.none )
-
-                            Err _ ->
-                                ( model, Cmd.none )
-
-                    else
-                        let
-                            operation =
-                                Dict.get requestId model.pending |> Maybe.withDefault Ignore
-
-                            next =
-                                { model
-                                    | pending = Dict.remove requestId model.pending
-                                    , saving = False
-                                    , error =
-                                        if ok then
-                                            Nothing
-
-                                        else
-                                            errorMessage
-                                }
-                        in
-                        if not ok then
-                            ( next, Cmd.none )
-
-                        else
-                            finish operation resultValue next
+                    IgnoreReply ->
+                        False
+            )
 
 
-finish : Pending -> Decode.Value -> Model -> ( Model, Cmd Msg )
-finish pending value_ model =
-    case pending of
-        Advance projectId ->
-            advance projectId model
-
-        DeleteAndAdvance projectId ->
-            case Decode.decodeValue Decode.bool value_ of
-                Ok True ->
-                    advance projectId model
-
-                _ ->
-                    ( model, Cmd.none )
-
-        AddDiary ->
-            case Decode.decodeValue diaryDecoder value_ of
-                Ok entry ->
-                    let
-                        data =
-                            Maybe.map (\current -> { current | diary = entry :: current.diary }) model.reviewData
-                    in
-                    ( { model | reviewData = data, diaryInput = "" }, Cmd.none )
-
-                Err _ ->
-                    ( model, Cmd.none )
-
-        AddAction ->
-            ( { model | actionTitle = "", context = "" }, Cmd.none )
-
-        Ignore ->
-            ( model, Cmd.none )
-
-
-advance : String -> Model -> ( Model, Cmd Msg )
+advance : ProjectId -> Model -> ( Model, Cmd Msg )
 advance projectId model =
-    let
-        next =
-            resetProjectForm { model | queue = List.filter ((/=) projectId) model.queue, projectSeconds = budget model.total }
-    in
-    loadCurrent next
-
-
-resetProjectForm : Model -> Model
-resetProjectForm model =
-    let
-        default =
-            List.head (blockingProjects model)
-                |> Maybe.withDefault (List.head (missingNextProjects model) |> Maybe.withDefault (currentProject model |> Maybe.withDefault emptyProject))
-    in
-    { model
-        | reviewData = Nothing
-        , desiredOutcome = ""
-        , diaryInput = ""
-        , actionTitle = ""
-        , actionProjectId =
-            if default.id == "" then
-                ""
-
-            else
-                default.id
-        , actionProjectQuery =
-            if default.id == "" then
-                ""
-
-            else
-                projectLabel model default
-        , context = ""
-        , work = False
-        , error = Nothing
-    }
+    loadCurrent
+        { model
+            | queue = List.filter ((/=) projectId) model.queue
+            , projectSeconds = budget model.total
+        }
 
 
 loadCurrent : Model -> ( Model, Cmd Msg )
 loadCurrent model =
     case currentProject model of
         Just project ->
-            send Ignore (projectCommand "load-review-project" project.id) (resetProjectForm model)
+            send IgnoreReply (Command.LoadReviewProject project.id) (resetProjectForm model)
 
         Nothing ->
+            ( resetProjectForm model, Cmd.none )
+
+
+{-| A fresh capture form, aimed at the first Project in the tree that still needs
+a Next Action so the obvious next keystroke is the right one.
+-}
+resetProjectForm : Model -> Model
+resetProjectForm model =
+    let
+        target =
+            case blockingProjects model of
+                first :: _ ->
+                    Just first
+
+                [] ->
+                    case missingNextProjects model of
+                        first :: _ ->
+                            Just first
+
+                        [] ->
+                            currentProject model
+    in
+    { model
+        | reviewData = Nothing
+        , desiredOutcome = ""
+        , diaryInput = ""
+        , actionTitle = ""
+        , project =
+            case target of
+                Just project ->
+                    Picker.init (projectLabel model project) (Just project)
+
+                Nothing ->
+                    Picker.init "" Nothing
+        , context = Picker.init "" Nothing
+        , work = False
+        , error = Nothing
+    }
+
+
+
+-- HOST EVENTS
+
+
+type HostEvent
+    = SnapshotEvent Snapshot
+    | ReviewDataEvent ReviewData
+    | SupportCountsEvent (List SupportCount)
+    | Replied Host.Outcome
+
+
+receiveHost : Decode.Value -> Model -> ( Model, Cmd Msg )
+receiveHost value model =
+    case Decode.decodeValue hostEventDecoder value of
+        Err _ ->
+            ( model, Cmd.none )
+
+        Ok (SnapshotEvent snapshot) ->
+            let
+                ids =
+                    Set.fromList (List.map .id snapshot.projects)
+            in
+            ( { model | snapshot = snapshot, queue = List.filter (\id -> Set.member id ids) model.queue }, Cmd.none )
+
+        Ok (SupportCountsEvent counts) ->
+            ( { model | supportCounts = countsDict counts }, Cmd.none )
+
+        Ok (ReviewDataEvent data) ->
+            if List.head model.queue == Just data.projectId then
+                ( { model | reviewData = Just data, desiredOutcome = data.desiredOutcome }, Cmd.none )
+
+            else
+                ( model, Cmd.none )
+
+        Ok (Replied outcome) ->
+            let
+                ( pending, requests ) =
+                    Host.resolve outcome.requestId model.requests
+
+                next =
+                    { model | requests = requests, saving = hasSavingRequest requests }
+            in
+            case outcome.result of
+                Err message ->
+                    ( { next | error = Just message }, Cmd.none )
+
+                Ok resultValue ->
+                    finish (Maybe.withDefault IgnoreReply pending)
+                        resultValue
+                        { next | error = Nothing }
+
+
+finish : Pending -> Decode.Value -> Model -> ( Model, Cmd Msg )
+finish pending resultValue model =
+    case pending of
+        Advance projectId ->
+            advance projectId model
+
+        DeleteAndAdvance projectId ->
+            case Decode.decodeValue Decode.bool resultValue of
+                Ok True ->
+                    advance projectId model
+
+                _ ->
+                    ( model, Cmd.none )
+
+        AppendDiary ->
+            case Decode.decodeValue diaryDecoder resultValue of
+                Ok entry ->
+                    ( { model
+                        | reviewData = Maybe.map (\data -> { data | diary = entry :: data.diary }) model.reviewData
+                        , diaryInput = ""
+                      }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        ClearCapture ->
+            ( { model | actionTitle = "", context = Picker.init "" Nothing }, Cmd.none )
+
+        IgnoreReply ->
             ( model, Cmd.none )
 
 
-send : Pending -> Encode.Value -> Model -> ( Model, Cmd Msg )
-send pending command model =
-    let
-        requestId =
-            "review-" ++ String.fromInt model.nextRequest
-    in
-    ( { model | nextRequest = model.nextRequest + 1, pending = Dict.insert requestId pending model.pending }
-    , reviewToHost (Encode.object [ ( "protocolVersion", Encode.int protocolVersion ), ( "requestId", Encode.string requestId ), ( "command", command ) ])
-    )
+
+-- VIEW
 
 
 view : Model -> Html Msg
@@ -438,13 +439,13 @@ viewProject model project =
             reviewActions model
 
         openActions =
-            List.filter (\action -> not (List.member action.status [ "done", "cancelled" ])) actions
+            List.filter (\action -> ActionStatus.isOpen action.status) actions
 
         nextActions =
-            List.filter (\action -> action.status == "next") openActions
+            List.filter (\action -> action.status == ActionStatus.Next) openActions
 
         doneActions =
-            List.filter (\action -> action.status == "done") actions
+            List.filter (\action -> action.status == ActionStatus.Done) actions
 
         blockers =
             blockingProjects model
@@ -463,20 +464,21 @@ viewProject model project =
         [ header [ class "dg-view-header dg-review-header" ]
             [ div [ class "dg-review-title" ] [ span [ class "dg-review-eyebrow" ] [ text "Guided workflow" ], h2 [] [ text "Project Review" ] ]
             , div [ class "dg-review-timers" ]
-                [ div [] [ span [] [ text "Session" ], strong [] [ text (formatTimer model.sessionSeconds) ] ]
-                , div [ classList [ ( "is-overdue", model.projectSeconds <= 30 ) ] ] [ span [] [ text "Project budget" ], strong [] [ text (formatTimer model.projectSeconds) ] ]
+                [ div [] [ span [] [ text "Session" ], strong [] [ text (Ui.timer model.sessionSeconds) ] ]
+                , div [ classList [ ( "is-overdue", model.projectSeconds <= 30 ) ] ] [ span [] [ text "Project budget" ], strong [] [ text (Ui.timer model.projectSeconds) ] ]
                 ]
             ]
         , div [ class "dg-progress-track" ] [ span [ style "width" (String.fromFloat progress ++ "%") ] [] ]
-        , maybeError model.error
+        , Ui.maybeView model.error (\message -> div [ class "dg-panel dg-error" ] [ text message ])
         , div [ class "dg-review-content" ]
             [ section [ class "dg-review-hero" ]
                 [ div [ class "dg-review-hero-copy" ]
-                    [ span [ class "dg-review-eyebrow" ] [ text ("Project tree " ++ String.fromInt (model.total - List.length model.queue + 1) ++ " of " ++ String.fromInt model.total) ]
-                    , button [ class "dg-project-title", onClick (HostCommand Ignore (openFileCommand project.file.path)) ] [ text project.title ]
+                    [ span [ class "dg-review-eyebrow" ]
+                        [ text ("Project tree " ++ String.fromInt (model.total - List.length model.queue + 1) ++ " of " ++ String.fromInt model.total) ]
+                    , button [ class "dg-project-title", onClick (Send IgnoreReply (Command.OpenFile project.file.path)) ] [ text project.title ]
                     , div [ class "dg-review-project-meta" ]
-                        [ span [ class "dg-status" ] [ text (Maybe.withDefault (statusLabel project.status) project.area) ]
-                        , span [] [ text (plural (List.length members) "Project") ]
+                        [ span [ class "dg-status" ] [ text (Maybe.withDefault (ProjectStatus.label project.status) project.area) ]
+                        , span [] [ text (Ui.plural (List.length members) "Project") ]
                         , span [] [ text (String.fromInt (List.length openActions) ++ " open") ]
                         , span [] [ text (String.fromInt (List.length nextActions) ++ " next") ]
                         ]
@@ -488,10 +490,10 @@ viewProject model project =
                     span [ class "dg-no-next" ] [ text (String.fromInt (List.length blockers) ++ " without Next Action") ]
                 ]
             , viewTree model project subprojects actions
-            , section [ class "dg-review-grid" ] [ viewOutcome model, viewPulse model project ]
+            , section [ class "dg-review-grid" ] [ viewOutcome model, viewPulse model ]
             , viewActions model openActions
             , section [ class "dg-review-grid" ] [ viewDiary model, viewStats doneActions supportFiles ]
-            , viewFooter model project blockers
+            , viewFooter model blockers
             ]
         ]
 
@@ -503,35 +505,38 @@ viewTree model root subprojects actions =
             [ span [ class "dg-review-panel-icon" ] [ text "⌘" ]
             , div [] [ h3 [] [ text "Project tree" ], p [] [ text "Reviewed together as one outcome hierarchy." ] ]
             , span [ class "dg-review-count" ] [ text (String.fromInt (List.length subprojects)) ]
-            , button [ class "dg-review-tree-add", onClick (HostCommand Ignore (createProjectCommand root.id)) ] [ text "New sub-project" ]
+            , button [ class "dg-review-tree-add", onClick (Send IgnoreReply (Command.NewProjectModal (Just root.id))) ] [ text "New sub-project" ]
             ]
         , if List.isEmpty subprojects then
             div [ class "dg-review-tree-empty" ] [ text "No sub-projects yet." ]
 
           else
-            div [ class "dg-review-tree-list" ]
-                (List.map
-                    (\project ->
-                        let
-                            projectActions =
-                                List.filter (\action -> action.projectId == Just project.id && not (List.member action.status [ "done", "cancelled" ])) actions
+            div [ class "dg-review-tree-list" ] (List.map (viewTreeRow model root actions) subprojects)
+        ]
 
-                            nextCount =
-                                List.filter (\action -> action.status == "next") projectActions |> List.length
-                        in
-                        div []
-                            [ button [ title (projectBreadcrumb model.snapshot.projects project), onClick (HostCommand Ignore (openFileCommand project.file.path)) ] [ text (relativeLabel model root project) ]
-                            , span [] [ text (statusLabel project.status) ]
-                            , span [] [ text (String.fromInt (List.length projectActions) ++ " open · " ++ String.fromInt nextCount ++ " next") ]
-                            , if project.status == "active" && nextCount == 0 then
-                                strong [] [ text "No Next Action" ]
 
-                              else
-                                text ""
-                            ]
-                    )
-                    subprojects
-                )
+viewTreeRow : Model -> Project -> List Action -> Project -> Html Msg
+viewTreeRow model root actions project =
+    let
+        projectActions =
+            List.filter (\action -> action.projectId == Just project.id && ActionStatus.isOpen action.status) actions
+
+        nextCount =
+            List.filter (\action -> action.status == ActionStatus.Next) projectActions |> List.length
+    in
+    div []
+        [ button
+            [ title (Hierarchy.breadcrumb model.snapshot.projects project)
+            , onClick (Send IgnoreReply (Command.OpenFile project.file.path))
+            ]
+            [ text (relativeLabel model root project) ]
+        , span [] [ text (ProjectStatus.label project.status) ]
+        , span [] [ text (String.fromInt (List.length projectActions) ++ " open · " ++ String.fromInt nextCount ++ " next") ]
+        , if project.status == ProjectStatus.Active && nextCount == 0 then
+            strong [] [ text "No Next Action" ]
+
+          else
+            text ""
         ]
 
 
@@ -543,17 +548,41 @@ viewOutcome model =
         ]
 
 
-viewPulse : Model -> Project -> Html Msg
-viewPulse model project =
+viewPulse : Model -> Html Msg
+viewPulse model =
     let
         emojis =
-            [ ( "👍", "no progress, but looks good" ), ( "🌱", "slow progress" ), ( "🛠️", "progress" ), ( "🚀", "great progress" ), ( "😰", "fear" ), ( "😴", "indifference" ), ( "😖", "stuck" ) ]
+            [ ( "👍", "no progress, but looks good" )
+            , ( "🌱", "slow progress" )
+            , ( "🛠️", "progress" )
+            , ( "🚀", "great progress" )
+            , ( "😰", "fear" )
+            , ( "😴", "indifference" )
+            , ( "😖", "stuck" )
+            ]
     in
     div [ class "dg-review-panel dg-review-pulse-panel" ]
         [ panelHeading "◉" "Project pulse" "Capture the current texture of the work."
-        , div [ class "dg-emoji-row" ] (List.map (\( emoji, label_ ) -> button [ title label_, attribute "aria-label" label_, onClick (AddDiaryText (emoji ++ " " ++ label_)) ] [ span [] [ text emoji ] ]) emojis)
+        , div [ class "dg-emoji-row" ]
+            (List.map
+                (\( emoji, description ) ->
+                    button
+                        [ title description
+                        , Html.Attributes.attribute "aria-label" description
+                        , onClick (AddDiaryText (emoji ++ " " ++ description))
+                        ]
+                        [ span [] [ text emoji ] ]
+                )
+                emojis
+            )
         , div [ class "dg-inline-form" ]
-            [ input [ value model.diaryInput, placeholder "Write a diary entry…", onInput DiaryChanged, onEnter (AddDiaryText model.diaryInput) ] []
+            [ input
+                [ value model.diaryInput
+                , placeholder "Write a diary entry…"
+                , onInput DiaryChanged
+                , Ui.onEnter { enter = AddDiaryText model.diaryInput, ignore = NoOp }
+                ]
+                []
             , button [ disabled (String.isEmpty (String.trim model.diaryInput)), onClick (AddDiaryText model.diaryInput) ] [ text "Add" ]
             ]
         ]
@@ -561,13 +590,6 @@ viewPulse model project =
 
 viewActions : Model -> List Action -> Html Msg
 viewActions model actions =
-    let
-        members =
-            reviewMembers model
-
-        contexts =
-            model.snapshot.actions |> List.filterMap .context |> uniqueSorted
-    in
     section [ class "dg-review-panel dg-review-actions-panel" ]
         [ div [ class "dg-review-panel-heading dg-review-panel-heading-row" ]
             [ span [ class "dg-review-panel-icon" ] [ text "→" ]
@@ -576,13 +598,18 @@ viewActions model actions =
             ]
         , div [ class "dg-action-rows" ] (List.map (viewActionRow model) actions)
         , div [ class "dg-action-capture" ]
-            [ input [ value model.actionTitle, placeholder "Define the next physical Action…", onInput ActionTitleChanged, onEnter AddActionNow ] []
-            , input [ class "dg-review-project-input", value model.actionProjectQuery, placeholder "Project", list "dg-review-projects", onInput ActionProjectChanged ] []
-            , datalist [ id "dg-review-projects" ] (List.map (\project -> option [ value (projectLabel model project) ] []) members)
-            , input [ class "dg-review-context-input", value model.context, placeholder "Context", list "dg-review-contexts", onInput ContextChanged ] []
-            , datalist [ id "dg-review-contexts" ] (List.map (\context -> option [ value context ] []) contexts)
-            , label [ class "dg-capture-toggle", title "Mark as work, independent of the context" ] [ input [ type_ "checkbox", checked model.work, onCheck WorkChanged ] [], span [] [ text "Work" ] ]
-            , button [ class "mod-cta", disabled (not (canAddAction model) || model.saving), onClick AddActionNow ] [ text "Add" ]
+            [ input
+                [ value model.actionTitle
+                , placeholder "Define the next physical Action…"
+                , onInput ActionTitleChanged
+                , Ui.onEnter { enter = AddActionNow, ignore = NoOp }
+                ]
+                []
+            , Picker.view (projectPicker model) (projectSuggestions model) model.project
+            , Picker.view (contextPicker model) (contextSuggestions model) model.context
+            , label [ class "dg-capture-toggle", title "Mark as work, independent of the context" ]
+                [ input [ type_ "checkbox", checked model.work, onCheck WorkChanged ] [], span [] [ text "Work" ] ]
+            , button [ class "mod-cta", disabled (capture model == Nothing || model.saving), onClick AddActionNow ] [ text "Add" ]
             ]
         ]
 
@@ -593,34 +620,36 @@ viewActionRow model action =
         [ input
             [ class "dg-action-row-checkbox"
             , type_ "checkbox"
-            , checked (action.status == "done")
-            , onCheck
-                (\done ->
-                    HostCommand Ignore
-                        (actionStatusCommand action.id
-                            (if done then
-                                "done"
-
-                             else
-                                "next"
-                            )
-                        )
-                )
+            , checked (action.status == ActionStatus.Done)
+            , onCheck (\done -> Send IgnoreReply (Command.SetActionStatus action.id (completionStatus done)))
             ]
             []
         , div [ class "dg-action-row-main" ]
-            [ button [ class "dg-action-row-title", onClick (HostCommand Ignore (openFileCommand action.file.path)) ] [ text action.title ]
+            [ button [ class "dg-action-row-title", onClick (Send IgnoreReply (Command.OpenFile action.file.path)) ] [ text action.title ]
             , div [ class "dg-action-row-meta" ]
-                (maybeList action.projectId (\id_ -> span [ class "dg-action-project-label" ] [ text (findProject id_ model.snapshot.projects |> Maybe.map (projectBreadcrumb model.snapshot.projects) |> Maybe.withDefault "Missing Project") ])
-                    ++ maybeList action.context (\context -> span [] [ text ("@" ++ context) ])
-                    ++ maybeList action.due (\due -> span [] [ text ("Due " ++ due) ])
+                (Ui.maybeList action.projectId
+                    (\projectId ->
+                        span [ class "dg-action-project-label" ]
+                            [ text (Hierarchy.breadcrumbFor model.snapshot.projects projectId |> Maybe.withDefault "Missing Project") ]
+                    )
+                    ++ Ui.maybeList action.context (\context -> span [] [ text ("@" ++ context) ])
+                    ++ Ui.maybeList action.due (\due -> span [] [ text ("Due " ++ due) ])
                 )
             ]
         , div [ class "dg-action-row-actions" ]
-            [ button [ class "dg-action-row-edit", onClick (HostCommand Ignore (actionCommand "edit-action" action.id)) ] [ text "Edit" ]
-            , button [ class "dg-action-row-delete", onClick (HostCommand Ignore (actionCommand "trash-action" action.id)) ] [ text "Delete" ]
+            [ button [ class "dg-action-row-edit", onClick (Send IgnoreReply (Command.EditActionModal action.id)) ] [ text "Edit" ]
+            , button [ class "dg-action-row-delete", onClick (Send IgnoreReply (Command.TrashAction action.id)) ] [ text "Delete" ]
             ]
         ]
+
+
+completionStatus : Bool -> ActionStatus.ActionStatus
+completionStatus done =
+    if done then
+        ActionStatus.Done
+
+    else
+        ActionStatus.Next
 
 
 viewDiary : Model -> Html Msg
@@ -650,14 +679,14 @@ viewStats doneActions supportFiles =
     div [ class "dg-review-panel dg-review-stats" ]
         [ panelHeading "◇" "Project material" "A quick inventory before moving on."
         , div [ class "dg-review-stat-grid" ]
-            [ div [] [ strong [] [ text (String.fromInt (List.length doneActions)) ], span [] [ text (plural (List.length doneActions) "completed Action") ] ]
-            , div [] [ strong [] [ text (String.fromInt supportFiles) ], span [] [ text (plural supportFiles "support file") ] ]
+            [ div [] [ strong [] [ text (String.fromInt (List.length doneActions)) ], span [] [ text (Ui.plural (List.length doneActions) "completed Action") ] ]
+            , div [] [ strong [] [ text (String.fromInt supportFiles) ], span [] [ text (Ui.plural supportFiles "support file") ] ]
             ]
         ]
 
 
-viewFooter : Model -> Project -> List Project -> Html Msg
-viewFooter model project blockers =
+viewFooter : Model -> List Project -> Html Msg
+viewFooter model blockers =
     div [ class "dg-workflow-footer" ]
         [ div []
             [ strong []
@@ -666,7 +695,7 @@ viewFooter model project blockers =
                         "Ready to move on?"
 
                      else
-                        pluralNeeds (List.length blockers)
+                        missingNextSentence (List.length blockers)
                     )
                 ]
             , if List.isEmpty blockers then
@@ -697,218 +726,14 @@ viewFooter model project blockers =
 
 panelHeading : String -> String -> String -> Html Msg
 panelHeading icon heading description =
-    div [ class "dg-review-panel-heading" ] [ span [ class "dg-review-panel-icon" ] [ text icon ], div [] [ h3 [] [ text heading ], p [] [ text description ] ] ]
+    div [ class "dg-review-panel-heading" ]
+        [ span [ class "dg-review-panel-icon" ] [ text icon ]
+        , div [] [ h3 [] [ text heading ], p [] [ text description ] ]
+        ]
 
 
-maybeError : Maybe String -> Html Msg
-maybeError error =
-    Maybe.map (\message -> div [ class "dg-panel dg-error" ] [ text message ]) error |> Maybe.withDefault (text "")
-
-
-currentProject : Model -> Maybe Project
-currentProject model =
-    List.head model.queue |> Maybe.andThen (\id_ -> findProject id_ model.snapshot.projects)
-
-
-reviewMembers : Model -> List Project
-reviewMembers model =
-    case currentProject model of
-        Nothing ->
-            []
-
-        Just root ->
-            model.snapshot.projects
-                |> List.filter (\project -> project.id == root.id || isDescendantOf root.id model.snapshot.projects project)
-                |> List.sortBy (projectBreadcrumb model.snapshot.projects)
-
-
-reviewActions : Model -> List Action
-reviewActions model =
-    let
-        ids =
-            reviewMembers model |> List.map .id |> Set.fromList
-    in
-    List.filter (\action -> Maybe.map (\id_ -> Set.member id_ ids) action.projectId |> Maybe.withDefault False) model.snapshot.actions
-
-
-missingNextProjects : Model -> List Project
-missingNextProjects model =
-    let
-        nextIds =
-            reviewActions model |> List.filter (\action -> action.status == "next") |> List.filterMap .projectId |> Set.fromList
-    in
-    reviewMembers model |> List.filter (\project -> project.status == "active" && not (Set.member project.id nextIds))
-
-
-blockingProjects : Model -> List Project
-blockingProjects model =
-    case currentProject model of
-        Nothing ->
-            []
-
-        Just root ->
-            let
-                members =
-                    reviewMembers model
-
-                missing =
-                    missingNextProjects model
-
-                activeChildren =
-                    List.any (\project -> project.id /= root.id && project.status == "active") members
-            in
-            if activeChildren then
-                List.filter (\project -> project.id /= root.id) missing
-
-            else
-                missing
-
-
-isDescendantOf : String -> List Project -> Project -> Bool
-isDescendantOf rootId projects project =
-    let
-        walk seen maybeId =
-            case maybeId of
-                Nothing ->
-                    False
-
-                Just id_ ->
-                    if id_ == rootId then
-                        True
-
-                    else if Set.member id_ seen then
-                        False
-
-                    else
-                        case findProject id_ projects of
-                            Just parent ->
-                                walk (Set.insert id_ seen) parent.parentProjectId
-
-                            Nothing ->
-                                False
-    in
-    walk Set.empty project.parentProjectId
-
-
-relativeLabel : Model -> Project -> Project -> String
-relativeLabel model root project =
-    projectBreadcrumb model.snapshot.projects project
-        |> String.split " > "
-        |> List.drop 1
-        |> String.join " > "
-        |> (\result ->
-                if String.isEmpty result then
-                    project.title
-
-                else
-                    result
-           )
-
-
-projectLabel : Model -> Project -> String
-projectLabel model project =
-    projectBreadcrumb model.snapshot.projects project
-
-
-projectBreadcrumb : List Project -> Project -> String
-projectBreadcrumb projects project =
-    let
-        walk seen current titles =
-            if Set.member current.id seen then
-                "…" :: titles
-
-            else
-                case current.parentProjectId |> Maybe.andThen (\id_ -> findProject id_ projects) of
-                    Just parent ->
-                        walk (Set.insert current.id seen) parent (current.title :: titles)
-
-                    Nothing ->
-                        current.title :: titles
-    in
-    walk Set.empty project [] |> String.join " > "
-
-
-findProject : String -> List Project -> Maybe Project
-findProject id_ projects =
-    List.filter (\project -> project.id == id_) projects |> List.head
-
-
-canAddAction : Model -> Bool
-canAddAction model =
-    not (String.isEmpty (String.trim model.actionTitle)) && not (String.isEmpty model.actionProjectId) && not (String.isEmpty (String.trim model.context))
-
-
-activeProjectIds : Model -> List String
-activeProjectIds model =
-    reviewMembers model |> List.filter (\project -> project.status == "active") |> List.map .id
-
-
-budget : Int -> Int
-budget total =
-    if total > 0 then
-        3600 // total
-
-    else
-        0
-
-
-formatTimer : Int -> String
-formatTimer seconds =
-    let
-        absolute =
-            abs seconds
-
-        padded =
-            String.fromInt (modBy 60 absolute) |> String.padLeft 2 '0'
-    in
-    (if seconds < 0 then
-        "−"
-
-     else
-        ""
-    )
-        ++ String.fromInt (absolute // 60)
-        ++ ":"
-        ++ padded
-
-
-statusLabel : String -> String
-statusLabel status =
-    case status of
-        "someday" ->
-            "Someday/Maybe"
-
-        "active" ->
-            "Active"
-
-        "backlog" ->
-            "Backlog"
-
-        "completed" ->
-            "Completed"
-
-        "cancelled" ->
-            "Cancelled"
-
-        _ ->
-            status
-
-
-plural : Int -> String -> String
-plural count noun =
-    String.fromInt count
-        ++ " "
-        ++ noun
-        ++ (if count == 1 then
-                ""
-
-            else
-                "s"
-           )
-
-
-pluralNeeds : Int -> String
-pluralNeeds count =
+missingNextSentence : Int -> String
+missingNextSentence count =
     String.fromInt count
         ++ " active Project"
         ++ (if count == 1 then
@@ -920,138 +745,197 @@ pluralNeeds count =
         ++ " a Next Action."
 
 
-uniqueSorted : List String -> List String
-uniqueSorted values =
-    values |> Set.fromList |> Set.toList |> List.sort
+
+-- PICKERS
 
 
-maybeList : Maybe a -> (a -> b) -> List b
-maybeList maybeValue render =
-    Maybe.map (render >> List.singleton) maybeValue |> Maybe.withDefault []
+projectPicker : Model -> Picker.Config Project Msg
+projectPicker model =
+    Picker.config
+        { placeholder = "Project"
+        , label = projectLabel model
+        , hint = always Nothing
+        , tag = ProjectPicker
+        }
 
 
-onEnter : Msg -> Html.Attribute Msg
-onEnter message =
-    on "keydown"
-        (Decode.map
-            (\key ->
-                if key == "Enter" then
-                    message
-
-                else
-                    NoOp
-            )
-            (Decode.field "key" Decode.string)
-        )
+contextPicker : Model -> Picker.Config String Msg
+contextPicker _ =
+    Picker.config
+        { placeholder = "Context"
+        , label = identity
+        , hint = always Nothing
+        , tag = ContextPicker
+        }
 
 
-projectCommand : String -> String -> Encode.Value
-projectCommand kind projectId =
-    Encode.object [ ( "type", Encode.string kind ), ( "projectId", Encode.string projectId ) ]
+{-| Only the Projects in the tree under review can receive a captured Action.
+-}
+projectSuggestions : Model -> List Project
+projectSuggestions model =
+    reviewMembers model
+        |> List.filter (\project -> Ui.matches model.project.query [ projectLabel model project ])
+        |> List.take 8
 
 
-createProjectCommand : String -> Encode.Value
-createProjectCommand parentProjectId =
-    Encode.object [ ( "type", Encode.string "create-project" ), ( "parentProjectId", Encode.string parentProjectId ) ]
+contextSuggestions : Model -> List String
+contextSuggestions model =
+    Data.contexts model.snapshot.actions
+        |> List.filter (\candidate -> Ui.matches model.context.query [ candidate ])
+        |> List.take 8
 
 
-openFileCommand : String -> Encode.Value
-openFileCommand path =
-    Encode.object [ ( "type", Encode.string "open-file" ), ( "path", Encode.string path ) ]
+projectLabel : Model -> Project -> String
+projectLabel model project =
+    Hierarchy.breadcrumb model.snapshot.projects project
 
 
-actionCommand : String -> String -> Encode.Value
-actionCommand kind actionId =
-    Encode.object [ ( "type", Encode.string kind ), ( "actionId", Encode.string actionId ) ]
+
+-- QUERIES
 
 
-actionStatusCommand : String -> String -> Encode.Value
-actionStatusCommand actionId status =
-    Encode.object [ ( "type", Encode.string "set-action-status" ), ( "actionId", Encode.string actionId ), ( "status", Encode.string status ) ]
+{-| The Action the capture row would create, once it names all three required parts.
+-}
+capture : Model -> Maybe { title : String, projectId : ProjectId, context : String, work : Bool }
+capture model =
+    case ( String.trim model.actionTitle, Picker.selection model.project, Picker.query model.context ) of
+        ( "", _, _ ) ->
+            Nothing
+
+        ( _, Nothing, _ ) ->
+            Nothing
+
+        ( _, _, "" ) ->
+            Nothing
+
+        ( actionTitle, Just project, context ) ->
+            Just { title = actionTitle, projectId = project.id, context = context, work = model.work }
 
 
-bodyCommand : String -> String -> String -> Encode.Value
-bodyCommand kind projectId body =
-    Encode.object [ ( "type", Encode.string kind ), ( "projectId", Encode.string projectId ), ( "body", Encode.string body ) ]
+currentProject : Model -> Maybe Project
+currentProject model =
+    List.head model.queue |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects)
 
 
-createActionCommand : Model -> Encode.Value
-createActionCommand model =
-    Encode.object
-        [ ( "type", Encode.string "create-review-action" )
-        , ( "title", Encode.string (String.trim model.actionTitle) )
-        , ( "projectId", Encode.string model.actionProjectId )
-        , ( "context", Encode.string (String.trim model.context) )
-        , ( "work", Encode.bool model.work )
-        ]
+reviewMembers : Model -> List Project
+reviewMembers model =
+    case currentProject model of
+        Nothing ->
+            []
+
+        Just root ->
+            model.snapshot.projects
+                |> List.filter (\project -> project.id == root.id || Hierarchy.isDescendantOf root.id model.snapshot.projects project)
+                |> List.sortBy (Hierarchy.breadcrumb model.snapshot.projects)
 
 
-reviewCommand : String -> String -> Model -> Encode.Value
-reviewCommand kind projectId model =
-    Encode.object
-        [ ( "type", Encode.string kind )
-        , ( "projectId", Encode.string projectId )
-        , ( "desiredOutcome", Encode.string model.desiredOutcome )
-        , ( "activeProjectIds", Encode.list Encode.string (activeProjectIds model) )
-        ]
+reviewActions : Model -> List Action
+reviewActions model =
+    let
+        ids =
+            reviewMembers model |> List.map .id |> Set.fromList
+    in
+    List.filter (\action -> Maybe.map (\id -> Set.member id ids) action.projectId |> Maybe.withDefault False) model.snapshot.actions
 
 
-type alias Flags =
-    { snapshot : Snapshot, queue : List String, supportCounts : List SupportCount }
+missingNextProjects : Model -> List Project
+missingNextProjects model =
+    let
+        nextIds =
+            reviewActions model
+                |> List.filter (\action -> action.status == ActionStatus.Next)
+                |> List.filterMap .projectId
+                |> Set.fromList
+    in
+    reviewMembers model
+        |> List.filter (\project -> project.status == ProjectStatus.Active && not (Set.member project.id nextIds))
+
+
+{-| The active Projects that still have to name a Next Action before the tree can
+be marked reviewed. A root with active children answers for itself through them.
+-}
+blockingProjects : Model -> List Project
+blockingProjects model =
+    case currentProject model of
+        Nothing ->
+            []
+
+        Just root ->
+            let
+                missing =
+                    missingNextProjects model
+
+                hasActiveChildren =
+                    reviewMembers model
+                        |> List.any (\project -> project.id /= root.id && project.status == ProjectStatus.Active)
+            in
+            if hasActiveChildren then
+                List.filter (\project -> project.id /= root.id) missing
+
+            else
+                missing
+
+
+relativeLabel : Model -> Project -> Project -> String
+relativeLabel model root project =
+    let
+        relative =
+            Hierarchy.breadcrumb model.snapshot.projects project
+                |> String.split Hierarchy.separator
+                |> List.drop 1
+                |> String.join Hierarchy.separator
+    in
+    if String.isEmpty relative then
+        project.title
+
+    else
+        relative
+
+
+activeProjectIds : Model -> List ProjectId
+activeProjectIds model =
+    reviewMembers model |> List.filter (\project -> project.status == ProjectStatus.Active) |> List.map .id
+
+
+budget : Int -> Int
+budget total =
+    if total > 0 then
+        sessionBudgetSeconds // total
+
+    else
+        0
+
+
+
+-- DECODING
 
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map3 Flags (Decode.field "snapshot" snapshotDecoder) (Decode.field "queue" (Decode.list Decode.string)) (Decode.field "supportCounts" (Decode.list supportCountDecoder))
-
-
-snapshotDecoder : Decoder Snapshot
-snapshotDecoder =
-    Decode.map4 Snapshot (Decode.field "revision" Decode.int) (Decode.field "today" Decode.string) (Decode.field "actions" (Decode.list actionDecoder)) (Decode.field "projects" (Decode.list projectDecoder))
-
-
-fileDecoder : Decoder File
-fileDecoder =
-    Decode.map File (Decode.field "path" Decode.string)
-
-
-actionDecoder : Decoder Action
-actionDecoder =
-    Decode.map7 Action
-        (Decode.field "id" Decode.string)
-        (Decode.field "title" Decode.string)
-        (Decode.field "file" fileDecoder)
-        (Decode.field "status" Decode.string)
-        (optionalField "projectId" (Decode.maybe Decode.string) Nothing)
-        (optionalField "context" (Decode.maybe Decode.string) Nothing)
-        (optionalField "due" (Decode.maybe Decode.string) Nothing)
-
-
-projectDecoder : Decoder Project
-projectDecoder =
-    Decode.map7 Project
-        (Decode.field "id" Decode.string)
-        (Decode.field "title" Decode.string)
-        (Decode.field "file" fileDecoder)
-        (Decode.field "status" Decode.string)
-        (optionalField "area" (Decode.maybe Decode.string) Nothing)
-        (optionalField "reviewed" (Decode.maybe Decode.string) Nothing)
-        (optionalField "parentProjectId" (Decode.maybe Decode.string) Nothing)
-
-
-diaryDecoder : Decoder DiaryEntry
-diaryDecoder =
-    Decode.map2 DiaryEntry (optionalField "timestamp" Decode.string "") (Decode.field "text" Decode.string)
-
-
-reviewDataDecoder : Decoder ReviewData
-reviewDataDecoder =
-    Decode.map3 ReviewData (Decode.field "projectId" Decode.string) (Decode.field "desiredOutcome" Decode.string) (Decode.field "diary" (Decode.list diaryDecoder))
+    Decode.map3 Flags
+        (Decode.field "snapshot" Data.snapshotDecoder)
+        (Decode.field "queue" (Decode.list Decode.string))
+        (Decode.field "supportCounts" (Decode.list supportCountDecoder))
 
 
 supportCountDecoder : Decoder SupportCount
 supportCountDecoder =
     Decode.map2 SupportCount (Decode.field "projectId" Decode.string) (Decode.field "count" Decode.int)
+
+
+diaryDecoder : Decoder DiaryEntry
+diaryDecoder =
+    Decode.map2 DiaryEntry
+        (Decode.oneOf [ Decode.field "timestamp" Decode.string, Decode.succeed "" ])
+        (Decode.field "text" Decode.string)
+
+
+reviewDataDecoder : Decoder ReviewData
+reviewDataDecoder =
+    Decode.map3 ReviewData
+        (Decode.field "projectId" Decode.string)
+        (Decode.field "desiredOutcome" Decode.string)
+        (Decode.field "diary" (Decode.list diaryDecoder))
 
 
 hostEventDecoder : Decoder HostEvent
@@ -1061,32 +945,25 @@ hostEventDecoder =
             (\kind ->
                 case kind of
                     "snapshot" ->
-                        Decode.map SnapshotEvent (Decode.field "snapshot" snapshotDecoder)
+                        Decode.map SnapshotEvent (Decode.field "snapshot" Data.snapshotDecoder)
 
                     "review-project-data" ->
                         Decode.map ReviewDataEvent (Decode.field "data" reviewDataDecoder)
 
+                    "support-counts" ->
+                        Decode.map SupportCountsEvent (Decode.field "counts" (Decode.list supportCountDecoder))
+
                     "command-result" ->
-                        Decode.map4 CommandResult (Decode.field "requestId" Decode.string) (Decode.field "ok" Decode.bool) (optionalField "error" (Decode.maybe Decode.string) Nothing) (optionalField "value" Decode.value Encode.null)
+                        Decode.map Replied Host.outcomeDecoder
 
                     _ ->
                         Decode.fail ("Unknown host event: " ++ kind)
             )
 
 
-optionalField : String -> Decoder a -> a -> Decoder a
-optionalField name decoder fallback =
-    Decode.oneOf [ Decode.field name decoder, Decode.succeed fallback ]
-
-
-emptyProject : Project
-emptyProject =
-    { id = "", title = "", file = { path = "" }, status = "", area = Nothing, reviewed = Nothing, parentProjectId = Nothing }
-
-
 emptyModel : String -> Model
 emptyModel message =
-    { snapshot = { revision = 0, today = "", actions = [], projects = [] }
+    { snapshot = Data.empty
     , queue = []
     , total = 0
     , supportCounts = Dict.empty
@@ -1094,14 +971,12 @@ emptyModel message =
     , desiredOutcome = ""
     , diaryInput = ""
     , actionTitle = ""
-    , actionProjectId = ""
-    , actionProjectQuery = ""
-    , context = ""
+    , project = Picker.init "" Nothing
+    , context = Picker.init "" Nothing
     , work = False
     , sessionSeconds = 0
     , projectSeconds = 0
-    , nextRequest = 1
-    , pending = Dict.empty
+    , requests = Host.noRequests
     , saving = False
     , error = Just message
     }

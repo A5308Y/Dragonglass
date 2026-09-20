@@ -7,7 +7,7 @@ import { activeProjectBlockers, projectActionIssue, projectPlacementsAfterMove }
 import type { Project } from "../domain/types";
 import { confirmDeleteProject, confirmDeleteProjects } from "../ui/delete-project";
 import { isVaultImage, resolveVaultImage } from "../ui/image-input";
-import { BatchProjectParentModal, BatchProjectTagsModal, ProjectDependenciesModal } from "../ui/modals";
+import { ElmModal } from "./elm-modals";
 import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
 import {
@@ -116,7 +116,7 @@ export class ElmProjectsHost {
   private sendSnapshot(): void {
     this.send({ type: "snapshot", snapshot: this.snapshot() });
     // Metadata includes vault resources that are deliberately not part of the shared snapshot.
-    this.send({ type: "command-result", requestId: "project-meta", ok: true, value: this.projectMeta() });
+    this.send({ type: "project-meta", projectMeta: this.projectMeta() });
   }
 
   private send(event: ElmHostEvent): void {
@@ -186,13 +186,13 @@ export class ElmProjectsHost {
       case "trash-projects":
         return confirmDeleteProjects(this.services, command.projectIds);
       case "batch-project-tags":
-        new BatchProjectTagsModal(this.services, command.projectIds, () => undefined).open();
+        new ElmModal(this.services, { kind: "batch-tags", projectIds: command.projectIds }).open();
         return;
       case "batch-project-parent":
-        new BatchProjectParentModal(this.services, command.projectIds, () => undefined).open();
+        new ElmModal(this.services, { kind: "batch-parent", projectIds: command.projectIds }).open();
         return;
       case "project-dependencies":
-        new ProjectDependenciesModal(this.services, this.project(command.projectId)).open();
+        new ElmModal(this.services, { kind: "dependencies", projectId: this.project(command.projectId).id }).open();
         return;
       case "import-actions":
         this.services.importActions(command.projectId);

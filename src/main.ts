@@ -7,7 +7,7 @@ import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
 import { GtdSettingTab } from "./settings";
-import { ActionEditorModal, ImportActionsModal, ImportSubprojectsModal, NewActionModal, NewProjectModal, ProjectEditorModal, ScheduleActionModal, TextPromptModal } from "./ui/modals";
+import { ElmModal } from "./adapter/elm-modals";
 import { OpenProjectModal } from "./ui/open-project";
 import type { GtdServices } from "./ui/services";
 import { localDate } from "./utils/date";
@@ -263,46 +263,42 @@ export default class DragonglassGtdPlugin extends Plugin {
   }
 
   private quickCapture(): void {
-    new TextPromptModal(this.app, "Quick Capture Inbox Item", "What's on your mind?", async (title) => {
-      await this.repository.createInboxItem(title);
-      new Notice("Captured to Inbox.");
-    }).open();
+    new ElmModal(this.services, { kind: "capture" }).open();
   }
 
   private createProject(openAfterCreate = true, parentProjectId = ""): void {
-    new NewProjectModal(this.services, async (file) => {
-      if (openAfterCreate) await this.openFile(file);
-    }, parentProjectId).open();
+    new ElmModal(this.services, { kind: "new-project", ...(parentProjectId ? { parentProjectId } : {}) }, {
+      onProjectCreated: async (file) => {
+        if (openAfterCreate) await this.openFile(file);
+      },
+    }).open();
   }
 
   private createAction(projectId = ""): void {
-    new NewActionModal(this.services, projectId).open();
+    new ElmModal(this.services, { kind: "new-action", ...(projectId ? { projectId } : {}) }).open();
   }
 
   private importActions(projectId = ""): void {
-    new ImportActionsModal(this.services, projectId).open();
+    new ElmModal(this.services, { kind: "import-actions", ...(projectId ? { projectId } : {}) }).open();
   }
 
   private importSubprojects(parentProjectId = ""): void {
-    new ImportSubprojectsModal(this.services, parentProjectId).open();
+    new ElmModal(this.services, { kind: "import-subprojects", ...(parentProjectId ? { parentProjectId } : {}) }).open();
   }
 
   private scheduleAction(id: string): void {
-    const action = this.index.getSnapshot().actionsById.get(id);
-    if (!action) return void new Notice("This Action is missing or has a duplicate ID.");
-    new ScheduleActionModal(this.services, action).open();
+    if (!this.index.getSnapshot().actionsById.has(id)) return void new Notice("This Action is missing or has a duplicate ID.");
+    new ElmModal(this.services, { kind: "schedule-action", actionId: id }).open();
   }
 
   private editAction(id: string, allowProjectConversion = false): void {
-    const action = this.index.getSnapshot().actionsById.get(id);
-    if (!action) return void new Notice("This Action is missing or has a duplicate ID.");
-    new ActionEditorModal(this.services, action, allowProjectConversion).open();
+    if (!this.index.getSnapshot().actionsById.has(id)) return void new Notice("This Action is missing or has a duplicate ID.");
+    new ElmModal(this.services, { kind: "edit-action", actionId: id, allowProjectConversion }).open();
   }
 
   private editProject(id: string): void {
-    const project = this.index.getSnapshot().projectsById.get(id);
-    if (!project) return void new Notice("This Project is missing or has a duplicate ID.");
-    new ProjectEditorModal(this.services, project).open();
+    if (!this.index.getSnapshot().projectsById.has(id)) return void new Notice("This Project is missing or has a duplicate ID.");
+    new ElmModal(this.services, { kind: "edit-project", projectId: id }).open();
   }
 
   private openProjectPicker(): void {

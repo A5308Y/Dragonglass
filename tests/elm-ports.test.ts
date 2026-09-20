@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const entries = ["src/elm/ActionBoard.elm", "src/elm/Inbox.elm", "src/elm/Projects.elm", "src/elm/ProjectReview.elm", "src/elm/Brainstorm.elm"];
+const entries = ["src/elm/ActionBoard.elm", "src/elm/Inbox.elm", "src/elm/Projects.elm", "src/elm/ProjectReview.elm", "src/elm/Brainstorm.elm", "src/elm/Modals.elm"];
 
 describe("compiled Elm entry points", () => {
   it("use globally unique port names", () => {
@@ -14,6 +14,6 @@ describe("compiled Elm entry points", () => {
         owners.set(name, path);
       }
     }
-    expect([...owners.keys()].sort()).toEqual(["brainstormFromHost", "brainstormToHost", "fromHost", "inboxFromHost", "inboxToHost", "projectsFromHost", "projectsToHost", "reviewFromHost", "reviewToHost", "toHost"]);
+    expect([...owners.keys()].sort()).toEqual(["brainstormFromHost", "brainstormToHost", "fromHost", "inboxFromHost", "inboxToHost", "modalsFromHost", "modalsToHost", "projectsFromHost", "projectsToHost", "reviewFromHost", "reviewToHost", "toHost"]);
   });
 });

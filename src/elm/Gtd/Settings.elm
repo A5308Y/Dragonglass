@@ -1,0 +1,702 @@
+module Gtd.Settings exposing
+    ( BoardConfiguration
+    , DueRange(..)
+    , Filter(..)
+    , GoogleCalendarSettings
+    , GroupBy(..)
+    , MatchOperator(..)
+    , SavedView
+    , Settings
+    , SortDirection(..)
+    , SortField(..)
+    , SortSpec
+    , VisibleColumns(..)
+    , decoder
+    , defaultConfiguration
+    , empty
+    , encode
+    , encodeConfigurationFields
+    , findSavedView
+    , groupByLabel
+    , reverse
+    , sortFieldLabel
+    , statusColumns
+    )
+
+{-| The plugin settings Elm receives with every snapshot, including the saved
+board views it writes back.
+
+Every enumerated choice a board can make — how it groups, how it sorts, and what
+each filter asks — is a union here, so a board can only ever hold a combination
+the settings file can represent.
+
+-}
+
+import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
+import Gtd.Id exposing (ProjectId)
+import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode
+
+
+
+-- BOARD CONFIGURATION
+
+
+type GroupBy
+    = GroupByStatus
+    | GroupByProject
+    | GroupByContext
+    | GroupByEnergy
+
+
+type SortField
+    = SortByCreated
+    | SortByDue
+    | SortByTitle
+    | SortByProject
+
+
+type SortDirection
+    = Ascending
+    | Descending
+
+
+type alias SortSpec =
+    { field : SortField, direction : SortDirection }
+
+
+type MatchOperator
+    = Is
+    | IsNot
+
+
+{-| What a due-date filter asks. Operator and operand travel together, so a
+"within next days" filter can never carry a date and a "before" filter can never
+carry a day count.
+-}
+type DueRange
+    = DueBefore String
+    | DueOnOrBefore String
+    | DueAfter String
+    | DueOnOrAfter String
+    | DueWithinDays Int
+    | DueIsEmpty
+    | DueIsNotEmpty
+
+
+{-| One board filter. Each field carries only the values that field can hold —
+`Nothing` in a Project filter is the "No project" bucket.
+-}
+type Filter
+    = ByStatus MatchOperator (List ActionStatus)
+    | ByProject MatchOperator (List (Maybe ProjectId))
+    | ByContext MatchOperator (List String)
+    | ByEnergy MatchOperator (List String)
+    | ByDue DueRange
+    | ByAvailability
+    | ByWork Bool
+
+
+{-| Which group columns a board shows.
+
+The keys stay strings because what a column means follows `groupBy`: a status
+key while grouping by status, and a Project id, context, or energy otherwise.
+
+-}
+type VisibleColumns
+    = AllColumns
+    | OnlyColumns (List String)
+
+
+type alias BoardConfiguration =
+    { filters : List Filter
+    , groupBy : GroupBy
+    , sort : SortSpec
+    , visibleColumns : VisibleColumns
+    }
+
+
+type alias SavedView =
+    { id : String
+    , name : String
+    , configuration : BoardConfiguration
+    }
+
+
+
+-- SETTINGS
+
+
+type alias GoogleCalendarSettings =
+    { enabled : Bool
+    , endpointUrl : String
+    , sharedSecret : String
+    , sourceId : String
+    , defaultDurationMinutes : Int
+    }
+
+
+type alias Settings =
+    { inboxDirectory : String
+    , referenceDirectory : String
+    , projectsDirectory : String
+    , actionsDirectory : String
+    , defaultProjectImage : String
+    , showProjectBoardImages : Bool
+    , defaultActionStatus : ActionStatus
+    , showDoneColumn : Bool
+    , projectBoardColumns : List ProjectStatus
+    , savedViews : List SavedView
+    , activeSavedViewId : Maybe String
+    , googleCalendar : GoogleCalendarSettings
+    , schemaVersion : Int
+    }
+
+
+empty : Settings
+empty =
+    { inboxDirectory = ""
+    , referenceDirectory = ""
+    , projectsDirectory = ""
+    , actionsDirectory = ""
+    , defaultProjectImage = ""
+    , showProjectBoardImages = True
+    , defaultActionStatus = ActionStatus.Next
+    , showDoneColumn = True
+    , projectBoardColumns = ProjectStatus.board
+    , savedViews = []
+    , activeSavedViewId = Nothing
+    , googleCalendar = { enabled = False, endpointUrl = "", sharedSecret = "", sourceId = "", defaultDurationMinutes = 30 }
+    , schemaVersion = 0
+    }
+
+
+
+-- HELPERS
+
+
+defaultConfiguration : Settings -> BoardConfiguration
+defaultConfiguration settings =
+    { filters = []
+    , groupBy = GroupByStatus
+    , sort = { field = SortByCreated, direction = Descending }
+    , visibleColumns = OnlyColumns (List.map ActionStatus.key (statusColumns settings))
+    }
+
+
+{-| The status columns a board lays out, honouring the Done column preference.
+-}
+statusColumns : Settings -> List ActionStatus
+statusColumns settings =
+    [ ActionStatus.Next, ActionStatus.Waiting, ActionStatus.Scheduled ]
+        ++ (if settings.showDoneColumn then
+                [ ActionStatus.Done ]
+
+            else
+                []
+           )
+
+
+findSavedView : List SavedView -> String -> Maybe SavedView
+findSavedView views savedId =
+    List.filter (\saved -> saved.id == savedId) views |> List.head
+
+
+reverse : SortDirection -> SortDirection
+reverse direction =
+    case direction of
+        Ascending ->
+            Descending
+
+        Descending ->
+            Ascending
+
+
+groupByLabel : GroupBy -> String
+groupByLabel groupBy =
+    case groupBy of
+        GroupByStatus ->
+            "Status"
+
+        GroupByProject ->
+            "Project"
+
+        GroupByContext ->
+            "Context"
+
+        GroupByEnergy ->
+            "Energy"
+
+
+sortFieldLabel : SortField -> String
+sortFieldLabel field =
+    case field of
+        SortByCreated ->
+            "Created"
+
+        SortByDue ->
+            "Due"
+
+        SortByTitle ->
+            "Title"
+
+        SortByProject ->
+            "Project"
+
+
+
+-- DECODING
+
+
+decoder : Decoder Settings
+decoder =
+    Decode.succeed Settings
+        |> required "inboxDirectory" Decode.string
+        |> required "referenceDirectory" Decode.string
+        |> required "projectsDirectory" Decode.string
+        |> required "actionsDirectory" Decode.string
+        |> required "defaultProjectImage" Decode.string
+        |> required "showProjectBoardImages" Decode.bool
+        |> required "defaultActionStatus" ActionStatus.decoder
+        |> required "showDoneColumn" Decode.bool
+        |> required "projectBoardColumns" (knownList ProjectStatus.decoder)
+        |> required "savedViews" (knownList savedViewDecoder)
+        |> required "activeSavedViewId" (Decode.maybe Decode.string)
+        |> required "googleCalendar" googleCalendarDecoder
+        |> required "schemaVersion" Decode.int
+
+
+googleCalendarDecoder : Decoder GoogleCalendarSettings
+googleCalendarDecoder =
+    Decode.map5 GoogleCalendarSettings
+        (Decode.field "enabled" Decode.bool)
+        (Decode.field "endpointUrl" Decode.string)
+        (Decode.field "sharedSecret" Decode.string)
+        (Decode.field "sourceId" Decode.string)
+        (Decode.field "defaultDurationMinutes" Decode.int)
+
+
+savedViewDecoder : Decoder SavedView
+savedViewDecoder =
+    Decode.map3 SavedView
+        (Decode.field "id" Decode.string)
+        (Decode.field "name" Decode.string)
+        configurationDecoder
+
+
+configurationDecoder : Decoder BoardConfiguration
+configurationDecoder =
+    Decode.map4 BoardConfiguration
+        (Decode.field "filters" (knownList filterDecoder))
+        (Decode.field "groupBy" groupByDecoder)
+        (Decode.field "sort" sortDecoder)
+        (optionalField "visibleColumns" visibleColumnsDecoder AllColumns)
+
+
+visibleColumnsDecoder : Decoder VisibleColumns
+visibleColumnsDecoder =
+    Decode.maybe (Decode.list Decode.string)
+        |> Decode.map
+            (\maybeColumns ->
+                case maybeColumns of
+                    Just columns ->
+                        OnlyColumns columns
+
+                    Nothing ->
+                        AllColumns
+            )
+
+
+groupByDecoder : Decoder GroupBy
+groupByDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\raw ->
+                case raw of
+                    "project" ->
+                        Decode.succeed GroupByProject
+
+                    "context" ->
+                        Decode.succeed GroupByContext
+
+                    "energy" ->
+                        Decode.succeed GroupByEnergy
+
+                    _ ->
+                        Decode.succeed GroupByStatus
+            )
+
+
+sortDecoder : Decoder SortSpec
+sortDecoder =
+    Decode.map2 SortSpec
+        (Decode.field "field" sortFieldDecoder)
+        (Decode.field "direction" sortDirectionDecoder)
+
+
+sortFieldDecoder : Decoder SortField
+sortFieldDecoder =
+    Decode.string
+        |> Decode.map
+            (\raw ->
+                case raw of
+                    "due" ->
+                        SortByDue
+
+                    "title" ->
+                        SortByTitle
+
+                    "project" ->
+                        SortByProject
+
+                    _ ->
+                        SortByCreated
+            )
+
+
+sortDirectionDecoder : Decoder SortDirection
+sortDirectionDecoder =
+    Decode.string
+        |> Decode.map
+            (\raw ->
+                if raw == "asc" then
+                    Ascending
+
+                else
+                    Descending
+            )
+
+
+filterDecoder : Decoder Filter
+filterDecoder =
+    Decode.field "kind" Decode.string
+        |> Decode.andThen
+            (\kind ->
+                case kind of
+                    "value" ->
+                        valueFilterDecoder
+
+                    "due" ->
+                        Decode.map ByDue dueRangeDecoder
+
+                    "availability" ->
+                        Decode.succeed ByAvailability
+
+                    "work" ->
+                        Decode.map ByWork (Decode.field "value" Decode.bool)
+
+                    _ ->
+                        Decode.fail ("Unknown filter kind: " ++ kind)
+            )
+
+
+valueFilterDecoder : Decoder Filter
+valueFilterDecoder =
+    Decode.map3 (\field operator values -> ( field, operator, values ))
+        (Decode.field "field" Decode.string)
+        (Decode.field "operator" matchOperatorDecoder)
+        (Decode.field "values" (Decode.list Decode.value))
+        |> Decode.andThen
+            (\( field, operator, values ) ->
+                let
+                    strings =
+                        List.filterMap (decodeOne Decode.string) values
+                in
+                case field of
+                    "status" ->
+                        Decode.succeed (ByStatus operator (List.filterMap (decodeOne ActionStatus.decoder) values))
+
+                    "project" ->
+                        Decode.succeed
+                            (ByProject operator
+                                (List.map
+                                    (\raw ->
+                                        if String.isEmpty raw then
+                                            Nothing
+
+                                        else
+                                            Just raw
+                                    )
+                                    strings
+                                )
+                            )
+
+                    "context" ->
+                        Decode.succeed (ByContext operator strings)
+
+                    "energy" ->
+                        Decode.succeed (ByEnergy operator strings)
+
+                    _ ->
+                        Decode.fail ("Unknown filter field: " ++ field)
+            )
+
+
+matchOperatorDecoder : Decoder MatchOperator
+matchOperatorDecoder =
+    Decode.string
+        |> Decode.map
+            (\raw ->
+                if raw == "notIn" then
+                    IsNot
+
+                else
+                    Is
+            )
+
+
+dueRangeDecoder : Decoder DueRange
+dueRangeDecoder =
+    Decode.map2 Tuple.pair
+        (Decode.field "operator" Decode.string)
+        (optionalField "value" Decode.value Encode.null)
+        |> Decode.andThen
+            (\( operator, raw ) ->
+                let
+                    date =
+                        decodeOne Decode.string raw |> Maybe.withDefault ""
+
+                    days =
+                        decodeOne Decode.int raw |> Maybe.withDefault 7
+                in
+                case operator of
+                    "before" ->
+                        Decode.succeed (DueBefore date)
+
+                    "onOrBefore" ->
+                        Decode.succeed (DueOnOrBefore date)
+
+                    "after" ->
+                        Decode.succeed (DueAfter date)
+
+                    "onOrAfter" ->
+                        Decode.succeed (DueOnOrAfter date)
+
+                    "withinNextDays" ->
+                        Decode.succeed (DueWithinDays days)
+
+                    "isEmpty" ->
+                        Decode.succeed DueIsEmpty
+
+                    "isNotEmpty" ->
+                        Decode.succeed DueIsNotEmpty
+
+                    _ ->
+                        Decode.fail ("Unknown due operator: " ++ operator)
+            )
+
+
+{-| Keeps the entries a decoder understands and drops the rest, so one stale
+saved filter cannot blank a whole board.
+-}
+knownList : Decoder a -> Decoder (List a)
+knownList itemDecoder =
+    Decode.list Decode.value |> Decode.map (List.filterMap (decodeOne itemDecoder))
+
+
+decodeOne : Decoder a -> Decode.Value -> Maybe a
+decodeOne itemDecoder raw =
+    Decode.decodeValue itemDecoder raw |> Result.toMaybe
+
+
+required : String -> Decoder a -> Decoder (a -> b) -> Decoder b
+required name itemDecoder pipeline =
+    Decode.map2 (<|) pipeline (Decode.field name itemDecoder)
+
+
+optionalField : String -> Decoder a -> a -> Decoder a
+optionalField name itemDecoder fallback =
+    Decode.oneOf [ Decode.field name itemDecoder, Decode.succeed fallback ]
+
+
+
+-- ENCODING
+
+
+encode : Settings -> Encode.Value
+encode settings =
+    Encode.object
+        [ ( "inboxDirectory", Encode.string settings.inboxDirectory )
+        , ( "referenceDirectory", Encode.string settings.referenceDirectory )
+        , ( "projectsDirectory", Encode.string settings.projectsDirectory )
+        , ( "actionsDirectory", Encode.string settings.actionsDirectory )
+        , ( "defaultProjectImage", Encode.string settings.defaultProjectImage )
+        , ( "showProjectBoardImages", Encode.bool settings.showProjectBoardImages )
+        , ( "defaultActionStatus", ActionStatus.encode settings.defaultActionStatus )
+        , ( "showDoneColumn", Encode.bool settings.showDoneColumn )
+        , ( "projectBoardColumns", Encode.list ProjectStatus.encode settings.projectBoardColumns )
+        , ( "savedViews", Encode.list encodeSavedView settings.savedViews )
+        , ( "activeSavedViewId", encodeMaybe Encode.string settings.activeSavedViewId )
+        , ( "googleCalendar", encodeGoogleCalendar settings.googleCalendar )
+        , ( "schemaVersion", Encode.int settings.schemaVersion )
+        ]
+
+
+encodeGoogleCalendar : GoogleCalendarSettings -> Encode.Value
+encodeGoogleCalendar settings =
+    Encode.object
+        [ ( "enabled", Encode.bool settings.enabled )
+        , ( "endpointUrl", Encode.string settings.endpointUrl )
+        , ( "sharedSecret", Encode.string settings.sharedSecret )
+        , ( "sourceId", Encode.string settings.sourceId )
+        , ( "defaultDurationMinutes", Encode.int settings.defaultDurationMinutes )
+        ]
+
+
+encodeSavedView : SavedView -> Encode.Value
+encodeSavedView saved =
+    Encode.object
+        ([ ( "id", Encode.string saved.id ), ( "name", Encode.string saved.name ) ]
+            ++ encodeConfigurationFields saved.configuration
+        )
+
+
+encodeConfigurationFields : BoardConfiguration -> List ( String, Encode.Value )
+encodeConfigurationFields configuration =
+    [ ( "filters", Encode.list encodeFilter configuration.filters )
+    , ( "groupBy", Encode.string (groupByKey configuration.groupBy) )
+    , ( "sort"
+      , Encode.object
+            [ ( "field", Encode.string (sortFieldKey configuration.sort.field) )
+            , ( "direction", Encode.string (sortDirectionKey configuration.sort.direction) )
+            ]
+      )
+    , ( "visibleColumns"
+      , case configuration.visibleColumns of
+            AllColumns ->
+                Encode.null
+
+            OnlyColumns columns ->
+                Encode.list Encode.string columns
+      )
+    ]
+
+
+groupByKey : GroupBy -> String
+groupByKey groupBy =
+    case groupBy of
+        GroupByStatus ->
+            "status"
+
+        GroupByProject ->
+            "project"
+
+        GroupByContext ->
+            "context"
+
+        GroupByEnergy ->
+            "energy"
+
+
+sortFieldKey : SortField -> String
+sortFieldKey field =
+    case field of
+        SortByCreated ->
+            "created"
+
+        SortByDue ->
+            "due"
+
+        SortByTitle ->
+            "title"
+
+        SortByProject ->
+            "project"
+
+
+sortDirectionKey : SortDirection -> String
+sortDirectionKey direction =
+    case direction of
+        Ascending ->
+            "asc"
+
+        Descending ->
+            "desc"
+
+
+encodeFilter : Filter -> Encode.Value
+encodeFilter filter =
+    case filter of
+        ByStatus operator values ->
+            valueFilter "status" operator (List.map ActionStatus.key values)
+
+        ByProject operator values ->
+            valueFilter "project" operator (List.map (Maybe.withDefault "") values)
+
+        ByContext operator values ->
+            valueFilter "context" operator values
+
+        ByEnergy operator values ->
+            valueFilter "energy" operator values
+
+        ByDue range ->
+            let
+                ( operator, value ) =
+                    dueRangeFields range
+            in
+            Encode.object
+                ([ ( "kind", Encode.string "due" ), ( "operator", Encode.string operator ) ]
+                    ++ (case value of
+                            Just encoded ->
+                                [ ( "value", encoded ) ]
+
+                            Nothing ->
+                                []
+                       )
+                )
+
+        ByAvailability ->
+            Encode.object [ ( "kind", Encode.string "availability" ), ( "operator", Encode.string "available" ) ]
+
+        ByWork expected ->
+            Encode.object [ ( "kind", Encode.string "work" ), ( "value", Encode.bool expected ) ]
+
+
+valueFilter : String -> MatchOperator -> List String -> Encode.Value
+valueFilter field operator values =
+    Encode.object
+        [ ( "kind", Encode.string "value" )
+        , ( "field", Encode.string field )
+        , ( "operator"
+          , Encode.string
+                (case operator of
+                    Is ->
+                        "in"
+
+                    IsNot ->
+                        "notIn"
+                )
+          )
+        , ( "values", Encode.list Encode.string values )
+        ]
+
+
+dueRangeFields : DueRange -> ( String, Maybe Encode.Value )
+dueRangeFields range =
+    case range of
+        DueBefore date ->
+            ( "before", Just (Encode.string date) )
+
+        DueOnOrBefore date ->
+            ( "onOrBefore", Just (Encode.string date) )
+
+        DueAfter date ->
+            ( "after", Just (Encode.string date) )
+
+        DueOnOrAfter date ->
+            ( "onOrAfter", Just (Encode.string date) )
+
+        DueWithinDays days ->
+            ( "withinNextDays", Just (Encode.int days) )
+
+        DueIsEmpty ->
+            ( "isEmpty", Nothing )
+
+        DueIsNotEmpty ->
+            ( "isNotEmpty", Nothing )
+
+
+encodeMaybe : (a -> Encode.Value) -> Maybe a -> Encode.Value
+encodeMaybe encoder maybeValue =
+    Maybe.map encoder maybeValue |> Maybe.withDefault Encode.null

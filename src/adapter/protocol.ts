@@ -1,3 +1,5 @@
+import { isAllDaySchedule } from "../domain/schedule";
+import { ACTION_STATUSES, PROJECT_STATUSES } from "../domain/types";
 import type { Action, GtdSettings, GtdSnapshot, InboxItem, InboxProcessingInput, Project } from "../domain/types";
 
 export const ELM_PROTOCOL_VERSION = 1;
@@ -11,6 +13,11 @@ export interface ElmFileDto {
 
 export interface ElmActionDto extends Omit<Action, "file"> {
   file: ElmFileDto;
+  /**
+   * A timed `scheduledStart` as local wall-clock `YYYY-MM-DDTHH:mm`.
+   * Only the host knows the vault's zone, so the editor is given the reading it shows.
+   */
+  scheduledLocal?: string;
 }
 
 export interface ElmProjectDto extends Omit<Project, "file"> {
@@ -79,11 +86,25 @@ export function elmSnapshot(
     revision: snapshot.revision,
     today,
     inboxItems: snapshot.inboxItems.map((item) => ({ ...item, file: fileDto(item.file), resourceUrl: resourceUrl(item.file) })),
-    actions: snapshot.actions.map((action) => ({ ...action, file: fileDto(action.file) })),
+    actions: snapshot.actions.map((action) => ({
+      ...action,
+      file: fileDto(action.file),
+      ...(action.scheduledStart && !isAllDaySchedule(action.scheduledStart)
+        ? { scheduledLocal: dateTimeLocal(action.scheduledStart) }
+        : {}),
+    })),
     projects: snapshot.projects.map((project) => ({ ...project, file: fileDto(project.file) })),
     issues: snapshot.issues.map((issue) => ({ ...issue })),
     settings: structuredClone(settings),
   };
+}
+
+/** The `datetime-local` reading of an absolute timestamp, or empty when it is not one. */
+function dateTimeLocal(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function fileDto(file: Action["file"] | Project["file"]): ElmFileDto {
@@ -93,6 +114,55 @@ function fileDto(file: Action["file"] | Project["file"]): ElmFileDto {
     basename: file.basename,
     extension: file.extension,
   };
+}
+
+/** What a Scheduled Action reserves, as the Elm editor stated it. */
+export type ElmScheduleInput =
+  | { kind: "all-day"; date: string }
+  | { kind: "timed"; localStart: string; durationMinutes: number };
+
+export interface ElmNewActionInput {
+  title: string;
+  status: Action["status"];
+  projectId?: string;
+  context: string;
+  waitingSince?: string;
+  schedule?: ElmScheduleInput;
+  work: boolean;
+}
+
+export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId"> {
+  projectId: string;
+  energy: string;
+  due: string;
+  deferUntil: string;
+}
+
+export interface ElmNewProjectInput {
+  title: string;
+  area: string;
+  image: string;
+  tags: string[];
+  parentProjectId?: string;
+}
+
+export interface ElmProjectChanges {
+  title: string;
+  status: Project["status"];
+  activateAt: string;
+  area: string;
+  image: string;
+  tags: string[];
+  reviewed: string;
+  parentProjectId: string;
+}
+
+/** One row of a pasted list, normalized so Elm reads Actions and Sub-projects alike. */
+export interface ElmImportedRow {
+  title: string;
+  tags: string[];
+  work: boolean;
+  done: boolean;
 }
 
 export type ElmHostCommand =
@@ -137,9 +207,26 @@ export type ElmHostCommand =
   | { type: "read-inbox-body"; itemId: string }
   | { type: "trash-inbox-item"; itemId: string }
   | { type: "process-inbox"; itemId: string; operation: "next-action" | "file" | "someday"; input: InboxProcessingInput }
+  | { type: "save-new-action"; input: ElmNewActionInput }
+  | { type: "save-action"; actionId: string; changes: ElmActionChanges }
+  | { type: "schedule-action"; actionId: string; schedule: ElmScheduleInput }
+  | { type: "convert-action-to-subproject"; actionId: string; title: string; parentProjectId: string }
+  | { type: "save-new-project"; input: ElmNewProjectInput }
+  | { type: "save-project"; projectId: string; changes: ElmProjectChanges }
+  | { type: "add-project-tags"; projectIds: string[]; tags: string[] }
+  | { type: "set-projects-parent"; projectIds: string[]; parentProjectId: string }
+  | { type: "set-project-blockers"; projectId: string; blockedByProjectIds: string[] }
+  | { type: "parse-import-list"; kind: ElmImportKind; text: string }
+  | { type: "import-action-list"; projectId?: string; text: string }
+  | { type: "import-subproject-list"; parentProjectId: string; text: string }
+  | { type: "capture-inbox-item"; title: string }
+  | { type: "submit-prompt"; value: string }
+  | { type: "close-modal" }
   | { type: "save-settings"; settings: GtdSettings }
   | { type: "prompt"; title: string; placeholder: string }
   | { type: "show-menu"; x: number; y: number; entries: ElmMenuEntry[] };
+
+export type ElmImportKind = "actions" | "subprojects";
 
 export interface ElmMenuEntry {
   label?: string;
@@ -255,6 +342,38 @@ function isHostCommand(value: unknown): value is ElmHostCommand {
       return typeof value.itemId === "string"
         && ["next-action", "file", "someday"].includes(String(value.operation))
         && isRecord(value.input);
+    case "save-new-action":
+      return isNewActionInput(value.input);
+    case "save-action":
+      return typeof value.actionId === "string" && isActionChanges(value.changes);
+    case "schedule-action":
+      return typeof value.actionId === "string" && isScheduleInput(value.schedule);
+    case "convert-action-to-subproject":
+      return typeof value.actionId === "string"
+        && typeof value.title === "string"
+        && typeof value.parentProjectId === "string";
+    case "save-new-project":
+      return isNewProjectInput(value.input);
+    case "save-project":
+      return typeof value.projectId === "string" && isProjectChanges(value.changes);
+    case "add-project-tags":
+      return isStringArray(value.projectIds) && isStringArray(value.tags);
+    case "set-projects-parent":
+      return isStringArray(value.projectIds) && typeof value.parentProjectId === "string";
+    case "set-project-blockers":
+      return typeof value.projectId === "string" && isStringArray(value.blockedByProjectIds);
+    case "parse-import-list":
+      return (value.kind === "actions" || value.kind === "subprojects") && typeof value.text === "string";
+    case "import-action-list":
+      return typeof value.text === "string" && (value.projectId === undefined || typeof value.projectId === "string");
+    case "import-subproject-list":
+      return typeof value.parentProjectId === "string" && typeof value.text === "string";
+    case "capture-inbox-item":
+      return typeof value.title === "string";
+    case "submit-prompt":
+      return typeof value.value === "string";
+    case "close-modal":
+      return true;
     case "save-settings":
       return isRecord(value.settings);
     case "prompt":
@@ -266,12 +385,71 @@ function isHostCommand(value: unknown): value is ElmHostCommand {
   }
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isScheduleInput(value: unknown): value is ElmScheduleInput {
+  if (!isRecord(value)) return false;
+  if (value.kind === "all-day") return typeof value.date === "string";
+  return value.kind === "timed"
+    && typeof value.localStart === "string"
+    && Number.isInteger(value.durationMinutes)
+    && Number(value.durationMinutes) > 0;
+}
+
+function isOptionalSchedule(value: unknown): boolean {
+  return value === undefined || isScheduleInput(value);
+}
+
+function isNewActionInput(value: unknown): value is ElmNewActionInput {
+  return isRecord(value)
+    && typeof value.title === "string"
+    && ACTION_STATUSES.includes(value.status as Action["status"])
+    && typeof value.context === "string"
+    && typeof value.work === "boolean"
+    && (value.projectId === undefined || typeof value.projectId === "string")
+    && (value.waitingSince === undefined || typeof value.waitingSince === "string")
+    && isOptionalSchedule(value.schedule);
+}
+
+function isActionChanges(value: unknown): value is ElmActionChanges {
+  return isNewActionInput(value)
+    && typeof (value as ElmActionChanges).projectId === "string"
+    && typeof (value as ElmActionChanges).energy === "string"
+    && typeof (value as ElmActionChanges).due === "string"
+    && typeof (value as ElmActionChanges).deferUntil === "string";
+}
+
+function isNewProjectInput(value: unknown): value is ElmNewProjectInput {
+  return isRecord(value)
+    && typeof value.title === "string"
+    && typeof value.area === "string"
+    && typeof value.image === "string"
+    && isStringArray(value.tags)
+    && (value.parentProjectId === undefined || typeof value.parentProjectId === "string");
+}
+
+function isProjectChanges(value: unknown): value is ElmProjectChanges {
+  return isRecord(value)
+    && typeof value.title === "string"
+    && PROJECT_STATUSES.includes(value.status as Project["status"])
+    && typeof value.activateAt === "string"
+    && typeof value.area === "string"
+    && typeof value.image === "string"
+    && isStringArray(value.tags)
+    && typeof value.reviewed === "string"
+    && typeof value.parentProjectId === "string";
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 export type ElmHostEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
+  | { type: "project-meta"; projectMeta: ElmProjectMetaDto[] }
+  | { type: "support-counts"; counts: Array<{ projectId: string; count: number }> }
   | { type: "project-detail"; detail: ElmProjectDetailDto }
   | { type: "show-project"; projectId: string | null }
   | { type: "review-project-data"; data: ElmReviewProjectDataDto }
