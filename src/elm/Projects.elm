@@ -67,6 +67,12 @@ type alias ProjectDetail =
     }
 
 
+type alias SubprojectDropTarget =
+    { status : ProjectStatus
+    , beforeId : Maybe ProjectId
+    }
+
+
 {-| What a host reply should finish.
 -}
 type Pending
@@ -102,6 +108,7 @@ type alias Model =
     , supportBodies : Dict String String
     , supportDraft : String
     , draggedProject : Maybe ProjectId
+    , subprojectDropTarget : Maybe SubprojectDropTarget
     , requests : Requests Pending
     , error : Maybe String
     , isMac : Bool
@@ -143,6 +150,8 @@ type Msg
     | SaveSupportNote String
     | DragStarted ProjectId
     | DragOver
+    | DragOverSubproject ProjectStatus (Maybe ProjectId)
+    | DragEnded
     | DropProject ProjectStatus
     | DropSubproject ProjectStatus (Maybe ProjectId)
     | Send Pending Command
@@ -206,6 +215,7 @@ init flags =
                     , supportBodies = Dict.empty
                     , supportDraft = ""
                     , draggedProject = Nothing
+                    , subprojectDropTarget = Nothing
                     , requests = Host.noRequests
                     , error = Nothing
                     , isMac = decoded.isMac
@@ -402,26 +412,36 @@ update msg model =
                 )
 
         DragStarted projectId ->
-            ( { model | draggedProject = Just projectId }, Cmd.none )
+            ( { model | draggedProject = Just projectId, subprojectDropTarget = Nothing }, Cmd.none )
 
         DragOver ->
             ( model, Cmd.none )
 
+        DragOverSubproject status beforeId ->
+            ( { model | subprojectDropTarget = Just { status = status, beforeId = beforeId } }, Cmd.none )
+
+        DragEnded ->
+            ( { model | draggedProject = Nothing, subprojectDropTarget = Nothing }, Cmd.none )
+
         DropProject status ->
             case model.draggedProject of
                 Just projectId ->
-                    send IgnoreReply (Command.SetProjectStatus projectId status) { model | draggedProject = Nothing }
+                    send IgnoreReply
+                        (Command.SetProjectStatus projectId status)
+                        { model | draggedProject = Nothing, subprojectDropTarget = Nothing }
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( { model | subprojectDropTarget = Nothing }, Cmd.none )
 
         DropSubproject status beforeId ->
             case model.draggedProject of
                 Just projectId ->
-                    send IgnoreReply (Command.MoveSubproject projectId status beforeId) { model | draggedProject = Nothing }
+                    send IgnoreReply
+                        (Command.MoveSubproject projectId status beforeId)
+                        { model | draggedProject = Nothing, subprojectDropTarget = Nothing }
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( { model | subprojectDropTarget = Nothing }, Cmd.none )
 
         Send pending command ->
             send pending command model
@@ -773,6 +793,7 @@ viewProjectCard model project =
         , attribute "data-project-card" project.id
         , draggable (Ui.boolAttribute (not model.selecting))
         , on "dragstart" (Decode.succeed (DragStarted project.id))
+        , on "dragend" (Decode.succeed DragEnded)
         , onClick
             (if model.selecting then
                 ToggleSelected project.id
@@ -1137,16 +1158,24 @@ viewSubprojectColumn model projects status =
     div
         [ class "dg-subproject-column"
         , attribute "data-subproject-column" (ProjectStatus.key status)
-        , dragOver
+        , Ui.preventDefaultOn "dragover" (DragOverSubproject status Nothing)
         , on "drop" (Decode.succeed (DropSubproject status Nothing))
         ]
         [ header [] [ strong [] [ text (ProjectStatus.label status) ], span [] [ text (String.fromInt (List.length items)) ] ]
         , div [ class "dg-subproject-list" ]
-            (if List.isEmpty items then
-                [ div [ class "dg-subproject-empty" ] [ text ("No " ++ String.toLower (ProjectStatus.label status) ++ " sub-projects.") ] ]
+            (List.map (viewSubprojectCard model) items
+                ++ (if model.subprojectDropTarget == Just { status = status, beforeId = Nothing } then
+                        [ div [ class "dg-subproject-drop-line", attribute "aria-hidden" "true" ] [] ]
 
-             else
-                List.map (viewSubprojectCard model) items
+                    else
+                        []
+                   )
+                ++ (if List.isEmpty items then
+                        [ div [ class "dg-subproject-empty" ] [ text ("No " ++ String.toLower (ProjectStatus.label status) ++ " sub-projects.") ] ]
+
+                    else
+                        []
+                   )
             )
         ]
 
@@ -1158,10 +1187,21 @@ viewSubprojectCard model project =
             (projectMeta project.id model).blockers
     in
     article
-        [ classList [ ( "dg-subproject-card", True ), ( "is-blocked", not (List.isEmpty blockers) ) ]
+        [ classList
+            [ ( "dg-subproject-card", True )
+            , ( "is-blocked", not (List.isEmpty blockers) )
+            , ( "is-drop-before", model.subprojectDropTarget == Just { status = project.status, beforeId = Just project.id } )
+            ]
         , draggable "true"
         , on "dragstart" (Decode.succeed (DragStarted project.id))
-        , Html.Events.custom "dragover" (Decode.succeed { message = DragOver, stopPropagation = True, preventDefault = True })
+        , on "dragend" (Decode.succeed DragEnded)
+        , Html.Events.custom "dragover"
+            (Decode.succeed
+                { message = DragOverSubproject project.status (Just project.id)
+                , stopPropagation = True
+                , preventDefault = True
+                }
+            )
         , Html.Events.custom "drop"
             (Decode.succeed { message = DropSubproject project.status (Just project.id), stopPropagation = True, preventDefault = True })
         ]
@@ -1655,6 +1695,7 @@ emptyModel message =
     , supportBodies = Dict.empty
     , supportDraft = ""
     , draggedProject = Nothing
+    , subprojectDropTarget = Nothing
     , requests = Host.noRequests
     , error = Just message
     , isMac = False
