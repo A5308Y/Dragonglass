@@ -2,7 +2,7 @@ import { Notice } from "obsidian";
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { InboxItem, InboxProcessingInput, Project } from "../domain/types";
-import { inboxProcessingPrefill } from "../domain/inbox-processing";
+import { inboxPrimaryDisposition, inboxProcessingPrefill } from "../domain/inbox-processing";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { isVaultAudio } from "../ui/audio";
 import { FuzzyField } from "../ui/fuzzy-field";
@@ -143,6 +143,7 @@ function InboxProcessor({
   const [nextAction, setNextAction] = useState("");
   const [context, setContext] = useState("");
   const [work, setWork] = useState(false);
+  const [fileOriginal, setFileOriginal] = useState(false);
   const [busy, setBusy] = useState(false);
   const projectLabels = useMemo(() => projectBreadcrumbs(projects), [projects]);
 
@@ -156,6 +157,7 @@ function InboxProcessor({
     setNextAction(prefill);
     setContext("");
     setWork(false);
+    setFileOriginal(false);
     setBusy(false);
     if (item) void services.repository.readInboxBody(item).then((value) => { if (!cancelled) setBody(value); });
     return () => { cancelled = true; };
@@ -179,6 +181,7 @@ function InboxProcessor({
     ...(nextAction.trim() ? { nextAction: nextAction.trim() } : {}),
     ...(context.trim() ? { context: context.trim() } : {}),
     work,
+    fileOriginal,
   });
   const run = async (operation: () => Promise<void>, message: string) => {
     if (busy) return;
@@ -199,17 +202,15 @@ function InboxProcessor({
     });
   const selectedProjectLabel = selectedProject ? projectLabels.get(selectedProject.id) ?? selectedProject.title : "";
   const projectName = selectedProject?.title ?? projectQuery.trim();
-  const actionLabel = selectedProject
-    ? `Create Next Action in ${selectedProject.title}`
-    : projectName
-      ? "Create Project + Next Action"
-      : "Create Next Action";
-  const referenceLabel = projectName
-    ? `File with ${projectName}${nextAction.trim() ? " + Next Action" : ""}`
-    : `File as General Reference${nextAction.trim() ? " + Next Action" : ""}`;
+  const primary = inboxPrimaryDisposition({
+    fileOriginal,
+    projectName,
+    projectExists: Boolean(selectedProject),
+    nextAction,
+    context,
+  });
   const somedayLabel = selectedProject ? `Move ${selectedProject.title} to Someday/Maybe` : "Create Someday/Maybe Project";
-  const actionReady = Boolean(nextAction.trim() && context.trim());
-  // Dispositions where a Next Action is optional still need a context once one is typed.
+  // Someday/Maybe needs no Next Action, but still needs a context once one is typed.
   const optionalActionReady = Boolean(!nextAction.trim() || context.trim());
 
   return (
@@ -275,12 +276,31 @@ function InboxProcessor({
             <input type="checkbox" checked={work} onChange={(event: Event) => setWork((event.currentTarget as HTMLInputElement).checked)} />
             <small>Independent of the context. Applied to any Action created here.</small>
           </label>
+
+          <label class="dg-processing-field dg-processing-toggle">
+            <span>File with Project</span>
+            <input type="checkbox" checked={fileOriginal} onChange={(event: Event) => setFileOriginal((event.currentTarget as HTMLInputElement).checked)} />
+            <small>{item.file.extension === "md"
+              ? "Keeps this note as reference and creates a separate Action. Otherwise the note itself becomes the Action."
+              : "Keeps this file as support material, or in General Reference with no Project. Otherwise it goes to Obsidian's trash once processed."}</small>
+          </label>
         </div>
       </section>
 
       <section class="dg-processor-actions">
-        <button class="mod-cta" title={actionLabel} disabled={!actionReady || busy} onClick={() => void run(() => services.repository.processInboxAsNextAction(item, input()), "Next Action created.")}>{actionLabel}</button>
-        <button title={referenceLabel} disabled={!optionalActionReady || busy} onClick={() => void run(() => services.repository.processInboxAsReference(item, input()), projectName ? "Filed with Project." : "Filed as General Reference.")}>{referenceLabel}</button>
+        <button
+          class="mod-cta"
+          title={primary.label}
+          disabled={!primary.ready || busy}
+          onClick={() => void run(
+            () => primary.operation === "file"
+              ? services.repository.processInboxAsReference(item, input())
+              : services.repository.processInboxAsNextAction(item, input()),
+            primary.operation === "file"
+              ? projectName ? "Filed with Project." : "Filed as General Reference."
+              : "Next Action created.",
+          )}
+        >{primary.label}</button>
         <button title={somedayLabel} disabled={!optionalActionReady || busy} onClick={() => void run(() => services.repository.processInboxAsSomedayProject(item, input()), "Filed as a Someday/Maybe Project.")}>{somedayLabel}</button>
         <button class="mod-warning" disabled={busy} onClick={() => void run(() => services.repository.trashInboxItem(item), "Inbox Item deleted.")}>Delete</button>
       </section>

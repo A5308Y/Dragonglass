@@ -100,6 +100,8 @@ export interface InboxProcessingInput {
   nextAction?: string;
   context?: string;
   work?: boolean;
+  /** Keeps the captured file as reference material instead of trashing it once it is processed. */
+  fileOriginal?: boolean;
 }
 
 export type ActionChanges = Partial<

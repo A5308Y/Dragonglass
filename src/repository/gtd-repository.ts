@@ -96,8 +96,9 @@ export class GtdRepository {
     if (!context) throw new Error("A context is required.");
     if (item.file.extension !== "md") {
       await this.createNextActionFile(title, context, item.created, project, input.work ?? false);
-      if (project) await this.fileInboxItemToProject(item, project);
-      else await this.fileInboxItemToGeneralReference(item);
+      // A Markdown capture becomes the Action itself; anything else has been consumed by it.
+      // Keeping the original is the caller's explicit choice, made through the reference disposition.
+      await this.trashInboxItem(item);
       return;
     }
     await this.enqueue(item.file.path, async () => {
@@ -253,7 +254,8 @@ export class GtdRepository {
     if (!project) throw new Error("Could not create the Someday/Maybe Project.");
 
     if (title) await this.createNextActionFile(title, context, item.created, project, input.work ?? false);
-    await this.fileInboxItemToProject(item, project);
+    if (input.fileOriginal) await this.fileInboxItemToProject(item, project);
+    else await this.trashInboxItem(item);
   }
 
   async createProject(input: ProjectInput): Promise<TFile> {
