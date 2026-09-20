@@ -480,6 +480,9 @@
   font-size: var(--font-ui-smaller);
   font-variant-numeric: tabular-nums;
 }
+/* The column scrolls, so a panel must keep its natural height instead of being squeezed
+   until its own content spills past its background. */
+.dg-project-detail-content > * { flex: 0 0 auto; }
 .dg-project-outcome-panel { min-height: 150px; }
 .dg-outcome-edit { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .dg-outcome-input {

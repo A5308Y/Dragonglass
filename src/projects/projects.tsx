@@ -759,6 +759,20 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   );
 }
 
+/**
+ * Submits a multi-line field on Cmd/Ctrl+Enter.
+ *
+ * Plain Enter stays a line break so pasted formatting survives, and a key this field has
+ * consumed stops here rather than reaching Obsidian's global hotkeys as well.
+ */
+function submitOnModEnter(event: KeyboardEvent, submit: () => void): void {
+  // An IME uses Enter to confirm a candidate; that keystroke is not a submission.
+  if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.isComposing) return;
+  event.preventDefault();
+  event.stopPropagation();
+  submit();
+}
+
 function ProjectOutcome({ services, project }: { services: GtdServices; project: Project }) {
   const [outcome, setOutcome] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -827,11 +841,13 @@ function ProjectOutcome({ services, project }: { services: GtdServices; project:
             placeholder="What will be true when this Project is complete? (⌘/Ctrl+Enter to save)"
             onInput={(event: Event) => setDraft((event.currentTarget as HTMLTextAreaElement).value)}
             onKeyDown={(event: KeyboardEvent) => {
-              if (event.key === "Escape") { event.preventDefault(); cancel(); return; }
-              // Enter stays a line break so pasted formatting survives.
-              if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
-              event.preventDefault();
-              void save();
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                cancel();
+                return;
+              }
+              submitOnModEnter(event, () => void save());
             }}
           />
           <div class="dg-outcome-edit-actions">
@@ -885,12 +901,7 @@ function ProjectDiary({ services, project }: { services: GtdServices; project: P
         aria-label="New Diary entry"
         placeholder="Observation or decision… (⌘/Ctrl+Enter to add)"
         onInput={(event: Event) => setDraft((event.currentTarget as HTMLTextAreaElement).value)}
-        onKeyDown={(event: KeyboardEvent) => {
-          // Enter stays a line break so pasted formatting survives.
-          if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
-          event.preventDefault();
-          void addEntry();
-        }}
+        onKeyDown={(event: KeyboardEvent) => submitOnModEnter(event, () => void addEntry())}
       />
       <button class="mod-cta" disabled={!draft.trim() || saving} onClick={() => void addEntry()}>Add entry</button>
     </div>
