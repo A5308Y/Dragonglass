@@ -500,7 +500,7 @@
 }
 .dg-outcome-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .dg-outcome-edit-actions button { min-height: 32px; }
-.dg-outcome { line-height: var(--line-height-normal); }
+.dg-outcome { display: block; line-height: var(--line-height-normal); }
 .dg-outcome > :first-child { margin-top: 0; }
 .dg-outcome > :last-child { margin-bottom: 0; }
 .dg-detail-empty {

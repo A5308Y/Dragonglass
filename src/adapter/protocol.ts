@@ -17,6 +17,35 @@ export interface ElmProjectDto extends Omit<Project, "file"> {
   file: ElmFileDto;
 }
 
+export interface ElmProjectMetaDto {
+  id: string;
+  breadcrumb: string;
+  activeSubprojects: number;
+  supportFiles: number;
+  imageUrl: string;
+  actionIssue: string | null;
+  blockers: string[];
+}
+
+export interface ElmProjectSupportFileDto extends ElmFileDto {
+  label: string;
+  kind: "note" | "image" | "attachment";
+  resourceUrl: string;
+}
+
+export interface ElmDiaryEntryDto {
+  timestamp: string;
+  text: string;
+}
+
+export interface ElmProjectDetailDto {
+  projectId: string;
+  desiredOutcome: string;
+  diary: ElmDiaryEntryDto[];
+  supportFiles: ElmProjectSupportFileDto[];
+  supportFolders: Array<{ path: string; label: string }>;
+}
+
 export interface ElmInboxItemDto extends Omit<InboxItem, "file"> {
   file: ElmFileDto;
   resourceUrl: string;
@@ -61,7 +90,9 @@ function fileDto(file: Action["file"] | Project["file"]): ElmFileDto {
 }
 
 export type ElmHostCommand =
-  | { type: "create-action" }
+  | { type: "create-action"; projectId?: string }
+  | { type: "create-project"; parentProjectId?: string }
+  | { type: "set-project-selection"; projectId?: string }
   | { type: "quick-capture" }
   | { type: "open-inbox" }
   | { type: "show-project"; projectId: string }
@@ -69,6 +100,24 @@ export type ElmHostCommand =
   | { type: "set-action-status"; actionId: string; status: Action["status"] }
   | { type: "update-action"; actionId: string; projectId?: string; context?: string }
   | { type: "trash-action"; actionId: string }
+  | { type: "edit-project"; projectId: string }
+  | { type: "set-project-status"; projectId: string; status: Project["status"] }
+  | { type: "move-subproject"; projectId: string; status: Project["status"]; beforeId?: string }
+  | { type: "trash-project"; projectId: string }
+  | { type: "trash-projects"; projectIds: string[] }
+  | { type: "batch-project-tags"; projectIds: string[] }
+  | { type: "batch-project-parent"; projectIds: string[] }
+  | { type: "project-dependencies"; projectId: string }
+  | { type: "import-actions"; projectId: string }
+  | { type: "import-subprojects"; projectId: string }
+  | { type: "load-project-detail"; projectId: string }
+  | { type: "set-desired-outcome"; projectId: string; body: string }
+  | { type: "add-diary-entry"; projectId: string; body: string }
+  | { type: "create-support-note"; projectId: string; title: string }
+  | { type: "create-support-folder"; projectId: string; path: string }
+  | { type: "read-support-note"; projectId: string; path: string }
+  | { type: "update-support-note"; projectId: string; path: string; body: string }
+  | { type: "save-project-preferences"; columns: Project["status"][]; showImages: boolean }
   | { type: "open-file"; path: string }
   | { type: "read-inbox-body"; itemId: string }
   | { type: "trash-inbox-item"; itemId: string }
@@ -101,6 +150,11 @@ function isHostCommand(value: unknown): value is ElmHostCommand {
   if (!isRecord(value) || typeof value.type !== "string") return false;
   switch (value.type) {
     case "create-action":
+      return value.projectId === undefined || typeof value.projectId === "string";
+    case "create-project":
+      return value.parentProjectId === undefined || typeof value.parentProjectId === "string";
+    case "set-project-selection":
+      return value.projectId === undefined || typeof value.projectId === "string";
     case "quick-capture":
     case "open-inbox":
       return true;
@@ -109,6 +163,40 @@ function isHostCommand(value: unknown): value is ElmHostCommand {
     case "edit-action":
     case "trash-action":
       return typeof value.actionId === "string";
+    case "edit-project":
+    case "trash-project":
+    case "project-dependencies":
+    case "import-actions":
+    case "import-subprojects":
+    case "load-project-detail":
+      return typeof value.projectId === "string";
+    case "set-project-status":
+      return typeof value.projectId === "string"
+        && ["active", "backlog", "someday", "completed", "cancelled"].includes(String(value.status));
+    case "move-subproject":
+      return typeof value.projectId === "string"
+        && ["active", "backlog", "someday", "completed"].includes(String(value.status))
+        && (value.beforeId === undefined || typeof value.beforeId === "string");
+    case "trash-projects":
+    case "batch-project-tags":
+    case "batch-project-parent":
+      return Array.isArray(value.projectIds) && value.projectIds.every((id) => typeof id === "string");
+    case "set-desired-outcome":
+    case "add-diary-entry":
+      return typeof value.projectId === "string" && typeof value.body === "string";
+    case "create-support-note":
+      return typeof value.projectId === "string" && typeof value.title === "string";
+    case "create-support-folder":
+      return typeof value.projectId === "string" && typeof value.path === "string";
+    case "read-support-note":
+      return typeof value.projectId === "string" && typeof value.path === "string";
+    case "update-support-note":
+      return typeof value.projectId === "string" && typeof value.path === "string" && typeof value.body === "string";
+    case "save-project-preferences":
+      return Array.isArray(value.columns)
+        && value.columns.length > 0
+        && value.columns.every((status) => ["active", "backlog", "someday", "completed"].includes(String(status)))
+        && typeof value.showImages === "boolean";
     case "set-action-status":
       return typeof value.actionId === "string"
         && ["next", "waiting", "scheduled", "done", "cancelled"].includes(String(value.status));
@@ -142,6 +230,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export type ElmHostEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
+  | { type: "project-detail"; detail: ElmProjectDetailDto }
+  | { type: "show-project"; projectId: string | null }
   | { type: "start-processing" }
   | { type: "command-result"; requestId: string; ok: true; value?: unknown }
   | { type: "command-result"; requestId: string; ok: false; error: string };

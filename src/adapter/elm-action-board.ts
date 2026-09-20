@@ -80,7 +80,7 @@ export class ElmActionBoardHost {
   private async execute(command: ElmHostCommand): Promise<unknown> {
     switch (command.type) {
       case "create-action":
-        this.services.createAction();
+        this.services.createAction(command.projectId);
         return;
       case "quick-capture":
         this.services.quickCapture();

@@ -2,8 +2,8 @@ import { ItemView, WorkspaceLeaf } from "obsidian";
 import { render } from "preact";
 import { ElmActionBoardHost } from "./adapter/elm-action-board";
 import { ElmInboxHost } from "./adapter/elm-inbox";
+import { ElmProjectsHost } from "./adapter/elm-projects";
 import { BrainstormView } from "./brainstorm/brainstorm";
-import { ProjectsView } from "./projects/projects";
 import { ProjectReview } from "./review/project-review";
 import type { GtdServices } from "./ui/services";
 
@@ -99,6 +99,7 @@ export class ActionBoardView extends ItemView {
 
 export class GtdProjectsView extends ItemView {
   private projectId: string | null = null;
+  private host: ElmProjectsHost | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
     super(leaf);
@@ -112,20 +113,30 @@ export class GtdProjectsView extends ItemView {
     if (state && typeof state === "object" && "projectId" in state && typeof state.projectId === "string") this.projectId = state.projectId;
     else this.projectId = null;
     await super.setState(state, result);
-    this.refresh();
+    if (this.host) this.host.setSelection(this.projectId);
+    else this.refresh();
   }
 
   getState(): Record<string, unknown> { return this.projectId ? { projectId: this.projectId } : {}; }
   async onOpen(): Promise<void> { this.refresh(); }
-  async onClose(): Promise<void> { render(null, this.contentEl); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
 
   showProject(projectId: string): void {
     this.projectId = projectId;
-    this.refresh();
+    if (this.host) this.host.showProject(projectId);
+    else this.refresh();
   }
 
   refresh(): void {
-    render(null, this.contentEl);
-    render(<ProjectsView services={this.services} initialProjectId={this.projectId} />, this.contentEl);
+    if (this.host) {
+      this.host.refresh();
+      return;
+    }
+    this.contentEl.empty();
+    this.host = new ElmProjectsHost(this.contentEl, this.services, this.projectId, (projectId) => { this.projectId = projectId; });
   }
 }
