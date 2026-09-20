@@ -1019,7 +1019,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   align-content: center;
 }
 .dg-processing-toggle > span { order: 2; justify-self: start; }
-.dg-processing-toggle > input {
+.dg-processing-toggle > input,
+.dg-processing-inline-toggle > input {
   order: 1;
   width: 16px;
   min-width: 16px;
@@ -1035,7 +1036,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   background: var(--background-primary);
   cursor: pointer;
 }
-.dg-processing-toggle > input::before {
+.dg-processing-toggle > input::before,
+.dg-processing-inline-toggle > input::before {
   width: 4px;
   height: 8px;
   content: "";
@@ -1044,22 +1046,43 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   opacity: 0;
   transform: translateY(-1px) rotate(45deg);
 }
-.dg-processing-toggle > input:checked {
+.dg-processing-toggle > input:checked,
+.dg-processing-inline-toggle > input:checked {
   border-color: var(--interactive-accent);
   background: var(--interactive-accent);
 }
-.dg-processing-toggle > input:checked::before { opacity: 1; }
-.dg-processing-toggle > input:focus-visible {
+.dg-processing-toggle > input:checked::before,
+.dg-processing-inline-toggle > input:checked::before { opacity: 1; }
+.dg-processing-toggle > input:focus-visible,
+.dg-processing-inline-toggle > input:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 22%, transparent);
 }
 .dg-processing-toggle > small { order: 3; grid-column: 1 / -1; }
 
 .dg-processing-field.is-wide { grid-column: 1 / -1; }
-.dg-processing-field > span {
+.dg-processing-field > span,
+.dg-processing-field-heading > span {
   font-size: var(--font-ui-small);
   font-weight: var(--font-semibold);
 }
+.dg-processing-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dg-processing-inline-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+/* The shared checkbox rule orders itself for the stacked toggles; inline it leads its own label. */
+.dg-processing-inline-toggle > input { order: 0; }
 .dg-processing-field > small {
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);

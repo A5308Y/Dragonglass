@@ -261,7 +261,14 @@ function InboxProcessor({
             <input value={nextAction} placeholder="What is the next physical Action?" onInput={(event: Event) => setNextAction((event.currentTarget as HTMLInputElement).value)} />
           </ProcessingField>
 
-          <ProcessingField label="Context" hint={context.trim() && !contexts.some((value) => value.toLocaleLowerCase() === context.trim().toLocaleLowerCase()) ? "This new context will be stored on the Action." : "Required when creating a Next Action."}>
+          <ProcessingField
+            label="Context"
+            hint={context.trim() && !contexts.some((value) => value.toLocaleLowerCase() === context.trim().toLocaleLowerCase()) ? "This new context will be stored on the Action." : "Required when creating a Next Action."}
+            adornment={<label class="dg-processing-inline-toggle" title="Marks the Action as work, independent of its context.">
+              <input type="checkbox" checked={work} onChange={(event: Event) => setWork((event.currentTarget as HTMLInputElement).checked)} />
+              <span>Work</span>
+            </label>}
+          >
             <FuzzyField
               value={context}
               placeholder="Search or name a context…"
@@ -270,12 +277,6 @@ function InboxProcessor({
               onChoose={(option) => setContext(option.label)}
             />
           </ProcessingField>
-
-          <label class="dg-processing-field dg-processing-toggle">
-            <span>Work</span>
-            <input type="checkbox" checked={work} onChange={(event: Event) => setWork((event.currentTarget as HTMLInputElement).checked)} />
-            <small>Independent of the context. Applied to any Action created here.</small>
-          </label>
 
           <label class="dg-processing-field dg-processing-toggle">
             <span>Someday/Maybe</span>
@@ -341,8 +342,19 @@ function InboxAudio({ src }: { src: string }) {
   return <audio ref={ref} class="dg-inbox-audio" controls preload="metadata" src={src} />;
 }
 
-function ProcessingField({ label, hint, wide = false, children }: { label: string; hint: string; wide?: boolean; children: ComponentChildren }) {
-  return <label class={`dg-processing-field${wide ? " is-wide" : ""}`}><span>{label}</span>{children}<small>{hint}</small></label>;
+function ProcessingField({ label, hint, wide = false, adornment, children }: {
+  label: string;
+  hint: string;
+  wide?: boolean;
+  /** Sits on the label's own line. A nested control rules out wrapping the field in a label. */
+  adornment?: ComponentChildren;
+  children: ComponentChildren;
+}) {
+  return <div class={`dg-processing-field${wide ? " is-wide" : ""}`}>
+    <div class="dg-processing-field-heading"><span>{label}</span>{adornment}</div>
+    {children}
+    <small>{hint}</small>
+  </div>;
 }
 
 function compareInboxItems(left: InboxItem, right: InboxItem): number {
