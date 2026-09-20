@@ -82,6 +82,7 @@ type alias Model =
     , selectedProjectId : Maybe ProjectId
     , detail : Maybe ProjectDetail
     , search : String
+    , issuesOnly : Bool
     , showSubprojects : Bool
     , showImages : Bool
     , visibleColumns : List ProjectStatus
@@ -110,6 +111,7 @@ type alias Model =
 type Msg
     = GotHost Decode.Value
     | SearchChanged String
+    | ToggleIssues Bool
     | ToggleColumns
     | ToggleColumn ProjectStatus
     | ToggleSelecting
@@ -179,6 +181,7 @@ init flags =
                     , selectedProjectId = decoded.initialProjectId
                     , detail = Nothing
                     , search = ""
+                    , issuesOnly = False
                     , showSubprojects = True
                     , showImages = decoded.snapshot.settings.showProjectBoardImages
                     , visibleColumns =
@@ -232,6 +235,9 @@ update msg model =
 
         SearchChanged query ->
             ( { model | search = query }, Cmd.none )
+
+        ToggleIssues enabled ->
+            ( { model | issuesOnly = enabled }, Cmd.none )
 
         ToggleColumns ->
             ( { model | columnsOpen = not model.columnsOpen }, Cmd.none )
@@ -635,6 +641,8 @@ viewBoard model =
             ]
         , div [ class "dg-toolbar dg-project-toolbar" ]
             [ input [ type_ "search", placeholder "Search Projects", value model.search, onInput SearchChanged ] []
+            , label [ class "dg-toolbar-toggle", title "Show only Projects with Action issues" ]
+                [ input [ type_ "checkbox", checked model.issuesOnly, onCheck ToggleIssues ] [], span [] [ text "Issues only" ] ]
             , button [ classList [ ( "is-active", model.columnsOpen ) ], onClick ToggleColumns ] [ text "Columns" ]
             , button
                 [ classList [ ( "is-active", model.selecting ) ]
@@ -1463,6 +1471,7 @@ visibleProjects model =
                     projectMeta project.id model
             in
             Ui.matches model.search [ project.title, meta.breadcrumb, Maybe.withDefault "" project.area ]
+                && (not model.issuesOnly || meta.actionIssue /= Nothing)
                 && (model.showSubprojects || project.parentProjectId == Nothing)
                 && List.member project.status model.visibleColumns
     in
@@ -1626,6 +1635,7 @@ emptyModel message =
     , selectedProjectId = Nothing
     , detail = Nothing
     , search = ""
+    , issuesOnly = False
     , showSubprojects = True
     , showImages = False
     , visibleColumns = ProjectStatus.board
