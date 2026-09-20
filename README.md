@@ -103,14 +103,14 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 - **GTD: Open Action Board**
 - **GTD: Open Inbox**
 - **GTD: Open Projects**
-- **GTD: Open Project** (fuzzy Project picker; Cmd/Ctrl+K by default)
+- **GTD: Open Project** (fuzzy Project picker; Cmd/Ctrl+Shift+O by default)
 - **GTD: Start Project Review**
 - **GTD: Open Brainstorm**
 - **GTD: Quick Capture Inbox Item**
 - **GTD: New Action**
 - **GTD: New Project**
 
-Assign any command to an Obsidian hotkey. Quick Capture asks only for a title and immediately creates an Inbox Item. New Action provides a lightweight Title, fuzzy Project, fuzzy Context, and Status form. It is also available from the Actions header, Projects header, each Project card menu, and Project detail; Project-specific entry points preselect that Project.
+Assign any command to an Obsidian hotkey. A plugin's default hotkey is only a suggestion: when it collides with a command that already owns that chord, Obsidian flags the conflict in Settings → Hotkeys and the binding does nothing. Check there after install if a default appears not to fire. Quick Capture asks only for a title and immediately creates an Inbox Item. New Action provides a lightweight Title, fuzzy Project, fuzzy Context, and Status form. It is also available from the Actions header, Projects header, each Project card menu, and Project detail; Project-specific entry points preselect that Project.
 
 ## Board behavior
 

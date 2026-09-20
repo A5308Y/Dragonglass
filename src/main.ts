@@ -150,7 +150,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({
       id: "open-project",
       name: "Open Project",
-      hotkeys: [{ modifiers: ["Mod"], key: "k" }],
+      // Mod+K is Obsidian's own "Insert Markdown link", which wins the conflict and leaves this dead.
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "o" }],
       callback: () => this.openProjectPicker(),
     });
     this.addCommand({ id: "start-project-review", name: "Start Project Review", callback: () => void this.activateView(REVIEW_VIEW_TYPE) });
