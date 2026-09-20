@@ -1,6 +1,11 @@
 import type { ActionStatus } from "./types";
 import { localDate } from "../utils/date";
 
+/** Waiting records a dependency on someone or something else, so it needs no execution context. */
+export function actionRequiresContext(status: ActionStatus): boolean {
+  return status !== "waiting";
+}
+
 /**
  * Resolves the `waiting_since` date an Action should carry for a status.
  *

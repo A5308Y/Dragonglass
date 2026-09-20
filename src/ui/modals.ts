@@ -11,6 +11,7 @@ import {
 import { ACTION_STATUSES, PROJECT_STATUSES, type Action, type ActionStatus, type Project, type ProjectChanges, type ProjectStatus } from "../domain/types";
 import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../domain/project-hierarchy";
 import { parseActionList } from "../domain/action-import";
+import { actionRequiresContext } from "../domain/action-status";
 import { parseSubprojectList } from "../domain/project-import";
 import { parseProjectTags, planProjectParentChange, projectTagAdditions } from "../domain/project-board";
 import { isAllDaySchedule } from "../domain/schedule";
@@ -170,7 +171,7 @@ export class NewActionModal extends FormModal {
 
   protected async submit(): Promise<void> {
     if (!this.title.trim()) return void new Notice("An Action title is required.");
-    if (!this.context.trim()) return void new Notice("A context is required.");
+    if (actionRequiresContext(this.status) && !this.context.trim()) return void new Notice("A context is required.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
     const schedule = scheduleValues(this.status, this.scheduledAllDay, this.scheduledStart, this.durationMinutes);
     if (!schedule) return;
@@ -311,7 +312,7 @@ export class ActionEditorModal extends FormModal {
       new Notice("A title is required.");
       return;
     }
-    if (!this.context.trim()) return void new Notice("A context is required.");
+    if (actionRequiresContext(this.status) && !this.context.trim()) return void new Notice("A context is required.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
     const schedule = scheduleValues(this.status, this.scheduledAllDay, this.scheduledStart, this.durationMinutes);
     if (!schedule) return;
@@ -1074,7 +1075,7 @@ function addContextSearch(
   const contexts = [...new Set(actions.map((action) => action.context).filter((context): context is string => Boolean(context)))].sort();
   new Setting(container)
     .setName("Context")
-    .setDesc("Required. Select an existing Context or type a new one.")
+    .setDesc("Optional for Waiting Actions; required for every other status.")
     .addText((text) => {
       text.setValue(value).setPlaceholder(contexts.length ? "Search or name a Context…" : "Name a Context…").onChange(onChange);
       const suggest = new ContextInputSuggest(app, text.inputEl, contexts, onChange);

@@ -343,6 +343,7 @@ function ProjectCard({
   const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled").length;
   const next = actions.filter((action) => action.status === "next").length;
   const scheduled = actions.filter((action) => action.status === "scheduled").length;
+  const waiting = actions.filter((action) => action.status === "waiting").length;
   const image = showImage ? projectImageFile(services, project) : null;
   const openMenu = (event: MouseEvent) => {
     event.preventDefault();
@@ -407,7 +408,7 @@ function ProjectCard({
       {project.reviewed && <div class="dg-project-reviewed">Reviewed {project.reviewed}</div>}
       {project.status === "someday" && project.activateAt && <div class="dg-project-reviewed">Activates {project.activateAt}</div>}
       {open === 0 && project.status === "active" && <div class="dg-project-health">No open Actions</div>}
-      {open > 0 && next === 0 && scheduled === 0 && project.status === "active" && <div class="dg-project-health">No Next Action</div>}
+      {open > 0 && next === 0 && scheduled === 0 && waiting === 0 && project.status === "active" && <div class="dg-project-health">No Next Action</div>}
     </article>
   );
 }

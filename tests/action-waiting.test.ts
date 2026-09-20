@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
-import { waitingSinceFor } from "../src/domain/action-status";
+import { actionRequiresContext, waitingSinceFor } from "../src/domain/action-status";
 import { parseAction } from "../src/domain/validation";
 
 const file = { path: "GTD/Actions/Chase invoice.md" } as TFile;
@@ -15,6 +15,13 @@ const frontmatter = (changes: Record<string, unknown> = {}) => ({
 });
 
 describe("Waiting since", () => {
+  it("is the only Action status that does not require a context", () => {
+    expect(actionRequiresContext("waiting")).toBe(false);
+    for (const status of ["next", "scheduled", "done", "cancelled"] as const) {
+      expect(actionRequiresContext(status)).toBe(true);
+    }
+  });
+
   it("starts the wait today when nothing is known yet", () => {
     expect(waitingSinceFor("waiting", undefined, undefined, "2026-09-20")).toBe("2026-09-20");
   });

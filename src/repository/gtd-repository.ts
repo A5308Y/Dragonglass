@@ -18,7 +18,7 @@ import type {
   ProjectInput,
 } from "../domain/types";
 import { normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
-import { waitingSinceFor } from "../domain/action-status";
+import { actionRequiresContext, waitingSinceFor } from "../domain/action-status";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
@@ -44,7 +44,7 @@ export class GtdRepository {
   }
 
   async createClarifiedAction(input: ActionInput): Promise<void> {
-    if (!input.context.trim()) throw new Error("A context is required.");
+    if (actionRequiresContext(input.status) && !input.context.trim()) throw new Error("A context is required.");
     validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
     const item = await this.createInboxRecord(input.title);
     await this.convertInboxItemToAction(item, input);
@@ -52,7 +52,7 @@ export class GtdRepository {
 
   /** Creates Action files straight from a pasted list. Returns how many were written. */
   async importActions(inputs: readonly ActionInput[]): Promise<number> {
-    if (inputs.some((input) => input.title.trim() && !input.context.trim())) {
+    if (inputs.some((input) => input.title.trim() && actionRequiresContext(input.status) && !input.context.trim())) {
       throw new Error("Every imported Action needs a context.");
     }
     for (const input of inputs) validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
@@ -93,7 +93,7 @@ export class GtdRepository {
     const title = input.title.trim();
     if (!title) throw new Error("An Action title is required.");
     const context = input.context.trim();
-    if (!context) throw new Error("A context is required.");
+    if (actionRequiresContext(input.status) && !context) throw new Error("A context is required.");
     if (item.file.extension !== "md") {
       await this.createNextActionFile(title, context, item.created, project, input.work ?? false);
       // A Markdown capture becomes the Action itself; anything else has been consumed by it.
@@ -111,7 +111,7 @@ export class GtdRepository {
         frontmatter.status = input.status;
         frontmatter.project_id = input.projectId ?? null;
         frontmatter.project = project ? wikiLink(project) : null;
-        frontmatter.context = context;
+        frontmatter.context = context || null;
         frontmatter.energy = input.energy || null;
         frontmatter.due = input.due || null;
         frontmatter.defer_until = input.deferUntil || null;
@@ -344,7 +344,9 @@ export class GtdRepository {
 
   async updateAction(id: string, changes: ActionChanges): Promise<void> {
     const action = this.requireAction(id);
-    if (changes.context !== undefined && !changes.context.trim()) throw new Error("A context is required.");
+    const resolvedStatus = changes.status ?? action.status;
+    const resolvedContext = changes.context !== undefined ? changes.context.trim() : action.context?.trim() ?? "";
+    if (actionRequiresContext(resolvedStatus) && !resolvedContext) throw new Error("A context is required.");
     validateActionSchedule(
       changes.status ?? action.status,
       changes.scheduledStart ?? action.scheduledStart,
@@ -367,7 +369,7 @@ export class GtdRepository {
           frontmatter.project_id = changes.projectId || null;
           frontmatter.project = project ? wikiLink(project) : null;
         }
-        if (changes.context !== undefined) frontmatter.context = changes.context.trim();
+        if (changes.context !== undefined) frontmatter.context = changes.context.trim() || null;
         if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
         if (changes.due !== undefined) frontmatter.due = changes.due || null;
         if (changes.deferUntil !== undefined) frontmatter.defer_until = changes.deferUntil || null;
@@ -543,7 +545,7 @@ export class GtdRepository {
 
   private async createActionFile(title: string, input: ActionInput, captured: string, project?: Project): Promise<TFile> {
     const context = input.context.trim();
-    if (!context) throw new Error("A context is required.");
+    if (actionRequiresContext(input.status) && !context) throw new Error("A context is required.");
     const id = createUlid();
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions");
     const path = this.uniqueMarkdownPath(directory, title, id);
@@ -555,7 +557,7 @@ export class GtdRepository {
       status,
       project_id: project?.id ?? null,
       project: project ? wikiLink(project) : null,
-      context,
+      context: context || null,
       energy: input.energy || null,
       due: input.due || null,
       defer_until: input.deferUntil || null,
