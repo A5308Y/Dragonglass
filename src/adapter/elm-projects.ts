@@ -99,11 +99,6 @@ export class ElmProjectsHost {
     const breadcrumbs = projectBreadcrumbs(snapshot.projects);
     const descendantCounts = activeDescendantCounts(snapshot.projects);
     const supportCounts = this.services.repository.supportFileCounts();
-    const actionsByProject = new Map<string, typeof snapshot.actions>();
-    for (const action of snapshot.actions) {
-      if (!action.projectId) continue;
-      actionsByProject.set(action.projectId, [...(actionsByProject.get(action.projectId) ?? []), action]);
-    }
     return snapshot.projects.map((project) => {
       const image = resolveVaultImage(
         this.services.app,
@@ -116,7 +111,7 @@ export class ElmProjectsHost {
         activeSubprojects: descendantCounts.get(project.id) ?? 0,
         supportFiles: supportCounts.get(project.id) ?? 0,
         imageUrl: image ? this.services.app.vault.getResourcePath(image) : "",
-        actionIssue: projectActionIssue(project, actionsByProject.get(project.id) ?? []),
+        actionIssue: projectActionIssue(project, snapshot.projects, snapshot.actions),
         blockers: activeProjectBlockers(project, snapshot.projectsById).map((blocker) => blocker.title),
       };
     });

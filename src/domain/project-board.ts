@@ -1,18 +1,33 @@
 import { wouldCreateProjectCycle } from "./project-hierarchy";
+import { projectReviewMembers, projectsBlockingReview } from "./project-review";
 import type { Action, Project, ProjectStatus } from "./types";
 import { normalizeVaultPath } from "../utils/path";
 
 export type ProjectActionIssue = "No open Actions" | "No Next Action";
 
-/** The single Action-health issue displayed on an Active Project card, if any. */
-export function projectActionIssue(project: Project, actions: readonly Action[]): ProjectActionIssue | null {
+/**
+ * The Action-health issue displayed on an Active Project card, using the same
+ * tree-level gate as Project Review.
+ */
+export function projectActionIssue(
+  project: Project,
+  projects: readonly Project[],
+  actions: readonly Action[],
+): ProjectActionIssue | null {
   if (project.status !== "active") return null;
-  const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled");
-  if (!open.length) return "No open Actions";
-  if (!open.some((action) => action.status === "next" || action.status === "scheduled" || action.status === "waiting")) {
-    return "No Next Action";
-  }
-  return null;
+  const blockers = projectsBlockingReview(project, projectReviewMembers(project, projects), actions);
+  if (!blockers.length) return null;
+
+  const blockerIds = new Set(blockers.map((blocker) => blocker.id));
+  const projectsWithOpenActions = new Set(actions
+    .filter((action) => action.projectId
+      && blockerIds.has(action.projectId)
+      && action.status !== "done"
+      && action.status !== "cancelled")
+    .map((action) => action.projectId!));
+  return blockers.some((blocker) => !projectsWithOpenActions.has(blocker.id))
+    ? "No open Actions"
+    : "No Next Action";
 }
 
 /** Whether a file or folder belongs anywhere in a Project's full support-material subtree. */

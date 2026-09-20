@@ -28,22 +28,45 @@ const project = (id: string, title: string, changes: Partial<Project> = {}): Pro
 describe("Sub-project board metadata", () => {
   it("reports the same Action-health issues shown on Active Project cards", () => {
     const active = project("A", "Active");
-    const action = (status: "next" | "waiting" | "scheduled" | "done" | "cancelled") => ({
+    const action = (status: "next" | "waiting" | "scheduled" | "done" | "cancelled", projectId = active.id) => ({
       type: "gtd-action" as const,
       id: status,
       title: status,
       status,
+      projectId,
       context: "computer",
       created: "2026-09-19",
       file,
     });
 
-    expect(projectActionIssue(active, [])).toBe("No open Actions");
-    expect(projectActionIssue(active, [action("done")])).toBe("No open Actions");
-    expect(projectActionIssue(active, [action("next")])).toBeNull();
-    expect(projectActionIssue(active, [action("scheduled")])).toBeNull();
-    expect(projectActionIssue(active, [action("waiting")])).toBeNull();
-    expect(projectActionIssue({ ...active, status: "someday" }, [])).toBeNull();
+    expect(projectActionIssue(active, [active], [])).toBe("No open Actions");
+    expect(projectActionIssue(active, [active], [action("done")])).toBe("No open Actions");
+    expect(projectActionIssue(active, [active], [action("next")])).toBeNull();
+    expect(projectActionIssue(active, [active], [action("scheduled")])).toBe("No Next Action");
+    expect(projectActionIssue(active, [active], [action("waiting")])).toBe("No Next Action");
+    expect(projectActionIssue({ ...active, status: "someday" }, [active], [])).toBeNull();
+  });
+
+  it("uses the Project Review gate for parent Projects", () => {
+    const parent = project("P", "Parent");
+    const child = project("C", "Child", { parentProjectId: parent.id });
+    const inactiveChild = project("I", "Inactive", { parentProjectId: parent.id, status: "backlog" });
+    const action = (id: string, projectId: string, status: "next" | "waiting") => ({
+      type: "gtd-action" as const,
+      id,
+      title: id,
+      status,
+      projectId,
+      context: "computer",
+      created: "2026-09-19",
+      file,
+    });
+    const projects = [parent, child, inactiveChild];
+
+    expect(projectActionIssue(parent, projects, [action("A1", child.id, "next")])).toBeNull();
+    expect(projectActionIssue(parent, projects, [])).toBe("No open Actions");
+    expect(projectActionIssue(parent, projects, [action("A1", child.id, "waiting")])).toBe("No Next Action");
+    expect(projectActionIssue(parent, projects, [action("A1", parent.id, "next")])).toBe("No open Actions");
   });
 
   it("normalizes custom tags", () => {
