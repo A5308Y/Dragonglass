@@ -705,7 +705,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-project-column .dg-card-list { overflow-y: auto; }
 .dg-project-card-image {
   width: 100%;
-  aspect-ratio: 16 / 7;
+  aspect-ratio: 16 / 9;
   margin-bottom: 9px;
   overflow: hidden;
   border-radius: var(--radius-s);
@@ -717,6 +717,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   height: 100%;
   display: block;
   object-fit: cover;
+  /* A cover crop trims top and bottom evenly; bias it upward, where faces sit. */
+  object-position: center 30%;
 }
 .dg-project-main-image {
   width: 100%;

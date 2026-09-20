@@ -759,6 +759,9 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   );
 }
 
+/** Names the submit chord the way this platform's keyboard does. */
+const MOD_ENTER = `${Platform.isMacOS ? "\u2318" : "Ctrl"}+Enter`;
+
 /**
  * Submits a multi-line field on Cmd/Ctrl+Enter.
  *
@@ -838,7 +841,7 @@ function ProjectOutcome({ services, project }: { services: GtdServices; project:
             value={draft}
             rows={5}
             aria-label={`Desired outcome for ${project.title}`}
-            placeholder="What will be true when this Project is complete? (⌘/Ctrl+Enter to save)"
+            placeholder={`What will be true when this Project is complete? (${MOD_ENTER} to save)`}
             onInput={(event: Event) => setDraft((event.currentTarget as HTMLTextAreaElement).value)}
             onKeyDown={(event: KeyboardEvent) => {
               if (event.key === "Escape") {
@@ -899,7 +902,7 @@ function ProjectDiary({ services, project }: { services: GtdServices; project: P
         value={draft}
         rows={3}
         aria-label="New Diary entry"
-        placeholder="Observation or decision… (⌘/Ctrl+Enter to add)"
+        placeholder={`Observation or decision… (${MOD_ENTER} to add)`}
         onInput={(event: Event) => setDraft((event.currentTarget as HTMLTextAreaElement).value)}
         onKeyDown={(event: KeyboardEvent) => submitOnModEnter(event, () => void addEntry())}
       />
