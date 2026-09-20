@@ -1,5 +1,18 @@
 import { wouldCreateProjectCycle } from "./project-hierarchy";
-import type { Project, ProjectStatus } from "./types";
+import type { Action, Project, ProjectStatus } from "./types";
+
+export type ProjectActionIssue = "No open Actions" | "No Next Action";
+
+/** The single Action-health issue displayed on an Active Project card, if any. */
+export function projectActionIssue(project: Project, actions: readonly Action[]): ProjectActionIssue | null {
+  if (project.status !== "active") return null;
+  const open = actions.filter((action) => action.status !== "done" && action.status !== "cancelled");
+  if (!open.length) return "No open Actions";
+  if (!open.some((action) => action.status === "next" || action.status === "scheduled" || action.status === "waiting")) {
+    return "No Next Action";
+  }
+  return null;
+}
 
 export interface ProjectPlacement {
   status: ProjectStatus;

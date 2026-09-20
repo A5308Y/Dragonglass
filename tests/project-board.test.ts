@@ -7,6 +7,7 @@ import {
   planProjectDeletion,
   planProjectParentChange,
   projectPlacementsAfterMove,
+  projectActionIssue,
   projectSupportFileCounts,
   projectTagAdditions,
   wouldCreateProjectDependencyCycle,
@@ -24,6 +25,26 @@ const project = (id: string, title: string, changes: Partial<Project> = {}): Pro
 });
 
 describe("Sub-project board metadata", () => {
+  it("reports the same Action-health issues shown on Active Project cards", () => {
+    const active = project("A", "Active");
+    const action = (status: "next" | "waiting" | "scheduled" | "done" | "cancelled") => ({
+      type: "gtd-action" as const,
+      id: status,
+      title: status,
+      status,
+      context: "computer",
+      created: "2026-09-19",
+      file,
+    });
+
+    expect(projectActionIssue(active, [])).toBe("No open Actions");
+    expect(projectActionIssue(active, [action("done")])).toBe("No open Actions");
+    expect(projectActionIssue(active, [action("next")])).toBeNull();
+    expect(projectActionIssue(active, [action("scheduled")])).toBeNull();
+    expect(projectActionIssue(active, [action("waiting")])).toBeNull();
+    expect(projectActionIssue({ ...active, status: "someday" }, [])).toBeNull();
+  });
+
   it("normalizes custom tags", () => {
     expect(normalizeProjectTags([" #Home ", "planning", "home", ""])).toEqual(["Home", "planning"]);
   });
