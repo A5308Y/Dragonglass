@@ -983,6 +983,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   line-height: var(--line-height-normal);
 }
 .dg-inbox-preview.is-empty { color: var(--text-muted); font-style: italic; }
+.dg-inbox-file-toggle {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--background-modifier-border);
+}
 .dg-inbox-audio {
   width: 100%;
   margin-top: 14px;
@@ -1062,7 +1067,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 
 .dg-processing-field.is-wide { grid-column: 1 / -1; }
 .dg-processing-field > span,
-.dg-processing-field-heading > span {
+.dg-processing-field-heading > span,
+.dg-inbox-file-toggle > span {
   font-size: var(--font-ui-small);
   font-weight: var(--font-semibold);
 }
@@ -1083,7 +1089,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 /* The shared checkbox rule orders itself for the stacked toggles; inline it leads its own label. */
 .dg-processing-inline-toggle > input { order: 0; }
-.dg-processing-field > small {
+/* Sitting under a field's input rather than beside its label, it should not span the whole row. */
+.dg-processing-field > .dg-processing-inline-toggle { align-self: flex-start; }
+.dg-processing-field > small,
+.dg-inbox-file-toggle > small {
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);
   line-height: 1.25;

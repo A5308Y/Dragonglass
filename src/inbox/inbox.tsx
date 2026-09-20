@@ -233,6 +233,16 @@ function InboxProcessor({
           // A voice capture is the note, so play it here instead of telling the reader to open the file.
           ? <InboxAudio src={services.app.vault.getResourcePath(item.file)} />
           : <div class={`dg-inbox-preview${body ? "" : " is-empty"}`}>{body || "No additional notes."}</div>}
+        <label class="dg-processing-toggle dg-inbox-file-toggle">
+          <span>File with Project</span>
+          <input type="checkbox" checked={fileOriginal} onChange={(event: Event) => setFileOriginal((event.currentTarget as HTMLInputElement).checked)} />
+          <small>{someday
+            // Nothing absorbs a parked capture's content, so say plainly that it is discarded.
+            ? "Keeps this capture as Project support material. Otherwise it goes to Obsidian's trash once the Project exists."
+            : item.file.extension === "md"
+              ? "Keeps this note as reference and creates a separate Action. Otherwise the note itself becomes the Action."
+              : "Keeps this file as support material, or in General Reference with no Project. Otherwise it goes to Obsidian's trash once processed."}</small>
+        </label>
       </section>
 
       <section class="dg-processing-form" aria-label="Clarify Inbox Item">
@@ -251,6 +261,10 @@ function InboxProcessor({
                 setProjectId(option.id);
               }}
             />
+            <label class="dg-processing-inline-toggle" title="Parks the Project instead of activating it. An existing Project is moved to Someday/Maybe; without one, this Item's title names it.">
+              <input type="checkbox" checked={someday} onChange={(event: Event) => setSomeday((event.currentTarget as HTMLInputElement).checked)} />
+              <span>Someday/Maybe</span>
+            </label>
           </ProcessingField>
 
           <ProcessingField label="Project Vision" wide hint="Applied when a Project is selected or created.">
@@ -277,23 +291,6 @@ function InboxProcessor({
               onChoose={(option) => setContext(option.label)}
             />
           </ProcessingField>
-
-          <label class="dg-processing-field dg-processing-toggle">
-            <span>Someday/Maybe</span>
-            <input type="checkbox" checked={someday} onChange={(event: Event) => setSomeday((event.currentTarget as HTMLInputElement).checked)} />
-            <small>Parks the Project instead of activating it. An existing Project is moved to Someday/Maybe; without one, this Item's title names it.</small>
-          </label>
-
-          <label class="dg-processing-field dg-processing-toggle">
-            <span>File with Project</span>
-            <input type="checkbox" checked={fileOriginal} onChange={(event: Event) => setFileOriginal((event.currentTarget as HTMLInputElement).checked)} />
-            <small>{someday
-              // Nothing absorbs a parked capture's content, so say plainly that it is discarded.
-              ? "Keeps this capture as Project support material. Otherwise it goes to Obsidian's trash once the Project exists."
-              : item.file.extension === "md"
-                ? "Keeps this note as reference and creates a separate Action. Otherwise the note itself becomes the Action."
-                : "Keeps this file as support material, or in General Reference with no Project. Otherwise it goes to Obsidian's trash once processed."}</small>
-          </label>
         </div>
       </section>
 
