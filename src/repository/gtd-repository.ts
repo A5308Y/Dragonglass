@@ -19,7 +19,7 @@ import type {
 } from "../domain/types";
 import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { actionRequiresContext, waitingSinceFor } from "../domain/action-status";
-import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
+import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
 import { localDate, parseDateOnly } from "../utils/date";
@@ -603,9 +603,12 @@ export class GtdRepository {
 
     const title = input.projectTitle?.trim() || fallbackTitle.trim();
     if (!title) return undefined;
+    // An unmatched name may still be a path into the hierarchy, naming the parent to create under.
+    const path = parseProjectPath(title, snapshot.projects);
     return this.createProjectRecord({
-      title,
+      title: path.title,
       status: newProjectStatus,
+      ...(path.parentId ? { parentProjectId: path.parentId } : {}),
       ...(desiredOutcome ? { desiredOutcome } : {}),
     });
   }

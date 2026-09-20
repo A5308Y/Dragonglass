@@ -3,6 +3,7 @@ import type { TFile } from "obsidian";
 import type { Project } from "../src/domain/types";
 import {
   activeDescendantCounts,
+  parseProjectPath,
   projectBreadcrumb,
   projectBreadcrumbs,
   projectDescendantIds,
@@ -96,5 +97,57 @@ describe("Active sub-project counts", () => {
     const counts = activeDescendantCounts([at("P1", "active", "P2"), at("P2", "active", "P1")]);
 
     expect([...counts]).toEqual([["P2", 1], ["P1", 1]]);
+  });
+});
+
+describe("Typed Project paths", () => {
+  const named = (id: string, title: string, parentProjectId?: string): Project => ({
+    type: "gtd-project",
+    id,
+    title,
+    status: "active",
+    created: "2026-09-18",
+    file: file(`${id}.md`),
+    ...(parentProjectId ? { parentProjectId } : {}),
+  });
+  const house = named("P1", "House");
+  const heating = named("P2", "Heating", "P1");
+  const all = [house, heating];
+
+  it("leaves a plain name alone", () => {
+    expect(parseProjectPath("Heat pump", all)).toEqual({ title: "Heat pump" });
+  });
+
+  it("nests under a parent named by its full breadcrumb", () => {
+    expect(parseProjectPath("House > Heating > Heat pump", all))
+      .toEqual({ parentId: "P2", parentBreadcrumb: "House > Heating", title: "Heat pump" });
+  });
+
+  it("nests under a parent named by its bare title", () => {
+    expect(parseProjectPath("heating > Heat pump", all))
+      .toEqual({ parentId: "P2", parentBreadcrumb: "House > Heating", title: "Heat pump" });
+  });
+
+  it("keeps an unresolvable prefix in the title rather than inventing a parent", () => {
+    expect(parseProjectPath("Nonsense > Heat pump", all)).toEqual({ title: "Nonsense > Heat pump" });
+    // Only the final segment is ever created, so a missing middle resolves nothing.
+    expect(parseProjectPath("House > Missing > Heat pump", all)).toEqual({ title: "House > Missing > Heat pump" });
+  });
+
+  it("refuses a bare title carried by two Projects", () => {
+    const elsewhere = [named("P3", "Garden"), named("P4", "Heating", "P3")];
+    expect(parseProjectPath("Heating > Heat pump", [...all, ...elsewhere])).toEqual({ title: "Heating > Heat pump" });
+  });
+
+  it("prefers the Project whose whole breadcrumb was typed", () => {
+    // A top-level "Heating" is named exactly by "Heating", so a nested namesake does not blur it.
+    const topLevel = named("P3", "Heating");
+    expect(parseProjectPath("Heating > Heat pump", [...all, topLevel]))
+      .toEqual({ parentId: "P3", parentBreadcrumb: "Heating", title: "Heat pump" });
+  });
+
+  it("ignores a separator with nothing on one side", () => {
+    expect(parseProjectPath("Heating >", all)).toEqual({ title: "Heating >" });
+    expect(parseProjectPath("> Heat pump", all)).toEqual({ title: "> Heat pump" });
   });
 });

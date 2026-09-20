@@ -3,7 +3,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { InboxItem, InboxProcessingInput, Project } from "../domain/types";
 import { inboxPrimaryDisposition, inboxProcessingPrefill, type InboxPrimaryDisposition } from "../domain/inbox-processing";
-import { projectBreadcrumbs } from "../domain/project-hierarchy";
+import { parseProjectPath, projectBreadcrumbs } from "../domain/project-hierarchy";
 import { isVaultAudio } from "../ui/audio";
 import { FuzzyField } from "../ui/fuzzy-field";
 import { useGtdSnapshot } from "../ui/hooks";
@@ -203,7 +203,9 @@ function InboxProcessor({
       return project.title.toLocaleLowerCase() === query || projectLabels.get(project.id)?.toLocaleLowerCase() === query;
     });
   const selectedProjectLabel = selectedProject ? projectLabels.get(selectedProject.id) ?? selectedProject.title : "";
-  const projectName = selectedProject?.title ?? projectQuery.trim();
+  // An unmatched name may be a path, so the buttons should name the leaf rather than the whole path.
+  const projectPath = parseProjectPath(projectQuery, projects);
+  const projectName = selectedProject?.title ?? projectPath.title;
   const primary = inboxPrimaryDisposition({
     someday,
     fileOriginal,
@@ -251,7 +253,7 @@ function InboxProcessor({
 
       <section class="dg-processing-form" aria-label="Clarify Inbox Item">
         <div class="dg-processing-grid">
-          <ProcessingField label="Project" wide hint={projectQuery.trim() && !selectedProject ? `A new ${someday ? "Someday/Maybe" : "Active"} Project will be created when needed.` : "Optional. Select an existing Project or type a new name."}>
+          <ProcessingField label="Project" wide hint={projectHint(projectQuery, Boolean(selectedProject), someday, projectPath.parentBreadcrumb)}>
             <FuzzyField
               value={projectQuery}
               placeholder="Search or name a Project…"
@@ -313,6 +315,14 @@ function InboxProcessor({
       {seconds === 0 && <div class="dg-warning">Two minutes elapsed. Make the smallest clear decision and keep moving.</div>}
     </div>
   );
+}
+
+function projectHint(query: string, selected: boolean, someday: boolean, parentBreadcrumb?: string): string {
+  if (!query.trim() || selected) return "Optional. Select an existing Project, or type a new name or “Parent > New sub-project”.";
+  const status = someday ? "Someday/Maybe" : "Active";
+  return parentBreadcrumb
+    ? `A new ${status} sub-project of ${parentBreadcrumb} will be created when needed.`
+    : `A new ${status} Project will be created when needed.`;
 }
 
 function processInbox(

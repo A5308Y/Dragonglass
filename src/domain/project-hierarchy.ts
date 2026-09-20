@@ -80,3 +80,43 @@ export function activeDescendantCounts(projects: readonly Project[]): Map<string
   }
   return counts;
 }
+
+/** The separator a breadcrumb uses, and so the one a typed Project path uses. */
+export const PROJECT_PATH_SEPARATOR = ">";
+
+export interface ProjectPath {
+  /** The existing Project a newly named one would be created under. */
+  parentId?: string;
+  /** That parent's breadcrumb, for telling the reader where the Project will land. */
+  parentBreadcrumb?: string;
+  /** The title to create, with any resolved parent path stripped. */
+  title: string;
+}
+
+/**
+ * Reads a typed Project name as a path into the hierarchy, so `Heating > Heat pump` names a new
+ * sub-project of an existing `Heating`.
+ *
+ * Only the segment after the final separator is ever created. An unresolvable prefix stays part
+ * of the title, because inventing an unasked-for parent is worse than one oddly named Project.
+ */
+export function parseProjectPath(query: string, projects: readonly Project[]): ProjectPath {
+  const title = query.trim();
+  const separator = title.lastIndexOf(PROJECT_PATH_SEPARATOR);
+  if (separator < 0) return { title };
+
+  const prefix = title.slice(0, separator).trim();
+  const leaf = title.slice(separator + PROJECT_PATH_SEPARATOR.length).trim();
+  if (!prefix || !leaf) return { title };
+
+  const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const normalized = prefix.toLocaleLowerCase();
+  const breadcrumbs = new Map(projects.map((project) => [project.id, projectBreadcrumb(project, projectsById)]));
+  const byBreadcrumb = projects.find((project) => breadcrumbs.get(project.id)?.toLocaleLowerCase() === normalized);
+  // A bare title only resolves when it is unambiguous; two "Heating" Projects name no parent.
+  const byTitle = projects.filter((project) => project.title.toLocaleLowerCase() === normalized);
+  const parent = byBreadcrumb ?? (byTitle.length === 1 ? byTitle[0] : undefined);
+  if (!parent) return { title };
+
+  return { parentId: parent.id, parentBreadcrumb: breadcrumbs.get(parent.id) ?? parent.title, title: leaf };
+}
