@@ -60,3 +60,23 @@ export function wouldCreateProjectCycle(projectId: string, parentProjectId: stri
   }
   return false;
 }
+
+/**
+ * Counts Active descendants for every Project, at any depth.
+ * Walking up from each Active Project credits all of its ancestors in a single pass.
+ */
+export function activeDescendantCounts(projects: readonly Project[]): Map<string, number> {
+  const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const counts = new Map<string, number>();
+  for (const project of projects) {
+    if (project.status !== "active") continue;
+    const seen = new Set([project.id]);
+    let ancestorId = project.parentProjectId;
+    while (ancestorId && !seen.has(ancestorId)) {
+      seen.add(ancestorId);
+      counts.set(ancestorId, (counts.get(ancestorId) ?? 0) + 1);
+      ancestorId = projectsById.get(ancestorId)?.parentProjectId;
+    }
+  }
+  return counts;
+}

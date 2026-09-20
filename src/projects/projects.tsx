@@ -2,7 +2,7 @@ import { Component, Keymap, MarkdownRenderer, Menu, Notice, Platform, type TFile
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { Action, Project, ProjectStatus } from "../domain/types";
 import type { DiaryEntry } from "../utils/markdown";
-import { projectBreadcrumbs } from "../domain/project-hierarchy";
+import { activeDescendantCounts, projectBreadcrumbs } from "../domain/project-hierarchy";
 import {
   activeProjectBlockers,
   compareProjectPriority,
@@ -67,14 +67,6 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     return result;
   }, [snapshot]);
 
-  const subprojectCounts = useMemo(() => {
-    const result = new Map<string, number>();
-    for (const project of snapshot.projects) {
-      if (!project.parentProjectId) continue;
-      result.set(project.parentProjectId, (result.get(project.parentProjectId) ?? 0) + 1);
-    }
-    return result;
-  }, [snapshot]);
   // The vault, not the index, owns support material, but every vault change rebuilds the snapshot.
   const supportFileCounts = useMemo(() => services.repository.supportFileCounts(), [snapshot]);
 
@@ -83,6 +75,8 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     return status ? { ...project, status } : project;
   }), [snapshot, optimistic]);
   const breadcrumbs = useMemo(() => projectBreadcrumbs(projects), [projects]);
+  // Read from the optimistic list so a card's count follows a sub-project drag straight away.
+  const activeSubprojectCounts = useMemo(() => activeDescendantCounts(projects), [projects]);
   const searchQuery = search.trim().toLocaleLowerCase();
 
   const columnProjects = useMemo(() => {
@@ -244,7 +238,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
                     services={services}
                     showImage={showImages}
                     breadcrumb={breadcrumbs.get(project.id) ?? project.title}
-                    subprojects={subprojectCounts.get(project.id) ?? 0}
+                    subprojects={activeSubprojectCounts.get(project.id) ?? 0}
                     supportFiles={supportFileCounts.get(project.id) ?? 0}
                     selecting={selecting}
                     selected={selectedIds.has(project.id)}
@@ -396,7 +390,7 @@ function ProjectCard({
       {Boolean(project.tags?.length) && <div class="dg-project-tags">{project.tags!.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
       <div class="dg-project-metrics">
         <span title="Open Actions"><strong>{open}</strong> open</span>
-        <span title="Immediate sub-projects"><strong>{subprojects}</strong> sub</span>
+        <span title="Active sub-projects, at any depth"><strong>{subprojects}</strong> sub</span>
         <span title="Project support material files"><strong>{supportFiles}</strong> files</span>
       </div>
       {project.reviewed && <div class="dg-project-reviewed">Reviewed {project.reviewed}</div>}

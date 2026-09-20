@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
 import type { Project } from "../src/domain/types";
 import {
+  activeDescendantCounts,
   projectBreadcrumb,
   projectBreadcrumbs,
   projectDescendantIds,
@@ -51,5 +52,49 @@ describe("Project hierarchy", () => {
 
     expect(parsed.parentProjectId).toBe("P1");
     expect(parsed.parentProjectLink).toBe("[[House]]");
+  });
+});
+
+describe("Active sub-project counts", () => {
+  const at = (id: string, status: Project["status"], parentProjectId?: string): Project => ({
+    type: "gtd-project",
+    id,
+    title: id,
+    status,
+    created: "2026-09-18",
+    file: file(`${id}.md`),
+    ...(parentProjectId ? { parentProjectId } : {}),
+  });
+
+  it("counts Active descendants at every depth", () => {
+    const counts = activeDescendantCounts([
+      at("P1", "active"),
+      at("P2", "active", "P1"),
+      at("P3", "active", "P2"),
+      at("P4", "active", "P3"),
+    ]);
+
+    expect([...counts]).toEqual([["P1", 3], ["P2", 2], ["P3", 1]]);
+  });
+
+  it("skips descendants that are not Active without hiding the Active ones beneath them", () => {
+    const counts = activeDescendantCounts([
+      at("P1", "active"),
+      at("P2", "completed", "P1"),
+      at("P3", "active", "P2"),
+      at("P4", "someday", "P1"),
+      at("P5", "backlog", "P1"),
+    ]);
+
+    // P3 still counts for P1 even though its own parent is Done.
+    expect(counts.get("P1")).toBe(1);
+    expect(counts.get("P2")).toBe(1);
+    expect(counts.has("P4")).toBe(false);
+  });
+
+  it("survives a hierarchy cycle", () => {
+    const counts = activeDescendantCounts([at("P1", "active", "P2"), at("P2", "active", "P1")]);
+
+    expect([...counts]).toEqual([["P2", 1], ["P1", 1]]);
   });
 });
