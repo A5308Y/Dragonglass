@@ -3,6 +3,7 @@ import type { TFile } from "obsidian";
 import type { Project } from "../src/domain/types";
 import {
   activeProjectBlockers,
+  isProjectSupportMaterialPath,
   normalizeProjectTags,
   planProjectDeletion,
   planProjectParentChange,
@@ -154,6 +155,13 @@ describe("Batch Project edits", () => {
 });
 
 describe("Project support material counts", () => {
+  it("recognizes ordinary folders and nested sub-project material in the full detail subtree", () => {
+    expect(isProjectSupportMaterialPath("Support/Alpha/Archive", "Support/Alpha")).toBe(true);
+    expect(isProjectSupportMaterialPath("Support/Alpha/Sub-project/Notes.md", "Support/Alpha")).toBe(true);
+    expect(isProjectSupportMaterialPath("Support/Alpha", "Support/Alpha")).toBe(false);
+    expect(isProjectSupportMaterialPath("Support/Alphabet/Decoy.md", "Support/Alpha")).toBe(false);
+  });
+
   const folders = [
     { id: "A", path: "Support/Alpha" },
     { id: "B", path: "Support/Alpha/Beta" },

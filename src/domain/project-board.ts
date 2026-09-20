@@ -1,5 +1,6 @@
 import { wouldCreateProjectCycle } from "./project-hierarchy";
 import type { Action, Project, ProjectStatus } from "./types";
+import { normalizeVaultPath } from "../utils/path";
 
 export type ProjectActionIssue = "No open Actions" | "No Next Action";
 
@@ -12,6 +13,13 @@ export function projectActionIssue(project: Project, actions: readonly Action[])
     return "No Next Action";
   }
   return null;
+}
+
+/** Whether a file or folder belongs anywhere in a Project's full support-material subtree. */
+export function isProjectSupportMaterialPath(path: string, supportPath: string): boolean {
+  const candidate = normalizeVaultPath(path);
+  const root = normalizeVaultPath(supportPath);
+  return Boolean(root && candidate.startsWith(`${root}/`));
 }
 
 export interface ProjectPlacement {

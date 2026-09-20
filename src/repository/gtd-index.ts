@@ -36,6 +36,7 @@ export class GtdIndex {
     plugin.registerEvent(this.metadataCache.on("changed", (file) => this.refresh(file)));
     plugin.registerEvent(this.vault.on("create", (file) => {
       if (file instanceof TFile) this.refresh(file);
+      else this.reindex();
     }));
     plugin.registerEvent(this.vault.on("rename", (file, oldPath) => this.rename(file, oldPath)));
     plugin.registerEvent(this.vault.on("delete", (file) => {

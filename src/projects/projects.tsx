@@ -466,6 +466,8 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const [supportNoteTitle, setSupportNoteTitle] = useState("");
   const [creatingSupportNote, setCreatingSupportNote] = useState(false);
   const [newSupportNotePath, setNewSupportNotePath] = useState("");
+  const [supportFolderPath, setSupportFolderPath] = useState("");
+  const [creatingSupportFolder, setCreatingSupportFolder] = useState(false);
   const image = projectImageFile(services, project);
   useEffect(() => {
     setSubprojectTagFilters([]);
@@ -477,6 +479,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
   const open = all.filter((action) => action.status !== "done" && action.status !== "cancelled");
   const completed = all.filter((action) => action.status === "done");
   const support = services.repository.supportFiles(project);
+  const supportFolders = services.repository.supportFolders(project);
   const supportNotes = support
     .filter((file) => isEditableSupportNote(services, file))
     .sort((left, right) => left.path.localeCompare(right.path));
@@ -567,6 +570,20 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
       new Notice(error instanceof Error ? error.message : "Could not create the support note.");
     } finally {
       setCreatingSupportNote(false);
+    }
+  };
+
+  const createSupportFolder = async () => {
+    const path = supportFolderPath.trim();
+    if (!path || creatingSupportFolder) return;
+    setCreatingSupportFolder(true);
+    try {
+      await services.repository.createProjectSupportFolder(project.id, path);
+      setSupportFolderPath("");
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not create the support folder.");
+    } finally {
+      setCreatingSupportFolder(false);
     }
   };
 
@@ -673,23 +690,48 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
         <ProjectDiary services={services} project={project} />
 
         <section class="dg-detail-section dg-support-panel">
-          <div class="dg-detail-section-heading"><div><span class="dg-detail-eyebrow">Files</span><h3>Project Support Material</h3></div><span class="dg-detail-count">{support.length}</span></div>
-          <div class="dg-support-note-create">
-            <input
-              value={supportNoteTitle}
-              placeholder="Note title…"
-              aria-label="New support note title"
-              disabled={creatingSupportNote}
-              onInput={(event: Event) => setSupportNoteTitle((event.currentTarget as HTMLInputElement).value)}
-              onKeyDown={(event: KeyboardEvent) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void createSupportNote();
-                }
-              }}
-            />
-            <button class="mod-cta" disabled={!supportNoteTitle.trim() || creatingSupportNote} onClick={() => void createSupportNote()}>Create note</button>
+          <div class="dg-detail-section-heading">
+            <div><span class="dg-detail-eyebrow">Files</span><h3>Project Support Material</h3></div>
+            <span class="dg-detail-count">{support.length} files · {supportFolders.length} folders</span>
           </div>
+          <div class="dg-support-create">
+            <div class="dg-support-note-create">
+              <input
+                value={supportNoteTitle}
+                placeholder="Note title…"
+                aria-label="New support note title"
+                disabled={creatingSupportNote}
+                onInput={(event: Event) => setSupportNoteTitle((event.currentTarget as HTMLInputElement).value)}
+                onKeyDown={(event: KeyboardEvent) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void createSupportNote();
+                  }
+                }}
+              />
+              <button class="mod-cta" disabled={!supportNoteTitle.trim() || creatingSupportNote} onClick={() => void createSupportNote()}>Create note</button>
+            </div>
+            <div class="dg-support-folder-create">
+              <input
+                value={supportFolderPath}
+                placeholder="Folder name or path…"
+                aria-label="New support folder path"
+                disabled={creatingSupportFolder}
+                onInput={(event: Event) => setSupportFolderPath((event.currentTarget as HTMLInputElement).value)}
+                onKeyDown={(event: KeyboardEvent) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void createSupportFolder();
+                  }
+                }}
+              />
+              <button disabled={!supportFolderPath.trim() || creatingSupportFolder} onClick={() => void createSupportFolder()}>Create folder</button>
+            </div>
+          </div>
+          {supportFolders.length > 0 && <div class="dg-support-folders">
+            <span>Folders</span>
+            <div>{supportFolders.map((path) => <span key={path} title={path}>📁 {supportPathLabel(path, project.supportPath)}</span>)}</div>
+          </div>}
           <div class="dg-support-notes">
             {supportNotes.map((file) => <SupportNote
               key={file.path}
@@ -710,7 +752,7 @@ function ProjectDetail({ services, project, onBack, onSelect }: { services: GtdS
             <span>Other files</span>
             <div>{supportAttachments.map((file) => <button key={file.path} onClick={() => void services.openFile(file)}>{supportFileLabel(file, project.supportPath)}</button>)}</div>
           </div>}
-          {support.length === 0 && <span class="dg-support-empty">No support material yet.</span>}
+          {support.length === 0 && supportFolders.length === 0 && <span class="dg-support-empty">No support material yet.</span>}
         </section>
       </main>
     </div>
@@ -996,6 +1038,12 @@ function supportFileLabel(file: TFile, supportPath?: string): string {
   return supportPath && file.path.startsWith(`${supportPath}/`)
     ? file.path.slice(supportPath.length + 1)
     : file.name;
+}
+
+function supportPathLabel(path: string, supportPath?: string): string {
+  return supportPath && path.startsWith(`${supportPath}/`)
+    ? path.slice(supportPath.length + 1)
+    : path;
 }
 
 function SubprojectColumn({ status, projects, projectsById, services, onSelect, onMove, onMovePriority }: {

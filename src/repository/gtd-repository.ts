@@ -17,7 +17,7 @@ import type {
   ProjectChanges,
   ProjectInput,
 } from "../domain/types";
-import { normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
+import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { actionRequiresContext, waitingSinceFor } from "../domain/action-status";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { normalizeScheduledStart } from "../domain/validation";
@@ -620,14 +620,18 @@ export class GtdRepository {
   supportFiles(project: Project): TFile[] {
     if (!project.supportPath) return [];
     const supportPath = normalizeVaultPath(project.supportPath);
-    const nestedProjectPaths = this.index.getSnapshot().projects
-      .filter((candidate) => candidate.id !== project.id && candidate.supportPath)
-      .map((candidate) => normalizeVaultPath(candidate.supportPath!))
-      .filter((candidatePath) => candidatePath !== supportPath && pathIsWithin(candidatePath, supportPath));
-    return this.app.vault.getFiles().filter((file) =>
-      pathIsWithin(file.path, supportPath)
-      && !nestedProjectPaths.some((nestedPath) => pathIsWithin(file.path, nestedPath))
-    );
+    // Project Details is the full subtree overview, including support owned by sub-projects.
+    return this.app.vault.getFiles().filter((file) => isProjectSupportMaterialPath(file.path, supportPath));
+  }
+
+  supportFolders(project: Project): string[] {
+    if (!project.supportPath) return [];
+    const supportPath = normalizeVaultPath(project.supportPath);
+    return this.app.vault.getAllLoadedFiles()
+      .filter((entry): entry is TFolder => entry instanceof TFolder
+        && isProjectSupportMaterialPath(entry.path, supportPath))
+      .map((folder) => folder.path)
+      .sort((left, right) => left.localeCompare(right));
   }
 
   /**
@@ -721,6 +725,18 @@ export class GtdRepository {
     const supportPath = await this.ensureProjectSupportPath(project);
     const path = this.uniqueMarkdownPath(supportPath, cleanTitle, createUlid());
     return this.app.vault.create(path, `# ${cleanTitle}\n\nProject: ${wikiLink(project)}\n\n`);
+  }
+
+  async createProjectSupportFolder(projectId: string, relativePath: string): Promise<string> {
+    const project = this.requireProject(projectId);
+    const cleanPath = supportFolderRelativePath(relativePath);
+    const supportPath = await this.ensureProjectSupportPath(project);
+    const target = normalizePath(`${supportPath}/${cleanPath}`);
+    const existing = this.app.vault.getAllLoadedFiles().find((entry) =>
+      entry.path.toLocaleLowerCase() === target.toLocaleLowerCase()
+    );
+    if (existing) throw new Error(`“${cleanPath}” already exists in Project Support Material.`);
+    return this.ensureFolder(target);
   }
 
   async readProjectSupportNote(projectId: string, path: string): Promise<string> {
@@ -1010,6 +1026,14 @@ function actionInput(title: string, context: string, project?: Project, work = f
 
 function pathIsWithin(path: string, folderPath: string): boolean {
   return path === folderPath || path.startsWith(`${folderPath}/`);
+}
+
+function supportFolderRelativePath(value: string): string {
+  const parts = value.replace(/\\/g, "/").split("/").map((part) => part.trim());
+  if (!parts.length || parts.some((part) => !part || part === "." || part === ".." || safeName(part) !== part)) {
+    throw new Error("Enter a valid folder name or relative folder path.");
+  }
+  return parts.join("/");
 }
 
 function projectDepth(project: Project, projectsById: ReadonlyMap<string, Project>): number {

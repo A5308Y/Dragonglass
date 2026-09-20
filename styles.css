@@ -508,8 +508,11 @@
   background: var(--background-primary);
 }
 .dg-muted { color: var(--text-muted); }
-.dg-support-note-create { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
-.dg-support-note-create input {
+.dg-support-create { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.dg-support-note-create,
+.dg-support-folder-create { display: flex; align-items: center; gap: 8px; }
+.dg-support-note-create input,
+.dg-support-folder-create input {
   min-width: 0;
   min-height: 36px;
   flex: 1;
@@ -519,7 +522,19 @@
   color: var(--text-normal);
   background: var(--background-primary);
 }
-.dg-support-note-create button { min-height: 36px; }
+.dg-support-note-create button,
+.dg-support-folder-create button { min-height: 36px; }
+.dg-support-folders { margin-top: 14px; }
+.dg-support-folders > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-support-folders > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 5px 10px; margin-top: 5px; }
+.dg-support-folders > div > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dg-support-notes { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
 .dg-support-note {
   overflow: hidden;
@@ -1631,8 +1646,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-subproject-card { align-items: stretch; flex-direction: column; }
   .dg-diary-add { align-items: stretch; flex-direction: column; }
   .dg-diary-add button { min-height: 40px; }
-  .dg-support-note-create { align-items: stretch; flex-direction: column; }
-  .dg-support-note-create button { min-height: 40px; }
+  .dg-support-create { grid-template-columns: 1fr; }
+  .dg-support-note-create,
+  .dg-support-folder-create { align-items: stretch; flex-direction: column; }
+  .dg-support-note-create button,
+  .dg-support-folder-create button { min-height: 40px; }
   .dg-support-note > header { align-items: flex-start; }
   .dg-support-note > header > div > button { min-height: 36px; }
   .dg-detail-section-heading { align-items: flex-start; flex-wrap: wrap; }
