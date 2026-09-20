@@ -862,11 +862,14 @@ viewTag tag =
 viewDetail : Model -> Project -> Html Msg
 viewDetail model project =
     let
+        meta =
+            projectMeta project.id model
+
         parent =
             project.parentProjectId |> Maybe.andThen (\parentId -> Data.findProject parentId model.snapshot.projects)
 
         imageUrl =
-            (projectMeta project.id model).imageUrl
+            meta.imageUrl
 
         actions =
             projectActions model project
@@ -890,6 +893,8 @@ viewDetail model project =
                 , button [ onClick (Send IgnoreReply (Command.EditProjectModal project.id)) ] [ text "Edit" ]
                 ]
             ]
+        , Ui.maybeView meta.actionIssue
+            (\issue -> div [ class "dg-warning" ] [ text ("Action issue: " ++ issue) ])
         , main_ [ class "dg-project-detail-content" ]
             [ if String.isEmpty imageUrl then
                 text ""
