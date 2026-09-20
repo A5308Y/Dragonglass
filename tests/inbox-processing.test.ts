@@ -21,6 +21,7 @@ describe("Inbox processing prefill", () => {
 describe("Primary processing disposition", () => {
   const disposition = (changes: Partial<Parameters<typeof inboxPrimaryDisposition>[0]> = {}) =>
     inboxPrimaryDisposition({
+      someday: false,
       fileOriginal: false,
       projectName: "",
       projectExists: false,
@@ -57,5 +58,19 @@ describe("Primary processing disposition", () => {
 
   it("holds back a filed Next Action that has no context", () => {
     expect(disposition({ fileOriginal: true, nextAction: "Call the plumber" }).ready).toBe(false);
+  });
+
+  it("parks the Project when Someday/Maybe is on, whatever filing says", () => {
+    expect(disposition({ someday: true }))
+      .toEqual({ operation: "someday", label: "Create Someday/Maybe Project", ready: true });
+    expect(disposition({ someday: true, fileOriginal: true }).operation).toBe("someday");
+    expect(disposition({ someday: true, projectName: "Heating", projectExists: true }).label)
+      .toBe("Move Heating to Someday/Maybe");
+  });
+
+  it("names a Next Action parked alongside the Project", () => {
+    expect(disposition({ someday: true, nextAction: "Call the plumber", context: "Calls" }).label)
+      .toBe("Create Someday/Maybe Project + Next Action");
+    expect(disposition({ someday: true, nextAction: "Call the plumber" }).ready).toBe(false);
   });
 });

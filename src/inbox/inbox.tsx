@@ -2,7 +2,7 @@ import { Notice } from "obsidian";
 import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { InboxItem, InboxProcessingInput, Project } from "../domain/types";
-import { inboxPrimaryDisposition, inboxProcessingPrefill } from "../domain/inbox-processing";
+import { inboxPrimaryDisposition, inboxProcessingPrefill, type InboxPrimaryDisposition } from "../domain/inbox-processing";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import { isVaultAudio } from "../ui/audio";
 import { FuzzyField } from "../ui/fuzzy-field";
@@ -143,6 +143,7 @@ function InboxProcessor({
   const [nextAction, setNextAction] = useState("");
   const [context, setContext] = useState("");
   const [work, setWork] = useState(false);
+  const [someday, setSomeday] = useState(false);
   const [fileOriginal, setFileOriginal] = useState(false);
   const [busy, setBusy] = useState(false);
   const projectLabels = useMemo(() => projectBreadcrumbs(projects), [projects]);
@@ -157,6 +158,7 @@ function InboxProcessor({
     setNextAction(prefill);
     setContext("");
     setWork(false);
+    setSomeday(false);
     setFileOriginal(false);
     setBusy(false);
     if (item) void services.repository.readInboxBody(item).then((value) => { if (!cancelled) setBody(value); });
@@ -203,15 +205,13 @@ function InboxProcessor({
   const selectedProjectLabel = selectedProject ? projectLabels.get(selectedProject.id) ?? selectedProject.title : "";
   const projectName = selectedProject?.title ?? projectQuery.trim();
   const primary = inboxPrimaryDisposition({
+    someday,
     fileOriginal,
     projectName,
     projectExists: Boolean(selectedProject),
     nextAction,
     context,
   });
-  const somedayLabel = selectedProject ? `Move ${selectedProject.title} to Someday/Maybe` : "Create Someday/Maybe Project";
-  // Someday/Maybe needs no Next Action, but still needs a context once one is typed.
-  const optionalActionReady = Boolean(!nextAction.trim() || context.trim());
 
   return (
     <div class="dg-processor">
@@ -237,7 +237,7 @@ function InboxProcessor({
 
       <section class="dg-processing-form" aria-label="Clarify Inbox Item">
         <div class="dg-processing-grid">
-          <ProcessingField label="Project" wide hint={projectQuery.trim() && !selectedProject ? "A new Active Project will be created when needed." : "Optional. Select an existing Project or type a new name."}>
+          <ProcessingField label="Project" wide hint={projectQuery.trim() && !selectedProject ? `A new ${someday ? "Someday/Maybe" : "Active"} Project will be created when needed.` : "Optional. Select an existing Project or type a new name."}>
             <FuzzyField
               value={projectQuery}
               placeholder="Search or name a Project…"
@@ -278,11 +278,20 @@ function InboxProcessor({
           </label>
 
           <label class="dg-processing-field dg-processing-toggle">
+            <span>Someday/Maybe</span>
+            <input type="checkbox" checked={someday} onChange={(event: Event) => setSomeday((event.currentTarget as HTMLInputElement).checked)} />
+            <small>Parks the Project instead of activating it. An existing Project is moved to Someday/Maybe; without one, this Item's title names it.</small>
+          </label>
+
+          <label class="dg-processing-field dg-processing-toggle">
             <span>File with Project</span>
             <input type="checkbox" checked={fileOriginal} onChange={(event: Event) => setFileOriginal((event.currentTarget as HTMLInputElement).checked)} />
-            <small>{item.file.extension === "md"
-              ? "Keeps this note as reference and creates a separate Action. Otherwise the note itself becomes the Action."
-              : "Keeps this file as support material, or in General Reference with no Project. Otherwise it goes to Obsidian's trash once processed."}</small>
+            <small>{someday
+              // Nothing absorbs a parked capture's content, so say plainly that it is discarded.
+              ? "Keeps this capture as Project support material. Otherwise it goes to Obsidian's trash once the Project exists."
+              : item.file.extension === "md"
+                ? "Keeps this note as reference and creates a separate Action. Otherwise the note itself becomes the Action."
+                : "Keeps this file as support material, or in General Reference with no Project. Otherwise it goes to Obsidian's trash once processed."}</small>
           </label>
         </div>
       </section>
@@ -293,21 +302,33 @@ function InboxProcessor({
           title={primary.label}
           disabled={!primary.ready || busy}
           onClick={() => void run(
-            () => primary.operation === "file"
-              ? services.repository.processInboxAsReference(item, input())
-              : services.repository.processInboxAsNextAction(item, input()),
-            primary.operation === "file"
-              ? projectName ? "Filed with Project." : "Filed as General Reference."
-              : "Next Action created.",
+            () => processInbox(services, primary.operation, item, input()),
+            processedMessage(primary.operation, projectName),
           )}
         >{primary.label}</button>
-        <button title={somedayLabel} disabled={!optionalActionReady || busy} onClick={() => void run(() => services.repository.processInboxAsSomedayProject(item, input()), "Filed as a Someday/Maybe Project.")}>{somedayLabel}</button>
         <button class="mod-warning" disabled={busy} onClick={() => void run(() => services.repository.trashInboxItem(item), "Inbox Item deleted.")}>Delete</button>
       </section>
 
       {seconds === 0 && <div class="dg-warning">Two minutes elapsed. Make the smallest clear decision and keep moving.</div>}
     </div>
   );
+}
+
+function processInbox(
+  services: GtdServices,
+  operation: InboxPrimaryDisposition["operation"],
+  item: InboxItem,
+  input: InboxProcessingInput,
+): Promise<void> {
+  if (operation === "someday") return services.repository.processInboxAsSomedayProject(item, input);
+  if (operation === "file") return services.repository.processInboxAsReference(item, input);
+  return services.repository.processInboxAsNextAction(item, input);
+}
+
+function processedMessage(operation: InboxPrimaryDisposition["operation"], projectName: string): string {
+  if (operation === "someday") return "Filed as a Someday/Maybe Project.";
+  if (operation === "file") return projectName ? "Filed with Project." : "Filed as General Reference.";
+  return "Next Action created.";
 }
 
 function InboxAudio({ src }: { src: string }) {
