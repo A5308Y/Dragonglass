@@ -1158,14 +1158,18 @@ viewSubprojectCard model project =
             (Decode.succeed { message = DropSubproject project.status (Just project.id), stopPropagation = True, preventDefault = True })
         ]
         [ div [ class "dg-subproject-card-heading" ]
-            [ button [ class "dg-subproject-title", onClick (SelectProject project.id) ] [ text project.title ]
+            [ button [ class "dg-subproject-title", title project.title, onClick (SelectProject project.id) ] [ text project.title ]
             , button
                 [ class "dg-icon-button"
                 , Ui.onPointer (\x y -> Send IgnoreReply (subprojectMenu x y model project))
                 ]
                 [ text "•••" ]
             ]
-        , div [ class "dg-project-tags" ] (List.map viewTag project.tags)
+        , if List.isEmpty project.tags then
+            text ""
+
+          else
+            div [ class "dg-project-tags" ] (List.map viewTag project.tags)
         , if List.isEmpty blockers then
             text ""
 
