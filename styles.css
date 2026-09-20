@@ -711,13 +711,16 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   font-size: 10px;
 }
 .dg-project-metrics {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 6px;
   margin-top: 10px;
 }
 .dg-project-metrics span {
   padding: 6px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-radius: var(--radius-s);
   color: var(--text-muted);
   background: var(--background-secondary);

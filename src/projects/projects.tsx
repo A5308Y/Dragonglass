@@ -67,6 +67,17 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     return result;
   }, [snapshot]);
 
+  const subprojectCounts = useMemo(() => {
+    const result = new Map<string, number>();
+    for (const project of snapshot.projects) {
+      if (!project.parentProjectId) continue;
+      result.set(project.parentProjectId, (result.get(project.parentProjectId) ?? 0) + 1);
+    }
+    return result;
+  }, [snapshot]);
+  // The vault, not the index, owns support material, but every vault change rebuilds the snapshot.
+  const supportFileCounts = useMemo(() => services.repository.supportFileCounts(), [snapshot]);
+
   const projects = useMemo(() => snapshot.projects.map((project) => {
     const status = optimistic.get(project.id);
     return status ? { ...project, status } : project;
@@ -233,6 +244,8 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
                     services={services}
                     showImage={showImages}
                     breadcrumb={breadcrumbs.get(project.id) ?? project.title}
+                    subprojects={subprojectCounts.get(project.id) ?? 0}
+                    supportFiles={supportFileCounts.get(project.id) ?? 0}
                     selecting={selecting}
                     selected={selectedIds.has(project.id)}
                     onToggleSelected={() => toggleSelected(project.id)}
@@ -299,6 +312,8 @@ function ProjectCard({
   services,
   showImage,
   breadcrumb,
+  subprojects,
+  supportFiles,
   selecting,
   selected,
   onToggleSelected,
@@ -312,6 +327,8 @@ function ProjectCard({
   services: GtdServices;
   showImage: boolean;
   breadcrumb: string;
+  subprojects: number;
+  supportFiles: number;
   selecting: boolean;
   selected: boolean;
   onToggleSelected: () => void;
@@ -378,7 +395,9 @@ function ProjectCard({
       {project.area && <div class="dg-project-area">{project.area}</div>}
       {Boolean(project.tags?.length) && <div class="dg-project-tags">{project.tags!.map((tag) => <span key={tag}>#{tag}</span>)}</div>}
       <div class="dg-project-metrics">
-        <span><strong>{open}</strong> open</span>
+        <span title="Open Actions"><strong>{open}</strong> open</span>
+        <span title="Immediate sub-projects"><strong>{subprojects}</strong> sub</span>
+        <span title="Project support material files"><strong>{supportFiles}</strong> files</span>
       </div>
       {project.reviewed && <div class="dg-project-reviewed">Reviewed {project.reviewed}</div>}
       {open === 0 && project.status === "active" && <div class="dg-project-health">No open Actions</div>}

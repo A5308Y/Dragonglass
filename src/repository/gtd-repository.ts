@@ -17,7 +17,7 @@ import type {
   ProjectChanges,
   ProjectInput,
 } from "../domain/types";
-import { normalizeProjectTags, wouldCreateProjectDependencyCycle } from "../domain/project-board";
+import { normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { normalizeTimestamp } from "../domain/validation";
 import { localDate } from "../utils/date";
@@ -608,6 +608,18 @@ export class GtdRepository {
       pathIsWithin(file.path, supportPath)
       && !nestedProjectPaths.some((nestedPath) => pathIsWithin(file.path, nestedPath))
     );
+  }
+
+  /**
+   * Counts support material for every Project in one vault pass, keyed by Project ID.
+   * Board cards need all of these at once, and {@link supportFiles} rescans the vault per Project.
+   */
+  supportFileCounts(): Map<string, number> {
+    const folders = this.index.getSnapshot().projects
+      .filter((project) => project.supportPath)
+      .map((project) => ({ id: project.id, path: normalizeVaultPath(project.supportPath!) }));
+    if (!folders.length) return new Map();
+    return projectSupportFileCounts(folders, this.app.vault.getFiles().map((file) => file.path));
   }
 
   /** Repairs generated support folders so their physical nesting matches the Project hierarchy. */

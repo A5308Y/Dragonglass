@@ -180,3 +180,33 @@ export function planProjectDeletion(projectIds: readonly string[], projects: rea
   }
   return { order: candidates.filter((id) => deletable.has(id)), blocked };
 }
+
+export interface ProjectSupportFolder {
+  id: string;
+  path: string;
+}
+
+/**
+ * Counts support material per Project in one pass over the vault's file paths.
+ * A file belongs to the Project whose support folder contains it most deeply, so a nested
+ * Project's material never inflates its ancestor's count.
+ */
+export function projectSupportFileCounts(
+  folders: readonly ProjectSupportFolder[],
+  filePaths: Iterable<string>,
+): Map<string, number> {
+  const counts = new Map(folders.map((folder) => [folder.id, 0]));
+  const owners = [...folders].sort((left, right) => right.path.length - left.path.length);
+  if (!owners.length) return counts;
+
+  for (const filePath of filePaths) {
+    let deepest = 0;
+    for (const owner of owners) {
+      if (deepest && owner.path.length < deepest) break;
+      if (filePath !== owner.path && !filePath.startsWith(`${owner.path}/`)) continue;
+      deepest = owner.path.length;
+      counts.set(owner.id, counts.get(owner.id)! + 1);
+    }
+  }
+  return counts;
+}

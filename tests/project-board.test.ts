@@ -7,6 +7,7 @@ import {
   planProjectDeletion,
   planProjectParentChange,
   projectPlacementsAfterMove,
+  projectSupportFileCounts,
   projectTagAdditions,
   wouldCreateProjectDependencyCycle,
 } from "../src/domain/project-board";
@@ -128,5 +129,36 @@ describe("Batch Project edits", () => {
       order: ["D"],
       blocked: ["B", "A"],
     });
+  });
+});
+
+describe("Project support material counts", () => {
+  const folders = [
+    { id: "A", path: "Support/Alpha" },
+    { id: "B", path: "Support/Alpha/Beta" },
+    { id: "C", path: "Support/Gamma" },
+  ];
+
+  it("credits the file to the deepest support folder that contains it", () => {
+    const counts = projectSupportFileCounts(folders, [
+      "Support/Alpha/Brief.md",
+      "Support/Alpha/Beta/Notes.md",
+      "Support/Alpha/Beta/Deeper/Scan.pdf",
+      "Support/Gamma/Plan.md",
+      "Elsewhere/Unrelated.md",
+      "Support/Alphabet/Decoy.md",
+    ]);
+
+    expect([...counts]).toEqual([["A", 1], ["B", 2], ["C", 1]]);
+  });
+
+  it("counts a file for every Project sharing the same support folder", () => {
+    const shared = [{ id: "A", path: "Support/Alpha" }, { id: "B", path: "Support/Alpha" }];
+
+    expect([...projectSupportFileCounts(shared, ["Support/Alpha/Brief.md"])]).toEqual([["A", 1], ["B", 1]]);
+  });
+
+  it("returns nothing when no Project has a support folder", () => {
+    expect([...projectSupportFileCounts([], ["Support/Alpha/Brief.md"])]).toEqual([]);
   });
 });
