@@ -726,8 +726,8 @@ viewProjectColumn model status =
         ]
         [ header [ class "dg-column-header" ]
             [ span [] [ text (ProjectStatus.label status) ]
-            , span [ class "dg-project-column-counts" ]
-                (span [ title "Projects in column" ] [ text (String.fromInt (List.length projects)) ]
+            , span [ class "dg-project-column-counts", title "Projects in column" ]
+                (text (String.fromInt (List.length projects) ++ " Projects")
                     :: (if status == ProjectStatus.Active then
                             [ span [ class "dg-project-column-health", title "Active Projects with Action issues" ]
                                 [ text (String.fromInt issues ++ " issues") ]
