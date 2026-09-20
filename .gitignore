@@ -1,5 +1,8 @@
 node_modules/
 main.js
+.generated/
+elm-stuff/
+.elm-home/
 *.map
 .DS_Store
 coverage/

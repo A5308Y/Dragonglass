@@ -4,9 +4,9 @@ Dragonglass GTD is a file-first GTD board for Obsidian. Projects and Actions are
 
 ## Development installation
 
-Requires Obsidian 1.13 or newer. Development uses Node.js 24 LTS (pinned in `mise.toml`); Node.js 22.12 or newer is the supported tooling minimum.
+Requires Obsidian 1.13 or newer. Development uses Node.js 24 LTS (pinned in `mise.toml`) and Elm 0.19.2; Node.js 22.12 or newer is the supported tooling minimum. The build checks the Elm compiler version before compiling the Elm surfaces.
 
-1. Run `mise install`.
+1. Run `mise install`; both Node and Elm are pinned by `mise.toml`.
 2. Run `mise exec -- npm install` and `mise exec -- npm run build`.
 3. Create `.obsidian/plugins/dragonglass-gtd` in a dedicated test vault.
 4. Copy `main.js`, `manifest.json`, and `styles.css` into that folder.

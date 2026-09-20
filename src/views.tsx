@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { render } from "preact";
-import { ActionBoard } from "./board/board";
+import { ElmActionBoardHost } from "./adapter/elm-action-board";
 import { BrainstormView } from "./brainstorm/brainstorm";
 import { InboxView } from "./inbox/inbox";
 import { ProjectsView } from "./projects/projects";
@@ -59,6 +59,8 @@ export class GtdInboxView extends ItemView {
 }
 
 export class ActionBoardView extends ItemView {
+  private host: ElmActionBoardHost | null = null;
+
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
     super(leaf);
   }
@@ -68,11 +70,19 @@ export class ActionBoardView extends ItemView {
   getIcon(): string { return "list-checks"; }
 
   async onOpen(): Promise<void> { this.refresh(); }
-  async onClose(): Promise<void> { render(null, this.contentEl); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
 
   refresh(): void {
-    render(null, this.contentEl);
-    render(<ActionBoard services={this.services} />, this.contentEl);
+    if (this.host) {
+      this.host.refresh();
+      return;
+    }
+    this.contentEl.empty();
+    this.host = new ElmActionBoardHost(this.contentEl, this.services);
   }
 }
 
