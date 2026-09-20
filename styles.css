@@ -274,6 +274,13 @@
   white-space: nowrap;
 }
 
+.dg-project-card .dg-card-title {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .dg-card-title:hover,
 .dg-project-title:hover { color: var(--text-accent); }
 .dg-card-title.dg-action-card-title:hover { color: var(--text-normal); }
@@ -830,14 +837,17 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-subproject-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dg-subproject-card-heading .dg-icon-button { flex: 0 0 28px; }
 .dg-subproject-title {
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
+  overflow-wrap: anywhere;
   border: 0 !important;
   text-align: left;
   font-weight: var(--font-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
   color: var(--text-normal);
   background: transparent !important;
   box-shadow: none !important;

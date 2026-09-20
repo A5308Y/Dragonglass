@@ -28,11 +28,13 @@ const SUBPROJECT_COLUMN_LABELS: Record<SubprojectColumnStatus, string> = { activ
 export function ProjectsView({ services, initialProjectId = null }: { services: GtdServices; initialProjectId?: string | null }) {
   const snapshot = useGtdSnapshot(services.repository.index);
   const [selectedId, setSelectedId] = useState<string | null>(initialProjectId);
+  const [returnProjectId, setReturnProjectId] = useState<string | null>(null);
   const [optimistic, setOptimistic] = useState<Map<string, ProjectStatus>>(new Map());
   const [search, setSearch] = useState("");
   const [showSubprojects, setShowSubprojects] = useState(true);
   const [showImages, setShowImages] = useState(() => services.getSettings().showProjectBoardImages);
   const [columnsOpen, setColumnsOpen] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
   const [visibleColumns, setVisibleColumns] = useState<ProjectBoardStatus[]>(() => {
     const configured = services.getSettings().projectBoardColumns;
     const valid = configured.filter((status): status is ProjectBoardStatus => BOARD_COLUMNS.includes(status as ProjectBoardStatus));
@@ -40,6 +42,17 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
   });
   useEffect(() => setSelectedId(initialProjectId), [initialProjectId]);
   const selected = selectedId ? snapshot.projectsById.get(selectedId) : undefined;
+
+  useEffect(() => {
+    if (selected || !returnProjectId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const card = [...(boardRef.current?.querySelectorAll<HTMLElement>("[data-project-card]") ?? [])]
+        .find((candidate) => candidate.dataset.projectCard === returnProjectId);
+      card?.scrollIntoView({ block: "center", inline: "center" });
+      setReturnProjectId(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selected, returnProjectId]);
 
   const actionsByProject = useMemo(() => {
     const result = new Map<string, Action[]>();
@@ -64,7 +77,10 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
     project.area ?? "",
   ].some((value) => value.toLocaleLowerCase().includes(searchQuery));
 
-  if (selected) return <ProjectDetail services={services} project={selected} onBack={() => setSelectedId(null)} onSelect={setSelectedId} />;
+  if (selected) return <ProjectDetail services={services} project={selected} onBack={() => {
+    setReturnProjectId(selected.id);
+    setSelectedId(null);
+  }} onSelect={setSelectedId} />;
 
   const moveProject = async (id: string, status: ProjectBoardStatus) => {
     const previous = snapshot.projectsById.get(id)?.status;
@@ -142,7 +158,7 @@ export function ProjectsView({ services, initialProjectId = null }: { services: 
         </label>
       </div>
       {columnsOpen && <ProjectColumnPicker visible={visibleColumns} onChange={(columns) => void changeVisibleColumns(columns)} />}
-      <div class="dg-board dg-project-board" role="list">
+      <div ref={boardRef} class="dg-board dg-project-board" role="list">
         {BOARD_COLUMNS.filter((status) => visibleColumns.includes(status)).map((status) => {
           const columnProjects = projects
             .filter((project) => projectColumn(project.status) === status
