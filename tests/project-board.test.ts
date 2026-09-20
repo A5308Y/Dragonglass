@@ -42,7 +42,7 @@ describe("Sub-project board metadata", () => {
     expect(projectActionIssue(active, [active], [])).toBe("No open Actions");
     expect(projectActionIssue(active, [active], [action("done")])).toBe("No open Actions");
     expect(projectActionIssue(active, [active], [action("next")])).toBeNull();
-    expect(projectActionIssue(active, [active], [action("scheduled")])).toBe("No Next Action");
+    expect(projectActionIssue(active, [active], [action("scheduled")])).toBeNull();
     expect(projectActionIssue(active, [active], [action("waiting")])).toBe("No Next Action");
     expect(projectActionIssue({ ...active, status: "someday" }, [active], [])).toBeNull();
   });

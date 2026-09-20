@@ -25,16 +25,18 @@ export function projectReviewMembers(root: Project, projects: readonly Project[]
 }
 
 export function activeProjectsWithoutNextAction(projects: readonly Project[], actions: readonly Action[]): Project[] {
-  const nextProjectIds = new Set(actions.filter((action) => action.status === "next" && action.projectId).map((action) => action.projectId!));
+  const nextProjectIds = new Set(actions
+    .filter((action) => (action.status === "next" || action.status === "scheduled") && action.projectId)
+    .map((action) => action.projectId!));
   return projects.filter((project) => project.status === "active" && !nextProjectIds.has(project.id));
 }
 
 /**
  * Active Projects that still block marking this review tree as reviewed.
  *
- * Every active sub-project needs a Next Action. The root only needs one itself
- * when it has no active sub-projects to carry the work. Returns the Projects to
- * fix, empty when nothing blocks.
+ * Every active sub-project needs a Next or Scheduled Action. The root only
+ * needs one itself when it has no active sub-projects to carry the work.
+ * Returns the Projects to fix, empty when nothing blocks.
  */
 export function projectsBlockingReview(root: Project, members: readonly Project[], actions: readonly Action[]): Project[] {
   const missing = activeProjectsWithoutNextAction(members, actions);

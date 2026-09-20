@@ -51,8 +51,8 @@ describe("combined Project Review", () => {
 
 describe("Next Action gate for marking a tree reviewed", () => {
   const members = () => projectReviewMembers(root, snapshot().projects);
-  const nextFor = (id: string, projectId: string): Action =>
-    ({ type: "gtd-action", id, title: `${projectId} next`, status: "next", projectId, created: "2026-09-01", file: file(`${id}.md`) });
+  const actionFor = (id: string, projectId: string, status: "next" | "scheduled" | "waiting" = "next"): Action =>
+    ({ type: "gtd-action", id, title: `${projectId} ${status}`, status, projectId, created: "2026-09-01", file: file(`${id}.md`) });
 
   it("still blocks on an active sub-project without a Next Action, even when the root has one", () => {
     expect(activeProjectsWithoutNextAction(members(), actions).map((project) => project.id)).toEqual(["P2"]);
@@ -60,7 +60,12 @@ describe("Next Action gate for marking a tree reviewed", () => {
   });
 
   it("lets the root carry no Next Action once every active sub-project has one", () => {
-    expect(projectsBlockingReview(root, members(), [nextFor("A2", "P2")])).toEqual([]);
+    expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2")])).toEqual([]);
+  });
+
+  it("accepts a Scheduled Action, but not a Waiting Action", () => {
+    expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2", "scheduled")])).toEqual([]);
+    expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2", "waiting")]).map((project) => project.id)).toEqual(["P2"]);
   });
 
   it("still requires a Next Action for a root with no active sub-projects", () => {
@@ -73,6 +78,6 @@ describe("Next Action gate for marking a tree reviewed", () => {
 
   it("ignores sub-projects that are not active", () => {
     expect(members().map((project) => project.id)).toEqual(["P1", "P2", "P3"]);
-    expect(projectsBlockingReview(root, members(), [nextFor("A2", "P2")]).map((project) => project.id)).toEqual([]);
+    expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2")]).map((project) => project.id)).toEqual([]);
   });
 });
