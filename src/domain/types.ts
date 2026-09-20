@@ -42,6 +42,8 @@ export interface Action {
   energy?: string;
   due?: string;
   deferUntil?: string;
+  /** The day a Waiting Action started waiting. Every Waiting Action carries one. */
+  waitingSince?: string;
   scheduledStart?: string;
   durationMinutes?: number;
   completed?: string;
@@ -76,6 +78,7 @@ export interface ActionInput {
   energy?: string;
   due?: string;
   deferUntil?: string;
+  waitingSince?: string;
   scheduledStart?: string;
   durationMinutes?: number;
   work?: boolean;
@@ -100,7 +103,7 @@ export interface InboxProcessingInput {
 }
 
 export type ActionChanges = Partial<
-  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "deferUntil" | "scheduledStart" | "durationMinutes" | "work">
+  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "deferUntil" | "waitingSince" | "scheduledStart" | "durationMinutes" | "work">
 >;
 
 export type ProjectChanges = Partial<

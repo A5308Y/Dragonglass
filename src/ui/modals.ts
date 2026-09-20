@@ -13,6 +13,7 @@ import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../
 import { parseActionList } from "../domain/action-import";
 import { parseSubprojectList } from "../domain/project-import";
 import { parseProjectTags, planProjectParentChange, projectTagAdditions } from "../domain/project-board";
+import { localDate } from "../utils/date";
 import { normalizeVaultPath } from "../utils/path";
 import { confirmDeleteProject } from "./delete-project";
 import { addImagePathSetting, resolveVaultImage } from "./image-input";
@@ -96,6 +97,7 @@ export class NewActionModal extends FormModal {
   private projectId: string;
   private projectQuery: string;
   private context = "";
+  private waitingSince: string;
   private scheduledStart = "";
   private durationMinutes: string;
   private work = false;
@@ -105,6 +107,7 @@ export class NewActionModal extends FormModal {
     const snapshot = services.repository.index.getSnapshot();
     const project = projectId ? snapshot.projectsById.get(projectId) : undefined;
     this.status = services.getSettings().defaultActionStatus;
+    this.waitingSince = localDate();
     this.durationMinutes = String(services.getSettings().googleCalendar.defaultDurationMinutes);
     this.projectId = project?.id ?? "";
     this.projectQuery = project ? projectBreadcrumb(project, snapshot.projectsById) : "";
@@ -135,14 +138,15 @@ export class NewActionModal extends FormModal {
       (value) => (this.context = value),
       (popover) => this.registerPopover(popover),
     );
-    let updateScheduleVisibility: () => void = () => undefined;
+    let updateStatusVisibility: () => void = () => undefined;
     new Setting(this.formEl).setName("Status").addDropdown((dropdown) => {
       for (const status of ACTION_STATUSES) dropdown.addOption(status, label(status));
       dropdown.setValue(this.status).onChange((value) => {
         this.status = value as ActionStatus;
-        updateScheduleVisibility();
+        updateStatusVisibility();
       });
     });
+    const waitingSetting = addWaitingSinceField(this.formEl, this.waitingSince, (value) => (this.waitingSince = value));
     const scheduleSettings = addScheduleFields(
       this.formEl,
       this.scheduledStart,
@@ -150,8 +154,11 @@ export class NewActionModal extends FormModal {
       (value) => (this.scheduledStart = value),
       (value) => (this.durationMinutes = value),
     );
-    updateScheduleVisibility = () => setScheduleVisibility(scheduleSettings, this.status === "scheduled");
-    updateScheduleVisibility();
+    updateStatusVisibility = () => {
+      setScheduleVisibility(scheduleSettings, this.status === "scheduled");
+      setScheduleVisibility([waitingSetting], this.status === "waiting");
+    };
+    updateStatusVisibility();
     addWorkToggle(this.formEl, this.work, (value) => (this.work = value));
     this.formEl.appendChild(this.actionsEl);
     this.addSubmit("Create Action");
@@ -169,6 +176,7 @@ export class NewActionModal extends FormModal {
         status: this.status,
         ...(this.projectId ? { projectId: this.projectId } : {}),
         context: this.context.trim(),
+        ...(this.status === "waiting" && this.waitingSince ? { waitingSince: this.waitingSince } : {}),
         ...schedule,
         work: this.work,
       });
@@ -189,6 +197,7 @@ export class ActionEditorModal extends FormModal {
   private energy: string;
   private due: string;
   private deferUntil: string;
+  private waitingSince: string;
   private scheduledStart: string;
   private durationMinutes: string;
   private work: boolean;
@@ -206,6 +215,7 @@ export class ActionEditorModal extends FormModal {
     this.energy = action.energy ?? "";
     this.due = action.due ?? "";
     this.deferUntil = action.deferUntil ?? "";
+    this.waitingSince = action.waitingSince ?? localDate();
     this.scheduledStart = dateTimeLocalValue(action.scheduledStart);
     this.durationMinutes = String(action.durationMinutes ?? services.getSettings().googleCalendar.defaultDurationMinutes);
     this.work = action.work ?? false;
@@ -214,12 +224,12 @@ export class ActionEditorModal extends FormModal {
   protected renderForm(): void {
     this.formEl.createEl("h2", { text: "Edit Action" });
     addText(this.formEl, "Title", this.title, (value) => (this.title = value));
-    let updateScheduleVisibility: () => void = () => undefined;
+    let updateStatusVisibility: () => void = () => undefined;
     new Setting(this.formEl).setName("Status").addDropdown((dropdown) => {
       for (const status of ACTION_STATUSES) dropdown.addOption(status, label(status));
       dropdown.setValue(this.status).onChange((value) => {
         this.status = value as ActionStatus;
-        updateScheduleVisibility();
+        updateStatusVisibility();
       });
     });
     addProjectSearch(
@@ -244,6 +254,7 @@ export class ActionEditorModal extends FormModal {
     addText(this.formEl, "Energy", this.energy, (value) => (this.energy = value), "medium");
     addDate(this.formEl, "Due", this.due, (value) => (this.due = value));
     addDate(this.formEl, "Defer until", this.deferUntil, (value) => (this.deferUntil = value));
+    const waitingSetting = addWaitingSinceField(this.formEl, this.waitingSince, (value) => (this.waitingSince = value));
     const scheduleSettings = addScheduleFields(
       this.formEl,
       this.scheduledStart,
@@ -251,8 +262,11 @@ export class ActionEditorModal extends FormModal {
       (value) => (this.scheduledStart = value),
       (value) => (this.durationMinutes = value),
     );
-    updateScheduleVisibility = () => setScheduleVisibility(scheduleSettings, this.status === "scheduled");
-    updateScheduleVisibility();
+    updateStatusVisibility = () => {
+      setScheduleVisibility(scheduleSettings, this.status === "scheduled");
+      setScheduleVisibility([waitingSetting], this.status === "waiting");
+    };
+    updateStatusVisibility();
     addWorkToggle(this.formEl, this.work, (value) => (this.work = value));
     this.formEl.appendChild(this.actionsEl);
     if (this.allowProjectConversion && this.action.projectId) {
@@ -302,6 +316,7 @@ export class ActionEditorModal extends FormModal {
         energy: this.energy.trim(),
         due: this.due,
         deferUntil: this.deferUntil,
+        ...(this.status === "waiting" && this.waitingSince ? { waitingSince: this.waitingSince } : {}),
         ...schedule,
         work: this.work,
       });
@@ -970,6 +985,18 @@ function addScheduleFields(
   });
   durationSetting.settingEl.addClass("dg-schedule-setting");
   return [startSetting.settingEl, durationSetting.settingEl];
+}
+
+function addWaitingSinceField(container: HTMLElement, value: string, onChange: (value: string) => void): HTMLElement {
+  const setting = new Setting(container)
+    .setName("Waiting since")
+    .setDesc("The day this Action started waiting.")
+    .addText((text) => {
+      text.inputEl.type = "date";
+      text.setValue(value).onChange(onChange);
+    });
+  setting.settingEl.addClass("dg-schedule-setting");
+  return setting.settingEl;
 }
 
 function setScheduleVisibility(settings: HTMLElement[], visible: boolean): void {

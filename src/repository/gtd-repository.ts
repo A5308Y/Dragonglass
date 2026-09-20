@@ -18,6 +18,7 @@ import type {
   ProjectInput,
 } from "../domain/types";
 import { normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
+import { waitingSinceFor } from "../domain/action-status";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { normalizeTimestamp } from "../domain/validation";
 import { localDate } from "../utils/date";
@@ -112,6 +113,7 @@ export class GtdRepository {
         frontmatter.energy = input.energy || null;
         frontmatter.due = input.due || null;
         frontmatter.defer_until = input.deferUntil || null;
+        frontmatter.waiting_since = waitingSinceFor(input.status, undefined, input.waitingSince);
         frontmatter.scheduled_start = input.scheduledStart || null;
         frontmatter.duration_minutes = input.durationMinutes ?? null;
         frontmatter.work = input.work ?? false;
@@ -351,6 +353,9 @@ export class GtdRepository {
           frontmatter.status = changes.status;
           if (changes.status !== action.status) frontmatter.completed = changes.status === "done" ? new Date().toISOString() : null;
         }
+        // Waiting owns this date, so only touch the key when the wait itself starts, moves, or ends.
+        const waitingSince = waitingSinceFor(changes.status ?? action.status, action.waitingSince, changes.waitingSince);
+        if (waitingSince !== (action.waitingSince ?? null)) frontmatter.waiting_since = waitingSince;
         if (changes.projectId !== undefined) {
           frontmatter.project_id = changes.projectId || null;
           frontmatter.project = project ? wikiLink(project) : null;
@@ -542,6 +547,7 @@ export class GtdRepository {
       energy: input.energy || null,
       due: input.due || null,
       defer_until: input.deferUntil || null,
+      waiting_since: waitingSinceFor(status, undefined, input.waitingSince),
       scheduled_start: input.scheduledStart || null,
       duration_minutes: input.durationMinutes ?? null,
       work: input.work ?? false,

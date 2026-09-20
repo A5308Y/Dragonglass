@@ -294,6 +294,7 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
         {action.context && <span>@{action.context}</span>}
         {action.energy && <span>{action.energy}</span>}
         {action.due && <span class={isOverdue(action.due) && action.status !== "done" ? "is-overdue" : ""}>{action.due}</span>}
+        {action.status === "waiting" && <span>Waiting since {action.waitingSince ?? "—"}</span>}
         {action.scheduledStart && <span>{new Date(action.scheduledStart).toLocaleString()}{action.durationMinutes ? ` · ${action.durationMinutes} min` : ""}</span>}
         {action.status === "scheduled" && (!action.scheduledStart || !action.durationMinutes) && <span class="is-overdue">Missing schedule</span>}
       </div>

@@ -74,6 +74,7 @@ context: computer
 energy: medium
 due: 2026-09-23
 defer_until:
+waiting_since:
 scheduled_start: 2026-09-22T12:00:00.000Z
 duration_minutes: 45
 created: 2026-09-18
@@ -83,6 +84,8 @@ completed:
 `project_id` is authoritative. The `project` link is only a human- and Bases-friendly convenience.
 
 Scheduled Actions use `scheduled_start` as an absolute RFC3339 timestamp and `duration_minutes` as a positive whole number. `due` remains a deadline rather than a calendar time. Moving an Action to Scheduled asks for these values when they are missing.
+
+Waiting Actions always carry a `waiting_since` date. Moving an Action to Waiting stamps today unless the editor supplies another date, re-editing a Waiting Action keeps the date it is already waiting since, and leaving Waiting clears it so no date outlives the wait it recorded. The Action editor shows the field only while the status is Waiting, and both the board card and the Action row read `Waiting since <date>`. Actions that were already Waiting before the field existed are stamped with the date Dragonglass first loaded the vault after this change.
 
 A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `completed`, `image`, `tags`, `order`, `blocked_by_project_ids`, and `support_path`. The `image` value is a vault-relative image path selected in the Project editor; when absent, the configured default Project image is used. `tags` supplies custom board filters, `order` persists board priority, and `blocked_by_project_ids` records stable-ID dependencies. Supported Project statuses are `active`, `backlog`, `someday`, `completed`, and `cancelled`; the UI labels `someday` as Someday/Maybe. Normal notes, PDFs, and other files can live beneath that support path. Generated support folders mirror the full Project hierarchy, for example `Project Support Material/Dragonglass/Project Board`.
 

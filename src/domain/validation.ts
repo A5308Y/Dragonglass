@@ -79,6 +79,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const energy = optionalString(frontmatter, "energy");
   const due = optionalString(frontmatter, "due");
   const deferUntil = optionalString(frontmatter, "defer_until");
+  const waitingSince = optionalString(frontmatter, "waiting_since");
   const scheduledStart = optionalString(frontmatter, "scheduled_start");
   const durationMinutes = optionalNumber(frontmatter, "duration_minutes");
   const completed = optionalString(frontmatter, "completed");
@@ -88,6 +89,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (energy) action.energy = energy;
   if (due) action.due = dateOnly(due, "due");
   if (deferUntil) action.deferUntil = dateOnly(deferUntil, "defer_until");
+  if (waitingSince) action.waitingSince = dateOnly(waitingSince, "waiting_since");
   if (scheduledStart) {
     action.scheduledStart = normalizeTimestamp(scheduledStart, "scheduled_start");
   }

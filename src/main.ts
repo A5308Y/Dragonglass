@@ -9,6 +9,7 @@ import { GtdSettingTab } from "./settings";
 import { ActionEditorModal, ImportActionsModal, ImportSubprojectsModal, NewActionModal, NewProjectModal, ProjectEditorModal, ScheduleActionModal, TextPromptModal } from "./ui/modals";
 import { OpenProjectModal } from "./ui/open-project";
 import type { GtdServices } from "./ui/services";
+import { localDate } from "./utils/date";
 import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, GtdBrainstormView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
@@ -166,6 +167,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     let failedProjects = 0;
     let migratedActions = 0;
     let failedActions = 0;
+    let stampedWaiting = 0;
+    let failedWaiting = 0;
     for (const file of this.app.vault.getMarkdownFiles()) {
       const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
       if (frontmatter?.type === "gtd-project" && frontmatter.status === "waiting") {
@@ -192,6 +195,18 @@ export default class DragonglassGtdPlugin extends Plugin {
         } catch {
           failedActions += 1;
         }
+      } else if (frontmatter?.type === "gtd-action" && frontmatter.status === "waiting" && !frontmatter.waiting_since) {
+        // Actions already waiting predate the field, so today is when Dragonglass started counting.
+        try {
+          await this.app.fileManager.processFrontMatter(file, (properties) => {
+            if (properties.type === "gtd-action" && properties.status === "waiting" && !properties.waiting_since) {
+              properties.waiting_since = localDate();
+            }
+          });
+          stampedWaiting += 1;
+        } catch {
+          failedWaiting += 1;
+        }
       }
     }
 
@@ -211,6 +226,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (failedProjects) new Notice(`Could not migrate ${failedProjects} waiting Project${failedProjects === 1 ? "" : "s"}.`);
     if (migratedActions) new Notice(`Migrated ${migratedActions} Someday Action${migratedActions === 1 ? "" : "s"} to Next.`);
     if (failedActions) new Notice(`Could not migrate ${failedActions} Someday Action${failedActions === 1 ? "" : "s"}.`);
+    if (stampedWaiting) new Notice(`Dated ${stampedWaiting} Waiting Action${stampedWaiting === 1 ? "" : "s"} from today.`);
+    if (failedWaiting) new Notice(`Could not date ${failedWaiting} Waiting Action${failedWaiting === 1 ? "" : "s"}.`);
     if (correctedSupportPaths) new Notice(`Nested support material for ${correctedSupportPaths} Project${correctedSupportPaths === 1 ? "" : "s"}.`);
     if (failedSupportPaths) new Notice(`Could not correct support material for ${failedSupportPaths} Project${failedSupportPaths === 1 ? "" : "s"}.`);
     const count = this.index.getSnapshot().issues.length;
