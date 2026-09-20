@@ -3,35 +3,42 @@ import { Menu, Notice } from "obsidian";
 // @ts-expect-error The generated module does not exist in a clean checkout.
 import { Elm } from "../../.generated/elm-runtime.js";
 import { actionSchedule } from "../domain/schedule";
-import type { GtdSettings } from "../domain/types";
 import type { GtdServices } from "../ui/services";
 import { ElmModal } from "./elm-modals";
 import { localDate } from "../utils/date";
+import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
 import {
   elmSnapshot,
-  type ElmHostCommand,
-  type ElmHostEvent,
-  type ElmMenuEntry,
-  parseElmCommand,
+  type ElmActionBoardCommand,
+  type ElmActionBoardEvent,
+  type ElmActionBoardMenuEntry,
+  parseActionBoardCommand,
 } from "./protocol";
 
 interface ElmApp {
   ports: {
-    toHost: { subscribe(listener: (value: unknown) => void): void };
-    fromHost: { send(value: ElmHostEvent): void };
+    toHost: ElmOutgoingPort;
+    fromHost: { send(value: ElmActionBoardEvent): void };
   };
 }
 
 export class ElmActionBoardHost {
   private readonly app: ElmApp;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribePort: () => void;
   private closed = false;
 
   constructor(node: HTMLElement, private readonly services: GtdServices) {
     const module = Elm.ActionBoard;
     if (!module) throw new Error("The Elm ActionBoard module was not compiled.");
     this.app = module.init({ node, flags: this.snapshot() }) as ElmApp;
-    this.app.ports.toHost.subscribe((value) => void this.receive(value));
+    this.unsubscribePort = subscribeElmCommands({
+      port: this.app.ports.toHost,
+      parse: parseActionBoardCommand,
+      execute: (command) => this.execute(command),
+      reply: (event) => this.reply(event),
+      failureMessage: "The GTD operation failed.",
+    });
     this.unsubscribe = services.repository.index.subscribe(() => this.sendSnapshot());
   }
 
@@ -41,6 +48,7 @@ export class ElmActionBoardHost {
 
   destroy(): void {
     this.closed = true;
+    this.unsubscribePort();
     this.unsubscribe();
   }
 
@@ -52,32 +60,11 @@ export class ElmActionBoardHost {
     if (!this.closed) this.app.ports.fromHost.send({ type: "snapshot", snapshot: this.snapshot() });
   }
 
-  private async receive(value: unknown): Promise<void> {
-    const envelope = parseElmCommand(value);
-    if (!envelope) {
-      new Notice("Dragonglass ignored an invalid Elm command.");
-      return;
-    }
-    try {
-      const result = await this.execute(envelope.command);
-      this.reply({
-        type: "command-result",
-        requestId: envelope.requestId,
-        ok: true,
-        ...(result === undefined ? {} : { value: result }),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "The GTD operation failed.";
-      this.reply({ type: "command-result", requestId: envelope.requestId, ok: false, error: message });
-      new Notice(message);
-    }
-  }
-
-  private reply(event: ElmHostEvent): void {
+  private reply(event: ElmActionBoardEvent): void {
     if (!this.closed) this.app.ports.fromHost.send(event);
   }
 
-  private async execute(command: ElmHostCommand): Promise<unknown> {
+  private async execute(command: ElmActionBoardCommand): Promise<unknown> {
     switch (command.type) {
       case "create-action":
         this.services.createAction(command.projectId);
@@ -118,9 +105,33 @@ export class ElmActionBoardHost {
         new Notice(`Deleted “${action.title}”.`);
         return;
       }
-      case "save-settings":
-        await this.services.saveSettings(command.settings as GtdSettings);
+      case "set-active-saved-view":
+        await this.services.saveSettings({
+          ...this.services.getSettings(),
+          activeSavedViewId: command.savedViewId,
+        });
         return;
+      case "upsert-saved-view": {
+        const settings = this.services.getSettings();
+        const exists = settings.savedViews.some((view) => view.id === command.view.id);
+        await this.services.saveSettings({
+          ...settings,
+          savedViews: exists
+            ? settings.savedViews.map((view) => view.id === command.view.id ? command.view : view)
+            : [...settings.savedViews, command.view],
+          activeSavedViewId: command.activate ? command.view.id : settings.activeSavedViewId,
+        });
+        return;
+      }
+      case "delete-saved-view": {
+        const settings = this.services.getSettings();
+        await this.services.saveSettings({
+          ...settings,
+          savedViews: settings.savedViews.filter((view) => view.id !== command.savedViewId),
+          activeSavedViewId: settings.activeSavedViewId === command.savedViewId ? null : settings.activeSavedViewId,
+        });
+        return;
+      }
       case "prompt":
         return new Promise<string>((resolve) => {
           new ElmModal(
@@ -132,12 +143,11 @@ export class ElmActionBoardHost {
       case "show-menu":
         this.showMenu(command.x, command.y, command.entries);
         return;
-      default:
-        throw new Error(`Unsupported Action Board command '${command.type}'.`);
     }
+    return assertNever(command);
   }
 
-  private showMenu(x: number, y: number, entries: ElmMenuEntry[]): void {
+  private showMenu(x: number, y: number, entries: ElmActionBoardMenuEntry[]): void {
     const menu = new Menu();
     for (const entry of entries) {
       if (entry.separator) {

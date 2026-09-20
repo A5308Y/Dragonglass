@@ -1,7 +1,7 @@
 port module Inbox exposing (main)
 
 import Browser
-import Gtd.Command as Command exposing (Command, Disposition(..))
+import Gtd.Command.Inbox as Command exposing (Command, Disposition(..))
 import Gtd.Data as Data exposing (InboxItem, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)

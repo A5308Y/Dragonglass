@@ -1,8 +1,8 @@
 import { isAllDaySchedule } from "../domain/schedule";
 import { ACTION_STATUSES, PROJECT_STATUSES } from "../domain/types";
-import type { Action, GtdSettings, GtdSnapshot, InboxItem, InboxProcessingInput, Project } from "../domain/types";
+import type { Action, GtdSettings, GtdSnapshot, InboxItem, InboxProcessingInput, Project, SavedView } from "../domain/types";
 
-export const ELM_PROTOCOL_VERSION = 1;
+export const ELM_PROTOCOL_VERSION = 2;
 
 export interface ElmFileDto {
   path: string;
@@ -72,7 +72,17 @@ export interface ElmSnapshotDto {
   actions: ElmActionDto[];
   projects: ElmProjectDto[];
   issues: Array<{ path: string; message: string; kind: string }>;
-  settings: GtdSettings;
+  settings: ElmSettingsDto;
+}
+
+export interface ElmSettingsDto {
+  showProjectBoardImages: boolean;
+  defaultActionStatus: Action["status"];
+  showDoneColumn: boolean;
+  projectBoardColumns: Project["status"][];
+  savedViews: SavedView[];
+  activeSavedViewId: string | null;
+  defaultDurationMinutes: number;
 }
 
 export function elmSnapshot(
@@ -95,7 +105,15 @@ export function elmSnapshot(
     })),
     projects: snapshot.projects.map((project) => ({ ...project, file: fileDto(project.file) })),
     issues: snapshot.issues.map((issue) => ({ ...issue })),
-    settings: structuredClone(settings),
+    settings: {
+      showProjectBoardImages: settings.showProjectBoardImages,
+      defaultActionStatus: settings.defaultActionStatus,
+      showDoneColumn: settings.showDoneColumn,
+      projectBoardColumns: [...settings.projectBoardColumns],
+      savedViews: structuredClone(settings.savedViews),
+      activeSavedViewId: settings.activeSavedViewId,
+      defaultDurationMinutes: settings.googleCalendar.defaultDurationMinutes,
+    },
   };
 }
 
@@ -165,7 +183,7 @@ export interface ElmImportedRow {
   done: boolean;
 }
 
-export type ElmHostCommand =
+type ElmNonMenuCommand =
   | { type: "create-action"; projectId?: string }
   | { type: "create-project"; parentProjectId?: string }
   | { type: "set-project-selection"; projectId?: string }
@@ -222,33 +240,183 @@ export type ElmHostCommand =
   | { type: "capture-inbox-item"; title: string }
   | { type: "submit-prompt"; value: string }
   | { type: "close-modal" }
-  | { type: "save-settings"; settings: GtdSettings }
-  | { type: "prompt"; title: string; placeholder: string }
-  | { type: "show-menu"; x: number; y: number; entries: ElmMenuEntry[] };
+  | { type: "set-active-saved-view"; savedViewId: string | null }
+  | { type: "upsert-saved-view"; view: SavedView; activate: boolean }
+  | { type: "delete-saved-view"; savedViewId: string }
+  | { type: "prompt"; title: string; placeholder: string };
 
 export type ElmImportKind = "actions" | "subprojects";
 
-export interface ElmMenuEntry {
+export interface ElmMenuEntry<C> {
   label?: string;
   separator?: boolean;
-  command?: Exclude<ElmHostCommand, { type: "show-menu" }>;
+  command?: C;
 }
 
-export interface ElmCommandEnvelope {
+interface ElmActionBoardMenuCommand {
+  type: "show-menu";
+  x: number;
+  y: number;
+  entries: ElmMenuEntry<Exclude<ElmActionBoardCommand, ElmActionBoardMenuCommand>>[];
+}
+
+interface ElmProjectsMenuCommand {
+  type: "show-menu";
+  x: number;
+  y: number;
+  entries: ElmMenuEntry<Exclude<ElmProjectsCommand, ElmProjectsMenuCommand>>[];
+}
+
+export type ElmActionBoardCommand = Extract<ElmNonMenuCommand,
+  | { type: "create-action" | "quick-capture" | "open-inbox" | "show-project" | "edit-action" }
+  | { type: "set-action-status" | "update-action" | "trash-action" }
+  | { type: "set-active-saved-view" | "upsert-saved-view" | "delete-saved-view" | "prompt" }
+> | ElmActionBoardMenuCommand;
+
+export type ElmProjectsCommand = Extract<ElmNonMenuCommand,
+  | { type: "create-action" | "create-project" | "set-project-selection" | "edit-action" }
+  | { type: "set-action-status" | "trash-action" | "edit-project" | "set-project-status" | "move-subproject" }
+  | { type: "trash-project" | "trash-projects" | "batch-project-tags" | "batch-project-parent" | "project-dependencies" }
+  | { type: "import-actions" | "import-subprojects" | "load-project-detail" | "set-desired-outcome" | "add-diary-entry" }
+  | { type: "create-support-note" | "create-support-folder" | "read-support-note" | "update-support-note" }
+  | { type: "save-project-preferences" | "open-file" }
+> | ElmProjectsMenuCommand;
+
+export type ElmInboxCommand = Extract<ElmNonMenuCommand,
+  { type: "quick-capture" | "open-file" | "read-inbox-body" | "trash-inbox-item" | "process-inbox" }
+>;
+
+export type ElmProjectReviewCommand = Extract<ElmNonMenuCommand,
+  | { type: "load-review-project" | "create-review-action" | "add-diary-entry" }
+  | { type: "complete-project-review" | "move-review-to-someday" | "trash-project" | "create-project" }
+  | { type: "open-file" | "edit-action" | "set-action-status" | "trash-action" }
+>;
+
+export type ElmBrainstormCommand = Extract<ElmNonMenuCommand,
+  | { type: "load-brainstorm-outcome" | "save-brainstorm" | "save-standalone-brainstorm" }
+  | { type: "shuffle-brainstorm-words" | "focus-brainstorm-ideas" | "show-project" }
+>;
+
+export type ElmModalCommand = Extract<ElmNonMenuCommand,
+  | { type: "save-new-action" | "save-action" | "schedule-action" | "convert-action-to-subproject" }
+  | { type: "save-new-project" | "save-project" | "trash-project" | "add-project-tags" }
+  | { type: "set-projects-parent" | "set-project-blockers" | "parse-import-list" }
+  | { type: "import-action-list" | "import-subproject-list" | "capture-inbox-item" | "submit-prompt" | "close-modal" }
+>;
+
+export type ElmActionBoardMenuEntry = ElmMenuEntry<Exclude<ElmActionBoardCommand, { type: "show-menu" }>>;
+export type ElmProjectsMenuEntry = ElmMenuEntry<Exclude<ElmProjectsCommand, { type: "show-menu" }>>;
+
+export interface ElmCommandEnvelope<C> {
   protocolVersion: number;
   requestId: string;
-  command: ElmHostCommand;
+  command: C;
 }
 
-export function parseElmCommand(value: unknown): ElmCommandEnvelope | null {
+type CommandValidator<C> = (value: unknown) => value is C;
+
+export const parseActionBoardCommand = parserFor<ElmActionBoardCommand>(isActionBoardCommand);
+export const parseProjectsCommand = parserFor<ElmProjectsCommand>(isProjectsCommand);
+export const parseInboxCommand = parserFor<ElmInboxCommand>(isInboxCommand);
+export const parseProjectReviewCommand = parserFor<ElmProjectReviewCommand>(isProjectReviewCommand);
+export const parseBrainstormCommand = parserFor<ElmBrainstormCommand>(isBrainstormCommand);
+export const parseModalCommand = parserFor<ElmModalCommand>(isModalCommand);
+
+function parserFor<C>(validator: CommandValidator<C>): (value: unknown) => ElmCommandEnvelope<C> | null {
+  return (value) => parseCommandEnvelope(value, validator);
+}
+
+function parseCommandEnvelope<C>(value: unknown, validator: CommandValidator<C>): ElmCommandEnvelope<C> | null {
   if (!isRecord(value)) return null;
-  const candidate = value as Partial<ElmCommandEnvelope>;
+  const candidate = value as Partial<ElmCommandEnvelope<unknown>>;
   if (candidate.protocolVersion !== ELM_PROTOCOL_VERSION || typeof candidate.requestId !== "string") return null;
-  if (!isHostCommand(candidate.command)) return null;
-  return candidate as ElmCommandEnvelope;
+  if (!validator(candidate.command)) return null;
+  return candidate as ElmCommandEnvelope<C>;
 }
 
-function isHostCommand(value: unknown): value is ElmHostCommand {
+function isActionBoardCommand(value: unknown): value is ElmActionBoardCommand {
+  return isSurfaceCommand(value, ACTION_BOARD_COMMANDS, isActionBoardMenuItemCommand);
+}
+
+function isProjectsCommand(value: unknown): value is ElmProjectsCommand {
+  return isSurfaceCommand(value, PROJECTS_COMMANDS, isProjectsMenuItemCommand);
+}
+
+function isActionBoardMenuItemCommand(value: unknown): value is Exclude<ElmActionBoardCommand, { type: "show-menu" }> {
+  return isSurfaceCommand(value, ACTION_BOARD_MENU_COMMANDS);
+}
+
+function isProjectsMenuItemCommand(value: unknown): value is Exclude<ElmProjectsCommand, { type: "show-menu" }> {
+  return isSurfaceCommand(value, PROJECTS_MENU_COMMANDS);
+}
+
+function isInboxCommand(value: unknown): value is ElmInboxCommand {
+  return isSurfaceCommand(value, INBOX_COMMANDS);
+}
+
+function isProjectReviewCommand(value: unknown): value is ElmProjectReviewCommand {
+  return isSurfaceCommand(value, PROJECT_REVIEW_COMMANDS);
+}
+
+function isBrainstormCommand(value: unknown): value is ElmBrainstormCommand {
+  return isSurfaceCommand(value, BRAINSTORM_COMMANDS);
+}
+
+function isModalCommand(value: unknown): value is ElmModalCommand {
+  return isSurfaceCommand(value, MODAL_COMMANDS);
+}
+
+const ACTION_BOARD_COMMANDS = new Set([
+  "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
+  "trash-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt", "show-menu",
+]);
+const ACTION_BOARD_MENU_COMMANDS = new Set([...ACTION_BOARD_COMMANDS].filter((type) => type !== "show-menu"));
+const PROJECTS_COMMANDS = new Set([
+  "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",
+  "edit-project", "set-project-status", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
+  "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
+  "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
+  "update-support-note", "save-project-preferences", "open-file", "show-menu",
+]);
+const PROJECTS_MENU_COMMANDS = new Set([...PROJECTS_COMMANDS].filter((type) => type !== "show-menu"));
+const INBOX_COMMANDS = new Set(["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"]);
+const PROJECT_REVIEW_COMMANDS = new Set([
+  "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
+  "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action",
+]);
+const BRAINSTORM_COMMANDS = new Set([
+  "load-brainstorm-outcome", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
+  "focus-brainstorm-ideas", "show-project",
+]);
+const MODAL_COMMANDS = new Set([
+  "save-new-action", "save-action", "schedule-action", "convert-action-to-subproject", "save-new-project", "save-project",
+  "trash-project", "add-project-tags", "set-projects-parent", "set-project-blockers", "parse-import-list",
+  "import-action-list", "import-subproject-list", "capture-inbox-item", "submit-prompt", "close-modal",
+]);
+
+function isSurfaceCommand(value: unknown, allowed: ReadonlySet<string>, nested?: CommandValidator<unknown>): boolean {
+  if (!isRecord(value) || typeof value.type !== "string" || !allowed.has(value.type)) return false;
+  if (value.type === "show-menu") return nested !== undefined && isMenuCommand(value, nested);
+  return isNonMenuCommand(value);
+}
+
+function isMenuCommand(value: Record<string, unknown>, commandValidator: CommandValidator<unknown>): boolean {
+  return typeof value.x === "number"
+    && Number.isFinite(value.x)
+    && typeof value.y === "number"
+    && Number.isFinite(value.y)
+    && Array.isArray(value.entries)
+    && value.entries.every((entry) => isMenuEntry(entry, commandValidator));
+}
+
+function isMenuEntry(value: unknown, commandValidator: CommandValidator<unknown>): boolean {
+  if (!isRecord(value)) return false;
+  if (value.separator === true) return value.label === undefined && value.command === undefined;
+  return typeof value.label === "string" && commandValidator(value.command)
+    && isRecord(value.command) && value.command.type !== "show-menu";
+}
+
+function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
   if (!isRecord(value) || typeof value.type !== "string") return false;
   switch (value.type) {
     case "create-action":
@@ -341,7 +509,7 @@ function isHostCommand(value: unknown): value is ElmHostCommand {
     case "process-inbox":
       return typeof value.itemId === "string"
         && ["next-action", "file", "someday"].includes(String(value.operation))
-        && isRecord(value.input);
+        && isInboxInput(value.input);
     case "save-new-action":
       return isNewActionInput(value.input);
     case "save-action":
@@ -374,15 +542,71 @@ function isHostCommand(value: unknown): value is ElmHostCommand {
       return typeof value.value === "string";
     case "close-modal":
       return true;
-    case "save-settings":
-      return isRecord(value.settings);
+    case "set-active-saved-view":
+      return value.savedViewId === null || typeof value.savedViewId === "string";
+    case "upsert-saved-view":
+      return isSavedView(value.view) && typeof value.activate === "boolean";
+    case "delete-saved-view":
+      return typeof value.savedViewId === "string";
     case "prompt":
       return typeof value.title === "string" && typeof value.placeholder === "string";
-    case "show-menu":
-      return typeof value.x === "number" && typeof value.y === "number" && Array.isArray(value.entries);
     default:
       return false;
   }
+}
+
+function isInboxInput(value: unknown): value is InboxProcessingInput {
+  return isRecord(value)
+    && isOptionalString(value.projectId)
+    && isOptionalString(value.projectTitle)
+    && isOptionalString(value.desiredOutcome)
+    && isOptionalString(value.nextAction)
+    && isOptionalString(value.context)
+    && isOptionalBoolean(value.work)
+    && isOptionalBoolean(value.fileOriginal);
+}
+
+function isSavedView(value: unknown): value is SavedView {
+  return isRecord(value)
+    && typeof value.id === "string"
+    && typeof value.name === "string"
+    && Array.isArray(value.filters)
+    && value.filters.every(isActionFilter)
+    && ["status", "project", "context", "energy"].includes(String(value.groupBy))
+    && isSortSpec(value.sort)
+    && (value.visibleColumns === null || isStringArray(value.visibleColumns));
+}
+
+function isActionFilter(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.kind !== "string") return false;
+  if (value.kind === "value") {
+    return ["status", "project", "context", "energy"].includes(String(value.field))
+      && (value.operator === "in" || value.operator === "notIn")
+      && isStringArray(value.values);
+  }
+  if (value.kind === "due") {
+    if (["before", "onOrBefore", "after", "onOrAfter"].includes(String(value.operator))) {
+      return typeof value.value === "string";
+    }
+    if (value.operator === "withinNextDays") return Number.isInteger(value.value) && Number(value.value) >= 0;
+    return (value.operator === "isEmpty" || value.operator === "isNotEmpty") && value.value === undefined;
+  }
+  if (value.kind === "availability") return value.operator === "available";
+  return value.kind === "work" && typeof value.value === "boolean";
+}
+
+function isSortSpec(value: unknown): boolean {
+  return isRecord(value)
+    && ["created", "due", "title", "project"].includes(String(value.field))
+    && (value.direction === "asc" || value.direction === "desc");
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalBoolean(value: unknown): boolean {
+  return value === undefined || typeof value === "boolean";
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -446,14 +670,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-export type ElmHostEvent =
-  | { type: "snapshot"; snapshot: ElmSnapshotDto }
-  | { type: "project-meta"; projectMeta: ElmProjectMetaDto[] }
-  | { type: "support-counts"; counts: Array<{ projectId: string; count: number }> }
-  | { type: "project-detail"; detail: ElmProjectDetailDto }
-  | { type: "show-project"; projectId: string | null }
-  | { type: "review-project-data"; data: ElmReviewProjectDataDto }
-  | { type: "brainstorm-outcome"; projectId: string; desiredOutcome: string }
-  | { type: "start-processing" }
+export type ElmCommandResultEvent =
   | { type: "command-result"; requestId: string; ok: true; value?: unknown }
   | { type: "command-result"; requestId: string; ok: false; error: string };
+
+export type ElmActionBoardEvent = { type: "snapshot"; snapshot: ElmSnapshotDto } | ElmCommandResultEvent;
+export type ElmProjectsEvent =
+  | { type: "snapshot"; snapshot: ElmSnapshotDto }
+  | { type: "project-meta"; projectMeta: ElmProjectMetaDto[] }
+  | { type: "project-detail"; detail: ElmProjectDetailDto }
+  | { type: "show-project"; projectId: string | null }
+  | ElmCommandResultEvent;
+export type ElmInboxEvent =
+  | { type: "snapshot"; snapshot: ElmSnapshotDto }
+  | { type: "start-processing" }
+  | ElmCommandResultEvent;
+export type ElmProjectReviewEvent =
+  | { type: "snapshot"; snapshot: ElmSnapshotDto }
+  | { type: "support-counts"; counts: Array<{ projectId: string; count: number }> }
+  | { type: "review-project-data"; data: ElmReviewProjectDataDto }
+  | ElmCommandResultEvent;
+export type ElmBrainstormEvent =
+  | { type: "snapshot"; snapshot: ElmSnapshotDto }
+  | { type: "brainstorm-outcome"; projectId: string; desiredOutcome: string }
+  | ElmCommandResultEvent;
+export type ElmModalEvent = ElmCommandResultEvent;

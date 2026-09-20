@@ -10,12 +10,13 @@ import { isVaultImage, resolveVaultImage } from "../ui/image-input";
 import { ElmModal } from "./elm-modals";
 import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
+import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
 import {
   elmSnapshot,
-  parseElmCommand,
-  type ElmHostCommand,
-  type ElmHostEvent,
-  type ElmMenuEntry,
+  parseProjectsCommand,
+  type ElmProjectsCommand,
+  type ElmProjectsEvent,
+  type ElmProjectsMenuEntry,
   type ElmProjectDetailDto,
   type ElmProjectMetaDto,
 } from "./protocol";
@@ -23,8 +24,8 @@ import { registerObsidianMarkdown } from "./obsidian-markdown";
 
 interface ElmApp {
   ports: {
-    projectsToHost: { subscribe(listener: (value: unknown) => void): void };
-    projectsFromHost: { send(value: ElmHostEvent): void };
+    projectsToHost: ElmOutgoingPort;
+    projectsFromHost: { send(value: ElmProjectsEvent): void };
   };
 }
 
@@ -38,6 +39,7 @@ interface ProjectFlags {
 export class ElmProjectsHost {
   private readonly app: ElmApp;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribePort: () => void;
   private closed = false;
 
   constructor(
@@ -50,7 +52,13 @@ export class ElmProjectsHost {
     const module = Elm.Projects;
     if (!module) throw new Error("The Elm Projects module was not compiled.");
     this.app = module.init({ node, flags: this.flags(initialProjectId) }) as ElmApp;
-    this.app.ports.projectsToHost.subscribe((value) => void this.receive(value));
+    this.unsubscribePort = subscribeElmCommands({
+      port: this.app.ports.projectsToHost,
+      parse: parseProjectsCommand,
+      execute: (command) => this.execute(command),
+      reply: (event) => this.send(event),
+      failureMessage: "The Project operation failed.",
+    });
     this.unsubscribe = services.repository.index.subscribe(() => this.sendSnapshot());
   }
 
@@ -69,6 +77,7 @@ export class ElmProjectsHost {
 
   destroy(): void {
     this.closed = true;
+    this.unsubscribePort();
     this.unsubscribe();
   }
 
@@ -119,29 +128,11 @@ export class ElmProjectsHost {
     this.send({ type: "project-meta", projectMeta: this.projectMeta() });
   }
 
-  private send(event: ElmHostEvent): void {
+  private send(event: ElmProjectsEvent): void {
     if (!this.closed) this.app.ports.projectsFromHost.send(event);
   }
 
-  private async receive(value: unknown): Promise<void> {
-    const envelope = parseElmCommand(value);
-    if (!envelope) return void new Notice("Dragonglass ignored an invalid Elm command.");
-    try {
-      const result = await this.execute(envelope.command);
-      this.send({
-        type: "command-result",
-        requestId: envelope.requestId,
-        ok: true,
-        ...(result === undefined ? {} : { value: result }),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "The Project operation failed.";
-      this.send({ type: "command-result", requestId: envelope.requestId, ok: false, error: message });
-      new Notice(message);
-    }
-  }
-
-  private async execute(command: ElmHostCommand): Promise<unknown> {
+  private async execute(command: ElmProjectsCommand): Promise<unknown> {
     switch (command.type) {
       case "create-action":
         this.services.createAction(command.projectId);
@@ -232,15 +223,11 @@ export class ElmProjectsHost {
         await this.services.openFile(file);
         return;
       }
-      case "save-settings":
-        await this.services.saveSettings(command.settings, false);
-        return;
       case "show-menu":
         this.showMenu(command.x, command.y, command.entries);
         return;
-      default:
-        throw new Error(`Unsupported Projects command '${command.type}'.`);
     }
+    return assertNever(command);
   }
 
   private project(id: string): Project {
@@ -287,7 +274,7 @@ export class ElmProjectsHost {
     };
   }
 
-  private showMenu(x: number, y: number, entries: ElmMenuEntry[]): void {
+  private showMenu(x: number, y: number, entries: ElmProjectsMenuEntry[]): void {
     const menu = new Menu();
     for (const entry of entries) {
       if (entry.separator) menu.addSeparator();

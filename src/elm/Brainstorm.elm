@@ -2,7 +2,7 @@ port module Brainstorm exposing (main)
 
 import Browser
 import Gtd.ActionStatus as ActionStatus
-import Gtd.Command as Command exposing (Command)
+import Gtd.Command.Brainstorm as Command exposing (Command)
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Host as Host exposing (RequestId, Requests)
 import Gtd.Id exposing (ActionId)

@@ -3,7 +3,7 @@ port module ProjectReview exposing (main)
 import Browser
 import Dict exposing (Dict)
 import Gtd.ActionStatus as ActionStatus
-import Gtd.Command as Command exposing (Command)
+import Gtd.Command.ProjectReview as Command exposing (Command)
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)

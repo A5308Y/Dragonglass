@@ -4,7 +4,7 @@ import Browser
 import Browser.Dom
 import Dict exposing (Dict)
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
-import Gtd.Command as Command exposing (Command, MenuEntry(..))
+import Gtd.Command.ActionBoard as Command exposing (Command, MenuEntry(..))
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
@@ -227,7 +227,7 @@ update msg model =
                     model.snapshot.settings
             in
             send IgnoreReply
-                (Command.SaveSettings { settings | activeSavedViewId = nextId })
+                (Command.SetActiveSavedView nextId)
                 { model | activeViewId = nextId, configuration = configuration }
 
         SetGroupBy groupBy ->
@@ -480,7 +480,12 @@ saveCurrentView model =
                         )
                         settings.savedViews
             in
-            send IgnoreReply (Command.SaveSettings { settings | savedViews = views }) model
+            case List.filter (\saved -> saved.id == activeId) views |> List.head of
+                Just saved ->
+                    send IgnoreReply (Command.UpsertSavedView saved False) model
+
+                Nothing ->
+                    ( model, Cmd.none )
 
 
 promptForView : Bool -> Model -> ( Model, Cmd Msg )
@@ -517,14 +522,11 @@ createSavedView name model =
         viewId =
             "view-" ++ String.fromInt model.snapshot.revision ++ "-" ++ String.fromInt model.savedViewSeed
 
-        settings =
-            model.snapshot.settings
-
         saved =
             { id = viewId, name = name, configuration = model.configuration }
     in
     send IgnoreReply
-        (Command.SaveSettings { settings | savedViews = settings.savedViews ++ [ saved ], activeSavedViewId = Just viewId })
+        (Command.UpsertSavedView saved True)
         { model | activeViewId = Just viewId, savedViewSeed = model.savedViewSeed + 1 }
 
 
@@ -540,12 +542,7 @@ deleteCurrentView model =
                     model.snapshot.settings
             in
             send IgnoreReply
-                (Command.SaveSettings
-                    { settings
-                        | savedViews = List.filter (\saved -> saved.id /= activeId) settings.savedViews
-                        , activeSavedViewId = Nothing
-                    }
-                )
+                (Command.DeleteSavedView activeId)
                 { model | activeViewId = Nothing, configuration = Settings.defaultConfiguration settings }
 
 

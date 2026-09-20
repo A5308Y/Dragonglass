@@ -7,18 +7,20 @@ import type { Project } from "../domain/types";
 import { confirmDeleteProject } from "../ui/delete-project";
 import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
-import { elmSnapshot, parseElmCommand, type ElmHostCommand, type ElmHostEvent } from "./protocol";
+import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
+import { elmSnapshot, parseProjectReviewCommand, type ElmProjectReviewCommand, type ElmProjectReviewEvent } from "./protocol";
 
 interface ElmApp {
   ports: {
-    reviewToHost: { subscribe(listener: (value: unknown) => void): void };
-    reviewFromHost: { send(value: ElmHostEvent): void };
+    reviewToHost: ElmOutgoingPort;
+    reviewFromHost: { send(value: ElmProjectReviewEvent): void };
   };
 }
 
 export class ElmProjectReviewHost {
   private readonly app: ElmApp;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribePort: () => void;
   private closed = false;
 
   constructor(node: HTMLElement, private readonly services: GtdServices) {
@@ -33,7 +35,13 @@ export class ElmProjectReviewHost {
         supportCounts: [...services.repository.supportFileCounts()].map(([projectId, count]) => ({ projectId, count })),
       },
     }) as ElmApp;
-    this.app.ports.reviewToHost.subscribe((value) => void this.receive(value));
+    this.unsubscribePort = subscribeElmCommands({
+      port: this.app.ports.reviewToHost,
+      parse: parseProjectReviewCommand,
+      execute: (command) => this.execute(command),
+      reply: (event) => this.send(event),
+      failureMessage: "The Project review operation failed.",
+    });
     this.unsubscribe = services.repository.index.subscribe(() => this.refresh());
   }
 
@@ -47,6 +55,7 @@ export class ElmProjectReviewHost {
 
   destroy(): void {
     this.closed = true;
+    this.unsubscribePort();
     this.unsubscribe();
   }
 
@@ -54,24 +63,11 @@ export class ElmProjectReviewHost {
     return elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate());
   }
 
-  private send(event: ElmHostEvent): void {
+  private send(event: ElmProjectReviewEvent): void {
     if (!this.closed) this.app.ports.reviewFromHost.send(event);
   }
 
-  private async receive(value: unknown): Promise<void> {
-    const envelope = parseElmCommand(value);
-    if (!envelope) return void new Notice("Dragonglass ignored an invalid Elm command.");
-    try {
-      const result = await this.execute(envelope.command);
-      this.send({ type: "command-result", requestId: envelope.requestId, ok: true, ...(result === undefined ? {} : { value: result }) });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "The Project review operation failed.";
-      this.send({ type: "command-result", requestId: envelope.requestId, ok: false, error: message });
-      new Notice(message);
-    }
-  }
-
-  private async execute(command: ElmHostCommand): Promise<unknown> {
+  private async execute(command: ElmProjectReviewCommand): Promise<unknown> {
     switch (command.type) {
       case "load-review-project": {
         const project = this.project(command.projectId);
@@ -133,9 +129,8 @@ export class ElmProjectReviewHost {
         await this.services.repository.trashAction(command.actionId);
         return;
       }
-      default:
-        throw new Error(`Unsupported Project Review command '${command.type}'.`);
     }
+    return assertNever(command);
   }
 
   private project(id: string): Project {

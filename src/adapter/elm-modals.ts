@@ -11,14 +11,15 @@ import { isVaultImage, resolveVaultImage } from "../ui/image-input";
 import type { GtdServices } from "../ui/services";
 import { normalizeVaultPath } from "../utils/path";
 import { localDate, parseDateOnly } from "../utils/date";
+import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
 import {
   elmSnapshot,
-  parseElmCommand,
+  parseModalCommand,
   type ElmActionChanges,
-  type ElmHostCommand,
-  type ElmHostEvent,
   type ElmImportedRow,
   type ElmNewActionInput,
+  type ElmModalCommand,
+  type ElmModalEvent,
   type ElmScheduleInput,
 } from "./protocol";
 
@@ -46,8 +47,8 @@ interface ElmModalHandlers {
 
 interface ElmApp {
   ports: {
-    modalsToHost: { subscribe(listener: (value: unknown) => void): void };
-    modalsFromHost: { send(value: ElmHostEvent): void };
+    modalsToHost: ElmOutgoingPort;
+    modalsFromHost: { send(value: ElmModalEvent): void };
   };
 }
 
@@ -60,6 +61,7 @@ interface ElmApp {
 export class ElmModal extends Modal {
   private app_: ElmApp | null = null;
   private closed = false;
+  private unsubscribePort: (() => void) | null = null;
 
   constructor(
     private readonly services: GtdServices,
@@ -70,6 +72,7 @@ export class ElmModal extends Modal {
   }
 
   onOpen(): void {
+    this.closed = false;
     this.modalEl.addClass("dg-modal-shell");
     this.contentEl.addClass("dg-modal");
     const module = Elm.Modals;
@@ -82,11 +85,20 @@ export class ElmModal extends Modal {
         form: this.form,
       },
     }) as ElmApp;
-    this.app_.ports.modalsToHost.subscribe((value) => void this.receive(value));
+    this.unsubscribePort = subscribeElmCommands({
+      port: this.app_.ports.modalsToHost,
+      parse: parseModalCommand,
+      execute: (command) => this.execute(command),
+      reply: (event) => this.send(event),
+      failureMessage: "The GTD operation failed.",
+      notifyErrors: false,
+    });
   }
 
   onClose(): void {
     this.closed = true;
+    this.unsubscribePort?.();
+    this.unsubscribePort = null;
     this.app_ = null;
     this.contentEl.empty();
   }
@@ -99,28 +111,11 @@ export class ElmModal extends Modal {
       .sort((left, right) => left.localeCompare(right));
   }
 
-  private send(event: ElmHostEvent): void {
+  private send(event: ElmModalEvent): void {
     if (!this.closed) this.app_?.ports.modalsFromHost.send(event);
   }
 
-  private async receive(value: unknown): Promise<void> {
-    const envelope = parseElmCommand(value);
-    if (!envelope) return void new Notice("Dragonglass ignored an invalid Elm command.");
-    try {
-      const result = await this.execute(envelope.command);
-      this.send({
-        type: "command-result",
-        requestId: envelope.requestId,
-        ok: true,
-        ...(result === undefined ? {} : { value: result }),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "The GTD operation failed.";
-      this.send({ type: "command-result", requestId: envelope.requestId, ok: false, error: message });
-    }
-  }
-
-  private async execute(command: ElmHostCommand): Promise<unknown> {
+  private async execute(command: ElmModalCommand): Promise<unknown> {
     switch (command.type) {
       case "close-modal":
         this.close();
@@ -211,9 +206,8 @@ export class ElmModal extends Modal {
         new Notice(`Imported ${created} Sub-project${created === 1 ? "" : "s"}.`);
         return;
       }
-      default:
-        throw new Error(`Unsupported modal command '${command.type}'.`);
     }
+    return assertNever(command);
   }
 
   private async convertToSubproject(actionId: string, title: string, parentProjectId: string): Promise<boolean> {

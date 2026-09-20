@@ -2,7 +2,6 @@ module Gtd.Settings exposing
     ( BoardConfiguration
     , DueRange(..)
     , Filter(..)
-    , GoogleCalendarSettings
     , GroupBy(..)
     , MatchOperator(..)
     , SavedView
@@ -14,8 +13,7 @@ module Gtd.Settings exposing
     , decoder
     , defaultConfiguration
     , empty
-    , encode
-    , encodeConfigurationFields
+    , encodeSavedView
     , findSavedView
     , groupByLabel
     , reverse
@@ -23,8 +21,11 @@ module Gtd.Settings exposing
     , statusColumns
     )
 
-{-| The plugin settings Elm receives with every snapshot, including the saved
-board views it writes back.
+{-| The UI-safe settings projection Elm receives with every snapshot.
+
+Filesystem paths, calendar credentials, and other host-only settings never cross
+the port boundary. Saved views are written through narrow commands rather than
+by round-tripping this whole record.
 
 Every enumerated choice a board can make — how it groups, how it sorts, and what
 each filter asks — is a union here, so a board can only ever hold a combination
@@ -128,47 +129,26 @@ type alias SavedView =
 -- SETTINGS
 
 
-type alias GoogleCalendarSettings =
-    { enabled : Bool
-    , endpointUrl : String
-    , sharedSecret : String
-    , sourceId : String
-    , defaultDurationMinutes : Int
-    }
-
-
 type alias Settings =
-    { inboxDirectory : String
-    , referenceDirectory : String
-    , projectsDirectory : String
-    , actionsDirectory : String
-    , defaultProjectImage : String
-    , showProjectBoardImages : Bool
+    { showProjectBoardImages : Bool
     , defaultActionStatus : ActionStatus
     , showDoneColumn : Bool
     , projectBoardColumns : List ProjectStatus
     , savedViews : List SavedView
     , activeSavedViewId : Maybe String
-    , googleCalendar : GoogleCalendarSettings
-    , schemaVersion : Int
+    , defaultDurationMinutes : Int
     }
 
 
 empty : Settings
 empty =
-    { inboxDirectory = ""
-    , referenceDirectory = ""
-    , projectsDirectory = ""
-    , actionsDirectory = ""
-    , defaultProjectImage = ""
-    , showProjectBoardImages = True
+    { showProjectBoardImages = True
     , defaultActionStatus = ActionStatus.Next
     , showDoneColumn = True
     , projectBoardColumns = ProjectStatus.board
     , savedViews = []
     , activeSavedViewId = Nothing
-    , googleCalendar = { enabled = False, endpointUrl = "", sharedSecret = "", sourceId = "", defaultDurationMinutes = 30 }
-    , schemaVersion = 0
+    , defaultDurationMinutes = 30
     }
 
 
@@ -252,29 +232,13 @@ sortFieldLabel field =
 decoder : Decoder Settings
 decoder =
     Decode.succeed Settings
-        |> required "inboxDirectory" Decode.string
-        |> required "referenceDirectory" Decode.string
-        |> required "projectsDirectory" Decode.string
-        |> required "actionsDirectory" Decode.string
-        |> required "defaultProjectImage" Decode.string
         |> required "showProjectBoardImages" Decode.bool
         |> required "defaultActionStatus" ActionStatus.decoder
         |> required "showDoneColumn" Decode.bool
         |> required "projectBoardColumns" (knownList ProjectStatus.decoder)
         |> required "savedViews" (knownList savedViewDecoder)
         |> required "activeSavedViewId" (Decode.maybe Decode.string)
-        |> required "googleCalendar" googleCalendarDecoder
-        |> required "schemaVersion" Decode.int
-
-
-googleCalendarDecoder : Decoder GoogleCalendarSettings
-googleCalendarDecoder =
-    Decode.map5 GoogleCalendarSettings
-        (Decode.field "enabled" Decode.bool)
-        (Decode.field "endpointUrl" Decode.string)
-        (Decode.field "sharedSecret" Decode.string)
-        (Decode.field "sourceId" Decode.string)
-        (Decode.field "defaultDurationMinutes" Decode.int)
+        |> required "defaultDurationMinutes" Decode.int
 
 
 savedViewDecoder : Decoder SavedView
@@ -514,36 +478,6 @@ optionalField name itemDecoder fallback =
 -- ENCODING
 
 
-encode : Settings -> Encode.Value
-encode settings =
-    Encode.object
-        [ ( "inboxDirectory", Encode.string settings.inboxDirectory )
-        , ( "referenceDirectory", Encode.string settings.referenceDirectory )
-        , ( "projectsDirectory", Encode.string settings.projectsDirectory )
-        , ( "actionsDirectory", Encode.string settings.actionsDirectory )
-        , ( "defaultProjectImage", Encode.string settings.defaultProjectImage )
-        , ( "showProjectBoardImages", Encode.bool settings.showProjectBoardImages )
-        , ( "defaultActionStatus", ActionStatus.encode settings.defaultActionStatus )
-        , ( "showDoneColumn", Encode.bool settings.showDoneColumn )
-        , ( "projectBoardColumns", Encode.list ProjectStatus.encode settings.projectBoardColumns )
-        , ( "savedViews", Encode.list encodeSavedView settings.savedViews )
-        , ( "activeSavedViewId", encodeMaybe Encode.string settings.activeSavedViewId )
-        , ( "googleCalendar", encodeGoogleCalendar settings.googleCalendar )
-        , ( "schemaVersion", Encode.int settings.schemaVersion )
-        ]
-
-
-encodeGoogleCalendar : GoogleCalendarSettings -> Encode.Value
-encodeGoogleCalendar settings =
-    Encode.object
-        [ ( "enabled", Encode.bool settings.enabled )
-        , ( "endpointUrl", Encode.string settings.endpointUrl )
-        , ( "sharedSecret", Encode.string settings.sharedSecret )
-        , ( "sourceId", Encode.string settings.sourceId )
-        , ( "defaultDurationMinutes", Encode.int settings.defaultDurationMinutes )
-        ]
-
-
 encodeSavedView : SavedView -> Encode.Value
 encodeSavedView saved =
     Encode.object
@@ -695,8 +629,3 @@ dueRangeFields range =
 
         DueIsNotEmpty ->
             ( "isNotEmpty", Nothing )
-
-
-encodeMaybe : (a -> Encode.Value) -> Maybe a -> Encode.Value
-encodeMaybe encoder maybeValue =
-    Maybe.map encoder maybeValue |> Maybe.withDefault Encode.null

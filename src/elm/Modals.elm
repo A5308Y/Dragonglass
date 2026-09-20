@@ -10,7 +10,7 @@ validation, and the command the form finally sends.
 
 import Browser
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
-import Gtd.Command as Command exposing (Command, ScheduleInput(..))
+import Gtd.Command.Modals as Command exposing (Command, ScheduleInput(..))
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
@@ -368,7 +368,7 @@ localStart action =
 
 defaultDuration : Snapshot -> String
 defaultDuration snapshot =
-    String.fromInt snapshot.settings.googleCalendar.defaultDurationMinutes
+    String.fromInt snapshot.settings.defaultDurationMinutes
 
 
 newProjectFields : Snapshot -> Maybe Project -> ProjectFields

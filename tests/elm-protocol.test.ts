@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
-import { ELM_PROTOCOL_VERSION, elmSnapshot, parseElmCommand } from "../src/adapter/protocol";
+import {
+  ELM_PROTOCOL_VERSION,
+  elmSnapshot,
+  parseActionBoardCommand,
+  parseBrainstormCommand,
+  parseInboxCommand,
+  parseModalCommand,
+  parseProjectReviewCommand,
+  parseProjectsCommand,
+} from "../src/adapter/protocol";
 import { defaultSettings } from "../src/state/defaults";
 import type { GtdSnapshot } from "../src/domain/types";
 
@@ -45,6 +54,7 @@ describe("Elm adapter protocol", () => {
 
   it("copies settings so Elm flags cannot mutate plugin state", () => {
     const settings = defaultSettings();
+    settings.googleCalendar.sharedSecret = "super-secret-not-for-elm";
     const snapshot: GtdSnapshot = {
       revision: 1,
       inboxItems: [],
@@ -60,6 +70,9 @@ describe("Elm adapter protocol", () => {
     encoded.settings.savedViews[0]!.name = "Changed";
 
     expect(settings.savedViews[0]?.name).not.toBe("Changed");
+    expect(encoded.settings).not.toHaveProperty("googleCalendar");
+    expect(encoded.settings).not.toHaveProperty("inboxDirectory");
+    expect(JSON.stringify(encoded)).not.toContain(settings.googleCalendar.sharedSecret);
   });
 
   it("gives Elm the local reading of a timed schedule, and none for an all-day one", () => {
@@ -85,86 +98,128 @@ describe("Elm adapter protocol", () => {
   });
 
   it("rejects malformed and mismatched command envelopes", () => {
-    expect(parseElmCommand(null)).toBeNull();
-    expect(parseElmCommand({ protocolVersion: 999, requestId: "1", command: { type: "quick-capture" } })).toBeNull();
-    expect(parseElmCommand({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "1", command: {} })).toBeNull();
-    expect(parseElmCommand({
+    expect(parseActionBoardCommand(null)).toBeNull();
+    expect(parseActionBoardCommand({ protocolVersion: 999, requestId: "1", command: { type: "quick-capture" } })).toBeNull();
+    expect(parseActionBoardCommand({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "1", command: {} })).toBeNull();
+    expect(parseInboxCommand({
       protocolVersion: ELM_PROTOCOL_VERSION,
       requestId: "1",
       command: { type: "process-inbox", itemId: "I1", operation: "unknown", input: {} },
     })).toBeNull();
-    expect(parseElmCommand({
+    expect(parseActionBoardCommand({
       protocolVersion: ELM_PROTOCOL_VERSION,
       requestId: "1",
       command: { type: "quick-capture" },
     })?.command.type).toBe("quick-capture");
+
+    // A valid command still cannot cross into a surface that does not own it.
+    expect(parseModalCommand({
+      protocolVersion: ELM_PROTOCOL_VERSION,
+      requestId: "1",
+      command: { type: "quick-capture" },
+    })).toBeNull();
   });
 
   it("validates Projects commands at the adapter boundary", () => {
     const envelope = (command: unknown) => ({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "projects-1", command });
 
-    expect(parseElmCommand(envelope({ type: "move-subproject", projectId: "P2", status: "backlog" }))?.command.type)
+    expect(parseProjectsCommand(envelope({ type: "move-subproject", projectId: "P2", status: "backlog" }))?.command.type)
       .toBe("move-subproject");
-    expect(parseElmCommand(envelope({ type: "save-project-preferences", columns: ["active", "someday"], showImages: true }))?.command.type)
+    expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: ["active", "someday"], showImages: true }))?.command.type)
       .toBe("save-project-preferences");
-    expect(parseElmCommand(envelope({ type: "move-subproject", projectId: "P2", status: "next" }))).toBeNull();
-    expect(parseElmCommand(envelope({ type: "trash-projects", projectIds: ["P1", 2] }))).toBeNull();
-    expect(parseElmCommand(envelope({ type: "save-project-preferences", columns: [], showImages: true }))).toBeNull();
+    expect(parseProjectsCommand(envelope({ type: "move-subproject", projectId: "P2", status: "next" }))).toBeNull();
+    expect(parseProjectsCommand(envelope({ type: "trash-projects", projectIds: ["P1", 2] }))).toBeNull();
+    expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: [], showImages: true }))).toBeNull();
   });
 
   it("validates modal commands at the adapter boundary", () => {
     const envelope = (command: unknown) => ({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "7", command });
     const input = { title: "Draft", status: "next", context: "computer", work: false };
 
-    expect(parseElmCommand(envelope({ type: "save-new-action", input }))?.command.type).toBe("save-new-action");
-    expect(parseElmCommand(envelope({
+    expect(parseModalCommand(envelope({ type: "save-new-action", input }))?.command.type).toBe("save-new-action");
+    expect(parseModalCommand(envelope({
       type: "save-new-action",
       input: { ...input, schedule: { kind: "timed", localStart: "2026-09-22T12:00", durationMinutes: 45 } },
     }))?.command.type).toBe("save-new-action");
-    expect(parseElmCommand(envelope({
+    expect(parseModalCommand(envelope({
       type: "save-action",
       actionId: "A1",
       changes: { ...input, projectId: "", energy: "", due: "", deferUntil: "" },
     }))?.command.type).toBe("save-action");
-    expect(parseElmCommand(envelope({
+    expect(parseModalCommand(envelope({
       type: "save-project",
       projectId: "P1",
       changes: { title: "Roof", status: "someday", activateAt: "2026-10-01", area: "", image: "", tags: [], reviewed: "", parentProjectId: "" },
     }))?.command.type).toBe("save-project");
-    expect(parseElmCommand(envelope({ type: "parse-import-list", kind: "subprojects", text: "- [ ] One" }))?.command.type)
+    expect(parseModalCommand(envelope({ type: "parse-import-list", kind: "subprojects", text: "- [ ] One" }))?.command.type)
       .toBe("parse-import-list");
-    expect(parseElmCommand(envelope({ type: "close-modal" }))?.command.type).toBe("close-modal");
+    expect(parseModalCommand(envelope({ type: "close-modal" }))?.command.type).toBe("close-modal");
 
     // A schedule with no duration, an unknown status, and a half-built Project edit are all refused.
-    expect(parseElmCommand(envelope({
+    expect(parseModalCommand(envelope({
       type: "save-new-action",
       input: { ...input, schedule: { kind: "timed", localStart: "2026-09-22T12:00" } },
     }))).toBeNull();
-    expect(parseElmCommand(envelope({ type: "save-new-action", input: { ...input, status: "inbox" } }))).toBeNull();
-    expect(parseElmCommand(envelope({ type: "save-action", actionId: "A1", changes: input }))).toBeNull();
-    expect(parseElmCommand(envelope({ type: "parse-import-list", kind: "notes", text: "" }))).toBeNull();
-    expect(parseElmCommand(envelope({ type: "add-project-tags", projectIds: ["P1"], tags: [3] }))).toBeNull();
+    expect(parseModalCommand(envelope({ type: "save-new-action", input: { ...input, status: "inbox" } }))).toBeNull();
+    expect(parseModalCommand(envelope({ type: "save-action", actionId: "A1", changes: input }))).toBeNull();
+    expect(parseModalCommand(envelope({ type: "parse-import-list", kind: "notes", text: "" }))).toBeNull();
+    expect(parseModalCommand(envelope({ type: "add-project-tags", projectIds: ["P1"], tags: [3] }))).toBeNull();
   });
 
   it("validates Review and Brainstorm commands at the adapter boundary", () => {
     const envelope = (command: unknown) => ({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "workflow-1", command });
 
-    expect(parseElmCommand(envelope({
+    expect(parseProjectReviewCommand(envelope({
       type: "complete-project-review",
       projectId: "P1",
       desiredOutcome: "Done looks like this",
       activeProjectIds: ["P1", "P2"],
     }))?.command.type).toBe("complete-project-review");
-    expect(parseElmCommand(envelope({
+    expect(parseBrainstormCommand(envelope({
       type: "save-brainstorm",
       actionId: "A1",
       ideas: "An idea",
       desiredOutcome: "A better outcome",
     }))?.command.type).toBe("save-brainstorm");
-    expect(parseElmCommand(envelope({ type: "focus-brainstorm-ideas", start: 3, end: 3 }))?.command.type)
+    expect(parseBrainstormCommand(envelope({ type: "focus-brainstorm-ideas", start: 3, end: 3 }))?.command.type)
       .toBe("focus-brainstorm-ideas");
-    expect(parseElmCommand(envelope({ type: "complete-project-review", projectId: "P1", desiredOutcome: "", activeProjectIds: [4] }))).toBeNull();
-    expect(parseElmCommand(envelope({ type: "focus-brainstorm-ideas", start: 1.5, end: 2 }))).toBeNull();
-    expect(parseElmCommand(envelope({ type: "focus-brainstorm-ideas", start: 4, end: 2 }))).toBeNull();
+    expect(parseProjectReviewCommand(envelope({ type: "complete-project-review", projectId: "P1", desiredOutcome: "", activeProjectIds: [4] }))).toBeNull();
+    expect(parseBrainstormCommand(envelope({ type: "focus-brainstorm-ideas", start: 1.5, end: 2 }))).toBeNull();
+    expect(parseBrainstormCommand(envelope({ type: "focus-brainstorm-ideas", start: 4, end: 2 }))).toBeNull();
+  });
+
+  it("validates nested Inbox, settings, and menu payloads", () => {
+    const envelope = (command: unknown) => ({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "nested-1", command });
+    const view = defaultSettings().savedViews[0]!;
+
+    expect(parseInboxCommand(envelope({
+      type: "process-inbox",
+      itemId: "I1",
+      operation: "next-action",
+      input: { nextAction: "Call", context: "phone", work: false, fileOriginal: true },
+    }))?.command.type).toBe("process-inbox");
+    expect(parseInboxCommand(envelope({
+      type: "process-inbox",
+      itemId: "I1",
+      operation: "next-action",
+      input: { work: "false" },
+    }))).toBeNull();
+
+    expect(parseActionBoardCommand(envelope({ type: "upsert-saved-view", view, activate: true }))?.command.type)
+      .toBe("upsert-saved-view");
+    expect(parseActionBoardCommand(envelope({ type: "upsert-saved-view", view: { ...view, sort: {} }, activate: true })))
+      .toBeNull();
+    expect(parseActionBoardCommand(envelope({
+      type: "show-menu",
+      x: 10,
+      y: 20,
+      entries: [{ label: "Delete", command: { type: "trash-action", actionId: "A1" } }, { separator: true }],
+    }))?.command.type).toBe("show-menu");
+    expect(parseActionBoardCommand(envelope({
+      type: "show-menu",
+      x: 10,
+      y: 20,
+      entries: [{ label: "Wrong surface", command: { type: "trash-project", projectId: "P1" } }],
+    }))).toBeNull();
   });
 });

@@ -13,18 +13,19 @@ module Gtd.Command exposing
     , noInboxInput
     )
 
-{-| Every request Elm can make of the Obsidian host.
+{-| Internal wire representation shared by the surface-specific command modules.
 
-One union for the whole protocol means a view builds a command by naming it,
-not by spelling a JSON object, and the compiler refuses a command that is
-missing an argument the host requires.
+Entry points import `Gtd.Command.ActionBoard`, `Gtd.Command.Projects`, and the
+other capability modules instead. Those smaller unions prevent one surface from
+constructing a command owned by another while this module keeps JSON encoding in
+one place.
 
 -}
 
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
 import Gtd.Id exposing (ActionId, InboxItemId, ProjectId)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
-import Gtd.Settings as Settings exposing (Settings)
+import Gtd.Settings as Settings exposing (SavedView)
 import Json.Encode as Encode
 
 
@@ -98,7 +99,9 @@ type Command
       -- Modal plumbing
     | SubmitPrompt String
     | CloseModal
-    | SaveSettings Settings
+    | SetActiveSavedView (Maybe String)
+    | UpsertSavedView SavedView Bool
+    | DeleteSavedView String
 
 
 type MenuEntry
@@ -496,8 +499,16 @@ encode command =
         CloseModal ->
             object "close-modal" []
 
-        SaveSettings settings ->
-            object "save-settings" [ ( "settings", Settings.encode settings ) ]
+        SetActiveSavedView maybeId ->
+            object "set-active-saved-view"
+                [ ( "savedViewId", Maybe.map Encode.string maybeId |> Maybe.withDefault Encode.null ) ]
+
+        UpsertSavedView saved activate ->
+            object "upsert-saved-view"
+                [ ( "view", Settings.encodeSavedView saved ), ( "activate", Encode.bool activate ) ]
+
+        DeleteSavedView savedId ->
+            object "delete-saved-view" [ ( "savedViewId", Encode.string savedId ) ]
 
 
 encodeMenuEntry : MenuEntry -> Encode.Value

@@ -27,7 +27,7 @@ import Json.Encode as Encode
 
 protocolVersion : Int
 protocolVersion =
-    1
+    2
 
 
 type RequestId

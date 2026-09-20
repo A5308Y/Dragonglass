@@ -5,18 +5,20 @@ import { Elm } from "../../.generated/elm-runtime.js";
 import type { InboxItem } from "../domain/types";
 import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
-import { elmSnapshot, parseElmCommand, type ElmHostCommand, type ElmHostEvent } from "./protocol";
+import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
+import { elmSnapshot, parseInboxCommand, type ElmInboxCommand, type ElmInboxEvent } from "./protocol";
 
 interface ElmApp {
   ports: {
-    inboxToHost: { subscribe(listener: (value: unknown) => void): void };
-    inboxFromHost: { send(value: ElmHostEvent): void };
+    inboxToHost: ElmOutgoingPort;
+    inboxFromHost: { send(value: ElmInboxEvent): void };
   };
 }
 
 export class ElmInboxHost {
   private readonly app: ElmApp;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribePort: () => void;
   private closed = false;
 
   constructor(node: HTMLElement, private readonly services: GtdServices, initialProcessing: boolean) {
@@ -26,7 +28,13 @@ export class ElmInboxHost {
       node,
       flags: { snapshot: this.snapshot(), initialProcessing },
     }) as ElmApp;
-    this.app.ports.inboxToHost.subscribe((value) => void this.receive(value));
+    this.unsubscribePort = subscribeElmCommands({
+      port: this.app.ports.inboxToHost,
+      parse: parseInboxCommand,
+      execute: (command) => this.execute(command),
+      reply: (event) => this.send(event),
+      failureMessage: "The Inbox operation failed.",
+    });
     this.unsubscribe = services.repository.index.subscribe(() => this.send({ type: "snapshot", snapshot: this.snapshot() }));
   }
 
@@ -37,6 +45,7 @@ export class ElmInboxHost {
 
   destroy(): void {
     this.closed = true;
+    this.unsubscribePort();
     this.unsubscribe();
   }
 
@@ -49,29 +58,11 @@ export class ElmInboxHost {
     );
   }
 
-  private send(event: ElmHostEvent): void {
+  private send(event: ElmInboxEvent): void {
     if (!this.closed) this.app.ports.inboxFromHost.send(event);
   }
 
-  private async receive(value: unknown): Promise<void> {
-    const envelope = parseElmCommand(value);
-    if (!envelope) return void new Notice("Dragonglass ignored an invalid Elm command.");
-    try {
-      const result = await this.execute(envelope.command);
-      this.send({
-        type: "command-result",
-        requestId: envelope.requestId,
-        ok: true,
-        ...(result === undefined ? {} : { value: result }),
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "The Inbox operation failed.";
-      this.send({ type: "command-result", requestId: envelope.requestId, ok: false, error: message });
-      new Notice(message);
-    }
-  }
-
-  private async execute(command: ElmHostCommand): Promise<unknown> {
+  private async execute(command: ElmInboxCommand): Promise<unknown> {
     switch (command.type) {
       case "quick-capture":
         this.services.quickCapture();
@@ -102,9 +93,8 @@ export class ElmInboxHost {
             : "Next Action created.");
         return;
       }
-      default:
-        throw new Error(`Unsupported Inbox command '${command.type}'.`);
     }
+    return assertNever(command);
   }
 
   private item(id: string): InboxItem {

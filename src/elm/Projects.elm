@@ -3,7 +3,7 @@ port module Projects exposing (main)
 import Browser
 import Dict exposing (Dict)
 import Gtd.ActionStatus as ActionStatus
-import Gtd.Command as Command exposing (Command, MenuEntry(..))
+import Gtd.Command.Projects as Command exposing (Command, MenuEntry(..))
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)

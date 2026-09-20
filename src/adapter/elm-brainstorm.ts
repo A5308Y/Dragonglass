@@ -4,7 +4,8 @@ import { Notice } from "obsidian";
 import { Elm } from "../../.generated/elm-runtime.js";
 import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
-import { elmSnapshot, parseElmCommand, type ElmHostCommand, type ElmHostEvent } from "./protocol";
+import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
+import { elmSnapshot, parseBrainstormCommand, type ElmBrainstormCommand, type ElmBrainstormEvent } from "./protocol";
 
 const WORDS = [
   "alignment", "ambiguity", "attention", "boundary", "breakthrough", "calm", "challenge", "clarity", "coherence", "constraint",
@@ -21,14 +22,15 @@ const WORDS = [
 
 interface ElmApp {
   ports: {
-    brainstormToHost: { subscribe(listener: (value: unknown) => void): void };
-    brainstormFromHost: { send(value: ElmHostEvent): void };
+    brainstormToHost: ElmOutgoingPort;
+    brainstormFromHost: { send(value: ElmBrainstormEvent): void };
   };
 }
 
 export class ElmBrainstormHost {
   private readonly app: ElmApp;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribePort: () => void;
   private closed = false;
 
   constructor(private readonly node: HTMLElement, private readonly services: GtdServices) {
@@ -42,7 +44,13 @@ export class ElmBrainstormHost {
         randomIndex: Math.floor(Math.random() * 1_000_000),
       },
     }) as ElmApp;
-    this.app.ports.brainstormToHost.subscribe((value) => void this.receive(value));
+    this.unsubscribePort = subscribeElmCommands({
+      port: this.app.ports.brainstormToHost,
+      parse: parseBrainstormCommand,
+      execute: (command) => this.execute(command),
+      reply: (event) => this.send(event),
+      failureMessage: "Could not save the brainstorm.",
+    });
     this.unsubscribe = services.repository.index.subscribe(() => this.refresh());
   }
 
@@ -52,6 +60,7 @@ export class ElmBrainstormHost {
 
   destroy(): void {
     this.closed = true;
+    this.unsubscribePort();
     this.unsubscribe();
   }
 
@@ -59,24 +68,11 @@ export class ElmBrainstormHost {
     return elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate());
   }
 
-  private send(event: ElmHostEvent): void {
+  private send(event: ElmBrainstormEvent): void {
     if (!this.closed) this.app.ports.brainstormFromHost.send(event);
   }
 
-  private async receive(value: unknown): Promise<void> {
-    const envelope = parseElmCommand(value);
-    if (!envelope) return void new Notice("Dragonglass ignored an invalid Elm command.");
-    try {
-      const result = await this.execute(envelope.command);
-      this.send({ type: "command-result", requestId: envelope.requestId, ok: true, ...(result === undefined ? {} : { value: result }) });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not save the brainstorm.";
-      this.send({ type: "command-result", requestId: envelope.requestId, ok: false, error: message });
-      new Notice(message);
-    }
-  }
-
-  private async execute(command: ElmHostCommand): Promise<unknown> {
+  private async execute(command: ElmBrainstormCommand): Promise<unknown> {
     switch (command.type) {
       case "load-brainstorm-outcome": {
         const project = this.services.repository.index.getSnapshot().projectsById.get(command.projectId);
@@ -108,9 +104,8 @@ export class ElmBrainstormHost {
       case "show-project":
         this.services.showProjectDetail(command.projectId);
         return;
-      default:
-        throw new Error(`Unsupported Brainstorm command '${command.type}'.`);
     }
+    return assertNever(command);
   }
 }
 
