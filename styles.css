@@ -983,6 +983,13 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   line-height: var(--line-height-normal);
 }
 .dg-inbox-preview.is-empty { color: var(--text-muted); font-style: italic; }
+.dg-inbox-audio {
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--background-modifier-border);
+  box-sizing: content-box;
+}
 
 .dg-processing-form {
   margin-top: 12px;

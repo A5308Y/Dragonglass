@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { InboxItem, InboxProcessingInput, Project } from "../domain/types";
 import { inboxProcessingPrefill } from "../domain/inbox-processing";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
+import { isVaultAudio } from "../ui/audio";
 import { FuzzyField } from "../ui/fuzzy-field";
 import { useGtdSnapshot } from "../ui/hooks";
 import type { GtdServices } from "../ui/services";
@@ -225,9 +226,12 @@ function InboxProcessor({
             <h3>{item.title}</h3>
             <span>{item.created}{item.legacyAction ? " · Legacy Inbox Action" : ""}</span>
           </div>
-          <button onClick={() => void services.openFile(item.file)}>Open note</button>
+          <button onClick={() => void services.openFile(item.file)}>{item.file.extension === "md" ? "Open note" : "Open file"}</button>
         </div>
-        <div class={`dg-inbox-preview${body ? "" : " is-empty"}`}>{body || "No additional notes."}</div>
+        {isVaultAudio(item.file)
+          // A voice capture is the note, so play it here instead of telling the reader to open the file.
+          ? <InboxAudio src={services.app.vault.getResourcePath(item.file)} />
+          : <div class={`dg-inbox-preview${body ? "" : " is-empty"}`}>{body || "No additional notes."}</div>}
       </section>
 
       <section class="dg-processing-form" aria-label="Clarify Inbox Item">
@@ -284,6 +288,16 @@ function InboxProcessor({
       {seconds === 0 && <div class="dg-warning">Two minutes elapsed. Make the smallest clear decision and keep moving.</div>}
     </div>
   );
+}
+
+function InboxAudio({ src }: { src: string }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  // Dropping the element does not reliably stop playback, so pause before moving to the next Item.
+  useEffect(() => {
+    const element = ref.current;
+    return () => element?.pause();
+  }, [src]);
+  return <audio ref={ref} class="dg-inbox-audio" controls preload="metadata" src={src} />;
 }
 
 function ProcessingField({ label, hint, wide = false, children }: { label: string; hint: string; wide?: boolean; children: ComponentChildren }) {
