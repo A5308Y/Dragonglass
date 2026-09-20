@@ -245,6 +245,10 @@ function InboxProcessor({
         </label>
       </section>
 
+      <section class="dg-processor-action">
+        <button class="mod-warning" disabled={busy} onClick={() => void run(() => services.repository.trashInboxItem(item), "Inbox Item deleted.")}>Delete &amp; Next</button>
+      </section>
+
       <section class="dg-processing-form" aria-label="Clarify Inbox Item">
         <div class="dg-processing-grid">
           <ProcessingField label="Project" wide hint={projectQuery.trim() && !selectedProject ? `A new ${someday ? "Someday/Maybe" : "Active"} Project will be created when needed.` : "Optional. Select an existing Project or type a new name."}>
@@ -294,7 +298,7 @@ function InboxProcessor({
         </div>
       </section>
 
-      <section class="dg-processor-actions">
+      <section class="dg-processor-action">
         <button
           class="mod-cta"
           title={primary.label}
@@ -304,7 +308,6 @@ function InboxProcessor({
             processedMessage(primary.operation, projectName),
           )}
         >{primary.label}</button>
-        <button class="mod-warning" disabled={busy} onClick={() => void run(() => services.repository.trashInboxItem(item), "Inbox Item deleted.")}>Delete</button>
       </section>
 
       {seconds === 0 && <div class="dg-warning">Two minutes elapsed. Make the smallest clear decision and keep moving.</div>}

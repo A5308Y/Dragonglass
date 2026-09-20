@@ -1160,13 +1160,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 .dg-fuzzy-results button > small { flex: 0 0 auto; color: var(--text-muted); }
 
-.dg-processor-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 8px;
+.dg-processor-action {
   margin-top: 12px;
 }
-.dg-processor-actions button {
+.dg-processor-action button {
+  width: 100%;
   min-width: 0;
   min-height: 44px;
   overflow: hidden;
@@ -1617,8 +1615,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-inbox-row-actions button { flex: 1; min-height: 40px; }
   .dg-processing-grid { grid-template-columns: 1fr; }
   .dg-processing-field.is-wide { grid-column: auto; }
-  .dg-processor-actions { grid-template-columns: 1fr; }
-  .dg-processor-actions button { min-height: 42px; white-space: normal; }
+  .dg-processor-action button { min-height: 42px; white-space: normal; }
   .dg-row-actions { grid-column: 1; grid-row: auto; }
   .dg-action-row { grid-template-columns: auto minmax(0, 1fr) auto; }
   .dg-project-detail-content { padding: 8px; gap: 8px; }
