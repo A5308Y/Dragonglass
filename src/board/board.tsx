@@ -13,6 +13,7 @@ import {
 import { projectBreadcrumb } from "../domain/project-hierarchy";
 import { buildBoard, type ActionGroup } from "../state/query";
 import { isOverdue, localDate } from "../utils/date";
+import { actionSchedule } from "../domain/schedule";
 import { useGtdSnapshot } from "../ui/hooks";
 import { TextPromptModal, label } from "../ui/modals";
 import type { GtdServices } from "../ui/services";
@@ -116,7 +117,7 @@ export function ActionBoard({ services }: { services: GtdServices }) {
     const action = snapshot.actionsById.get(id);
     const previous = action?.status;
     if (!previous || previous === status) return;
-    if (status === "scheduled" && (!action.scheduledStart || !action.durationMinutes)) {
+    if (status === "scheduled" && !actionSchedule(action.scheduledStart, action.durationMinutes)) {
       services.scheduleAction(id);
       return;
     }
@@ -233,6 +234,7 @@ function BoardColumn({ group, services, groupBy, onMove }: { key?: string; group
 function ActionCard({ action, services, onMove }: { key?: string; action: Action; services: GtdServices; onMove: (id: string, status: ActionStatus) => Promise<void> }) {
   const snapshot = services.repository.index.getSnapshot();
   const project = action.projectId ? snapshot.projectsById.get(action.projectId) : undefined;
+  const schedule = actionSchedule(action.scheduledStart, action.durationMinutes);
   const deleteAction = async () => {
     if (!window.confirm(`Delete “${action.title}”?\n\nThis moves the Action file to Obsidian's trash.`)) return;
     try {
@@ -295,8 +297,9 @@ function ActionCard({ action, services, onMove }: { key?: string; action: Action
         {action.energy && <span>{action.energy}</span>}
         {action.due && <span class={isOverdue(action.due) && action.status !== "done" ? "is-overdue" : ""}>{action.due}</span>}
         {action.status === "waiting" && <span>Waiting since {action.waitingSince ?? "—"}</span>}
-        {action.scheduledStart && <span>{new Date(action.scheduledStart).toLocaleString()}{action.durationMinutes ? ` · ${action.durationMinutes} min` : ""}</span>}
-        {action.status === "scheduled" && (!action.scheduledStart || !action.durationMinutes) && <span class="is-overdue">Missing schedule</span>}
+        {schedule?.kind === "all-day" && <span>{schedule.date} · all day</span>}
+        {schedule?.kind === "timed" && <span>{new Date(schedule.start).toLocaleString()} · {schedule.durationMinutes} min</span>}
+        {action.status === "scheduled" && !schedule && <span class="is-overdue">Missing schedule</span>}
       </div>
     </article>
   );

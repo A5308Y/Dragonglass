@@ -1,4 +1,5 @@
-const BRIDGE_VERSION = 1;
+const BRIDGE_VERSION = 2;
+const MAX_REMINDER_MINUTES = 40320;
 
 function doPost(event) {
   const lock = LockService.getScriptLock();
@@ -87,21 +88,27 @@ function listManagedEvents(calendarId, source) {
 }
 
 function eventResource(input, source) {
+  const allDay = input.allDay === true;
+  const reminderMinutes = typeof input.reminderMinutes === "number" ? input.reminderMinutes : 60;
   const fingerprint = sha256Hex(JSON.stringify({
     summary: input.summary,
     description: input.description,
     start: input.start,
     end: input.end,
+    allDay: allDay,
+    reminderMinutes: reminderMinutes,
   }));
   return {
     id: "dg" + sha256Hex("dragonglass-event:" + source + ":" + input.actionId).slice(0, 50),
     status: "confirmed",
     summary: input.summary,
     description: input.description,
-    start: { dateTime: input.start },
-    end: { dateTime: input.end },
+    // An all-day event carries plain dates; Google reads its end date as exclusive.
+    start: allDay ? { date: input.start } : { dateTime: input.start },
+    end: allDay ? { date: input.end } : { dateTime: input.end },
     transparency: "opaque",
-    reminders: { useDefault: true },
+    // For an all-day event Google measures the alarm from midnight on the start date.
+    reminders: { useDefault: false, overrides: [{ method: "popup", minutes: reminderMinutes }] },
     extendedProperties: {
       private: {
         dragonglassSource: source,
@@ -114,20 +121,42 @@ function eventResource(input, source) {
 
 function eventMatches(current, desired) {
   const properties = current.extendedProperties && current.extendedProperties.private;
+  const key = desired.start.date ? "date" : "dateTime";
   return current.status !== "cancelled"
     && current.summary === desired.summary
     && current.description === desired.description
-    && current.start && current.start.dateTime === desired.start.dateTime
-    && current.end && current.end.dateTime === desired.end.dateTime
+    && current.start && current.start[key] === desired.start[key]
+    && current.end && current.end[key] === desired.end[key]
     && current.transparency === desired.transparency
-    && current.reminders && current.reminders.useDefault === true
+    && remindersMatch(current.reminders, desired.reminders)
     && properties && properties.dragonglassFingerprint === desired.extendedProperties.private.dragonglassFingerprint;
+}
+
+function remindersMatch(current, desired) {
+  if (!current || current.useDefault === true) return false;
+  const currentOverrides = current.overrides || [];
+  const desiredOverrides = desired.overrides || [];
+  if (currentOverrides.length !== desiredOverrides.length) return false;
+  return desiredOverrides.every(function (override, index) {
+    return currentOverrides[index].method === override.method && currentOverrides[index].minutes === override.minutes;
+  });
 }
 
 function validateEvent(input) {
   if (!input || typeof input.actionId !== "string" || !input.actionId) throw new Error("An event has no Action ID.");
   if (typeof input.summary !== "string" || !input.summary) throw new Error("An event has no title.");
   if (typeof input.description !== "string") throw new Error("An event description is invalid.");
+  if (input.reminderMinutes !== undefined
+    && (typeof input.reminderMinutes !== "number" || input.reminderMinutes < 0 || input.reminderMinutes > MAX_REMINDER_MINUTES)) {
+    throw new Error("An event has an invalid reminder.");
+  }
+  if (input.allDay === true) {
+    const isDate = /^\d{4}-\d{2}-\d{2}$/;
+    if (!isDate.test(input.start) || !isDate.test(input.end) || input.end <= input.start) {
+      throw new Error("An all-day event has an invalid date range.");
+    }
+    return;
+  }
   const start = new Date(input.start);
   const end = new Date(input.end);
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) throw new Error("An event has an invalid time range.");

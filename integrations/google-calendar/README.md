@@ -12,4 +12,6 @@ This bridge mirrors Dragonglass Scheduled Actions into one dedicated Google Cale
 
 After changing `Code.gs` or `appsscript.json`, update the web-app deployment through **Deploy → Manage deployments → Edit → New version**. Saving the source alone does not update an existing `/exec` deployment.
 
+The bridge and the plugin agree on a payload version. When the plugin is newer than the deployed script, every sync fails with `Unsupported bridge version.` — redeploy `Code.gs` from this directory to clear it. Version 2 added all-day events and an alarm on every managed event.
+
 Keep the deployment URL and secret private. Anyone who has both can alter Dragonglass-managed events in the configured calendar. Workspace administrators can disable public Apps Script web apps; in that case this bridge cannot be used without an administrator-approved deployment.

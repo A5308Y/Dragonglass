@@ -4,6 +4,9 @@ import type { GoogleCalendarSettings } from "../domain/types";
 import type { GtdIndex } from "../repository/gtd-index";
 import { buildCalendarSyncEvents } from "./events";
 
+/** Bumped whenever the bridge payload changes, so an un-redeployed Apps Script says so plainly. */
+const BRIDGE_VERSION = 2;
+
 export interface CalendarSyncResult {
   created: number;
   updated: number;
@@ -79,7 +82,7 @@ export class GoogleCalendarSync {
 
   async testConnection(): Promise<CalendarSyncResult> {
     const settings = this.requireConfiguration(false);
-    return this.callBridge(settings, { version: 1, operation: "test", secret: settings.sharedSecret, sourceId: settings.sourceId });
+    return this.callBridge(settings, { version: BRIDGE_VERSION, operation: "test", secret: settings.sharedSecret, sourceId: settings.sourceId });
   }
 
   async syncNow(): Promise<CalendarSyncResult> {
@@ -99,7 +102,7 @@ export class GoogleCalendarSync {
     this.setStatus({ ...previousStatus, state: "syncing" });
     const events = buildCalendarSyncEvents(this.index.getSnapshot(), this.app.vault.getName());
     const run = this.callBridge(settings, {
-      version: 1,
+      version: BRIDGE_VERSION,
       operation: "reconcile",
       secret: settings.sharedSecret,
       sourceId: settings.sourceId,

@@ -9,6 +9,7 @@ import {
 } from "./types";
 import type { TFile } from "obsidian";
 import { normalizeProjectTags } from "./project-board";
+import { isAllDaySchedule } from "./schedule";
 
 type Frontmatter = Record<string, unknown>;
 
@@ -46,6 +47,11 @@ function optionalNumber(frontmatter: Frontmatter, key: string): number | undefin
 function dateOnly(value: string, key: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00`).getTime())) throw new Error(`Invalid '${key}' date`);
   return value;
+}
+
+/** A `scheduled_start` is either a plain date, meaning all day, or an absolute timestamp. */
+export function normalizeScheduledStart(value: string, key = "scheduled_start"): string {
+  return isAllDaySchedule(value) ? dateOnly(value, key) : normalizeTimestamp(value, key);
 }
 
 export function normalizeTimestamp(value: string, key: string): string {
@@ -90,9 +96,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (due) action.due = dateOnly(due, "due");
   if (deferUntil) action.deferUntil = dateOnly(deferUntil, "defer_until");
   if (waitingSince) action.waitingSince = dateOnly(waitingSince, "waiting_since");
-  if (scheduledStart) {
-    action.scheduledStart = normalizeTimestamp(scheduledStart, "scheduled_start");
-  }
+  if (scheduledStart) action.scheduledStart = normalizeScheduledStart(scheduledStart);
   if (durationMinutes !== undefined) {
     if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) throw new Error("Invalid 'duration_minutes'");
     action.durationMinutes = durationMinutes;

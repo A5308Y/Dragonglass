@@ -20,7 +20,8 @@ import type {
 import { normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { waitingSinceFor } from "../domain/action-status";
 import { projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
-import { normalizeTimestamp } from "../domain/validation";
+import { normalizeScheduledStart } from "../domain/validation";
+import { isAllDaySchedule } from "../domain/schedule";
 import { localDate } from "../utils/date";
 import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
 import { baseName, generatedFolderNames, normalizeVaultPath, parentPath, safeName } from "../utils/path";
@@ -115,7 +116,7 @@ export class GtdRepository {
         frontmatter.defer_until = input.deferUntil || null;
         frontmatter.waiting_since = waitingSinceFor(input.status, undefined, input.waitingSince);
         frontmatter.scheduled_start = input.scheduledStart || null;
-        frontmatter.duration_minutes = input.durationMinutes ?? null;
+        frontmatter.duration_minutes = scheduledDuration(input);
         frontmatter.work = input.work ?? false;
         frontmatter.captured = item.created;
         frontmatter.created = localDate();
@@ -366,6 +367,9 @@ export class GtdRepository {
         if (changes.deferUntil !== undefined) frontmatter.defer_until = changes.deferUntil || null;
         if (changes.scheduledStart !== undefined) frontmatter.scheduled_start = changes.scheduledStart || null;
         if (changes.durationMinutes !== undefined) frontmatter.duration_minutes = changes.durationMinutes;
+        // An all-day schedule has no length, so a duration from an earlier time of day must not survive.
+        const resolvedStart = changes.scheduledStart ?? action.scheduledStart;
+        if (resolvedStart && isAllDaySchedule(resolvedStart)) frontmatter.duration_minutes = null;
         if (changes.work !== undefined) frontmatter.work = changes.work;
       });
       if (changes.title && changes.title.trim() !== oldTitle) {
@@ -549,7 +553,7 @@ export class GtdRepository {
       defer_until: input.deferUntil || null,
       waiting_since: waitingSinceFor(status, undefined, input.waitingSince),
       scheduled_start: input.scheduledStart || null,
-      duration_minutes: input.durationMinutes ?? null,
+      duration_minutes: scheduledDuration(input),
       work: input.work ?? false,
       captured,
       created: localDate(),
@@ -966,13 +970,21 @@ function requiredProcessingValue(value: string | undefined, message: string): st
 }
 
 function validateActionSchedule(status: Action["status"], scheduledStart?: string, durationMinutes?: number): void {
-  if (scheduledStart) normalizeTimestamp(scheduledStart, "scheduled_start");
+  if (scheduledStart) normalizeScheduledStart(scheduledStart);
   if (durationMinutes !== undefined && (!Number.isInteger(durationMinutes) || durationMinutes <= 0)) {
     throw new Error("Duration must be a positive whole number of minutes.");
   }
-  if (status === "scheduled" && (!scheduledStart || durationMinutes === undefined)) {
-    throw new Error("Scheduled Actions require a start time and duration.");
+  if (status !== "scheduled") return;
+  if (!scheduledStart) throw new Error("Scheduled Actions require a start date.");
+  // An all-day Action has no time of day, so it has no length to ask for either.
+  if (!isAllDaySchedule(scheduledStart) && durationMinutes === undefined) {
+    throw new Error("Scheduled Actions with a time of day require a duration.");
   }
+}
+
+function scheduledDuration(input: ActionInput): number | null {
+  if (input.scheduledStart && isAllDaySchedule(input.scheduledStart)) return null;
+  return input.durationMinutes ?? null;
 }
 
 function actionInput(title: string, context: string, project?: Project, work = false): ActionInput {

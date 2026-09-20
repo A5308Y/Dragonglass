@@ -126,7 +126,11 @@ Marking an Action done writes `status: done` and an ISO completion timestamp. Re
 
 Google Calendar integration is an optional one-way mirror for Scheduled Actions. It uses a user-owned Apps Script bridge and a dedicated calendar, so Dragonglass never stores a Google OAuth refresh token. Configure the bridge using [the setup guide](integrations/google-calendar/README.md), then enter its deployment URL and shared secret in plugin settings.
 
-Each valid Scheduled Action becomes a busy calendar event containing its title, Project breadcrumb, Context, and an Obsidian deep link. Leaving Scheduled or deleting the Action removes its managed event. Calendar-side changes are overwritten by the next reconciliation; unrelated calendar events are never touched. Sync runs after local index changes, at startup, every five minutes, and through **Sync now** in settings. The bridge URL and shared secret are stored as plain text in the plugin data file.
+Each valid Scheduled Action becomes a busy calendar event containing its title, Project breadcrumb, Context, and an Obsidian deep link. Every managed event carries an alarm, replacing the calendar's default reminders: one hour before the start for an Action with a time of day, and 09:00 the preceding day for an all-day one.
+
+A Scheduled Action need not have a time of day. Writing `scheduled_start` as a plain date, which the **All day** toggle in the Action editor does, makes the Action an all-day event on that date and drops its duration, since a whole day has no length to reserve. Google measures an all-day event's alarm back from midnight on its date, so the 09:00-the-day-before alarm is sent as 900 minutes. Actions with a time of day still require a positive `duration_minutes`.
+
+Leaving Scheduled or deleting the Action removes its managed event. Calendar-side changes are overwritten by the next reconciliation; unrelated calendar events are never touched. Sync runs after local index changes, at startup, every five minutes, and through **Sync now** in settings. The bridge URL and shared secret are stored as plain text in the plugin data file.
 
 ## Projects
 

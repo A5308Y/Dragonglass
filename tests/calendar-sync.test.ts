@@ -51,6 +51,8 @@ describe("Google Calendar event projection", () => {
       ].join("\n"),
       start: "2026-09-20T12:00:00.000Z",
       end: "2026-09-20T12:45:00.000Z",
+      allDay: false,
+      reminderMinutes: 60,
     }]);
   });
 
@@ -62,6 +64,25 @@ describe("Google Calendar event projection", () => {
       { ...missingStart, id: "A3" },
       { ...missingDuration, id: "A4" },
     ]), "Personal Vault")).toEqual([]);
+  });
+
+  it("exports an Action with no time of day as a one-day all-day event", () => {
+    const { durationMinutes: _duration, ...base } = scheduled;
+    const [event] = buildCalendarSyncEvents(snapshot([{ ...base, scheduledStart: "2026-09-22" }]), "Vault");
+
+    expect(event).toMatchObject({
+      start: "2026-09-22",
+      // Google reads an all-day end date as exclusive, so one day ends on the next.
+      end: "2026-09-23",
+      allDay: true,
+      reminderMinutes: 900,
+    });
+  });
+
+  it("ignores a stale duration left on an all-day Action", () => {
+    const [event] = buildCalendarSyncEvents(snapshot([{ ...scheduled, scheduledStart: "2026-09-22" }]), "Vault");
+
+    expect(event).toMatchObject({ start: "2026-09-22", end: "2026-09-23", allDay: true });
   });
 
   it("sorts exported events deterministically", () => {

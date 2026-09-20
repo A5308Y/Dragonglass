@@ -13,7 +13,8 @@ import { projectBreadcrumb, projectBreadcrumbs, projectDescendantIds } from "../
 import { parseActionList } from "../domain/action-import";
 import { parseSubprojectList } from "../domain/project-import";
 import { parseProjectTags, planProjectParentChange, projectTagAdditions } from "../domain/project-board";
-import { localDate } from "../utils/date";
+import { isAllDaySchedule } from "../domain/schedule";
+import { localDate, parseDateOnly } from "../utils/date";
 import { normalizeVaultPath } from "../utils/path";
 import { confirmDeleteProject } from "./delete-project";
 import { addImagePathSetting, resolveVaultImage } from "./image-input";
@@ -98,6 +99,7 @@ export class NewActionModal extends FormModal {
   private projectQuery: string;
   private context = "";
   private waitingSince: string;
+  private scheduledAllDay = false;
   private scheduledStart = "";
   private durationMinutes: string;
   private work = false;
@@ -149,13 +151,15 @@ export class NewActionModal extends FormModal {
     const waitingSetting = addWaitingSinceField(this.formEl, this.waitingSince, (value) => (this.waitingSince = value));
     const scheduleSettings = addScheduleFields(
       this.formEl,
+      this.scheduledAllDay,
       this.scheduledStart,
       this.durationMinutes,
+      (value) => (this.scheduledAllDay = value),
       (value) => (this.scheduledStart = value),
       (value) => (this.durationMinutes = value),
     );
     updateStatusVisibility = () => {
-      setScheduleVisibility(scheduleSettings, this.status === "scheduled");
+      setScheduleVisibility(scheduleSettings, this.status === "scheduled", this.scheduledAllDay);
       setScheduleVisibility([waitingSetting], this.status === "waiting");
     };
     updateStatusVisibility();
@@ -168,7 +172,7 @@ export class NewActionModal extends FormModal {
     if (!this.title.trim()) return void new Notice("An Action title is required.");
     if (!this.context.trim()) return void new Notice("A context is required.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
-    const schedule = scheduleValues(this.status, this.scheduledStart, this.durationMinutes);
+    const schedule = scheduleValues(this.status, this.scheduledAllDay, this.scheduledStart, this.durationMinutes);
     if (!schedule) return;
     try {
       await this.services.repository.createClarifiedAction({
@@ -198,6 +202,7 @@ export class ActionEditorModal extends FormModal {
   private due: string;
   private deferUntil: string;
   private waitingSince: string;
+  private scheduledAllDay: boolean;
   private scheduledStart: string;
   private durationMinutes: string;
   private work: boolean;
@@ -216,7 +221,8 @@ export class ActionEditorModal extends FormModal {
     this.due = action.due ?? "";
     this.deferUntil = action.deferUntil ?? "";
     this.waitingSince = action.waitingSince ?? localDate();
-    this.scheduledStart = dateTimeLocalValue(action.scheduledStart);
+    this.scheduledAllDay = Boolean(action.scheduledStart && isAllDaySchedule(action.scheduledStart));
+    this.scheduledStart = this.scheduledAllDay ? action.scheduledStart! : dateTimeLocalValue(action.scheduledStart);
     this.durationMinutes = String(action.durationMinutes ?? services.getSettings().googleCalendar.defaultDurationMinutes);
     this.work = action.work ?? false;
   }
@@ -257,13 +263,15 @@ export class ActionEditorModal extends FormModal {
     const waitingSetting = addWaitingSinceField(this.formEl, this.waitingSince, (value) => (this.waitingSince = value));
     const scheduleSettings = addScheduleFields(
       this.formEl,
+      this.scheduledAllDay,
       this.scheduledStart,
       this.durationMinutes,
+      (value) => (this.scheduledAllDay = value),
       (value) => (this.scheduledStart = value),
       (value) => (this.durationMinutes = value),
     );
     updateStatusVisibility = () => {
-      setScheduleVisibility(scheduleSettings, this.status === "scheduled");
+      setScheduleVisibility(scheduleSettings, this.status === "scheduled", this.scheduledAllDay);
       setScheduleVisibility([waitingSetting], this.status === "waiting");
     };
     updateStatusVisibility();
@@ -305,7 +313,7 @@ export class ActionEditorModal extends FormModal {
     }
     if (!this.context.trim()) return void new Notice("A context is required.");
     if (!validateProjectSelection(this.projectId, this.projectQuery)) return;
-    const schedule = scheduleValues(this.status, this.scheduledStart, this.durationMinutes);
+    const schedule = scheduleValues(this.status, this.scheduledAllDay, this.scheduledStart, this.durationMinutes);
     if (!schedule) return;
     try {
       await this.services.repository.updateAction(this.action.id, {
@@ -328,12 +336,14 @@ export class ActionEditorModal extends FormModal {
 }
 
 export class ScheduleActionModal extends FormModal {
+  private scheduledAllDay: boolean;
   private scheduledStart: string;
   private durationMinutes: string;
 
   constructor(private readonly services: GtdServices, private readonly action: Action) {
     super(services.app);
-    this.scheduledStart = dateTimeLocalValue(action.scheduledStart);
+    this.scheduledAllDay = Boolean(action.scheduledStart && isAllDaySchedule(action.scheduledStart));
+    this.scheduledStart = this.scheduledAllDay ? action.scheduledStart! : dateTimeLocalValue(action.scheduledStart);
     this.durationMinutes = String(action.durationMinutes ?? services.getSettings().googleCalendar.defaultDurationMinutes);
   }
 
@@ -342,8 +352,10 @@ export class ScheduleActionModal extends FormModal {
     this.formEl.createEl("p", { cls: "dg-muted", text: "Choose when this Action should occupy time on your calendar." });
     addScheduleFields(
       this.formEl,
+      this.scheduledAllDay,
       this.scheduledStart,
       this.durationMinutes,
+      (value) => (this.scheduledAllDay = value),
       (value) => (this.scheduledStart = value),
       (value) => (this.durationMinutes = value),
     );
@@ -352,7 +364,7 @@ export class ScheduleActionModal extends FormModal {
   }
 
   protected async submit(): Promise<void> {
-    const schedule = scheduleValues("scheduled", this.scheduledStart, this.durationMinutes);
+    const schedule = scheduleValues("scheduled", this.scheduledAllDay, this.scheduledStart, this.durationMinutes);
     if (!schedule) return;
     try {
       await this.services.repository.updateAction(this.action.id, { status: "scheduled", ...schedule });
@@ -967,13 +979,36 @@ function addDate(container: HTMLElement, name: string, value: string, onChange: 
 
 function addScheduleFields(
   container: HTMLElement,
+  allDay: boolean,
   start: string,
   duration: string,
+  onAllDayChange: (value: boolean) => void,
   onStartChange: (value: string) => void,
   onDurationChange: (value: string) => void,
 ): HTMLElement[] {
+  let startInput: HTMLInputElement;
+  let durationEl: HTMLElement;
+
+  const allDaySetting = new Setting(container)
+    .setName("All day")
+    .setDesc("Reserve the whole day instead of a time of day.")
+    .addToggle((toggle) => toggle.setValue(allDay).onChange((value) => {
+      // The input types accept different strings, so convert before swapping the type.
+      const previous = startInput.value;
+      startInput.type = value ? "date" : "datetime-local";
+      const next = value
+        ? previous.slice(0, 10)
+        : previous ? `${previous.slice(0, 10)}T${DEFAULT_START_TIME}` : "";
+      startInput.value = next;
+      onStartChange(next);
+      onAllDayChange(value);
+      durationEl.toggleClass("is-hidden", value);
+    }));
+  allDaySetting.settingEl.addClass("dg-schedule-setting");
+
   const startSetting = new Setting(container).setName("Scheduled start").setDesc("Local date and time.").addText((text) => {
-    text.inputEl.type = "datetime-local";
+    text.inputEl.type = allDay ? "date" : "datetime-local";
+    startInput = text.inputEl;
     text.setValue(start).onChange(onStartChange);
   });
   startSetting.settingEl.addClass("dg-schedule-setting");
@@ -984,8 +1019,12 @@ function addScheduleFields(
     text.setValue(duration).onChange(onDurationChange);
   });
   durationSetting.settingEl.addClass("dg-schedule-setting");
-  return [startSetting.settingEl, durationSetting.settingEl];
+  durationEl = durationSetting.settingEl;
+  durationEl.toggleClass("is-hidden", allDay);
+  return [allDaySetting.settingEl, startSetting.settingEl, durationSetting.settingEl];
 }
+
+const DEFAULT_START_TIME = "09:00";
 
 function addWaitingSinceField(container: HTMLElement, value: string, onChange: (value: string) => void): HTMLElement {
   const setting = new Setting(container)
@@ -999,15 +1038,31 @@ function addWaitingSinceField(container: HTMLElement, value: string, onChange: (
   return setting.settingEl;
 }
 
-function setScheduleVisibility(settings: HTMLElement[], visible: boolean): void {
+/** Hides the whole schedule block, keeping the Duration field's own all-day state intact. */
+function setScheduleVisibility(settings: HTMLElement[], visible: boolean, allDay = false): void {
   for (const setting of settings) setting.toggleClass("is-hidden", !visible);
+  const duration = settings[settings.length - 1];
+  if (visible && allDay) duration?.toggleClass("is-hidden", true);
 }
 
-function scheduleValues(status: ActionStatus, localStart: string, durationValue: string): Pick<Action, "scheduledStart" | "durationMinutes"> | {} | null {
+function scheduleValues(
+  status: ActionStatus,
+  allDay: boolean,
+  localStart: string,
+  durationValue: string,
+): Pick<Action, "scheduledStart" | "durationMinutes"> | {} | null {
   if (status !== "scheduled" && !localStart) return {};
   if (!localStart) {
-    new Notice("Choose a scheduled start time.");
+    new Notice(allDay ? "Choose a scheduled date." : "Choose a scheduled start time.");
     return null;
+  }
+  if (allDay) {
+    // A date alone is the stored form of an Action with no time of day.
+    if (!isAllDaySchedule(localStart) || !parseDateOnly(localStart)) {
+      new Notice("Choose a valid scheduled date.");
+      return null;
+    }
+    return { scheduledStart: localStart };
   }
   const start = new Date(localStart);
   if (Number.isNaN(start.getTime()) || dateTimeLocalValue(start.toISOString()) !== localStart.slice(0, 16)) {

@@ -1,5 +1,6 @@
 import { Notice } from "obsidian";
 import { useEffect, useState } from "preact/hooks";
+import { actionSchedule } from "../domain/schedule";
 import type { Action } from "../domain/types";
 import type { GtdServices } from "./services";
 
@@ -12,6 +13,7 @@ export function ActionRows({ actions, services, projectLabels, allowProjectConve
 
 function ActionRow({ action, services, projectLabels, allowProjectConversion, linkTitle }: { key?: string; action: Action; services: GtdServices; projectLabels?: ReadonlyMap<string, string>; allowProjectConversion: boolean; linkTitle: boolean }) {
   const done = action.status === "done";
+  const schedule = actionSchedule(action.scheduledStart, action.durationMinutes);
   const [checked, setChecked] = useState(done);
   const [updating, setUpdating] = useState(false);
   useEffect(() => setChecked(done), [done]);
@@ -61,8 +63,9 @@ function ActionRow({ action, services, projectLabels, allowProjectConversion, li
           {action.energy && <span>{action.energy} energy</span>}
           {action.due && <span>Due {action.due}</span>}
           {action.status === "waiting" && <span>Waiting since {action.waitingSince ?? "—"}</span>}
-          {action.scheduledStart && <span>{new Date(action.scheduledStart).toLocaleString()}{action.durationMinutes ? ` · ${action.durationMinutes} min` : ""}</span>}
-          {action.status === "scheduled" && (!action.scheduledStart || !action.durationMinutes) && <span class="is-overdue">Missing schedule</span>}
+          {schedule?.kind === "all-day" && <span>{schedule.date} · all day</span>}
+          {schedule?.kind === "timed" && <span>{new Date(schedule.start).toLocaleString()} · {schedule.durationMinutes} min</span>}
+          {action.status === "scheduled" && !schedule && <span class="is-overdue">Missing schedule</span>}
         </div>
       </div>
       <div class="dg-action-row-actions">
