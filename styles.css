@@ -1431,6 +1431,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-action-capture input:first-child { flex: 1 1 0; min-width: 0; }
 .dg-action-capture > .dg-fuzzy-field { width: auto; min-width: 0; flex: 1 1 0; }
 .dg-action-capture > .dg-fuzzy-field ~ .dg-fuzzy-field { width: 180px; flex: 0 1 180px; }
+.dg-action-capture > .dg-review-project-input { width: auto; min-width: 0; flex: 1 1 0; }
+.dg-action-capture > .dg-review-context-input { width: 180px; min-width: 0; flex: 0 1 180px; }
 .dg-capture-toggle {
   display: flex;
   flex: 0 0 auto;

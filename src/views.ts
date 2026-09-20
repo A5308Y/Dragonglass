@@ -1,10 +1,9 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
-import { render } from "preact";
 import { ElmActionBoardHost } from "./adapter/elm-action-board";
+import { ElmBrainstormHost } from "./adapter/elm-brainstorm";
 import { ElmInboxHost } from "./adapter/elm-inbox";
 import { ElmProjectsHost } from "./adapter/elm-projects";
-import { BrainstormView } from "./brainstorm/brainstorm";
-import { ProjectReview } from "./review/project-review";
+import { ElmProjectReviewHost } from "./adapter/elm-project-review";
 import type { GtdServices } from "./ui/services";
 
 export const BOARD_VIEW_TYPE = "dragonglass-action-board";
@@ -14,23 +13,43 @@ export const PROJECTS_VIEW_TYPE = "dragonglass-projects";
 export const REVIEW_VIEW_TYPE = "dragonglass-project-review";
 
 export class GtdBrainstormView extends ItemView {
+  private host: ElmBrainstormHost | null = null;
+
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) { super(leaf); }
   getViewType(): string { return BRAINSTORM_VIEW_TYPE; }
   getDisplayText(): string { return "GTD Brainstorm"; }
   getIcon(): string { return "lightbulb"; }
   async onOpen(): Promise<void> { this.refresh(); }
-  async onClose(): Promise<void> { render(null, this.contentEl); }
-  refresh(): void { render(null, this.contentEl); render(<BrainstormView services={this.services} />, this.contentEl); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
+  refresh(): void {
+    if (this.host) return this.host.refresh();
+    this.contentEl.empty();
+    this.host = new ElmBrainstormHost(this.contentEl, this.services);
+  }
 }
 
 export class GtdProjectReviewView extends ItemView {
+  private host: ElmProjectReviewHost | null = null;
+
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) { super(leaf); }
   getViewType(): string { return REVIEW_VIEW_TYPE; }
   getDisplayText(): string { return "GTD Project Review"; }
   getIcon(): string { return "clipboard-check"; }
   async onOpen(): Promise<void> { this.refresh(); }
-  async onClose(): Promise<void> { render(null, this.contentEl); }
-  refresh(): void { render(null, this.contentEl); render(<ProjectReview services={this.services} />, this.contentEl); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
+  refresh(): void {
+    if (this.host) return this.host.refresh();
+    this.contentEl.empty();
+    this.host = new ElmProjectReviewHost(this.contentEl, this.services);
+  }
 }
 
 export class GtdInboxView extends ItemView {

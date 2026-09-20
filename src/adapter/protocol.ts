@@ -46,6 +46,12 @@ export interface ElmProjectDetailDto {
   supportFolders: Array<{ path: string; label: string }>;
 }
 
+export interface ElmReviewProjectDataDto {
+  projectId: string;
+  desiredOutcome: string;
+  diary: ElmDiaryEntryDto[];
+}
+
 export interface ElmInboxItemDto extends Omit<InboxItem, "file"> {
   file: ElmFileDto;
   resourceUrl: string;
@@ -118,6 +124,15 @@ export type ElmHostCommand =
   | { type: "read-support-note"; projectId: string; path: string }
   | { type: "update-support-note"; projectId: string; path: string; body: string }
   | { type: "save-project-preferences"; columns: Project["status"][]; showImages: boolean }
+  | { type: "load-review-project"; projectId: string }
+  | { type: "create-review-action"; title: string; projectId: string; context: string; work: boolean }
+  | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
+  | { type: "move-review-to-someday"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
+  | { type: "load-brainstorm-outcome"; projectId: string }
+  | { type: "save-brainstorm"; actionId: string; ideas: string; desiredOutcome?: string }
+  | { type: "save-standalone-brainstorm"; topic: string; ideas: string }
+  | { type: "shuffle-brainstorm-words" }
+  | { type: "focus-brainstorm-ideas"; start: number; end: number }
   | { type: "open-file"; path: string }
   | { type: "read-inbox-body"; itemId: string }
   | { type: "trash-inbox-item"; itemId: string }
@@ -197,6 +212,33 @@ function isHostCommand(value: unknown): value is ElmHostCommand {
         && value.columns.length > 0
         && value.columns.every((status) => ["active", "backlog", "someday", "completed"].includes(String(status)))
         && typeof value.showImages === "boolean";
+    case "load-review-project":
+    case "load-brainstorm-outcome":
+      return typeof value.projectId === "string";
+    case "create-review-action":
+      return typeof value.title === "string"
+        && typeof value.projectId === "string"
+        && typeof value.context === "string"
+        && typeof value.work === "boolean";
+    case "complete-project-review":
+    case "move-review-to-someday":
+      return typeof value.projectId === "string"
+        && typeof value.desiredOutcome === "string"
+        && Array.isArray(value.activeProjectIds)
+        && value.activeProjectIds.every((id) => typeof id === "string");
+    case "save-brainstorm":
+      return typeof value.actionId === "string"
+        && typeof value.ideas === "string"
+        && (value.desiredOutcome === undefined || typeof value.desiredOutcome === "string");
+    case "save-standalone-brainstorm":
+      return typeof value.topic === "string" && typeof value.ideas === "string";
+    case "shuffle-brainstorm-words":
+      return true;
+    case "focus-brainstorm-ideas":
+      return Number.isInteger(value.start)
+        && Number.isInteger(value.end)
+        && Number(value.start) >= 0
+        && Number(value.end) >= Number(value.start);
     case "set-action-status":
       return typeof value.actionId === "string"
         && ["next", "waiting", "scheduled", "done", "cancelled"].includes(String(value.status));
@@ -232,6 +274,8 @@ export type ElmHostEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "project-detail"; detail: ElmProjectDetailDto }
   | { type: "show-project"; projectId: string | null }
+  | { type: "review-project-data"; data: ElmReviewProjectDataDto }
+  | { type: "brainstorm-outcome"; projectId: string; desiredOutcome: string }
   | { type: "start-processing" }
   | { type: "command-result"; requestId: string; ok: true; value?: unknown }
   | { type: "command-result"; requestId: string; ok: false; error: string };

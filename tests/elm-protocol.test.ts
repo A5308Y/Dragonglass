@@ -89,4 +89,26 @@ describe("Elm adapter protocol", () => {
     expect(parseElmCommand(envelope({ type: "trash-projects", projectIds: ["P1", 2] }))).toBeNull();
     expect(parseElmCommand(envelope({ type: "save-project-preferences", columns: [], showImages: true }))).toBeNull();
   });
+
+  it("validates Review and Brainstorm commands at the adapter boundary", () => {
+    const envelope = (command: unknown) => ({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "workflow-1", command });
+
+    expect(parseElmCommand(envelope({
+      type: "complete-project-review",
+      projectId: "P1",
+      desiredOutcome: "Done looks like this",
+      activeProjectIds: ["P1", "P2"],
+    }))?.command.type).toBe("complete-project-review");
+    expect(parseElmCommand(envelope({
+      type: "save-brainstorm",
+      actionId: "A1",
+      ideas: "An idea",
+      desiredOutcome: "A better outcome",
+    }))?.command.type).toBe("save-brainstorm");
+    expect(parseElmCommand(envelope({ type: "focus-brainstorm-ideas", start: 3, end: 3 }))?.command.type)
+      .toBe("focus-brainstorm-ideas");
+    expect(parseElmCommand(envelope({ type: "complete-project-review", projectId: "P1", desiredOutcome: "", activeProjectIds: [4] }))).toBeNull();
+    expect(parseElmCommand(envelope({ type: "focus-brainstorm-ideas", start: 1.5, end: 2 }))).toBeNull();
+    expect(parseElmCommand(envelope({ type: "focus-brainstorm-ideas", start: 4, end: 2 }))).toBeNull();
+  });
 });
