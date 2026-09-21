@@ -43,6 +43,8 @@ interface ElmModalHandlers {
   onPrompt?: (value: string) => void;
   /** Receives the file a new Project created. */
   onProjectCreated?: (file: TFile) => Promise<void>;
+  /** Runs once the modal has closed, however it closed, so a caller waiting on it is released. */
+  onDismissed?: () => void;
 }
 
 interface ElmApp {
@@ -101,6 +103,7 @@ export class ElmModal extends Modal {
     this.unsubscribePort = null;
     this.app_ = null;
     this.contentEl.empty();
+    this.handlers.onDismissed?.();
   }
 
   private vaultImages(): string[] {

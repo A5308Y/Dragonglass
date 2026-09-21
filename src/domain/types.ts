@@ -202,7 +202,16 @@ export interface GtdSettings {
   savedViews: SavedView[];
   activeSavedViewId: string | null;
   googleCalendar: GoogleCalendarSettings;
+  feeds: FeedSettings;
   schemaVersion: number;
+}
+
+export interface FeedSettings {
+  enabled: boolean;
+  /** The vault-relative JSON file holding subscriptions and triage state. */
+  storePath: string;
+  /** Minutes between automatic fetches. Five is the floor. */
+  refreshMinutes: number;
 }
 
 export interface GoogleCalendarSettings {

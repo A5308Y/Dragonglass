@@ -43,6 +43,7 @@ type alias Model =
     , search : String
     , processing : Bool
     , cursor : Int
+    , requested : Maybe InboxItemId
     , sessionTotal : Int
     , seconds : Int
     , body : Maybe { itemId : InboxItemId, text : String }
@@ -114,6 +115,7 @@ initialModel snapshot =
     , search = ""
     , processing = False
     , cursor = 0
+    , requested = Nothing
     , sessionTotal = 0
     , seconds = decisionSeconds
     , body = Nothing
@@ -219,12 +221,23 @@ enterProcessing maybeId model =
         items =
             sortedItems model.snapshot.inboxItems
 
-        cursor =
-            maybeId
-                |> Maybe.andThen (\wanted -> indexOf wanted items)
-                |> Maybe.withDefault 0
+        found =
+            maybeId |> Maybe.andThen (\wanted -> indexOf wanted items)
     in
-    resetCurrent { model | processing = True, cursor = cursor, sessionTotal = List.length items }
+    resetCurrent
+        { model
+            | processing = True
+            , cursor = Maybe.withDefault 0 found
+            , requested =
+                -- A named Item written a moment ago may not be indexed yet, so the
+                -- request outlives this snapshot rather than silently landing on another Item.
+                if found == Nothing then
+                    maybeId
+
+                else
+                    Nothing
+            , sessionTotal = List.length items
+        }
 
 
 resetCurrent : Model -> ( Model, Cmd Msg )
@@ -297,7 +310,7 @@ busyItems model =
 
 type HostEvent
     = SnapshotEvent Snapshot
-    | StartProcessingEvent
+    | StartProcessingEvent (Maybe InboxItemId)
     | Replied Host.Outcome
 
 
@@ -306,27 +319,43 @@ receiveHost value model =
     case Decode.decodeValue hostEventDecoder value of
         Ok (SnapshotEvent snapshot) ->
             let
-                previousId =
-                    currentItem model |> Maybe.map .id
-
                 next =
                     { model | snapshot = snapshot }
 
-                nextId =
-                    currentItem next |> Maybe.map .id
+                arrived =
+                    model.requested |> Maybe.andThen (\wanted -> indexOf wanted (sortedItems snapshot.inboxItems))
             in
-            if model.processing && previousId /= nextId then
-                resetCurrent next
+            case arrived of
+                Just cursor ->
+                    resetCurrent
+                        { next
+                            | processing = True
+                            , cursor = cursor
+                            , requested = Nothing
+                            , sessionTotal = List.length snapshot.inboxItems
+                        }
 
-            else
-                ( next, Cmd.none )
+                Nothing ->
+                    let
+                        previousId =
+                            currentItem model |> Maybe.map .id
 
-        Ok StartProcessingEvent ->
-            if model.processing then
+                        nextId =
+                            currentItem next |> Maybe.map .id
+                    in
+                    if model.processing && previousId /= nextId then
+                        resetCurrent next
+
+                    else
+                        ( next, Cmd.none )
+
+        Ok (StartProcessingEvent maybeId) ->
+            -- Opening the processor again is a no-op, but naming an Item always moves to it.
+            if model.processing && maybeId == Nothing then
                 ( model, Cmd.none )
 
             else
-                enterProcessing Nothing model
+                enterProcessing maybeId model
 
         Ok (Replied outcome) ->
             let
@@ -833,7 +862,7 @@ hostEventDecoder =
                         Decode.map SnapshotEvent (Decode.field "snapshot" Data.snapshotDecoder)
 
                     "start-processing" ->
-                        Decode.succeed StartProcessingEvent
+                        Decode.map StartProcessingEvent (Decode.maybe (Decode.field "itemId" Decode.string))
 
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder

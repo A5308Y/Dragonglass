@@ -23,7 +23,7 @@ one place.
 -}
 
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
-import Gtd.Id exposing (ActionId, InboxItemId, ProjectId)
+import Gtd.Id exposing (ActionId, FeedItemKey, InboxItemId, ProjectId)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Settings as Settings exposing (SavedView)
 import Json.Encode as Encode
@@ -87,6 +87,14 @@ type Command
     | SaveStandaloneBrainstorm String String
     | ShuffleBrainstormWords
     | FocusBrainstormIdeas Int Int
+      -- Feeds
+    | RefreshFeeds
+    | AddFeed
+    | KeepFeedItems (List FeedItemKey)
+    | DiscardFeedItems (List FeedItemKey)
+    | UndoFeedDiscard
+    | ProcessFeedItem FeedItemKey
+    | OpenLink String
       -- Inbox
     | ReadInboxBody InboxItemId
     | TrashInboxItem InboxItemId
@@ -464,6 +472,27 @@ encode command =
 
         FocusBrainstormIdeas start end ->
             object "focus-brainstorm-ideas" [ ( "start", Encode.int start ), ( "end", Encode.int end ) ]
+
+        RefreshFeeds ->
+            object "refresh-feeds" []
+
+        AddFeed ->
+            object "add-feed" []
+
+        KeepFeedItems keys ->
+            object "keep-feed-items" [ ( "keys", Encode.list Encode.string keys ) ]
+
+        DiscardFeedItems keys ->
+            object "discard-feed-items" [ ( "keys", Encode.list Encode.string keys ) ]
+
+        UndoFeedDiscard ->
+            object "undo-feed-discard" []
+
+        ProcessFeedItem key ->
+            object "process-feed-item" [ ( "key", Encode.string key ) ]
+
+        OpenLink url ->
+            object "open-link" [ ( "url", Encode.string url ) ]
 
         ReadInboxBody itemId ->
             object "read-inbox-body" [ ( "itemId", Encode.string itemId ) ]

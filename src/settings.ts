@@ -2,10 +2,11 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
 import { addImagePathSetting } from "./ui/image-input";
-import { normalizeVaultPath } from "./utils/path";
+import { isPathInDirectory, normalizeVaultPath } from "./utils/path";
 
 export class GtdSettingTab extends PluginSettingTab {
   private unsubscribeCalendarStatus: (() => void) | undefined;
+  private unsubscribeFeedStatus: (() => void) | undefined;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
@@ -14,6 +15,8 @@ export class GtdSettingTab extends PluginSettingTab {
   display(): void {
     this.unsubscribeCalendarStatus?.();
     this.unsubscribeCalendarStatus = undefined;
+    this.unsubscribeFeedStatus?.();
+    this.unsubscribeFeedStatus = undefined;
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Dragonglass GTD" });
@@ -80,6 +83,8 @@ export class GtdSettingTab extends PluginSettingTab {
         this.plugin.settings.showDoneColumn = value;
         await this.plugin.saveSettings();
       }));
+
+    this.displayFeeds(containerEl);
 
     containerEl.createEl("h3", { text: "Google Calendar" });
     containerEl.createEl("p", {
@@ -197,11 +202,127 @@ export class GtdSettingTab extends PluginSettingTab {
     this.unsubscribeCalendarStatus = this.plugin.subscribeGoogleCalendarStatus(refreshStatus);
   }
 
+  /**
+   * Feed subscriptions.
+   *
+   * Subscribing is frequent and lives in the Feeds view; unsubscribing is not, and
+   * lives here, where deleting a feed's triage state is a deliberate act.
+   */
+  private displayFeeds(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Feeds" });
+    containerEl.createEl("p", {
+      text: "Fetches subscribed RSS and Atom feeds for triage in the Feeds view. Feed Items are not vault files until you keep one, "
+        + "which makes it an ordinary Inbox Item. Fetching contacts each feed's server directly.",
+    });
+
+    new Setting(containerEl)
+      .setName("Enable feeds")
+      .setDesc("Fetch subscribed feeds on start-up and on the refresh interval.")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.feeds.enabled).onChange(async (value) => {
+        this.plugin.settings.feeds.enabled = value;
+        await this.plugin.saveSettings(false);
+        this.display();
+      }));
+
+    new Setting(containerEl)
+      .setName("Refresh interval")
+      .setDesc("Minutes between automatic fetches. Five is the minimum.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "5";
+        text.inputEl.step = "5";
+        text.setValue(String(this.plugin.settings.feeds.refreshMinutes)).onChange(async (value) => {
+          const minutes = Number(value);
+          if (!Number.isInteger(minutes) || minutes < 5) return;
+          this.plugin.settings.feeds.refreshMinutes = minutes;
+          await this.plugin.saveSettings(false);
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Feed store")
+      .setDesc("Vault-relative JSON file holding subscriptions and what has already been swept. It syncs with the vault, so read state follows you between devices.")
+      .addText((text) => text.setValue(this.plugin.settings.feeds.storePath).onChange(async (value) => {
+        const path = normalizeVaultPath(value) || "GTD/feeds.json";
+        // Everything under the Inbox directory is indexed as an Inbox Item, store file included.
+        if (isPathInDirectory(path, this.plugin.settings.inboxDirectory)) {
+          new Notice("The feed store cannot live inside the Inbox directory, where every file becomes an Inbox Item.");
+          return;
+        }
+        this.plugin.settings.feeds.storePath = path;
+        await this.plugin.saveSettings(false);
+      }));
+
+    const feeds = this.plugin.getFeedService();
+    const fetchSetting = new Setting(containerEl)
+      .setName("Subscriptions")
+      .addButton((button) => button.setButtonText("Add feed").onClick(async () => {
+        const url = await this.plugin.promptForFeedUrl();
+        if (!url) return;
+        try {
+          const source = await feeds.addFeed(url);
+          new Notice(`Subscribed to “${source.title}”.`);
+        } catch (error) {
+          new Notice(error instanceof Error ? error.message : "Could not subscribe to that feed.");
+        }
+        this.display();
+      }))
+      .addButton((button) => button.setButtonText("Fetch now").setCta().onClick(async () => {
+        button.setDisabled(true);
+        try {
+          const result = await this.plugin.fetchFeeds();
+          new Notice(`Fetched ${result.added} new Feed Item${result.added === 1 ? "" : "s"}.`);
+        } catch (error) {
+          new Notice(error instanceof Error ? error.message : "Could not fetch feeds.");
+        } finally {
+          button.setDisabled(false);
+          this.display();
+        }
+      }));
+    const refreshFeedStatus = () => fetchSetting.setDesc(feedStatusText(this.plugin.getFeedStatus()));
+    refreshFeedStatus();
+    this.unsubscribeFeedStatus = feeds.subscribe(refreshFeedStatus);
+
+    const sources = feeds.getStore().sources;
+    if (!sources.length) {
+      containerEl.createEl("p", { text: "No feeds yet." });
+      return;
+    }
+    for (const source of sources) {
+      new Setting(containerEl)
+        .setName(source.title)
+        .setDesc(`${source.url} · ${feeds.getStore().states[source.id]?.unread.length ?? 0} unread`)
+        .addToggle((toggle) => toggle
+          .setTooltip("Fetch this feed")
+          .setValue(source.enabled)
+          .onChange(async (value) => {
+            await feeds.updateFeed(source.id, { enabled: value });
+            this.display();
+          }))
+        .addButton((button) => button.setButtonText("Unsubscribe").setWarning().onClick(async () => {
+          if (!window.confirm(`Unsubscribe from “${source.title}”? Its unread Items and swept history are forgotten.`)) return;
+          await feeds.removeFeed(source.id);
+          new Notice(`Unsubscribed from “${source.title}”.`);
+          this.display();
+        }));
+    }
+  }
+
   hide(): void {
     this.unsubscribeCalendarStatus?.();
     this.unsubscribeCalendarStatus = undefined;
+    this.unsubscribeFeedStatus?.();
+    this.unsubscribeFeedStatus = undefined;
     super.hide();
   }
+}
+
+function feedStatusText(status: ReturnType<DragonglassGtdPlugin["getFeedStatus"]>): string {
+  if (status.state === "success") return `Last fetched ${status.lastFetch ? new Date(status.lastFetch).toLocaleString() : "successfully"}.`;
+  if (status.state === "error") return status.error ?? "The last fetch failed.";
+  if (status.state === "fetching") return "Fetching…";
+  if (status.state === "disabled") return "Feeds are switched off.";
+  return "Ready to fetch.";
 }
 
 function randomSecret(): string {

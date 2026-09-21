@@ -38,9 +38,9 @@ export class ElmInboxHost {
     this.unsubscribe = services.repository.index.subscribe(() => this.send({ type: "snapshot", snapshot: this.snapshot() }));
   }
 
-  refresh(startProcessing = false): void {
+  refresh(startProcessing = false, itemId?: string): void {
     this.send({ type: "snapshot", snapshot: this.snapshot() });
-    if (startProcessing) this.send({ type: "start-processing" });
+    if (startProcessing) this.send({ type: "start-processing", ...(itemId ? { itemId } : {}) });
   }
 
   destroy(): void {

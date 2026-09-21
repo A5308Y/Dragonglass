@@ -1,4 +1,4 @@
-module Gtd.Id exposing (ActionId, InboxItemId, ProjectId)
+module Gtd.Id exposing (ActionId, FeedId, FeedItemKey, InboxItemId, ProjectId)
 
 {-| The stable ULIDs that define identity across the vault.
 
@@ -18,4 +18,18 @@ type alias ProjectId =
 
 
 type alias InboxItemId =
+    String
+
+
+type alias FeedId =
+    String
+
+
+{-| A Feed Item's identity within its feed: its guid, id, link, or a digest.
+
+Feed Items are not vault entities and carry no ULID, so a key is only unique
+alongside the feed that produced it.
+
+-}
+type alias FeedItemKey =
     String

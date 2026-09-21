@@ -1,3 +1,5 @@
+import type { FeedStoreData } from "../domain/feed";
+import { feedItemAge } from "../domain/feed-triage";
 import { isAllDaySchedule } from "../domain/schedule";
 import { ACTION_STATUSES, PROJECT_STATUSES } from "../domain/types";
 import type { Action, GtdSettings, GtdSnapshot, InboxItem, InboxProcessingInput, Project, SavedView } from "../domain/types";
@@ -64,6 +66,47 @@ export interface ElmInboxItemDto extends Omit<InboxItem, "file"> {
   resourceUrl: string;
 }
 
+export interface ElmFeedItemDto {
+  key: string;
+  title: string;
+  link: string;
+  published: string;
+  /** How old the Item reads on a row, computed by the host so Elm needs no clock. */
+  age: string;
+  author: string;
+  summary: string;
+}
+
+export interface ElmFeedDto {
+  id: string;
+  title: string;
+  url: string;
+  enabled: boolean;
+  /** When this feed was last fetched, or `""`. */
+  fetched: string;
+  /** Why this feed's last fetch failed, or `""`. */
+  error: string;
+  items: ElmFeedItemDto[];
+}
+
+/**
+ * The Feeds surface is fed separately from the GTD snapshot.
+ *
+ * Feed Items are not vault entities, so they never travel in a snapshot; a fetch
+ * that adds two hundred rows must not look like two hundred Projects changing.
+ */
+export interface ElmFeedsDto {
+  protocolVersion: typeof ELM_PROTOCOL_VERSION;
+  /** False while the integration is switched off, which is what the empty state explains. */
+  enabled: boolean;
+  state: "disabled" | "idle" | "fetching" | "success" | "error";
+  lastFetch: string;
+  error: string;
+  /** How many Items the last sweep took, and therefore what Undo would put back. */
+  undoCount: number;
+  feeds: ElmFeedDto[];
+}
+
 export interface ElmSnapshotDto {
   protocolVersion: typeof ELM_PROTOCOL_VERSION;
   revision: number;
@@ -83,6 +126,43 @@ export interface ElmSettingsDto {
   savedViews: SavedView[];
   activeSavedViewId: string | null;
   defaultDurationMinutes: number;
+}
+
+/** The Feeds payload, built from the store and the fetcher's status. */
+export function elmFeeds(
+  store: FeedStoreData,
+  status: { state: ElmFeedsDto["state"]; lastFetch?: string; error?: string },
+  options: { enabled: boolean; undoCount: number; now?: Date },
+): ElmFeedsDto {
+  const now = options.now ?? new Date();
+  return {
+    protocolVersion: ELM_PROTOCOL_VERSION,
+    enabled: options.enabled,
+    state: status.state,
+    lastFetch: status.lastFetch ?? "",
+    error: status.error ?? "",
+    undoCount: options.undoCount,
+    feeds: store.sources.map((source) => {
+      const state = store.states[source.id];
+      return {
+        id: source.id,
+        title: source.title,
+        url: source.url,
+        enabled: source.enabled,
+        fetched: state?.fetched ?? "",
+        error: state?.error ?? "",
+        items: (state?.unread ?? []).map((item) => ({
+          key: item.key,
+          title: item.title,
+          link: item.link,
+          published: item.published,
+          age: feedItemAge(item.published, now),
+          author: item.author,
+          summary: item.summary,
+        })),
+      };
+    }),
+  };
 }
 
 export function elmSnapshot(
@@ -243,7 +323,14 @@ type ElmNonMenuCommand =
   | { type: "set-active-saved-view"; savedViewId: string | null }
   | { type: "upsert-saved-view"; view: SavedView; activate: boolean }
   | { type: "delete-saved-view"; savedViewId: string }
-  | { type: "prompt"; title: string; placeholder: string };
+  | { type: "prompt"; title: string; placeholder: string }
+  | { type: "refresh-feeds" }
+  | { type: "add-feed" }
+  | { type: "keep-feed-items"; keys: string[] }
+  | { type: "discard-feed-items"; keys: string[] }
+  | { type: "undo-feed-discard" }
+  | { type: "process-feed-item"; key: string }
+  | { type: "open-link"; url: string };
 
 export type ElmImportKind = "actions" | "subprojects";
 
@@ -286,6 +373,11 @@ export type ElmInboxCommand = Extract<ElmNonMenuCommand,
   { type: "quick-capture" | "open-file" | "read-inbox-body" | "trash-inbox-item" | "process-inbox" }
 >;
 
+export type ElmFeedsCommand = Extract<ElmNonMenuCommand,
+  | { type: "refresh-feeds" | "add-feed" | "keep-feed-items" | "discard-feed-items" }
+  | { type: "undo-feed-discard" | "process-feed-item" | "open-link" | "open-inbox" }
+>;
+
 export type ElmProjectReviewCommand = Extract<ElmNonMenuCommand,
   | { type: "load-review-project" | "create-review-action" | "add-diary-entry" }
   | { type: "complete-project-review" | "move-review-to-someday" | "trash-project" | "create-project" }
@@ -318,6 +410,7 @@ type CommandValidator<C> = (value: unknown) => value is C;
 export const parseActionBoardCommand = parserFor<ElmActionBoardCommand>(isActionBoardCommand);
 export const parseProjectsCommand = parserFor<ElmProjectsCommand>(isProjectsCommand);
 export const parseInboxCommand = parserFor<ElmInboxCommand>(isInboxCommand);
+export const parseFeedsCommand = parserFor<ElmFeedsCommand>(isFeedsCommand);
 export const parseProjectReviewCommand = parserFor<ElmProjectReviewCommand>(isProjectReviewCommand);
 export const parseBrainstormCommand = parserFor<ElmBrainstormCommand>(isBrainstormCommand);
 export const parseModalCommand = parserFor<ElmModalCommand>(isModalCommand);
@@ -354,6 +447,10 @@ function isInboxCommand(value: unknown): value is ElmInboxCommand {
   return isSurfaceCommand(value, INBOX_COMMANDS);
 }
 
+function isFeedsCommand(value: unknown): value is ElmFeedsCommand {
+  return isSurfaceCommand(value, FEEDS_COMMANDS);
+}
+
 function isProjectReviewCommand(value: unknown): value is ElmProjectReviewCommand {
   return isSurfaceCommand(value, PROJECT_REVIEW_COMMANDS);
 }
@@ -380,6 +477,10 @@ const PROJECTS_COMMANDS = new Set([
 ]);
 const PROJECTS_MENU_COMMANDS = new Set([...PROJECTS_COMMANDS].filter((type) => type !== "show-menu"));
 const INBOX_COMMANDS = new Set(["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"]);
+const FEEDS_COMMANDS = new Set([
+  "refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard",
+  "process-feed-item", "open-link", "open-inbox",
+]);
 const PROJECT_REVIEW_COMMANDS = new Set([
   "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
   "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action",
@@ -550,6 +651,17 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.savedViewId === "string";
     case "prompt":
       return typeof value.title === "string" && typeof value.placeholder === "string";
+    case "refresh-feeds":
+    case "add-feed":
+    case "undo-feed-discard":
+      return true;
+    case "keep-feed-items":
+    case "discard-feed-items":
+      return isStringArray(value.keys);
+    case "process-feed-item":
+      return typeof value.key === "string";
+    case "open-link":
+      return typeof value.url === "string";
     default:
       return false;
   }
@@ -683,7 +795,7 @@ export type ElmProjectsEvent =
   | ElmCommandResultEvent;
 export type ElmInboxEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
-  | { type: "start-processing" }
+  | { type: "start-processing"; itemId?: string }
   | ElmCommandResultEvent;
 export type ElmProjectReviewEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
@@ -694,4 +806,5 @@ export type ElmBrainstormEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "brainstorm-outcome"; projectId: string; desiredOutcome: string }
   | ElmCommandResultEvent;
+export type ElmFeedsEvent = { type: "feeds"; feeds: ElmFeedsDto } | ElmCommandResultEvent;
 export type ElmModalEvent = ElmCommandResultEvent;

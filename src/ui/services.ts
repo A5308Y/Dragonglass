@@ -10,6 +10,10 @@ export interface GtdServices {
   openFile: (file: TFile) => Promise<void>;
   quickCapture: () => void;
   openInbox: () => void;
+  /** Opens the Inbox already processing this Item. */
+  processInboxItem: (itemId: string) => void;
+  /** Asks for one line of text, resolving to `""` when the prompt is dismissed. */
+  promptForText: (title: string, placeholder: string) => Promise<string>;
   createAction: (projectId?: string) => void;
   scheduleAction: (id: string) => void;
   importActions: (projectId?: string) => void;

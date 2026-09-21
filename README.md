@@ -106,6 +106,8 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 - **GTD: Open Project** (fuzzy Project picker; Cmd/Ctrl+Shift+O by default)
 - **GTD: Start Project Review**
 - **GTD: Open Brainstorm**
+- **GTD: Open Feeds**
+- **GTD: Fetch Feeds**
 - **GTD: Quick Capture Inbox Item**
 - **GTD: New Action**
 - **GTD: New Project**
@@ -121,6 +123,24 @@ On desktop, drag an Action between status columns. On mobile, or whenever drag-a
 Keyboard navigation inside the board uses Up/Down to move between cards and `D` to mark the focused Action done.
 
 Marking an Action done writes `status: done` and an ISO completion timestamp. Reopening through the quick action sets `status: next` and clears `completed`. Action dates never change Action statuses automatically.
+
+## Feeds
+
+Feeds are an optional RSS and Atom reader whose only job is to decide what deserves the Inbox. It is off by default; enable it in settings, then subscribe from the Feeds view or the settings tab.
+
+A Feed Item is not a vault file. It is a row in one JSON store until you keep it, and keeping it creates an ordinary Inbox Item that goes through the normal Inbox Processing Workflow unchanged. That split is the whole point: the Inbox clarifies one capture at a time against a two-minute budget because everything in it was put there deliberately, while a feed sends far more than it is owed and most of it earns one verdict. Routing feed Items into the Inbox directly would make Inbox zero meaningless, and a "mark all as read" would mean hundreds of files in Obsidian's trash.
+
+Because nothing is written until an Item is kept, discarding is cheap and reversible. **Undo** in the Feeds header puts the last sweep back in full.
+
+The list is the surface rather than a way into a processor. Items are grouped by feed in collapsible sections, each with a count and its own sweep button, and a search box filters titles, authors, and summaries. Clicking a title expands its summary in place; **Open** opens the article in a browser.
+
+Keeping is a mark, not a write. Tick **Keep** on the few Items worth clarifying, then press the sweep button: the marked Items become Inbox Items and every other Item in that section is discarded together. The button says what it will do — `Discard all (40)`, `Keep 2, discard 38`, or `Keep all (3)` — so a sweep never quietly files something. The toolbar carries the same button for every open section at once, which is the global "mark all as read"; a collapsed feed is left alone, and the button's count always states exactly how many Items it covers. A single row can also be kept, discarded, or sent straight to Inbox processing with **Process**.
+
+Rows are keyboard-operable, which is where a list-heavy triage pass actually gets fast. Up and Down move between rows, Enter expands one, `K` marks it to keep, `D` discards it, `P` processes it, `O` opens it, and `S` sweeps its whole section. Focus lands on whichever row takes the place of one that leaves.
+
+Subscriptions and triage state live in a single JSON file in the vault, `GTD/feeds.json` by default, so which Items you have already swept travels with ordinary vault sync rather than with plugin settings. Each feed remembers the keys it has resolved, capped so the file cannot grow without bound; a feed that keeps serving the same window therefore does not refill a list you have already swept. The file is disposable in the sense that a lost one costs only unread Items, but deleting it does forget what was discarded.
+
+Fetching is a direct request to each feed's server, on start-up and on a configurable interval of at least five minutes. Feed documents are parsed into plain values and never into DOM nodes, so nothing a feed publishes becomes markup: summaries are flattened to text, only `http` and `https` links are kept, and text written into a kept Item's note has wikilinks, embeds, and tags escaped so a feed cannot add itself to your graph.
 
 ## Google Calendar
 
@@ -177,7 +197,8 @@ The last view uses `file.backlinks` and the convenience `project` wiki-link. Obs
 - Stable IDs, not filenames, define identity and relationships.
 - Duplicate IDs and malformed GTD metadata are not silently mutated.
 - The in-memory index can always be rebuilt from Markdown files.
-- The plugin uses no network service, external database, Node API, Electron API, telemetry, or custom synchronization.
+- The plugin uses no external database, Node API, Electron API, telemetry, or custom synchronization.
+- Network access is confined to the two optional integrations you configure yourself: the Google Calendar bridge and Feeds. Both are off by default, and neither sends vault content anywhere a feed or your own Apps Script deployment does not already require.
 
 ## Scope
 

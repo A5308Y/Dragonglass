@@ -65,6 +65,11 @@ export function defaultSettings(): GtdSettings {
       sourceId: "",
       defaultDurationMinutes: 30,
     },
-    schemaVersion: 9,
+    feeds: {
+      enabled: false,
+      storePath: "GTD/feeds.json",
+      refreshMinutes: 30,
+    },
+    schemaVersion: 10,
   };
 }

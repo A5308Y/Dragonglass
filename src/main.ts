@@ -1,5 +1,6 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { GoogleCalendarSync, type CalendarSyncStatus, type CalendarSyncResult } from "./calendar/calendar-sync";
+import { FeedService, type FeedFetchResult, type FeedSyncStatus } from "./feeds/feed-service";
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import { projectsDueForActivation } from "./domain/project-activation";
 import type { GtdSettings, SavedView } from "./domain/types";
@@ -13,13 +14,14 @@ import type { GtdServices } from "./ui/services";
 import { localDate } from "./utils/date";
 import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
-import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, GtdBrainstormView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
+import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
 
 export default class DragonglassGtdPlugin extends Plugin {
   declare settings: GtdSettings;
   private index!: GtdIndex;
   private repository!: GtdRepository;
   private calendarSync!: GoogleCalendarSync;
+  private feeds!: FeedService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
 
@@ -28,6 +30,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.index = new GtdIndex(this.app.vault, this.app.metadataCache, () => this.settings.inboxDirectory);
     this.repository = new GtdRepository(this.app, this.index, () => this.settings);
     this.calendarSync = new GoogleCalendarSync(this.app, this.index, () => this.settings.googleCalendar);
+    this.feeds = new FeedService(this.app, () => this.settings.feeds);
     this.services = {
       app: this.app,
       repository: this.repository,
@@ -40,6 +43,8 @@ export default class DragonglassGtdPlugin extends Plugin {
       openFile: (file) => this.openFile(file),
       quickCapture: () => this.quickCapture(),
       openInbox: () => void this.activateView(INBOX_VIEW_TYPE),
+      processInboxItem: (itemId) => void this.processInbox(itemId),
+      promptForText: (title, placeholder) => this.promptForText(title, placeholder),
       createAction: (projectId) => this.createAction(projectId),
       scheduleAction: (id) => this.scheduleAction(id),
       importActions: (projectId) => this.importActions(projectId),
@@ -52,6 +57,7 @@ export default class DragonglassGtdPlugin extends Plugin {
 
     this.registerView(BOARD_VIEW_TYPE, (leaf) => new ActionBoardView(leaf, this.services));
     this.registerView(BRAINSTORM_VIEW_TYPE, (leaf) => new GtdBrainstormView(leaf, this.services));
+    this.registerView(FEEDS_VIEW_TYPE, (leaf) => new GtdFeedsView(leaf, this.services, this.feeds));
     this.registerView(INBOX_VIEW_TYPE, (leaf) => new GtdInboxView(leaf, this.services));
     this.registerView(PROJECTS_VIEW_TYPE, (leaf) => new GtdProjectsView(leaf, this.services));
     this.registerView(REVIEW_VIEW_TYPE, (leaf) => new GtdProjectReviewView(leaf, this.services));
@@ -60,6 +66,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addRibbonIcon("folder-kanban", "Open GTD Projects", () => void this.activateView(PROJECTS_VIEW_TYPE));
     this.addRibbonIcon("clipboard-check", "Start GTD Project Review", () => void this.activateView(REVIEW_VIEW_TYPE));
     this.addRibbonIcon("lightbulb", "Open GTD Brainstorm", () => void this.activateView(BRAINSTORM_VIEW_TYPE));
+    this.addRibbonIcon("rss", "Open GTD Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
     this.addSettingTab(new GtdSettingTab(this.app, this));
     this.registerCommands();
 
@@ -69,6 +76,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   onunload(): void {
     for (const leaf of this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE)) leaf.detach();
     for (const leaf of this.app.workspace.getLeavesOfType(BRAINSTORM_VIEW_TYPE)) leaf.detach();
+    for (const leaf of this.app.workspace.getLeavesOfType(FEEDS_VIEW_TYPE)) leaf.detach();
     for (const leaf of this.app.workspace.getLeavesOfType(INBOX_VIEW_TYPE)) leaf.detach();
     for (const leaf of this.app.workspace.getLeavesOfType(PROJECTS_VIEW_TYPE)) leaf.detach();
     for (const leaf of this.app.workspace.getLeavesOfType(REVIEW_VIEW_TYPE)) leaf.detach();
@@ -92,6 +100,14 @@ export default class DragonglassGtdPlugin extends Plugin {
         ? saved.projectBoardColumns.filter((status) => isProjectStatus(status) && status !== "cancelled")
         : defaults.projectBoardColumns,
       schemaVersion: defaults.schemaVersion,
+      feeds: {
+        ...defaults.feeds,
+        ...(saved?.feeds ?? {}),
+        storePath: normalizeVaultPath(saved?.feeds?.storePath ?? "") || defaults.feeds.storePath,
+        refreshMinutes: Number.isInteger(saved?.feeds?.refreshMinutes) && saved!.feeds!.refreshMinutes >= 5
+          ? saved!.feeds!.refreshMinutes
+          : defaults.feeds.refreshMinutes,
+      },
       googleCalendar: {
         ...defaults.googleCalendar,
         ...(saved?.googleCalendar ?? {}),
@@ -110,6 +126,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   async saveSettings(refreshViews = true): Promise<void> {
     await this.saveData(this.settings);
     this.calendarSync?.schedule(0);
+    this.feeds?.schedule(0);
     if (!refreshViews) return;
     for (const leaf of this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE)) {
       if (leaf.view instanceof ActionBoardView) leaf.view.refresh();
@@ -125,6 +142,9 @@ export default class DragonglassGtdPlugin extends Plugin {
     }
     for (const leaf of this.app.workspace.getLeavesOfType(BRAINSTORM_VIEW_TYPE)) {
       if (leaf.view instanceof GtdBrainstormView) leaf.view.refresh();
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType(FEEDS_VIEW_TYPE)) {
+      if (leaf.view instanceof GtdFeedsView) leaf.view.refresh();
     }
   }
 
@@ -144,6 +164,22 @@ export default class DragonglassGtdPlugin extends Plugin {
     return this.calendarSync.syncNow();
   }
 
+  getFeedService(): FeedService {
+    return this.feeds;
+  }
+
+  getFeedStatus(): FeedSyncStatus {
+    return this.feeds.getStatus();
+  }
+
+  async fetchFeeds(): Promise<FeedFetchResult> {
+    return this.feeds.fetchAll();
+  }
+
+  promptForFeedUrl(): Promise<string> {
+    return this.promptForText("Subscribe to a feed", "https://example.com/feed.xml");
+  }
+
   private registerCommands(): void {
     this.addCommand({ id: "open-action-board", name: "Open Action Board", callback: () => void this.activateView(BOARD_VIEW_TYPE) });
     this.addCommand({ id: "open-inbox", name: "Open Inbox", callback: () => void this.activateView(INBOX_VIEW_TYPE) });
@@ -158,6 +194,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     });
     this.addCommand({ id: "start-project-review", name: "Start Project Review", callback: () => void this.activateView(REVIEW_VIEW_TYPE) });
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
+    this.addCommand({ id: "open-feeds", name: "Open Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
+    this.addCommand({ id: "fetch-feeds", name: "Fetch Feeds", callback: () => void this.fetchFeedsWithNotice() });
     this.addCommand({ id: "quick-capture-inbox-item", name: "Quick Capture Inbox Item", callback: () => this.quickCapture() });
     this.addCommand({ id: "new-action", name: "New Action", callback: () => this.createAction() });
     this.addCommand({ id: "import-actions", name: "Import Actions", callback: () => this.importActions() });
@@ -225,6 +263,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     }
     await this.activateScheduledProjects();
     this.register(this.calendarSync.start());
+    this.register(this.feeds.start());
     this.registerInterval(window.setInterval(() => this.calendarSync.schedule(0), 5 * 60_000));
     this.registerInterval(window.setInterval(() => void this.activateScheduledProjects(), 60_000));
     if (migratedProjects) new Notice(`Migrated ${migratedProjects} waiting Project${migratedProjects === 1 ? "" : "s"} to Active.`);
@@ -321,9 +360,31 @@ export default class DragonglassGtdPlugin extends Plugin {
     return leaf;
   }
 
-  private async processInbox(): Promise<void> {
+  private async processInbox(itemId?: string): Promise<void> {
     const leaf = await this.activateView(INBOX_VIEW_TYPE);
-    if (leaf.view instanceof GtdInboxView) leaf.view.startProcessing();
+    if (leaf.view instanceof GtdInboxView) leaf.view.startProcessing(itemId);
+  }
+
+  /** Asks for one line of text. A dismissed prompt answers with `""` rather than hanging. */
+  private promptForText(title: string, placeholder: string): Promise<string> {
+    return new Promise<string>((resolve) => {
+      let answered = false;
+      new ElmModal(this.services, { kind: "prompt", title, placeholder }, {
+        onPrompt: (value) => {
+          answered = true;
+          resolve(value);
+        },
+        onDismissed: () => {
+          if (!answered) resolve("");
+        },
+      }).open();
+    });
+  }
+
+  private async fetchFeedsWithNotice(): Promise<void> {
+    if (!this.settings.feeds.enabled) return void new Notice("Feeds are switched off in Dragonglass settings.");
+    const result = await this.feeds.fetchAll();
+    new Notice(result.added ? `Fetched ${result.added} new Feed Item${result.added === 1 ? "" : "s"}.` : "No new Feed Items.");
   }
 
   private async openProjectDetail(id: string): Promise<void> {

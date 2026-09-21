@@ -43,6 +43,17 @@ export class GtdRepository {
     return (await this.createInboxRecord(title, details)).file;
   }
 
+  /**
+   * Creates an Inbox Item and hands back the record.
+   *
+   * The ULID is minted here rather than read back from the index, so a caller that
+   * wants to address the Item immediately does not have to wait for the metadata
+   * cache to catch up with the file it just wrote.
+   */
+  async createIdentifiedInboxItem(title: string, details = ""): Promise<InboxItem> {
+    return this.createInboxRecord(title, details);
+  }
+
   async createClarifiedAction(input: ActionInput): Promise<void> {
     if (actionRequiresContext(input.status) && !input.context.trim()) throw new Error("A context is required.");
     validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);

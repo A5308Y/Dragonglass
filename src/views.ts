@@ -1,13 +1,16 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { ElmActionBoardHost } from "./adapter/elm-action-board";
 import { ElmBrainstormHost } from "./adapter/elm-brainstorm";
+import { ElmFeedsHost } from "./adapter/elm-feeds";
 import { ElmInboxHost } from "./adapter/elm-inbox";
 import { ElmProjectsHost } from "./adapter/elm-projects";
 import { ElmProjectReviewHost } from "./adapter/elm-project-review";
+import type { FeedService } from "./feeds/feed-service";
 import type { GtdServices } from "./ui/services";
 
 export const BOARD_VIEW_TYPE = "dragonglass-action-board";
 export const BRAINSTORM_VIEW_TYPE = "dragonglass-brainstorm";
+export const FEEDS_VIEW_TYPE = "dragonglass-feeds";
 export const INBOX_VIEW_TYPE = "dragonglass-inbox";
 export const PROJECTS_VIEW_TYPE = "dragonglass-projects";
 export const REVIEW_VIEW_TYPE = "dragonglass-project-review";
@@ -52,8 +55,29 @@ export class GtdProjectReviewView extends ItemView {
   }
 }
 
+export class GtdFeedsView extends ItemView {
+  private host: ElmFeedsHost | null = null;
+
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices, private readonly feeds: FeedService) { super(leaf); }
+  getViewType(): string { return FEEDS_VIEW_TYPE; }
+  getDisplayText(): string { return "GTD Feeds"; }
+  getIcon(): string { return "rss"; }
+  async onOpen(): Promise<void> { this.refresh(); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
+  refresh(): void {
+    if (this.host) return this.host.refresh();
+    this.contentEl.empty();
+    this.host = new ElmFeedsHost(this.contentEl, this.services, this.feeds);
+  }
+}
+
 export class GtdInboxView extends ItemView {
   private processing = false;
+  private processingItemId: string | undefined;
   private host: ElmInboxHost | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
@@ -71,20 +95,25 @@ export class GtdInboxView extends ItemView {
     this.contentEl.empty();
   }
 
-  startProcessing(): void {
+  startProcessing(itemId?: string): void {
     this.processing = true;
+    this.processingItemId = itemId;
     this.refresh();
   }
 
   refresh(): void {
     if (this.host) {
-      this.host.refresh(this.processing);
+      this.host.refresh(this.processing, this.processingItemId);
       this.processing = false;
+      this.processingItemId = undefined;
       return;
     }
     this.contentEl.empty();
     this.host = new ElmInboxHost(this.contentEl, this.services, this.processing);
+    // A named Item arrives as an event, because the program is only told once at start-up.
+    if (this.processing && this.processingItemId) this.host.refresh(true, this.processingItemId);
     this.processing = false;
+    this.processingItemId = undefined;
   }
 }
 
