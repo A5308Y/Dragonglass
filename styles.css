@@ -7,6 +7,22 @@
   overflow: hidden;
 }
 
+/* Obsidian fixes its view header and bottom navbar over the content on iPhone
+   in floating/full-screen modes. Keep zero-padding desktop layouts while
+   honoring the mobile offsets the host publishes for those modes. */
+body.is-phone .workspace-leaf-content:is(
+  [data-type="dragonglass-action-board"],
+  [data-type="dragonglass-brainstorm"],
+  [data-type="dragonglass-inbox"],
+  [data-type="dragonglass-projects"],
+  [data-type="dragonglass-project-review"]
+) .view-content {
+  box-sizing: border-box;
+  margin-top: 0;
+  padding-top: var(--view-top-spacing, 0px);
+  padding-bottom: max(var(--view-bottom-spacing, 0px), var(--safe-area-inset-bottom, 0px));
+}
+
 .dg-view {
   --dg-card-width: 272px;
   height: 100%;
