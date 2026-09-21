@@ -26,7 +26,7 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (FeedId, FeedItemKey)
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, button, div, h2, h3, header, input, p, section, small, span, text)
-import Html.Attributes exposing (attribute, class, classList, disabled, id, placeholder, tabindex, title, type_, value)
+import Html.Attributes exposing (attribute, class, classList, disabled, id, placeholder, tabindex, type_, value)
 import Html.Events exposing (onClick, onFocus, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -348,7 +348,6 @@ view model =
                 [ if model.feeds.undoCount > 0 then
                     button
                         [ class "dg-feed-undo"
-                        , title "Puts the last discard back. Nothing was written to the vault."
                         , onClick (Send Working Command.UndoDiscard)
                         ]
                         [ text ("Undo " ++ String.fromInt model.feeds.undoCount) ]
@@ -426,7 +425,6 @@ toolbar model openCount sections =
         , span [ class "dg-batch-spacer" ] []
         , button
             [ class "mod-warning dg-feed-discard"
-            , title "Discards every Item shown in an open feed section."
             , disabled (openCount == 0 || busy model)
             , onClick DiscardAll
             ]
@@ -460,15 +458,14 @@ sectionView model indexes entry =
                         )
                     ]
                 , div [ class "dg-feed-section-title" ]
-                    [ h3 [ title entry.feed.url ] [ text entry.feed.title ]
+                    [ h3 [] [ text entry.feed.title ]
                     , span [ class "dg-count" ] [ text (String.fromInt (List.length entry.items)) ]
                     ]
                 ]
             , div [ class "dg-feed-section-controls" ]
-                [ Ui.maybeView (nonEmpty entry.feed.error) (\message -> span [ class "dg-feed-error", title message ] [ text "Fetch failed" ])
+                [ Ui.maybeView (nonEmpty entry.feed.error) (\_ -> span [ class "dg-feed-error" ] [ text "Fetch failed" ])
                 , button
                     [ class "mod-warning dg-feed-discard"
-                    , title "Discards every Item shown in this feed."
                     , disabled (count == 0 || busy model)
                     , onClick (DiscardSection entry.feed.id)
                     ]
@@ -525,7 +522,6 @@ rowView model indexes item =
             , button
                 [ class "mod-cta"
                 , disabled (busy model)
-                , title "Sends this Item to the Inbox to be clarified there."
                 , onClick (KeepOne item.key)
                 ]
                 [ text "Keep" ]
