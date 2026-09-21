@@ -7,6 +7,7 @@ const item = (changes: Partial<FeedItem> = {}): FeedItem => ({
   feedId: "feed-1",
   title: "Heat pumps in old houses",
   link: "https://example.com/heat-pumps",
+  commentsUrl: "",
   published: "2026-09-14T08:30:00.000Z",
   author: "Ada Lovelace",
   summary: "A long look at retrofits.",
@@ -48,6 +49,16 @@ describe("What a kept Item becomes", () => {
   it("omits the parts an Item does not carry", () => {
     expect(feedItemNote(item({ link: "", author: "", published: "", summary: "" }), "Heating Weekly"))
       .toBe("Heating Weekly");
+  });
+
+  it("records the discussion link separately from the source, right after it", () => {
+    expect(feedItemNote(item({ commentsUrl: "https://news.ycombinator.com/item?id=1" }), "Hacker News")).toBe(
+      "Source: https://example.com/heat-pumps\n"
+      + "Comments: https://news.ycombinator.com/item?id=1\n"
+      + "Hacker News · Ada Lovelace · 2026-09-14\n"
+      + "\n"
+      + "> A long look at retrofits.",
+    );
   });
 
   it("falls back to a title rather than writing an untitled note", () => {

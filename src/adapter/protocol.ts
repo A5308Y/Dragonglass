@@ -70,6 +70,8 @@ export interface ElmFeedItemDto {
   key: string;
   title: string;
   link: string;
+  /** The discussion page for this Item, when the feed names one separately from `link`. */
+  commentsUrl: string;
   published: string;
   /** How old the Item reads on a row, computed by the host so Elm needs no clock. */
   age: string;
@@ -155,6 +157,7 @@ export function elmFeeds(
           key: item.key,
           title: item.title,
           link: item.link,
+          commentsUrl: item.commentsUrl,
           published: item.published,
           age: feedItemAge(item.published, now),
           author: item.author,

@@ -72,10 +72,28 @@ describe("RSS feeds", () => {
       feedId: "feed-1",
       title: "Heat pumps in old houses",
       link: "https://example.com/heat-pumps",
+      commentsUrl: "",
       published: "2026-09-14T08:30:00.000Z",
       author: "Ada Lovelace",
       summary: "A long look at retrofits.",
     });
+  });
+
+  it("reads the discussion link Hacker News and similar feeds carry separately from the article", () => {
+    const hackerNews = `<rss><channel><item>
+      <title>Show HN: Dragonglass</title>
+      <link>https://example.com/dragonglass</link>
+      <comments>https://news.ycombinator.com/item?id=1</comments>
+      <description>&lt;a href="https://news.ycombinator.com/item?id=1"&gt;Comments&lt;/a&gt;</description>
+    </item></channel></rss>`;
+    const [item] = parseFeed(hackerNews, "hn").items;
+    expect(item?.link).toBe("https://example.com/dragonglass");
+    expect(item?.commentsUrl).toBe("https://news.ycombinator.com/item?id=1");
+  });
+
+  it("drops a hostile comments link the same as any other", () => {
+    const hostile = `<rss><channel><item><title>A</title><comments>javascript:alert(1)</comments></item></channel></rss>`;
+    expect(parseFeed(hostile, "f").items[0]?.commentsUrl).toBe("");
   });
 
   it("reads RSS 1.0 items that sit beside the channel rather than inside it", () => {
@@ -117,6 +135,17 @@ describe("Atom feeds", () => {
     expect(item?.key).toBe("urn:uuid:9");
     expect(item?.author).toBe("Grace");
     expect(item?.published).toBe("2026-09-01T10:00:00.000Z");
+  });
+
+  it("reads the Atom Threading Extension's rel=\"replies\" link as the discussion page", () => {
+    const withReplies = `<feed><entry>
+      <title>A</title><id>1</id>
+      <link rel="alternate" href="https://example.com/a"/>
+      <link rel="replies" href="https://example.com/a/comments"/>
+    </entry></feed>`;
+    const [item] = parseFeed(withReplies, "f").items;
+    expect(item?.link).toBe("https://example.com/a");
+    expect(item?.commentsUrl).toBe("https://example.com/a/comments");
   });
 
   it("falls back to updated when an entry has no published date", () => {

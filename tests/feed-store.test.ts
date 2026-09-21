@@ -21,6 +21,7 @@ const item = (key: string, published = "2026-09-01T00:00:00.000Z", feedId = "fee
   feedId,
   title: `Item ${key}`,
   link: `https://example.com/${key}`,
+  commentsUrl: "",
   published,
   author: "",
   summary: "",
@@ -45,6 +46,20 @@ describe("Folding a fetch into a feed", () => {
     const merged = mergeFetchedItems(stateWith({ unread: [existing] }), [{ ...item("a"), title: "Rewritten" }], "now");
     expect(merged.unread).toHaveLength(1);
     expect(merged.unread[0]?.title).toBe("As first seen");
+  });
+
+  it("backfills a field a feed only started sending after an Item first arrived", () => {
+    const existing = { ...item("a"), commentsUrl: "" };
+    const refetched = { ...item("a"), commentsUrl: "https://news.ycombinator.com/item?id=1" };
+    const merged = mergeFetchedItems(stateWith({ unread: [existing] }), [refetched], "now");
+    expect(merged.unread).toHaveLength(1);
+    expect(merged.unread[0]?.commentsUrl).toBe("https://news.ycombinator.com/item?id=1");
+  });
+
+  it("does not let a refetch erase a comments link the cached copy already has", () => {
+    const existing = { ...item("a"), commentsUrl: "https://example.com/thread" };
+    const merged = mergeFetchedItems(stateWith({ unread: [existing] }), [{ ...item("a"), commentsUrl: "" }], "now");
+    expect(merged.unread[0]?.commentsUrl).toBe("https://example.com/thread");
   });
 
   it("orders newest first and puts undated Items last", () => {

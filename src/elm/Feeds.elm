@@ -249,7 +249,15 @@ rowKey index key pressed model =
             send Working (Command.ProcessItem key) { model | kept = Set.remove key model.kept }
 
         Character "o" ->
-            case itemLink key model of
+            case itemUrl .link key model of
+                Just url ->
+                    send IgnoreReply (Command.OpenLink url) model
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        Character "c" ->
+            case itemUrl .commentsUrl key model of
                 Just url ->
                     send IgnoreReply (Command.OpenLink url) model
 
@@ -645,6 +653,8 @@ rowView model indexes item =
             ]
         , div [ class "dg-feed-row-actions" ]
             [ button [ disabled (String.isEmpty item.link), onClick (Open item.link) ] [ text "Open" ]
+            , Ui.maybeView (nonEmpty item.commentsUrl)
+                (\url -> button [ onClick (Open url) ] [ text "Comments" ])
             , button [ disabled (busy model), onClick (Process item.key) ] [ text "Process" ]
             , button [ class "mod-warning", disabled (busy model), onClick (Discard item.key) ] [ text "Discard" ]
             ]
@@ -712,12 +722,15 @@ sectionOf key model =
         |> Maybe.map .items
 
 
-itemLink : FeedItemKey -> Model -> Maybe String
-itemLink key model =
+{-| The non-empty value a field accessor names for this Item, if any — used for whichever
+URL a keyboard shortcut is opening.
+-}
+itemUrl : (Item -> String) -> FeedItemKey -> Model -> Maybe String
+itemUrl field key model =
     Feed.itemsOf model.feeds
-        |> List.filter (\item -> item.key == key && not (String.isEmpty item.link))
+        |> List.filter (\item -> item.key == key)
         |> List.head
-        |> Maybe.map .link
+        |> Maybe.andThen (field >> nonEmpty)
 
 
 matchesSearch : String -> Item -> Bool

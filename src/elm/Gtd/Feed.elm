@@ -29,6 +29,7 @@ type alias Item =
     { key : FeedItemKey
     , title : String
     , link : String
+    , commentsUrl : String
     , published : String
     , age : String
     , author : String
@@ -211,10 +212,11 @@ feedDecoder =
 
 itemDecoder : Decoder Item
 itemDecoder =
-    Decode.map7 Item
+    Decode.map8 Item
         (Decode.field "key" Decode.string)
         (Decode.field "title" Decode.string)
         (field "link" Decode.string "")
+        (field "commentsUrl" Decode.string "")
         (field "published" Decode.string "")
         (field "age" Decode.string "")
         (field "author" Decode.string "")

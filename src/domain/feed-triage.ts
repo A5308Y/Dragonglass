@@ -44,6 +44,7 @@ export function feedItemTitle(item: Pick<FeedItem, "title">): string {
 export function feedItemNote(item: FeedItem, feedTitle: string): string {
   const lines: string[] = [];
   if (item.link) lines.push(`Source: ${item.link}`);
+  if (item.commentsUrl) lines.push(`Comments: ${item.commentsUrl}`);
   const attribution = [feedTitle.trim(), item.author.trim(), item.published.slice(0, 10)].filter(Boolean);
   if (attribution.length) lines.push(escapeVaultText(attribution.join(" · ")));
   const summary = escapeVaultText(item.summary);

@@ -30,6 +30,11 @@ export interface FeedItem {
   title: string;
   /** An `http`/`https` URL, or `""` when the feed offered nothing safe to open. */
   link: string;
+  /**
+   * The discussion page for this Item — RSS `<comments>`, or an Atom `rel="replies"` link —
+   * distinct from `link` because a feed like Hacker News points them at two different pages.
+   */
+  commentsUrl: string;
   /** RFC 3339, or `""` when the feed omitted a usable date. */
   published: string;
   author: string;
@@ -105,14 +110,23 @@ export function unreadItems(store: FeedStoreData): FeedItem[] {
 export function mergeFetchedItems(state: FeedState, fetched: readonly FeedItem[], fetchedAt: string): FeedState {
   const resolved = new Set(state.seen);
   const present = new Set(state.unread.map((item) => item.key));
+  const fetchedByKey = new Map(fetched.map((item) => [item.key, item]));
   const added: FeedItem[] = [];
   for (const item of fetched) {
     if (resolved.has(item.key) || present.has(item.key)) continue;
     present.add(item.key);
     added.push(item);
   }
+  const patched = state.unread.map((existing) => {
+    const refreshed = fetchedByKey.get(existing.key);
+    // A field the feed only started sending after this Item first arrived — a comments
+    // link, say — is filled in rather than waiting for the Item to cycle off the list.
+    return refreshed && !existing.commentsUrl && refreshed.commentsUrl
+      ? { ...existing, commentsUrl: refreshed.commentsUrl }
+      : existing;
+  });
   return {
-    unread: [...added, ...state.unread].sort(byNewestFirst).slice(0, UNREAD_ITEM_LIMIT),
+    unread: [...added, ...patched].sort(byNewestFirst).slice(0, UNREAD_ITEM_LIMIT),
     seen: state.seen,
     fetched: fetchedAt,
     error: "",
@@ -216,6 +230,7 @@ function parseItem(feedId: string, raw: unknown): FeedItem[] {
     feedId,
     title: text(raw.title),
     link: text(raw.link),
+    commentsUrl: text(raw.commentsUrl),
     published: text(raw.published),
     author: text(raw.author),
     summary: text(raw.summary),
