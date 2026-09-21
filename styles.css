@@ -1676,8 +1676,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-feed-section-heading { flex: 1 1 100%; }
   .dg-feed-section-controls { flex: 1 1 100%; justify-content: flex-end; }
   .dg-feed-discard { flex: 1 1 auto; min-height: 38px; }
-  .dg-feed-rename-start { min-height: 32px !important; padding-inline: 10px; }
-  .dg-feed-rename { min-height: 38px; }
   .dg-feed-row { flex-direction: column; }
   .dg-feed-row-actions { width: 100%; }
   .dg-feed-row-actions button { flex: 1; min-height: 40px; }
@@ -1806,23 +1804,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   background: transparent !important;
   box-shadow: none !important;
   color: var(--text-muted);
-}
-.dg-feed-rename-start {
-  flex: 0 0 auto;
-  min-height: 0 !important;
-  padding: 1px 6px;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
-}
-.dg-feed-rename-start:hover { color: var(--text-accent); }
-.dg-feed-rename {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: auto;
-  padding: 2px 6px;
-  font-size: var(--font-ui-medium);
 }
 .dg-feed-error { color: var(--text-error); font-size: var(--font-ui-smaller); white-space: nowrap; }
 

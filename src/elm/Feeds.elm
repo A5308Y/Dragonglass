@@ -26,8 +26,8 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (FeedId, FeedItemKey)
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, button, div, h2, h3, header, input, p, section, small, span, text)
-import Html.Attributes exposing (attribute, autofocus, class, classList, disabled, id, placeholder, tabindex, title, type_, value)
-import Html.Events exposing (onBlur, onClick, onFocus, onInput)
+import Html.Attributes exposing (attribute, class, classList, disabled, id, placeholder, tabindex, title, type_, value)
+import Html.Events exposing (onClick, onFocus, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -53,7 +53,6 @@ type alias Model =
     , collapsed : Set FeedId
     , expanded : Set FeedItemKey
     , focusIndex : Maybe Int
-    , renaming : Maybe { feedId : FeedId, title : String }
     , requests : Requests Pending
     , error : Maybe String
     }
@@ -71,13 +70,8 @@ type Msg
     | DiscardSection FeedId
     | DiscardAll
     | Open String
-    | StartRename FeedId String
-    | RenameChanged String
-    | SaveRename
-    | CancelRename
     | Send Pending Command
     | Focused (Result Browser.Dom.Error ())
-    | NoOp
 
 
 main : Program Decode.Value Model Msg
@@ -107,7 +101,6 @@ initialModel feeds =
     , collapsed = Set.empty
     , expanded = Set.empty
     , focusIndex = Nothing
-    , renaming = Nothing
     , requests = Host.noRequests
     , error = Nothing
     }
@@ -163,25 +156,10 @@ update msg model =
         Open url ->
             send IgnoreReply (Command.OpenLink url) model
 
-        StartRename feedId currentTitle ->
-            ( { model | renaming = Just { feedId = feedId, title = currentTitle } }, Cmd.none )
-
-        RenameChanged title ->
-            ( { model | renaming = Maybe.map (\entry -> { entry | title = title }) model.renaming }, Cmd.none )
-
-        SaveRename ->
-            saveRename model
-
-        CancelRename ->
-            ( { model | renaming = Nothing }, Cmd.none )
-
         Send pending command ->
             send pending command model
 
         Focused _ ->
-            ( model, Cmd.none )
-
-        NoOp ->
             ( model, Cmd.none )
 
 
@@ -203,29 +181,6 @@ discardKeys keys model =
 
     else
         send Working (Command.DiscardItems keys) model
-
-
-{-| Submits a rename, or simply closes editing when nothing changed.
--}
-saveRename : Model -> ( Model, Cmd Msg )
-saveRename model =
-    case model.renaming of
-        Nothing ->
-            ( model, Cmd.none )
-
-        Just entry ->
-            let
-                title =
-                    String.trim entry.title
-
-                current =
-                    model.feeds.feeds |> List.filter (\feed -> feed.id == entry.feedId) |> List.head |> Maybe.map .title
-            in
-            if String.isEmpty title || Just title == current then
-                ( { model | renaming = Nothing }, Cmd.none )
-
-            else
-                send Working (Command.RenameFeed entry.feedId title) { model | renaming = Nothing }
 
 
 rowKey : Int -> FeedItemKey -> Key -> Model -> ( Model, Cmd Msg )
@@ -505,26 +460,9 @@ sectionView model indexes entry =
                         )
                     ]
                 , div [ class "dg-feed-section-title" ]
-                    (case model.renaming of
-                        Just renaming ->
-                            if renaming.feedId == entry.feed.id then
-                                [ input
-                                    [ class "dg-feed-rename"
-                                    , value renaming.title
-                                    , autofocus True
-                                    , onInput RenameChanged
-                                    , onBlur SaveRename
-                                    , Ui.onKeyDown renameKey
-                                    ]
-                                    []
-                                ]
-
-                            else
-                                titleView entry
-
-                        Nothing ->
-                            titleView entry
-                    )
+                    [ h3 [ title entry.feed.url ] [ text entry.feed.title ]
+                    , span [ class "dg-count" ] [ text (String.fromInt (List.length entry.items)) ]
+                    ]
                 ]
             , div [ class "dg-feed-section-controls" ]
                 [ Ui.maybeView (nonEmpty entry.feed.error) (\message -> span [ class "dg-feed-error", title message ] [ text "Fetch failed" ])
@@ -544,32 +482,6 @@ sectionView model indexes entry =
             div [ class "dg-feed-list", attribute "role" "list", attribute "aria-label" entry.feed.title ]
                 (List.map (rowView model indexes) entry.items)
         ]
-
-
-titleView : Section -> List (Html Msg)
-titleView entry =
-    [ h3 [ title entry.feed.url ] [ text entry.feed.title ]
-    , span [ class "dg-count" ] [ text (String.fromInt (List.length entry.items)) ]
-    , button
-        [ class "dg-feed-rename-start"
-        , title "Rename this feed"
-        , onClick (StartRename entry.feed.id entry.feed.title)
-        ]
-        [ text "Rename" ]
-    ]
-
-
-renameKey : Key -> Msg
-renameKey pressed =
-    case pressed of
-        Enter ->
-            SaveRename
-
-        Escape ->
-            CancelRename
-
-        _ ->
-            NoOp
 
 
 rowView : Model -> Dict FeedItemKey Int -> Item -> Html Msg

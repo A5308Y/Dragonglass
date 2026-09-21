@@ -329,7 +329,6 @@ type ElmNonMenuCommand =
   | { type: "prompt"; title: string; placeholder: string }
   | { type: "refresh-feeds" }
   | { type: "add-feed" }
-  | { type: "rename-feed"; feedId: string; title: string }
   | { type: "keep-feed-items"; keys: string[] }
   | { type: "discard-feed-items"; keys: string[] }
   | { type: "undo-feed-discard" }
@@ -377,7 +376,7 @@ export type ElmInboxCommand = Extract<ElmNonMenuCommand,
 >;
 
 export type ElmFeedsCommand = Extract<ElmNonMenuCommand,
-  | { type: "refresh-feeds" | "add-feed" | "rename-feed" | "keep-feed-items" | "discard-feed-items" }
+  | { type: "refresh-feeds" | "add-feed" | "keep-feed-items" | "discard-feed-items" }
   | { type: "undo-feed-discard" | "open-link" | "open-inbox" }
 >;
 
@@ -481,7 +480,7 @@ const PROJECTS_COMMANDS = new Set([
 const PROJECTS_MENU_COMMANDS = new Set([...PROJECTS_COMMANDS].filter((type) => type !== "show-menu"));
 const INBOX_COMMANDS = new Set(["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"]);
 const FEEDS_COMMANDS = new Set([
-  "refresh-feeds", "add-feed", "rename-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard",
+  "refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard",
   "open-link", "open-inbox",
 ]);
 const PROJECT_REVIEW_COMMANDS = new Set([
@@ -658,8 +657,6 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "add-feed":
     case "undo-feed-discard":
       return true;
-    case "rename-feed":
-      return typeof value.feedId === "string" && typeof value.title === "string";
     case "keep-feed-items":
     case "discard-feed-items":
       return isStringArray(value.keys);

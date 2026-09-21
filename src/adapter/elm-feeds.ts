@@ -74,10 +74,6 @@ export class ElmFeedsHost {
         new Notice(`Subscribed to “${source.title}”.`);
         return;
       }
-      case "rename-feed": {
-        await this.feeds.updateFeed(command.feedId, { title: command.title });
-        return;
-      }
       case "keep-feed-items": {
         const kept = await this.keep(command.keys);
         new Notice(`Kept ${kept} Feed Item${kept === 1 ? "" : "s"} in the Inbox.`);

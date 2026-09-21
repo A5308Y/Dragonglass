@@ -4,14 +4,13 @@ module Gtd.Command.Feeds exposing (Command(..), encode)
 -}
 
 import Gtd.Command as Base
-import Gtd.Id exposing (FeedId, FeedItemKey)
+import Gtd.Id exposing (FeedItemKey)
 import Json.Encode as Encode
 
 
 type Command
     = RefreshFeeds
     | AddFeed
-    | RenameFeed FeedId String
     | KeepItems (List FeedItemKey)
     | DiscardItems (List FeedItemKey)
     | UndoDiscard
@@ -28,9 +27,6 @@ encode command =
 
             AddFeed ->
                 Base.AddFeed
-
-            RenameFeed feedId title ->
-                Base.RenameFeed feedId title
 
             KeepItems keys ->
                 Base.KeepFeedItems keys
