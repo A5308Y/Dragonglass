@@ -7,11 +7,13 @@ decision at a time against a two-minute budget, because every capture there was
 put there on purpose. A feed sends far more than it is owed, so almost every Item
 earns one verdict — gone — and only a few are worth clarifying.
 
-So the list is the surface rather than a way into a processor, keeping is a mark
-rather than a write, and the button that matters sweeps a whole feed: the Items
-marked to keep become Inbox Items and the rest are discarded together. Nothing
-here is a vault file yet, which is why a sweep of two hundred rows is one write
-and can be undone.
+So the list is the surface rather than a way into a processor. **Keep** acts on
+one Item immediately, sending it to the Inbox to be clarified there later; there
+is no intermediate "marked" state to sweep afterward. Discarding is coarser on
+purpose — a whole feed's remaining Items, or every open feed's, in one press —
+because that is the actual shape of feed triage: a couple of Items are worth
+keeping and the rest is noise. Nothing here is a vault file until it is kept,
+which is why discarding two hundred rows is one write and can be undone.
 
 -}
 
@@ -24,8 +26,8 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (FeedId, FeedItemKey)
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, button, div, h2, h3, header, input, p, section, small, span, text)
-import Html.Attributes exposing (attribute, autofocus, checked, class, classList, disabled, id, placeholder, tabindex, title, type_, value)
-import Html.Events exposing (onBlur, onCheck, onClick, onFocus, onInput)
+import Html.Attributes exposing (attribute, autofocus, class, classList, disabled, id, placeholder, tabindex, title, type_, value)
+import Html.Events exposing (onBlur, onClick, onFocus, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -49,7 +51,6 @@ type alias Model =
     { feeds : Feeds
     , search : String
     , collapsed : Set FeedId
-    , kept : Set FeedItemKey
     , expanded : Set FeedItemKey
     , focusIndex : Maybe Int
     , renaming : Maybe { feedId : FeedId, title : String }
@@ -62,14 +63,13 @@ type Msg
     = GotHost Decode.Value
     | SearchChanged String
     | ToggleCollapsed FeedId
-    | SetKept FeedItemKey Bool
     | ToggleExpanded FeedItemKey
     | SetFocus Int
     | RowKey Int FeedItemKey Key
     | CollapseAll Bool
-    | Sweep (List FeedItemKey) (List FeedItemKey)
-    | Discard FeedItemKey
-    | Process FeedItemKey
+    | KeepOne FeedItemKey
+    | DiscardSection FeedId
+    | DiscardAll
     | Open String
     | StartRename FeedId String
     | RenameChanged String
@@ -105,7 +105,6 @@ initialModel feeds =
     { feeds = feeds
     , search = ""
     , collapsed = Set.empty
-    , kept = Set.empty
     , expanded = Set.empty
     , focusIndex = Nothing
     , renaming = Nothing
@@ -131,18 +130,6 @@ update msg model =
         ToggleCollapsed feedId ->
             ( { model | collapsed = toggle feedId model.collapsed }, Cmd.none )
 
-        SetKept key kept ->
-            ( { model
-                | kept =
-                    if kept then
-                        Set.insert key model.kept
-
-                    else
-                        Set.remove key model.kept
-              }
-            , Cmd.none
-            )
-
         ToggleExpanded key ->
             ( { model | expanded = toggle key model.expanded }, Cmd.none )
 
@@ -164,14 +151,14 @@ update msg model =
             , Cmd.none
             )
 
-        Sweep keep discard ->
-            sweep keep discard model
+        KeepOne key ->
+            keepOne key model
 
-        Discard key ->
-            send Working (Command.DiscardItems [ key ]) { model | kept = Set.remove key model.kept }
+        DiscardSection feedId ->
+            discardKeys (sectionKeys feedId model) model
 
-        Process key ->
-            send Working (Command.ProcessItem key) { model | kept = Set.remove key model.kept }
+        DiscardAll ->
+            discardKeys (List.map (.item >> .key) (visibleRows model)) model
 
         Open url ->
             send IgnoreReply (Command.OpenLink url) model
@@ -198,95 +185,24 @@ update msg model =
             ( model, Cmd.none )
 
 
-{-| Keeps and discards travel as two commands so a failed keep never discards anything.
+{-| Sends one Item straight to the Inbox. Immediate, not marked-then-swept.
 -}
-sweep : List FeedItemKey -> List FeedItemKey -> Model -> ( Model, Cmd Msg )
-sweep keep discard model =
-    if busy model || List.isEmpty (keep ++ discard) then
+keepOne : FeedItemKey -> Model -> ( Model, Cmd Msg )
+keepOne key model =
+    if busy model then
         ( model, Cmd.none )
 
     else
-        let
-            cleared =
-                { model | kept = Set.diff model.kept (Set.fromList keep) }
-
-            ( afterKeep, keepCmd ) =
-                if List.isEmpty keep then
-                    ( cleared, Cmd.none )
-
-                else
-                    send Working (Command.KeepItems keep) cleared
-
-            ( afterDiscard, discardCmd ) =
-                if List.isEmpty discard then
-                    ( afterKeep, Cmd.none )
-
-                else
-                    send Working (Command.DiscardItems discard) afterKeep
-        in
-        ( afterDiscard, Cmd.batch [ keepCmd, discardCmd ] )
+        send Working (Command.KeepItems [ key ]) model
 
 
-rowKey : Int -> FeedItemKey -> Key -> Model -> ( Model, Cmd Msg )
-rowKey index key pressed model =
-    case pressed of
-        ArrowDown ->
-            ( model, focusRow (index + 1) model )
+discardKeys : List FeedItemKey -> Model -> ( Model, Cmd Msg )
+discardKeys keys model =
+    if busy model || List.isEmpty keys then
+        ( model, Cmd.none )
 
-        ArrowUp ->
-            ( model, focusRow (index - 1) model )
-
-        Enter ->
-            ( { model | expanded = toggle key model.expanded }, Cmd.none )
-
-        Character "k" ->
-            ( { model | kept = toggle key model.kept }, Cmd.none )
-
-        Character "d" ->
-            send Working (Command.DiscardItems [ key ]) { model | kept = Set.remove key model.kept }
-
-        Character "p" ->
-            send Working (Command.ProcessItem key) { model | kept = Set.remove key model.kept }
-
-        Character "o" ->
-            case itemUrl .link key model of
-                Just url ->
-                    send IgnoreReply (Command.OpenLink url) model
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        Character "c" ->
-            case itemUrl .commentsUrl key model of
-                Just url ->
-                    send IgnoreReply (Command.OpenLink url) model
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        Character "s" ->
-            case sectionOf key model of
-                Just rows ->
-                    let
-                        plan =
-                            Feed.sweep model.kept rows
-                    in
-                    sweep plan.keep plan.discard model
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        _ ->
-            ( model, Cmd.none )
-
-
-send : Pending -> Command -> Model -> ( Model, Cmd Msg )
-send pending command model =
-    let
-        ( requestId, requests ) =
-            Host.issue pending model.requests
-    in
-    ( { model | requests = requests }, feedsToHost (Host.envelope requestId (Command.encode command)) )
+    else
+        send Working (Command.DiscardItems keys) model
 
 
 {-| Submits a rename, or simply closes editing when nothing changed.
@@ -310,6 +226,58 @@ saveRename model =
 
             else
                 send Working (Command.RenameFeed entry.feedId title) { model | renaming = Nothing }
+
+
+rowKey : Int -> FeedItemKey -> Key -> Model -> ( Model, Cmd Msg )
+rowKey index key pressed model =
+    case pressed of
+        ArrowDown ->
+            ( model, focusRow (index + 1) model )
+
+        ArrowUp ->
+            ( model, focusRow (index - 1) model )
+
+        Enter ->
+            ( { model | expanded = toggle key model.expanded }, Cmd.none )
+
+        Character "k" ->
+            keepOne key model
+
+        Character "o" ->
+            case itemUrl .link key model of
+                Just url ->
+                    send IgnoreReply (Command.OpenLink url) model
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        Character "c" ->
+            case itemUrl .commentsUrl key model of
+                Just url ->
+                    send IgnoreReply (Command.OpenLink url) model
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        Character "s" ->
+            case sectionOf key model of
+                Just feedId ->
+                    discardKeys (sectionKeys feedId model) model
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
+
+
+send : Pending -> Command -> Model -> ( Model, Cmd Msg )
+send pending command model =
+    let
+        ( requestId, requests ) =
+            Host.issue pending model.requests
+    in
+    ( { model | requests = requests }, feedsToHost (Host.envelope requestId (Command.encode command)) )
 
 
 {-| Moves focus to a row by position. Walking off either end stays put.
@@ -369,14 +337,8 @@ receiveHost value model =
                 present =
                     Feed.itemsOf feeds |> List.map .key |> Set.fromList
             in
-            -- Marks and expansions only mean anything for Items still on the list.
-            ( { model
-                | feeds = feeds
-                , kept = Set.intersect model.kept present
-                , expanded = Set.intersect model.expanded present
-              }
-            , Cmd.none
-            )
+            -- Expansion only means anything for an Item still on the list.
+            ( { model | feeds = feeds, expanded = Set.intersect model.expanded present }, Cmd.none )
 
         Ok (Replied outcome) ->
             let
@@ -394,7 +356,7 @@ receiveHost value model =
                     ( { next | error = Nothing }
                     , if pending == Just Working then
                         -- The row that took this one's place should be the one now focused.
-                        Maybe.map (\index -> focusRow index next) next.focusIndex |> Maybe.withDefault Cmd.none
+                        Maybe.map (\index -> focusNearest index next) next.focusIndex |> Maybe.withDefault Cmd.none
 
                       else
                         Cmd.none
@@ -418,11 +380,8 @@ view model =
         sections =
             visibleSections model
 
-        rows =
-            visibleRows model
-
-        plan =
-            Feed.sweep model.kept (List.map .item rows)
+        openCount =
+            List.length (visibleRows model)
     in
     div [ class "dg-view dg-feeds-view" ]
         [ header [ class "dg-view-header" ]
@@ -434,7 +393,7 @@ view model =
                 [ if model.feeds.undoCount > 0 then
                     button
                         [ class "dg-feed-undo"
-                        , title "Puts the last sweep back. Nothing was written to the vault."
+                        , title "Puts the last discard back. Nothing was written to the vault."
                         , onClick (Send Working Command.UndoDiscard)
                         ]
                         [ text ("Undo " ++ String.fromInt model.feeds.undoCount) ]
@@ -467,7 +426,7 @@ view model =
 
           else
             div []
-                [ toolbar model plan sections
+                [ toolbar model openCount sections
                 , if List.isEmpty sections then
                     emptyState
                         (if String.isEmpty model.search then
@@ -477,7 +436,7 @@ view model =
                             "Nothing matches this search."
                         )
                         (if String.isEmpty model.search then
-                            "Every subscribed feed has been swept."
+                            "Every subscribed feed has been kept or discarded."
 
                          else
                             "Clear the search to see the rest."
@@ -490,8 +449,8 @@ view model =
         ]
 
 
-toolbar : Model -> Feed.Sweep -> List Section -> Html Msg
-toolbar model plan sections =
+toolbar : Model -> Int -> List Section -> Html Msg
+toolbar model openCount sections =
     let
         allCollapsed =
             not (List.isEmpty sections)
@@ -511,12 +470,79 @@ toolbar model plan sections =
             ]
         , span [ class "dg-batch-spacer" ] []
         , button
-            [ class "mod-cta dg-feed-sweep"
-            , title "Keeps what is marked and discards the rest, across every open feed section."
-            , disabled (not plan.ready || busy model)
-            , onClick (Sweep plan.keep plan.discard)
+            [ class "mod-warning dg-feed-discard"
+            , title "Discards every Item shown in an open feed section."
+            , disabled (openCount == 0 || busy model)
+            , onClick DiscardAll
             ]
-            [ text plan.label ]
+            [ text ("Discard all (" ++ String.fromInt openCount ++ ")") ]
+        ]
+
+
+sectionView : Model -> Dict FeedItemKey Int -> Section -> Html Msg
+sectionView model indexes entry =
+    let
+        collapsed =
+            Set.member entry.feed.id model.collapsed
+
+        count =
+            List.length entry.items
+    in
+    section [ class "dg-feed-section", classList [ ( "is-collapsed", collapsed ) ] ]
+        [ div [ class "dg-feed-section-header" ]
+            [ div [ class "dg-feed-section-heading" ]
+                [ button
+                    [ class "dg-feed-collapse"
+                    , attribute "aria-expanded" (Ui.boolAttribute (not collapsed))
+                    , onClick (ToggleCollapsed entry.feed.id)
+                    ]
+                    [ text
+                        (if collapsed then
+                            "▸"
+
+                         else
+                            "▾"
+                        )
+                    ]
+                , div [ class "dg-feed-section-title" ]
+                    (case model.renaming of
+                        Just renaming ->
+                            if renaming.feedId == entry.feed.id then
+                                [ input
+                                    [ class "dg-feed-rename"
+                                    , value renaming.title
+                                    , autofocus True
+                                    , onInput RenameChanged
+                                    , onBlur SaveRename
+                                    , Ui.onKeyDown renameKey
+                                    ]
+                                    []
+                                ]
+
+                            else
+                                titleView entry
+
+                        Nothing ->
+                            titleView entry
+                    )
+                ]
+            , div [ class "dg-feed-section-controls" ]
+                [ Ui.maybeView (nonEmpty entry.feed.error) (\message -> span [ class "dg-feed-error", title message ] [ text "Fetch failed" ])
+                , button
+                    [ class "mod-warning dg-feed-discard"
+                    , title "Discards every Item shown in this feed."
+                    , disabled (count == 0 || busy model)
+                    , onClick (DiscardSection entry.feed.id)
+                    ]
+                    [ text ("Discard (" ++ String.fromInt count ++ ")") ]
+                ]
+            ]
+        , if collapsed then
+            text ""
+
+          else
+            div [ class "dg-feed-list", attribute "role" "list", attribute "aria-label" entry.feed.title ]
+                (List.map (rowView model indexes) entry.items)
         ]
 
 
@@ -546,95 +572,24 @@ renameKey pressed =
             NoOp
 
 
-sectionView : Model -> Dict FeedItemKey Int -> Section -> Html Msg
-sectionView model indexes entry =
-    let
-        collapsed =
-            Set.member entry.feed.id model.collapsed
-
-        plan =
-            Feed.sweep model.kept entry.items
-    in
-    section [ class "dg-feed-section", classList [ ( "is-collapsed", collapsed ) ] ]
-        [ div [ class "dg-feed-section-header" ]
-            [ button
-                [ class "dg-feed-collapse"
-                , attribute "aria-expanded" (Ui.boolAttribute (not collapsed))
-                , onClick (ToggleCollapsed entry.feed.id)
-                ]
-                [ text
-                    (if collapsed then
-                        "▸"
-
-                     else
-                        "▾"
-                    )
-                ]
-            , div [ class "dg-feed-section-title" ]
-                (case model.renaming of
-                    Just renaming ->
-                        if renaming.feedId == entry.feed.id then
-                            [ input
-                                [ class "dg-feed-rename"
-                                , value renaming.title
-                                , autofocus True
-                                , onInput RenameChanged
-                                , onBlur SaveRename
-                                , Ui.onKeyDown renameKey
-                                ]
-                                []
-                            ]
-
-                        else
-                            titleView entry
-
-                    Nothing ->
-                        titleView entry
-                )
-            , Ui.maybeView (nonEmpty entry.feed.error) (\message -> span [ class "dg-feed-error", title message ] [ text "Fetch failed" ])
-            , button
-                [ class "dg-feed-sweep"
-                , title "Keeps what is marked in this feed and discards the rest."
-                , disabled (not plan.ready || busy model)
-                , onClick (Sweep plan.keep plan.discard)
-                ]
-                [ text plan.label ]
-            ]
-        , if collapsed then
-            text ""
-
-          else
-            div [ class "dg-feed-list", attribute "role" "list", attribute "aria-label" entry.feed.title ]
-                (List.map (rowView model indexes) entry.items)
-        ]
-
-
 rowView : Model -> Dict FeedItemKey Int -> Item -> Html Msg
 rowView model indexes item =
     let
         index =
             Dict.get item.key indexes |> Maybe.withDefault 0
 
-        kept =
-            Set.member item.key model.kept
-
         expanded =
             Set.member item.key model.expanded
     in
     article
-        [ classList [ ( "dg-feed-row", True ), ( "is-kept", kept ), ( "is-expanded", expanded ) ]
+        [ classList [ ( "dg-feed-row", True ), ( "is-expanded", expanded ) ]
         , attribute "role" "listitem"
         , id (rowDomId index)
         , tabindex 0
         , onFocus (SetFocus index)
         , Ui.onKeyDown (RowKey index item.key)
         ]
-        [ Html.label
-            [ class "dg-feed-keep", title "Keep this Item. A sweep sends every marked Item to the Inbox." ]
-            [ input [ type_ "checkbox", checked kept, onCheck (SetKept item.key) ] []
-            , span [] [ text "Keep" ]
-            ]
-        , div [ class "dg-feed-main" ]
+        [ div [ class "dg-feed-main" ]
             [ button [ class "dg-feed-title", onClick (ToggleExpanded item.key) ] [ text item.title ]
             , span [ class "dg-feed-meta" ] [ text (itemMeta item) ]
             , if expanded then
@@ -655,8 +610,13 @@ rowView model indexes item =
             [ button [ disabled (String.isEmpty item.link), onClick (Open item.link) ] [ text "Open" ]
             , Ui.maybeView (nonEmpty item.commentsUrl)
                 (\url -> button [ onClick (Open url) ] [ text "Comments" ])
-            , button [ disabled (busy model), onClick (Process item.key) ] [ text "Process" ]
-            , button [ class "mod-warning", disabled (busy model), onClick (Discard item.key) ] [ text "Discard" ]
+            , button
+                [ class "mod-cta"
+                , disabled (busy model)
+                , title "Sends this Item to the Inbox to be clarified there."
+                , onClick (KeepOne item.key)
+                ]
+                [ text "Keep" ]
             ]
         ]
 
@@ -714,12 +674,22 @@ rowIndexes model =
         |> Dict.fromList
 
 
-sectionOf : FeedItemKey -> Model -> Maybe (List Item)
+{-| The keys a section's Discard button would take — every Item currently shown in
+that feed, collapsed or not, since discarding a specific feed is a deliberate act.
+-}
+sectionKeys : FeedId -> Model -> List FeedItemKey
+sectionKeys feedId model =
+    visibleSections model
+        |> List.filter (\entry -> entry.feed.id == feedId)
+        |> List.concatMap (.items >> List.map .key)
+
+
+sectionOf : FeedItemKey -> Model -> Maybe FeedId
 sectionOf key model =
     visibleSections model
         |> List.filter (\entry -> List.any (\item -> item.key == key) entry.items)
         |> List.head
-        |> Maybe.map .items
+        |> Maybe.map (.feed >> .id)
 
 
 {-| The non-empty value a field accessor names for this Item, if any — used for whichever

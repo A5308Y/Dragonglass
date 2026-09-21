@@ -333,7 +333,6 @@ type ElmNonMenuCommand =
   | { type: "keep-feed-items"; keys: string[] }
   | { type: "discard-feed-items"; keys: string[] }
   | { type: "undo-feed-discard" }
-  | { type: "process-feed-item"; key: string }
   | { type: "open-link"; url: string };
 
 export type ElmImportKind = "actions" | "subprojects";
@@ -379,7 +378,7 @@ export type ElmInboxCommand = Extract<ElmNonMenuCommand,
 
 export type ElmFeedsCommand = Extract<ElmNonMenuCommand,
   | { type: "refresh-feeds" | "add-feed" | "rename-feed" | "keep-feed-items" | "discard-feed-items" }
-  | { type: "undo-feed-discard" | "process-feed-item" | "open-link" | "open-inbox" }
+  | { type: "undo-feed-discard" | "open-link" | "open-inbox" }
 >;
 
 export type ElmProjectReviewCommand = Extract<ElmNonMenuCommand,
@@ -483,7 +482,7 @@ const PROJECTS_MENU_COMMANDS = new Set([...PROJECTS_COMMANDS].filter((type) => t
 const INBOX_COMMANDS = new Set(["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"]);
 const FEEDS_COMMANDS = new Set([
   "refresh-feeds", "add-feed", "rename-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard",
-  "process-feed-item", "open-link", "open-inbox",
+  "open-link", "open-inbox",
 ]);
 const PROJECT_REVIEW_COMMANDS = new Set([
   "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
@@ -664,8 +663,6 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "keep-feed-items":
     case "discard-feed-items":
       return isStringArray(value.keys);
-    case "process-feed-item":
-      return typeof value.key === "string";
     case "open-link":
       return typeof value.url === "string";
     default:

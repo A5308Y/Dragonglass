@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeVaultText, feedItemAge, feedItemNote, feedItemTitle, feedSweep } from "../src/domain/feed-triage";
+import { escapeVaultText, feedItemAge, feedItemNote, feedItemTitle } from "../src/domain/feed-triage";
 import type { FeedItem } from "../src/domain/feed";
 
 const item = (changes: Partial<FeedItem> = {}): FeedItem => ({
@@ -12,28 +12,6 @@ const item = (changes: Partial<FeedItem> = {}): FeedItem => ({
   author: "Ada Lovelace",
   summary: "A long look at retrofits.",
   ...changes,
-});
-
-describe("The sweep button", () => {
-  it("says it will discard everything when nothing is marked", () => {
-    expect(feedSweep(0, 40)).toEqual({ keep: 0, discard: 40, label: "Discard all (40)", ready: true });
-  });
-
-  it("names both halves once some Items are marked", () => {
-    expect(feedSweep(2, 40).label).toBe("Keep 2, discard 38");
-  });
-
-  it("says nothing is discarded when every Item is marked", () => {
-    expect(feedSweep(3, 3).label).toBe("Keep all (3)");
-  });
-
-  it("is not ready with nothing to sweep", () => {
-    expect(feedSweep(0, 0)).toEqual({ keep: 0, discard: 0, label: "Nothing to sweep", ready: false });
-  });
-
-  it("cannot report more kept than shown", () => {
-    expect(feedSweep(9, 3)).toEqual({ keep: 3, discard: 0, label: "Keep all (3)", ready: true });
-  });
 });
 
 describe("What a kept Item becomes", () => {

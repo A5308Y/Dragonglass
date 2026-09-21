@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(elm make *)",
+      "Bash(ELM_HOME=\"$PWD/.elm-home\" elm make *)"
+    ]
+  }
+}

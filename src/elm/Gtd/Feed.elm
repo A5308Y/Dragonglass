@@ -3,12 +3,10 @@ module Gtd.Feed exposing
     , Feeds
     , Item
     , Status(..)
-    , Sweep
     , decoder
     , empty
     , itemsOf
     , statusText
-    , sweep
     , totalUnread
     )
 
@@ -22,7 +20,6 @@ of the plugin like two hundred Projects changing.
 
 import Gtd.Id exposing (FeedId, FeedItemKey)
 import Json.Decode as Decode exposing (Decoder)
-import Set exposing (Set)
 
 
 type alias Item =
@@ -106,58 +103,6 @@ statusText feeds =
 
             else
                 feeds.error
-
-
-
--- SWEEPING
-
-
-{-| What one sweep button will do, and how it says so.
-
-A sweep is the whole point of the surface: the Items marked to keep become Inbox
-Items and everything else shown is discarded, in one press. The label names both
-halves so nothing is thrown away by a button that only said "Discard".
-
--}
-type alias Sweep =
-    { keep : List FeedItemKey
-    , discard : List FeedItemKey
-    , label : String
-    , ready : Bool
-    }
-
-
-sweep : Set FeedItemKey -> List Item -> Sweep
-sweep kept items =
-    let
-        keys =
-            List.map .key items
-
-        ( keep, discard ) =
-            List.partition (\key -> Set.member key kept) keys
-
-        keepCount =
-            List.length keep
-
-        discardCount =
-            List.length discard
-    in
-    { keep = keep
-    , discard = discard
-    , label =
-        if keepCount == 0 && discardCount == 0 then
-            "Nothing to sweep"
-
-        else if keepCount == 0 then
-            "Discard all (" ++ String.fromInt discardCount ++ ")"
-
-        else if discardCount == 0 then
-            "Keep all (" ++ String.fromInt keepCount ++ ")"
-
-        else
-            "Keep " ++ String.fromInt keepCount ++ ", discard " ++ String.fromInt discardCount
-    , ready = keepCount + discardCount > 0
-    }
 
 
 

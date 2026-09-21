@@ -15,7 +15,6 @@ type Command
     | KeepItems (List FeedItemKey)
     | DiscardItems (List FeedItemKey)
     | UndoDiscard
-    | ProcessItem FeedItemKey
     | OpenLink String
     | OpenInbox
 
@@ -41,9 +40,6 @@ encode command =
 
             UndoDiscard ->
                 Base.UndoFeedDiscard
-
-            ProcessItem key ->
-                Base.ProcessFeedItem key
 
             OpenLink url ->
                 Base.OpenLink url

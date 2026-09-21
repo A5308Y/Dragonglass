@@ -94,7 +94,6 @@ type Command
     | KeepFeedItems (List FeedItemKey)
     | DiscardFeedItems (List FeedItemKey)
     | UndoFeedDiscard
-    | ProcessFeedItem FeedItemKey
     | OpenLink String
       -- Inbox
     | ReadInboxBody InboxItemId
@@ -491,9 +490,6 @@ encode command =
 
         UndoFeedDiscard ->
             object "undo-feed-discard" []
-
-        ProcessFeedItem key ->
-            object "process-feed-item" [ ( "key", Encode.string key ) ]
 
         OpenLink url ->
             object "open-link" [ ( "url", Encode.string url ) ]

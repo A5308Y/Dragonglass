@@ -43,7 +43,6 @@ export default class DragonglassGtdPlugin extends Plugin {
       openFile: (file) => this.openFile(file),
       quickCapture: () => this.quickCapture(),
       openInbox: () => void this.activateView(INBOX_VIEW_TYPE),
-      processInboxItem: (itemId) => void this.processInbox(itemId),
       promptForText: (title, placeholder) => this.promptForText(title, placeholder),
       createAction: (projectId) => this.createAction(projectId),
       scheduleAction: (id) => this.scheduleAction(id),

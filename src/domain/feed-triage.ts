@@ -1,33 +1,11 @@
 /**
- * What a sweep says it will do, and what a kept Feed Item becomes.
+ * What a kept Feed Item becomes.
  *
- * Both are decided here rather than in the view so that the wording on the button
- * and the note that lands in the Inbox can be tested without a vault or a browser.
+ * Decided here rather than in the view so that the note that lands in the Inbox
+ * can be tested without a vault or a browser.
  */
 
 import type { FeedItem } from "./feed";
-
-export interface FeedSweep {
-  keep: number;
-  discard: number;
-  label: string;
-  ready: boolean;
-}
-
-/**
- * The single sweep button.
- *
- * A sweep both keeps and discards, so the label names both halves: a button that
- * only said "Discard" would quietly be sending things to the Inbox as well.
- */
-export function feedSweep(kept: number, total: number): FeedSweep {
-  const keep = Math.max(0, Math.min(kept, total));
-  const discard = Math.max(0, total - keep);
-  if (!keep && !discard) return { keep: 0, discard: 0, label: "Nothing to sweep", ready: false };
-  if (!keep) return { keep, discard, label: `Discard all (${discard})`, ready: true };
-  if (!discard) return { keep, discard, label: `Keep all (${keep})`, ready: true };
-  return { keep, discard, label: `Keep ${keep}, discard ${discard}`, ready: true };
-}
 
 /** The Inbox Item title a kept Feed Item takes. */
 export function feedItemTitle(item: Pick<FeedItem, "title">): string {

@@ -94,14 +94,6 @@ export class ElmFeedsHost {
         if (restored) new Notice(`Put ${restored} Feed Item${restored === 1 ? "" : "s"} back.`);
         return;
       }
-      case "process-feed-item": {
-        const item = this.feeds.findItem(command.key);
-        if (!item) throw new Error("This Feed Item is no longer on the list.");
-        const created = await this.createInboxItem(item);
-        await this.feeds.consume([item.key]);
-        this.services.processInboxItem(created);
-        return;
-      }
       case "open-link": {
         const url = new URL(command.url);
         if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only http and https links can be opened.");
