@@ -1619,9 +1619,18 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 
 @media (max-width: 600px) {
-  .dg-view-header { align-items: flex-start; }
+  .dg-view-header {
+    flex: 0 0 auto;
+    align-items: flex-start;
+    overflow: visible;
+  }
   .dg-view-header,
   .dg-header-actions { flex-wrap: wrap; }
+  .dg-view-header > div {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  .dg-view-header > .dg-header-actions { justify-content: flex-end; }
   .dg-view-header button,
   .dg-card .dg-icon-button { min-height: 38px; }
   .dg-board-view,
