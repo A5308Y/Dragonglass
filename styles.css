@@ -1786,8 +1786,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-feed-collapse {
   flex: 0 0 auto;
   padding: 0 6px;
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
   color: var(--text-muted);
 }
 .dg-feed-error { color: var(--text-error); font-size: var(--font-ui-smaller); white-space: nowrap; }
@@ -1824,8 +1824,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   display: block;
   max-width: 100%;
   padding: 0;
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
   text-align: left;
   color: var(--text-normal);
   font-weight: var(--font-semibold);
