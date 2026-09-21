@@ -1709,6 +1709,12 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-action-capture input:not([type="checkbox"]),
   .dg-action-capture button { width: 100% !important; min-height: 40px; }
   .dg-capture-toggle { justify-content: flex-start; min-height: 40px; }
+  .dg-action-capture .dg-capture-toggle input[type="checkbox"] {
+    width: 16px;
+    max-width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+  }
   .dg-action-capture > .dg-fuzzy-field { width: 100%; flex: 0 0 auto; }
   .dg-workflow-footer { align-items: stretch; flex-direction: column; }
   .dg-review-content > .dg-workflow-footer { bottom: -8px; margin: 14px -8px -8px; padding: 12px 8px; }
@@ -1720,6 +1726,13 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .modal.dg-modal-shell { width: calc(100vw - 12px); max-width: none; }
   .dg-modal .setting-item { display: flex; align-items: stretch; flex-direction: column; gap: 6px; }
   .dg-modal .setting-item-control { width: 100%; }
+  .dg-modal .setting-item:not(.mod-toggle):not(.setting-item-heading) .setting-item-control > input[type="checkbox"] {
+    width: var(--checkbox-size);
+    max-width: var(--checkbox-size);
+    height: var(--checkbox-size);
+    flex: 0 0 var(--checkbox-size);
+    margin-inline-end: auto;
+  }
   .dg-modal input:not([type="checkbox"]),
   .dg-modal select { width: 100%; min-height: 42px; }
 }
