@@ -1368,13 +1368,15 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-review-tree-list > div > button { flex: 0 1 auto; max-width: 100%; }
 .dg-review-tree-list > div:first-child { border-top: 0; }
 .dg-review-tree-list button {
+  display: block;
   min-width: 0;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
+  overflow-wrap: anywhere;
   border: 0 !important;
   text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: normal;
   color: var(--text-normal);
   background: transparent !important;
   box-shadow: none !important;
@@ -1700,7 +1702,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-review-hero { align-items: flex-start; padding: 14px; }
   .dg-review-panel { padding: 13px; }
   .dg-review-tree-list > div { padding: 8px 12px; gap: 4px 10px; }
-  .dg-review-tree-list > div > button { flex-basis: 100%; }
+  .dg-review-tree-list > div > button { width: 100%; flex-basis: 100%; }
   .dg-emoji-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .dg-inline-form,
   .dg-action-capture { align-items: stretch; flex-direction: column; }
