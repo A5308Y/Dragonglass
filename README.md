@@ -132,7 +132,7 @@ A Feed Item is not a vault file. It is a row in one JSON store until you keep it
 
 Because nothing is written until an Item is kept, discarding is cheap and reversible. **Undo** in the Feeds header puts the last sweep back in full.
 
-The list is the surface rather than a way into a processor. Items are grouped by feed in collapsible sections, each with a count and its own sweep button, and a search box filters titles, authors, and summaries. Clicking a title expands its summary in place; **Open** opens the article in a browser.
+The list is the surface rather than a way into a processor. Items are grouped by feed in collapsible sections, each with a count, a **Rename** control for the feed itself, and its own sweep button; a search box filters titles, authors, and summaries. Clicking an Item's title expands its summary in place; **Open** opens the article in a browser. A feed can also be renamed or unsubscribed from the settings tab, which also lists it whether or not it currently has unread Items.
 
 Keeping is a mark, not a write. Tick **Keep** on the few Items worth clarifying, then press the sweep button: the marked Items become Inbox Items and every other Item in that section is discarded together. The button says what it will do — `Discard all (40)`, `Keep 2, discard 38`, or `Keep all (3)` — so a sweep never quietly files something. The toolbar carries the same button for every open section at once, which is the global "mark all as read"; a collapsed feed is left alone, and the button's count always states exactly how many Items it covers. A single row can also be kept, discarded, or sent straight to Inbox processing with **Process**.
 

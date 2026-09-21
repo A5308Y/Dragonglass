@@ -23,7 +23,7 @@ one place.
 -}
 
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
-import Gtd.Id exposing (ActionId, FeedItemKey, InboxItemId, ProjectId)
+import Gtd.Id exposing (ActionId, FeedId, FeedItemKey, InboxItemId, ProjectId)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Settings as Settings exposing (SavedView)
 import Json.Encode as Encode
@@ -90,6 +90,7 @@ type Command
       -- Feeds
     | RefreshFeeds
     | AddFeed
+    | RenameFeed FeedId String
     | KeepFeedItems (List FeedItemKey)
     | DiscardFeedItems (List FeedItemKey)
     | UndoFeedDiscard
@@ -478,6 +479,9 @@ encode command =
 
         AddFeed ->
             object "add-feed" []
+
+        RenameFeed feedId title ->
+            object "rename-feed" [ ( "feedId", Encode.string feedId ), ( "title", Encode.string title ) ]
 
         KeepFeedItems keys ->
             object "keep-feed-items" [ ( "keys", Encode.list Encode.string keys ) ]

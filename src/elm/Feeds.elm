@@ -24,8 +24,8 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (FeedId, FeedItemKey)
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, button, div, h2, h3, header, input, p, section, small, span, text)
-import Html.Attributes exposing (attribute, checked, class, classList, disabled, id, placeholder, tabindex, title, type_, value)
-import Html.Events exposing (onCheck, onClick, onFocus, onInput)
+import Html.Attributes exposing (attribute, autofocus, checked, class, classList, disabled, id, placeholder, tabindex, title, type_, value)
+import Html.Events exposing (onBlur, onCheck, onClick, onFocus, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -52,6 +52,7 @@ type alias Model =
     , kept : Set FeedItemKey
     , expanded : Set FeedItemKey
     , focusIndex : Maybe Int
+    , renaming : Maybe { feedId : FeedId, title : String }
     , requests : Requests Pending
     , error : Maybe String
     }
@@ -70,8 +71,13 @@ type Msg
     | Discard FeedItemKey
     | Process FeedItemKey
     | Open String
+    | StartRename FeedId String
+    | RenameChanged String
+    | SaveRename
+    | CancelRename
     | Send Pending Command
     | Focused (Result Browser.Dom.Error ())
+    | NoOp
 
 
 main : Program Decode.Value Model Msg
@@ -102,6 +108,7 @@ initialModel feeds =
     , kept = Set.empty
     , expanded = Set.empty
     , focusIndex = Nothing
+    , renaming = Nothing
     , requests = Host.noRequests
     , error = Nothing
     }
@@ -169,10 +176,25 @@ update msg model =
         Open url ->
             send IgnoreReply (Command.OpenLink url) model
 
+        StartRename feedId currentTitle ->
+            ( { model | renaming = Just { feedId = feedId, title = currentTitle } }, Cmd.none )
+
+        RenameChanged title ->
+            ( { model | renaming = Maybe.map (\entry -> { entry | title = title }) model.renaming }, Cmd.none )
+
+        SaveRename ->
+            saveRename model
+
+        CancelRename ->
+            ( { model | renaming = Nothing }, Cmd.none )
+
         Send pending command ->
             send pending command model
 
         Focused _ ->
+            ( model, Cmd.none )
+
+        NoOp ->
             ( model, Cmd.none )
 
 
@@ -257,6 +279,29 @@ send pending command model =
             Host.issue pending model.requests
     in
     ( { model | requests = requests }, feedsToHost (Host.envelope requestId (Command.encode command)) )
+
+
+{-| Submits a rename, or simply closes editing when nothing changed.
+-}
+saveRename : Model -> ( Model, Cmd Msg )
+saveRename model =
+    case model.renaming of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just entry ->
+            let
+                title =
+                    String.trim entry.title
+
+                current =
+                    model.feeds.feeds |> List.filter (\feed -> feed.id == entry.feedId) |> List.head |> Maybe.map .title
+            in
+            if String.isEmpty title || Just title == current then
+                ( { model | renaming = Nothing }, Cmd.none )
+
+            else
+                send Working (Command.RenameFeed entry.feedId title) { model | renaming = Nothing }
 
 
 {-| Moves focus to a row by position. Walking off either end stays put.
@@ -467,6 +512,32 @@ toolbar model plan sections =
         ]
 
 
+titleView : Section -> List (Html Msg)
+titleView entry =
+    [ h3 [ title entry.feed.url ] [ text entry.feed.title ]
+    , span [ class "dg-count" ] [ text (String.fromInt (List.length entry.items)) ]
+    , button
+        [ class "dg-feed-rename-start"
+        , title "Rename this feed"
+        , onClick (StartRename entry.feed.id entry.feed.title)
+        ]
+        [ text "Rename" ]
+    ]
+
+
+renameKey : Key -> Msg
+renameKey pressed =
+    case pressed of
+        Enter ->
+            SaveRename
+
+        Escape ->
+            CancelRename
+
+        _ ->
+            NoOp
+
+
 sectionView : Model -> Dict FeedItemKey Int -> Section -> Html Msg
 sectionView model indexes entry =
     let
@@ -492,9 +563,26 @@ sectionView model indexes entry =
                     )
                 ]
             , div [ class "dg-feed-section-title" ]
-                [ h3 [ title entry.feed.url ] [ text entry.feed.title ]
-                , span [ class "dg-count" ] [ text (String.fromInt (List.length entry.items)) ]
-                ]
+                (case model.renaming of
+                    Just renaming ->
+                        if renaming.feedId == entry.feed.id then
+                            [ input
+                                [ class "dg-feed-rename"
+                                , value renaming.title
+                                , autofocus True
+                                , onInput RenameChanged
+                                , onBlur SaveRename
+                                , Ui.onKeyDown renameKey
+                                ]
+                                []
+                            ]
+
+                        else
+                            titleView entry
+
+                    Nothing ->
+                        titleView entry
+                )
             , Ui.maybeView (nonEmpty entry.feed.error) (\message -> span [ class "dg-feed-error", title message ] [ text "Fetch failed" ])
             , button
                 [ class "dg-feed-sweep"

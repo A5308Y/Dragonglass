@@ -290,8 +290,15 @@ export class GtdSettingTab extends PluginSettingTab {
     }
     for (const source of sources) {
       new Setting(containerEl)
-        .setName(source.title)
+        .setName("Title")
         .setDesc(`${source.url} · ${feeds.getStore().states[source.id]?.unread.length ?? 0} unread`)
+        .addText((text) => text
+          .setValue(source.title)
+          .onChange(async (value) => {
+            const title = value.trim();
+            if (!title) return;
+            await feeds.updateFeed(source.id, { title });
+          }))
         .addToggle((toggle) => toggle
           .setTooltip("Fetch this feed")
           .setValue(source.enabled)
