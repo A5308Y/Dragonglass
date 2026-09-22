@@ -175,6 +175,9 @@ describe("Elm adapter protocol", () => {
       desiredOutcome: "Done looks like this",
       activeProjectIds: ["P1", "P2"],
     }))?.command.type).toBe("complete-project-review");
+    expect(parseProjectReviewCommand(envelope({ type: "set-project-status", projectId: "P2", status: "active" }))?.command.type)
+      .toBe("set-project-status");
+    expect(parseProjectReviewCommand(envelope({ type: "set-project-status", projectId: "P2", status: "next" }))).toBeNull();
     expect(parseBrainstormCommand(envelope({
       type: "save-brainstorm",
       actionId: "A1",

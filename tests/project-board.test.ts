@@ -5,6 +5,7 @@ import {
   activeProjectBlockers,
   isProjectSupportMaterialPath,
   normalizeProjectTags,
+  planProjectCompletion,
   planProjectDeletion,
   planProjectParentChange,
   projectPlacementsAfterMove,
@@ -212,5 +213,31 @@ describe("Project support material counts", () => {
 
   it("returns nothing when no Project has a support folder", () => {
     expect([...projectSupportFileCounts([], ["Support/Alpha/Brief.md"])]).toEqual([]);
+  });
+});
+
+describe("Completing a Project", () => {
+  const parent = project("P", "Parent");
+  const child = (id: string, status: Project["status"], order?: number) =>
+    project(id, id, { parentProjectId: parent.id, status, ...(order === undefined ? {} : { order }) });
+
+  it("separates planned sub-projects from optional ones", () => {
+    const projects = [
+      parent,
+      child("A", "active"),
+      child("B2", "backlog", 2_000),
+      child("B1", "backlog", 1_000),
+      child("S", "someday"),
+      child("C", "completed"),
+      child("X", "cancelled"),
+      project("G", "Grandchild", { parentProjectId: "A", status: "backlog" }),
+    ];
+    const plan = planProjectCompletion(parent.id, projects);
+    expect(plan.unfinished.map((item) => item.id)).toEqual(["B1", "B2", "A"]);
+    expect(plan.optional.map((item) => item.id)).toEqual(["S"]);
+  });
+
+  it("has nothing to report for a Project without open sub-projects", () => {
+    expect(planProjectCompletion(parent.id, [parent, child("C", "completed")])).toEqual({ unfinished: [], optional: [] });
   });
 });

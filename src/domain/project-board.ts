@@ -167,6 +167,24 @@ export function planProjectParentChange(
   return { changing, unchanged, blocked };
 }
 
+export interface ProjectCompletionPlan {
+  /** Active and Backlog sub-projects: planned work the parent's outcome still depends on. */
+  unfinished: Project[];
+  /** Someday/Maybe sub-projects: optional ideas that can be cancelled along with the parent. */
+  optional: Project[];
+}
+
+/** What completing a Project would leave behind among its direct sub-projects. */
+export function planProjectCompletion(projectId: string, projects: readonly Project[]): ProjectCompletionPlan {
+  const children = projects
+    .filter((project) => project.parentProjectId === projectId)
+    .sort(compareProjectPriority);
+  return {
+    unfinished: children.filter((child) => child.status === "active" || child.status === "backlog"),
+    optional: children.filter((child) => child.status === "someday"),
+  };
+}
+
 export interface ProjectDeletionPlan {
   /** Deletion order, deepest sub-projects first, so no Project outlives its children. */
   order: string[];

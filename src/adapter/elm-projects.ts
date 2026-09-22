@@ -5,6 +5,7 @@ import { Elm } from "../../.generated/elm-runtime.js";
 import { activeDescendantCounts, projectBreadcrumbs } from "../domain/project-hierarchy";
 import { activeProjectBlockers, projectActionIssue, projectPlacementsAfterMove } from "../domain/project-board";
 import type { Project } from "../domain/types";
+import { confirmCompleteProject } from "../ui/complete-project";
 import { confirmDeleteProject, confirmDeleteProjects } from "../ui/delete-project";
 import { isVaultImage, resolveVaultImage } from "../ui/image-input";
 import { ElmModal } from "./elm-modals";
@@ -155,12 +156,15 @@ export class ElmProjectsHost {
         this.services.editProject(command.projectId);
         return;
       case "set-project-status":
+        if (command.status === "completed" && !await confirmCompleteProject(this.services, command.projectId)) return;
         await this.services.repository.setProjectStatus(command.projectId, command.status);
         return;
       case "move-subproject": {
+        if (command.status === "completed" && !await confirmCompleteProject(this.services, command.projectId)) return;
         const snapshot = this.services.repository.index.getSnapshot();
         const moving = snapshot.projectsById.get(command.projectId);
-        if (!moving?.parentProjectId) throw new Error("This sub-project no longer exists.");
+        if (!moving) throw new Error("This Project no longer exists.");
+        // Top-level Projects are siblings of each other, so the main board ranks them the same way.
         const siblings = snapshot.projects.filter((project) => project.parentProjectId === moving.parentProjectId);
         const placements = projectPlacementsAfterMove(siblings, command.projectId, command.status, command.beforeId);
         await Promise.all([...placements].map(([id, placement]) => this.services.repository.updateProject(id, placement)));

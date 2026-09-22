@@ -6,6 +6,7 @@ module Gtd.Command.ProjectReview exposing (Command(..), encode)
 import Gtd.ActionStatus exposing (ActionStatus)
 import Gtd.Command as Base
 import Gtd.Id exposing (ActionId, ProjectId)
+import Gtd.ProjectStatus exposing (ProjectStatus)
 import Json.Encode as Encode
 
 
@@ -16,6 +17,7 @@ type Command
     | CompleteProjectReview ProjectId String (List ProjectId)
     | MoveReviewToSomeday ProjectId String (List ProjectId)
     | TrashProject ProjectId
+    | SetProjectStatus ProjectId ProjectStatus
     | NewProjectModal (Maybe ProjectId)
     | OpenFile String
     | EditActionModal ActionId
@@ -44,6 +46,9 @@ encode command =
 
             TrashProject projectId ->
                 Base.TrashProject projectId
+
+            SetProjectStatus projectId status ->
+                Base.SetProjectStatus projectId status
 
             NewProjectModal parentId ->
                 Base.NewProjectModal parentId

@@ -535,6 +535,15 @@ viewTreeRow model root actions project =
         , if project.status == ProjectStatus.Active && not (List.any (.status >> movesProject) projectActions) then
             strong [] [ text "No Next Action" ]
 
+          else if project.status == ProjectStatus.Backlog then
+            -- The review is where planned work gets pulled in.
+            button
+                [ class "dg-review-activate"
+                , title "Move this sub-project to Active"
+                , onClick (Send IgnoreReply (Command.SetProjectStatus project.id ProjectStatus.Active))
+                ]
+                [ text "Activate" ]
+
           else
             text ""
         ]

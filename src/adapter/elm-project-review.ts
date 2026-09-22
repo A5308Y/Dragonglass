@@ -107,6 +107,8 @@ export class ElmProjectReviewHost {
         return;
       case "trash-project":
         return confirmDeleteProject(this.services, command.projectId);
+      case "set-project-status":
+        return this.services.repository.setProjectStatus(command.projectId, command.status);
       case "create-project":
         this.services.createProject(false, command.parentProjectId);
         return;

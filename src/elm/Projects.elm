@@ -97,6 +97,7 @@ type alias Model =
     , selectedIds : Set ProjectId
     , showCompleted : Bool
     , showSecondary : Bool
+    , expandedColumns : List ProjectStatus
     , tagFilters : Set String
     , outcomeEditing : Bool
     , outcomeDraft : String
@@ -131,6 +132,7 @@ type Msg
     | BackToBoard
     | ToggleCompleted
     | ToggleSecondary
+    | ToggleColumnExpanded ProjectStatus
     | ToggleTag String
     | ClearTags
     | BeginOutcome
@@ -204,6 +206,7 @@ init flags =
                     , selectedIds = Set.empty
                     , showCompleted = False
                     , showSecondary = False
+                    , expandedColumns = []
                     , tagFilters = Set.empty
                     , outcomeEditing = False
                     , outcomeDraft = ""
@@ -298,6 +301,18 @@ update msg model =
 
         ToggleSecondary ->
             ( { model | showSecondary = not model.showSecondary }, Cmd.none )
+
+        ToggleColumnExpanded status ->
+            ( { model
+                | expandedColumns =
+                    if List.member status model.expandedColumns then
+                        List.filter ((/=) status) model.expandedColumns
+
+                    else
+                        status :: model.expandedColumns
+              }
+            , Cmd.none
+            )
 
         ToggleTag tag ->
             ( { model | tagFilters = toggleSet tag model.tagFilters }, Cmd.none )
@@ -415,7 +430,7 @@ update msg model =
             ( { model | draggedProject = Just projectId, subprojectDropTarget = Nothing }, Cmd.none )
 
         DragOver ->
-            ( model, Cmd.none )
+            ( { model | subprojectDropTarget = Nothing }, Cmd.none )
 
         DragOverSubproject status beforeId ->
             ( { model | subprojectDropTarget = Just { status = status, beforeId = beforeId } }, Cmd.none )
@@ -427,7 +442,13 @@ update msg model =
             case model.draggedProject of
                 Just projectId ->
                     send IgnoreReply
-                        (Command.SetProjectStatus projectId status)
+                        (if status == ProjectStatus.Backlog && isTopLevel model projectId then
+                            -- Joining the Backlog queue at the end gives the Project a rank.
+                            Command.MoveSubproject projectId status Nothing
+
+                         else
+                            Command.SetProjectStatus projectId status
+                        )
                         { model | draggedProject = Nothing, subprojectDropTarget = Nothing }
 
                 Nothing ->
@@ -688,7 +709,14 @@ viewBoard model =
         , div [ class "dg-board dg-project-board", attribute "role" "list" ]
             (ProjectStatus.board
                 |> List.filter (\status -> List.member status model.visibleColumns)
-                |> List.map (viewProjectColumn model)
+                |> List.map
+                    (\status ->
+                        if isSecondaryColumn status && not (List.member status model.expandedColumns) then
+                            viewCollapsedColumn model status
+
+                        else
+                            viewProjectColumn model status
+                    )
             )
         ]
 
@@ -737,11 +765,51 @@ viewBatchBar model =
         ]
 
 
+{-| Someday/Maybe and Completed hold no committed work, so the board keeps them
+out of the way until asked.
+-}
+isSecondaryColumn : ProjectStatus -> Bool
+isSecondaryColumn status =
+    status == ProjectStatus.Someday || status == ProjectStatus.Completed
+
+
+viewCollapsedColumn : Model -> ProjectStatus -> Html Msg
+viewCollapsedColumn model status =
+    let
+        count =
+            visibleProjects model |> List.filter (\project -> project.status == status) |> List.length
+    in
+    section
+        [ class "dg-column dg-project-column is-collapsed"
+        , attribute "data-column" (ProjectStatus.key status)
+        , dragOver
+        , on "drop" (Decode.succeed (DropProject status))
+        ]
+        [ button
+            [ class "dg-project-column-expand"
+            , title ("Show " ++ ProjectStatus.label status)
+            , attribute "aria-expanded" "false"
+            , onClick (ToggleColumnExpanded status)
+            ]
+            [ span [] [ text (disclosure False) ]
+            , span [ class "dg-project-column-expand-label" ] [ text (ProjectStatus.label status) ]
+            , span [ class "dg-project-column-expand-count" ] [ text (String.fromInt count) ]
+            ]
+        ]
+
+
 viewProjectColumn : Model -> ProjectStatus -> Html Msg
 viewProjectColumn model status =
     let
         projects =
-            visibleProjects model |> List.filter (\project -> project.status == status)
+            visibleProjects model
+                |> List.filter (\project -> project.status == status)
+                |> (if status == ProjectStatus.Backlog then
+                        rankBacklog
+
+                    else
+                        identity
+                   )
 
         issues =
             projects |> List.filter (\project -> (projectMeta project.id model).actionIssue /= Nothing) |> List.length
@@ -753,7 +821,17 @@ viewProjectColumn model status =
         , on "drop" (Decode.succeed (DropProject status))
         ]
         [ header [ class "dg-column-header" ]
-            [ span [] [ text (ProjectStatus.label status) ]
+            [ if isSecondaryColumn status then
+                button
+                    [ class "dg-project-column-collapse"
+                    , title ("Hide " ++ ProjectStatus.label status)
+                    , attribute "aria-expanded" "true"
+                    , onClick (ToggleColumnExpanded status)
+                    ]
+                    [ text (disclosure True ++ " " ++ ProjectStatus.label status) ]
+
+              else
+                span [] [ text (ProjectStatus.label status) ]
             , span [ class "dg-project-column-counts", title "Projects in column" ]
                 (text (String.fromInt (List.length projects) ++ " Projects")
                     :: (if status == ProjectStatus.Active then
@@ -789,19 +867,26 @@ viewProjectCard model project =
             Set.member project.id model.selectedIds
     in
     article
-        [ classList [ ( "dg-card dg-project-card", True ), ( "is-selectable", model.selecting ), ( "is-selected", selected ) ]
-        , attribute "data-project-card" project.id
-        , draggable (Ui.boolAttribute (not model.selecting))
-        , on "dragstart" (Decode.succeed (DragStarted project.id))
-        , on "dragend" (Decode.succeed DragEnded)
-        , onClick
+        ([ classList
+            [ ( "dg-card dg-project-card", True )
+            , ( "is-selectable", model.selecting )
+            , ( "is-selected", selected )
+            , ( "is-drop-before", model.subprojectDropTarget == Just { status = project.status, beforeId = Just project.id } )
+            ]
+         , attribute "data-project-card" project.id
+         , draggable (Ui.boolAttribute (not model.selecting))
+         , on "dragstart" (Decode.succeed (DragStarted project.id))
+         , on "dragend" (Decode.succeed DragEnded)
+         , onClick
             (if model.selecting then
                 ToggleSelected project.id
 
              else
                 NoOp
             )
-        ]
+         ]
+            ++ backlogDropAttributes model project
+        )
         [ if model.showImages && not (String.isEmpty meta.imageUrl) then
             div [ class "dg-project-card-image" ] [ img [ src meta.imageUrl, alt "" ] [] ]
 
@@ -852,6 +937,26 @@ viewProjectCard model project =
             text ""
         , Ui.maybeView meta.actionIssue (\issue -> div [ class "dg-project-health" ] [ text issue ])
         ]
+
+
+{-| A top-level Backlog card accepts another top-level Project dropped before it,
+which ranks the queue. Sub-projects are ranked on their parent's board instead.
+-}
+backlogDropAttributes : Model -> Project -> List (Html.Attribute Msg)
+backlogDropAttributes model project =
+    let
+        draggingTopLevel =
+            model.draggedProject |> Maybe.map (isTopLevel model) |> Maybe.withDefault False
+    in
+    if project.status == ProjectStatus.Backlog && project.parentProjectId == Nothing && draggingTopLevel then
+        [ Html.Events.custom "dragover"
+            (Decode.succeed { message = DragOverSubproject project.status (Just project.id), stopPropagation = True, preventDefault = True })
+        , Html.Events.custom "drop"
+            (Decode.succeed { message = DropSubproject project.status (Just project.id), stopPropagation = True, preventDefault = True })
+        ]
+
+    else
+        []
 
 
 viewTag : String -> Html Msg
@@ -1525,6 +1630,25 @@ visibleProjects model =
         |> List.sortBy (\project -> String.toLower (projectMeta project.id model).breadcrumb)
 
 
+{-| Top-level Backlog Projects in their ranked order, then any sub-projects shown
+alongside them, which keep the board's usual order.
+-}
+rankBacklog : List Project -> List Project
+rankBacklog projects =
+    let
+        ( topLevel, nested ) =
+            List.partition (\project -> project.parentProjectId == Nothing) projects
+    in
+    List.sortWith Hierarchy.compareByOrder topLevel ++ nested
+
+
+isTopLevel : Model -> ProjectId -> Bool
+isTopLevel model projectId =
+    Data.findProject projectId model.snapshot.projects
+        |> Maybe.map (\project -> project.parentProjectId == Nothing)
+        |> Maybe.withDefault False
+
+
 projectActions : Model -> Project -> List Action
 projectActions model project =
     List.filter (\action -> action.projectId == Just project.id) model.snapshot.actions
@@ -1689,6 +1813,7 @@ emptyModel message =
     , selectedIds = Set.empty
     , showCompleted = False
     , showSecondary = False
+    , expandedColumns = []
     , tagFilters = Set.empty
     , outcomeEditing = False
     , outcomeDraft = ""

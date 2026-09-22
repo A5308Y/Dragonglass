@@ -6,6 +6,7 @@ import { parseActionList } from "../domain/action-import";
 import { parseSubprojectList } from "../domain/project-import";
 import { parseProjectTags, planProjectParentChange, projectTagAdditions } from "../domain/project-board";
 import type { Action, ActionInput, Project, ProjectChanges } from "../domain/types";
+import { confirmCompleteProject } from "../ui/complete-project";
 import { confirmDeleteProject } from "../ui/delete-project";
 import { isVaultImage, resolveVaultImage } from "../ui/image-input";
 import type { GtdServices } from "../ui/services";
@@ -158,10 +159,15 @@ export class ElmModal extends Modal {
         return;
       }
       case "save-project": {
-        const sourcePath = this.services.repository.index.getSnapshot().projectsById.get(command.projectId)?.file.path ?? "";
+        const current = this.services.repository.index.getSnapshot().projectsById.get(command.projectId);
+        const sourcePath = current?.file.path ?? "";
+        // Declining the completion prompt still saves the other edits.
+        const status = command.changes.status === "completed" && !await confirmCompleteProject(this.services, command.projectId)
+          ? current?.status ?? command.changes.status
+          : command.changes.status;
         await this.services.repository.updateProject(command.projectId, {
           title: command.changes.title,
-          status: command.changes.status,
+          status,
           activateAt: command.changes.activateAt,
           area: command.changes.area,
           image: this.validatedImage(command.changes.image, sourcePath),

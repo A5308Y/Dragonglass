@@ -389,7 +389,7 @@ export type ElmFeedsCommand = Extract<ElmNonMenuCommand,
 export type ElmProjectReviewCommand = Extract<ElmNonMenuCommand,
   | { type: "load-review-project" | "create-review-action" | "add-diary-entry" }
   | { type: "complete-project-review" | "move-review-to-someday" | "trash-project" | "create-project" }
-  | { type: "open-file" | "edit-action" | "set-action-status" | "trash-action" }
+  | { type: "open-file" | "edit-action" | "set-action-status" | "trash-action" | "set-project-status" }
 >;
 
 export type ElmBrainstormCommand = Extract<ElmNonMenuCommand,
@@ -491,7 +491,7 @@ const FEEDS_COMMANDS = new Set([
 ]);
 const PROJECT_REVIEW_COMMANDS = new Set([
   "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
-  "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action",
+  "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action", "set-project-status",
 ]);
 const BRAINSTORM_COMMANDS = new Set([
   "load-brainstorm-outcome", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
