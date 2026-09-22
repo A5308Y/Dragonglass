@@ -931,7 +931,7 @@ viewProjectCard model project =
               else
                 text ""
             , button
-                [ class "dg-card-title"
+                [ class "dg-card-title dg-flat-button"
                 , title meta.breadcrumb
                 , onClick
                     (if model.selecting then

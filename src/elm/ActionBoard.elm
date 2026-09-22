@@ -947,7 +947,7 @@ cardView model action =
                     labelled =
                         withStatusSymbol model projectId name
                 in
-                button [ class "dg-project-link", title labelled, onClick (Send IgnoreReply (Command.ShowProject projectId)) ] [ text labelled ]
+                button [ class "dg-project-link dg-flat-button", title labelled, onClick (Send IgnoreReply (Command.ShowProject projectId)) ] [ text labelled ]
 
             ( Just _, Nothing ) ->
                 span [ class "dg-missing" ] [ text "Missing project" ]
