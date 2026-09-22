@@ -27,6 +27,7 @@ import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, button, div, h2, h3, header, input, p, section, small, span, text)
 import Html.Attributes exposing (attribute, class, classList, disabled, id, placeholder, tabindex, type_, value)
 import Html.Events exposing (onClick, onFocus, onInput)
+import Html.Keyed as Keyed
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -482,8 +483,8 @@ sectionView model indexes entry =
             text ""
 
           else
-            div [ class "dg-feed-list", attribute "role" "list", attribute "aria-label" entry.feed.title ]
-                (List.map (rowView model indexes) entry.items)
+            Keyed.node "div" [ class "dg-feed-list", attribute "role" "list", attribute "aria-label" entry.feed.title ]
+                (List.map (\item -> ( item.key, rowView model indexes item )) entry.items)
         ]
 
 
