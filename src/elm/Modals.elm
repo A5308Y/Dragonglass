@@ -1600,8 +1600,7 @@ projectRow model name description picker =
 
 parentProjectRow : Model -> String -> String -> Picker Project -> Html Msg
 parentProjectRow model name description picker =
-    div [ class "dg-project-parent-setting" ]
-        [ projectRow model name description picker ]
+    projectRow model name description picker
 
 
 tagsRow : String -> Html Msg

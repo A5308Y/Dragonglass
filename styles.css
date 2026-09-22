@@ -1612,20 +1612,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   width: 100%;
   justify-content: stretch;
 }
-.dg-modal .dg-project-parent-setting > .setting-item {
-  grid-template-columns: 1fr;
-  gap: 6px;
-}
-.dg-modal .dg-project-parent-setting,
-.dg-modal .dg-project-parent-setting > .setting-item,
-.dg-modal .dg-project-parent-setting .setting-item-control,
-.dg-modal .dg-project-parent-setting .dg-fuzzy-field {
+.dg-modal .setting-item-control > .dg-fuzzy-field {
   width: 100%;
   max-width: none;
-}
-.dg-modal .dg-project-parent-setting .setting-item-control,
-.dg-modal .dg-project-parent-setting .dg-fuzzy-field {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
 }
 .dg-schedule-setting.is-hidden { display: none; }
 .dg-modal input:not([type="checkbox"]),
