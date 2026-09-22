@@ -101,7 +101,12 @@ export interface InboxProcessingInput {
   projectTitle?: string;
   desiredOutcome?: string;
   nextAction?: string;
+  /** The status for an Action created while clarifying this Inbox Item. */
+  status?: ActionStatus;
   context?: string;
+  waitingSince?: string;
+  scheduledStart?: string;
+  durationMinutes?: number;
   work?: boolean;
   /** Keeps the captured file as reference material instead of trashing it once it is processed. */
   fileOriginal?: boolean;

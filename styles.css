@@ -1156,7 +1156,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   line-height: 1.25;
 }
 .dg-processing-field input:not([type="checkbox"]),
-.dg-processing-field textarea {
+.dg-processing-field textarea,
+.dg-processing-field select {
   width: 100%;
   min-width: 0;
   padding: 9px 11px;
@@ -1167,7 +1168,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   box-shadow: none;
   appearance: none;
 }
-.dg-processing-field input:not([type="checkbox"]) { min-height: 40px; }
+.dg-processing-field input:not([type="checkbox"]),
+.dg-processing-field select { min-height: 40px; }
 .dg-processing-field textarea {
   min-height: 78px;
   resize: vertical;

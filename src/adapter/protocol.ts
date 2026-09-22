@@ -239,6 +239,11 @@ export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId"> {
   deferUntil: string;
 }
 
+/** Inbox processing adds an editor-local schedule which the desktop host resolves to vault time. */
+export interface ElmInboxProcessingInput extends Omit<InboxProcessingInput, "scheduledStart" | "durationMinutes"> {
+  schedule?: ElmScheduleInput;
+}
+
 export interface ElmNewProjectInput {
   title: string;
   area: string;
@@ -307,7 +312,7 @@ type ElmNonMenuCommand =
   | { type: "open-file"; path: string }
   | { type: "read-inbox-body"; itemId: string }
   | { type: "trash-inbox-item"; itemId: string }
-  | { type: "process-inbox"; itemId: string; operation: "next-action" | "file" | "someday"; input: InboxProcessingInput }
+  | { type: "process-inbox"; itemId: string; operation: "next-action" | "file" | "someday"; input: ElmInboxProcessingInput }
   | { type: "save-new-action"; input: ElmNewActionInput }
   | { type: "save-action"; actionId: string; changes: ElmActionChanges }
   | { type: "schedule-action"; actionId: string; schedule: ElmScheduleInput }
@@ -667,13 +672,16 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
   }
 }
 
-function isInboxInput(value: unknown): value is InboxProcessingInput {
+function isInboxInput(value: unknown): value is ElmInboxProcessingInput {
   return isRecord(value)
     && isOptionalString(value.projectId)
     && isOptionalString(value.projectTitle)
     && isOptionalString(value.desiredOutcome)
     && isOptionalString(value.nextAction)
+    && (value.status === undefined || ACTION_STATUSES.includes(value.status as Action["status"]))
     && isOptionalString(value.context)
+    && isOptionalString(value.waitingSince)
+    && isOptionalSchedule(value.schedule)
     && isOptionalBoolean(value.work)
     && isOptionalBoolean(value.fileOriginal);
 }

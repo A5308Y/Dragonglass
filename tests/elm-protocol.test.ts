@@ -202,6 +202,25 @@ describe("Elm adapter protocol", () => {
       type: "process-inbox",
       itemId: "I1",
       operation: "next-action",
+      input: { nextAction: "Await reply", status: "waiting", waitingSince: "2026-09-22", context: "", work: false, fileOriginal: false },
+    }))?.command.type).toBe("process-inbox");
+    expect(parseInboxCommand(envelope({
+      type: "process-inbox",
+      itemId: "I1",
+      operation: "next-action",
+      input: {
+        nextAction: "Call supplier",
+        status: "scheduled",
+        context: "phone",
+        schedule: { kind: "all-day", date: "2026-09-23" },
+        work: false,
+        fileOriginal: false,
+      },
+    }))?.command.type).toBe("process-inbox");
+    expect(parseInboxCommand(envelope({
+      type: "process-inbox",
+      itemId: "I1",
+      operation: "next-action",
       input: { work: "false" },
     }))).toBeNull();
 

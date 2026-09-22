@@ -129,7 +129,10 @@ type alias InboxInput =
     , projectTitle : String
     , desiredOutcome : String
     , nextAction : String
+    , status : ActionStatus
     , context : String
+    , waitingSince : String
+    , schedule : Maybe ScheduleInput
     , work : Bool
     , fileOriginal : Bool
     }
@@ -141,7 +144,10 @@ noInboxInput =
     , projectTitle = ""
     , desiredOutcome = ""
     , nextAction = ""
+    , status = ActionStatus.Next
     , context = ""
+    , waitingSince = ""
+    , schedule = Nothing
     , work = False
     , fileOriginal = False
     }
@@ -549,12 +555,19 @@ encodeMenuEntry entry =
 encodeInboxInput : InboxInput -> Encode.Value
 encodeInboxInput input =
     Encode.object
-        ([ ( "work", Encode.bool input.work ), ( "fileOriginal", Encode.bool input.fileOriginal ) ]
+        ([ ( "status", ActionStatus.encode input.status ), ( "work", Encode.bool input.work ), ( "fileOriginal", Encode.bool input.fileOriginal ) ]
             ++ maybeIdField "projectId" input.projectId
             ++ presentString "projectTitle" input.projectTitle
             ++ presentString "desiredOutcome" input.desiredOutcome
             ++ presentString "nextAction" input.nextAction
             ++ presentString "context" input.context
+            ++ (if input.status == ActionStatus.Waiting then
+                    presentString "waitingSince" input.waitingSince
+
+                else
+                    []
+               )
+            ++ scheduleField input.schedule
         )
 
 

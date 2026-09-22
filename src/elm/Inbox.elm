@@ -1,6 +1,8 @@
 port module Inbox exposing (main)
 
 import Browser
+import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
+import Gtd.Command as Base exposing (ScheduleInput(..))
 import Gtd.Command.Inbox as Command exposing (Command, Disposition(..))
 import Gtd.Data as Data exposing (InboxItem, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
@@ -8,8 +10,8 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (InboxItemId)
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.Ui as Ui
-import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, p, section, small, span, text, textarea)
-import Html.Attributes exposing (attribute, checked, class, classList, controls, placeholder, preload, src, style, title, type_, value)
+import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, option, p, section, select, small, span, text, textarea)
+import Html.Attributes exposing (attribute, checked, class, classList, controls, placeholder, preload, selected, src, style, title, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -38,6 +40,10 @@ type Pending
     | Working InboxItemId
 
 
+type alias ScheduleFields =
+    { allDay : Bool, start : String, duration : String }
+
+
 type alias Model =
     { snapshot : Snapshot
     , search : String
@@ -51,7 +57,10 @@ type alias Model =
     , context : Picker String
     , desiredOutcome : String
     , nextAction : String
+    , actionStatus : ActionStatus
     , work : Bool
+    , waitingSince : String
+    , schedule : ScheduleFields
     , someday : Bool
     , fileOriginal : Bool
     , requests : Requests Pending
@@ -69,7 +78,12 @@ type Msg
     | ContextPicker (Picker.PickerMsg String)
     | DesiredOutcomeChanged String
     | NextActionChanged String
+    | ActionStatusChanged ActionStatus
     | SetWork Bool
+    | WaitingSinceChanged String
+    | SetAllDay Bool
+    | ScheduledStartChanged String
+    | ScheduledDurationChanged String
     | SetSomeday Bool
     | SetFileOriginal Bool
     | DeleteItem InboxItemId
@@ -123,7 +137,10 @@ initialModel snapshot =
     , context = Picker.init "" Nothing
     , desiredOutcome = ""
     , nextAction = ""
+    , actionStatus = ActionStatus.Next
     , work = False
+    , waitingSince = snapshot.today
+    , schedule = { allDay = False, start = "", duration = String.fromInt snapshot.settings.defaultDurationMinutes }
     , someday = False
     , fileOriginal = False
     , requests = Host.noRequests
@@ -183,8 +200,52 @@ update msg model =
         NextActionChanged nextAction ->
             ( { model | nextAction = nextAction }, Cmd.none )
 
+        ActionStatusChanged actionStatus ->
+            ( { model | actionStatus = actionStatus }, Cmd.none )
+
         SetWork work ->
             ( { model | work = work }, Cmd.none )
+
+        WaitingSinceChanged waitingSince ->
+            ( { model | waitingSince = waitingSince }, Cmd.none )
+
+        SetAllDay allDay ->
+            let
+                schedule =
+                    model.schedule
+            in
+            ( { model
+                | schedule =
+                    { schedule
+                        | allDay = allDay
+                        , start =
+                            if allDay then
+                                String.left 10 schedule.start
+
+                            else if String.isEmpty schedule.start then
+                                ""
+
+                            else
+                                String.left 10 schedule.start ++ "T09:00"
+                    }
+              }
+            , Cmd.none
+            )
+
+        ScheduledStartChanged start ->
+            let
+                schedule =
+                    model.schedule
+            in
+            ( { model | schedule = { schedule | start = start } }, Cmd.none )
+
+        ScheduledDurationChanged duration ->
+            let
+                schedule =
+                    model.schedule
+            in
+            ( { model | schedule = { schedule | duration = duration } }, Cmd.none )
+
 
         SetSomeday someday ->
             ( { model | someday = someday }, Cmd.none )
@@ -260,7 +321,10 @@ resetCurrent model =
                     , context = Picker.init "" Nothing
                     , desiredOutcome = ""
                     , nextAction = prefill
+                    , actionStatus = ActionStatus.Next
                     , work = False
+                    , waitingSince = model.snapshot.today
+                    , schedule = { allDay = False, start = "", duration = String.fromInt model.snapshot.settings.defaultDurationMinutes }
                     , someday = False
                     , fileOriginal = False
                     , error = Nothing
@@ -586,7 +650,7 @@ processingForm : Model -> Html Msg
 processingForm model =
     section [ class "dg-processing-form", attribute "aria-label" "Clarify Inbox Item" ]
         [ div [ class "dg-processing-grid" ]
-            [ processingField True
+            ([ processingField True
                 "Project"
                 "Optional. Select an existing Project, or type a new name or “Parent > New sub-project”."
                 [ Picker.view (projectPicker model) (projectSuggestions model) model.project
@@ -598,9 +662,13 @@ processingForm model =
                 "Applied when a Project is selected or created."
                 [ textarea [ value model.desiredOutcome, placeholder "What will be true when this Project is complete?", onInput DesiredOutcomeChanged ] [] ]
             , processingField False
-                "Next Action"
-                "Required with a context for Action-producing dispositions."
+                "Action"
+                (actionHint model.actionStatus)
                 [ input [ value model.nextAction, placeholder "What is the next physical Action?", onInput NextActionChanged ] [] ]
+            , processingField False
+                "Action status"
+                "Choose Next, Waiting, or Scheduled."
+                [ actionStatusSelect model.actionStatus ]
             , div [ class "dg-processing-field" ]
                 [ div [ class "dg-processing-field-heading" ]
                     [ span [] [ text "Context" ]
@@ -608,9 +676,12 @@ processingForm model =
                         [ input [ type_ "checkbox", checked model.work, onCheck SetWork ] [], span [] [ text "Work" ] ]
                     ]
                 , Picker.view (contextPicker model) (contextSuggestions model) model.context
-                , small [] [ text "Required when creating a Next Action." ]
+                , small [] [ text (if ActionStatus.requiresContext model.actionStatus then "Required for this Action." else "Optional for a Waiting Action.") ]
                 ]
             ]
+                ++ waitingFields model
+                ++ scheduleFields model
+            )
         ]
 
 
@@ -618,6 +689,88 @@ processingField : Bool -> String -> String -> List (Html Msg) -> Html Msg
 processingField wide name hint children =
     div [ classList [ ( "dg-processing-field", True ), ( "is-wide", wide ) ] ]
         (div [ class "dg-processing-field-heading" ] [ span [] [ text name ] ] :: children ++ [ small [] [ text hint ] ])
+
+
+actionStatusSelect : ActionStatus -> Html Msg
+actionStatusSelect current =
+    select
+        [ value (ActionStatus.key current)
+        , onInput
+            (\raw ->
+                [ ActionStatus.Next, ActionStatus.Waiting, ActionStatus.Scheduled ]
+                    |> List.filter (\status -> ActionStatus.key status == raw)
+                    |> List.head
+                    |> Maybe.map ActionStatusChanged
+                    |> Maybe.withDefault (ActionStatusChanged ActionStatus.Next)
+            )
+        ]
+        (List.map
+            (\status -> option [ value (ActionStatus.key status), selected (status == current) ] [ text (ActionStatus.label status) ])
+            [ ActionStatus.Next, ActionStatus.Waiting, ActionStatus.Scheduled ]
+        )
+
+
+actionHint : ActionStatus -> String
+actionHint status =
+    case status of
+        ActionStatus.Waiting ->
+            "A Waiting Action can omit a context."
+
+        ActionStatus.Scheduled ->
+            "Choose when this Action belongs on the calendar."
+
+        _ ->
+            "Required with a context for Action-producing dispositions."
+
+
+waitingFields : Model -> List (Html Msg)
+waitingFields model =
+    if model.actionStatus == ActionStatus.Waiting then
+        [ processingField False
+            "Waiting since"
+            "The day this Action started waiting."
+            [ input [ type_ "date", value model.waitingSince, onInput WaitingSinceChanged ] [] ]
+        ]
+
+    else
+        []
+
+
+scheduleFields : Model -> List (Html Msg)
+scheduleFields model =
+    if model.actionStatus /= ActionStatus.Scheduled then
+        []
+
+    else
+        [ processingField False
+            "All day"
+            "Reserve the whole day instead of a time of day."
+            [ label [ class "dg-processing-inline-toggle" ]
+                [ input [ type_ "checkbox", checked model.schedule.allDay, onCheck SetAllDay ] []
+                , span [] [ text "All day" ]
+                ]
+            ]
+        , processingField False
+            "Scheduled start"
+            (if model.schedule.allDay then "Choose the scheduled date." else "Local date and time.")
+            [ input
+                [ type_ (if model.schedule.allDay then "date" else "datetime-local")
+                , value model.schedule.start
+                , onInput ScheduledStartChanged
+                ]
+                []
+            ]
+        ]
+            ++ (if model.schedule.allDay then
+                    []
+
+                else
+                    [ processingField False
+                        "Duration"
+                        "Minutes reserved on the calendar."
+                        [ input [ type_ "number", Html.Attributes.min "1", value model.schedule.duration, onInput ScheduledDurationChanged ] [] ]
+                    ]
+               )
 
 
 projectPicker : Model -> Picker.Config Project Msg
@@ -702,10 +855,10 @@ disposition model =
                 ""
 
             else
-                " + Next Action"
+                " + " ++ actionLabel model.actionStatus
 
         optionalReady =
-            String.isEmpty action || not (String.isEmpty context)
+            String.isEmpty action || actionIsReady model
     in
     if model.someday then
         { operation = ParkAsSomeday
@@ -738,15 +891,51 @@ disposition model =
         { operation = CreateNextAction
         , label =
             if String.isEmpty projectName then
-                "Create Next Action"
+                "Create " ++ actionLabel model.actionStatus
 
             else if project /= Nothing then
-                "Create Next Action in " ++ projectName
+                "Create " ++ actionLabel model.actionStatus ++ " in " ++ projectName
 
             else
-                "Create Project + Next Action"
-        , ready = not (String.isEmpty action) && not (String.isEmpty context)
+                "Create Project + " ++ actionLabel model.actionStatus
+        , ready = not (String.isEmpty action) && actionIsReady model
         }
+
+
+actionLabel : ActionStatus -> String
+actionLabel status =
+    case status of
+        ActionStatus.Waiting ->
+            "Waiting Action"
+
+        ActionStatus.Scheduled ->
+            "Scheduled Action"
+
+        _ ->
+            "Next Action"
+
+
+actionIsReady : Model -> Bool
+actionIsReady model =
+    let
+        hasContext =
+            not (ActionStatus.requiresContext model.actionStatus) || not (String.isEmpty (Picker.query model.context))
+
+        scheduleReady =
+            if model.actionStatus /= ActionStatus.Scheduled then
+                True
+
+            else if model.schedule.allDay then
+                String.length model.schedule.start == 10
+
+            else
+                String.length model.schedule.start >= 16
+                    && (String.toInt (String.trim model.schedule.duration)
+                            |> Maybe.map (\minutes -> minutes > 0)
+                            |> Maybe.withDefault False
+                       )
+    in
+    hasContext && scheduleReady
 
 
 processingInput : Model -> Command.InboxInput
@@ -755,10 +944,26 @@ processingInput model =
     , projectTitle = Picker.query model.project
     , desiredOutcome = String.trim model.desiredOutcome
     , nextAction = String.trim model.nextAction
+    , status = model.actionStatus
     , context = Picker.query model.context
+    , waitingSince = model.waitingSince
+    , schedule = processingSchedule model
     , work = model.work
     , fileOriginal = model.fileOriginal
     }
+
+
+processingSchedule : Model -> Maybe ScheduleInput
+processingSchedule model =
+    if model.actionStatus /= ActionStatus.Scheduled || String.isEmpty (String.trim model.nextAction) then
+        Nothing
+
+    else if model.schedule.allDay then
+        Just (AllDayOn model.schedule.start)
+
+    else
+        String.toInt (String.trim model.schedule.duration)
+            |> Maybe.map (TimedAt (String.left 16 model.schedule.start))
 
 
 {-| The chosen Project, or the one an exactly typed title or breadcrumb names.

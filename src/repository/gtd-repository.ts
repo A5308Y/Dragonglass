@@ -105,8 +105,9 @@ export class GtdRepository {
     if (!title) throw new Error("An Action title is required.");
     const context = input.context.trim();
     if (actionRequiresContext(input.status) && !context) throw new Error("A context is required.");
+    validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
     if (item.file.extension !== "md") {
-      await this.createNextActionFile(title, context, item.created, project, input.work ?? false);
+      await this.createActionFile(title, input, item.created, project);
       // A Markdown capture becomes the Action itself; anything else has been consumed by it.
       // Keeping the original is the caller's explicit choice, made through the reference disposition.
       await this.trashInboxItem(item);
@@ -237,20 +238,21 @@ export class GtdRepository {
 
   async processInboxAsNextAction(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
     const item = this.resolveInboxItem(itemOrId);
-    const title = requiredProcessingValue(input.nextAction, "A Next Action is required.");
-    const context = requiredProcessingValue(input.context, "A context is required.");
+    const title = requiredProcessingValue(input.nextAction, "An Action is required.");
+    const status = input.status ?? "next";
+    const context = actionRequiresContext(status) ? requiredProcessingValue(input.context, "A context is required.") : input.context?.trim() ?? "";
     const project = await this.prepareProcessingProject(input, "active");
-    await this.convertInboxItemToAction(item, actionInput(title, context, project, input.work), project);
+    await this.convertInboxItemToAction(item, processingActionInput(title, context, input, project), project);
   }
 
   async processInboxAsReference(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
     const item = this.resolveInboxItem(itemOrId);
     const title = input.nextAction?.trim() ?? "";
     const context = input.context?.trim() ?? "";
-    if (title && !context) throw new Error("A context is required when creating a Next Action.");
+    if (title && actionRequiresContext(input.status ?? "next") && !context) throw new Error("A context is required when creating an Action.");
     const project = await this.prepareProcessingProject(input, "active");
 
-    if (title) await this.createNextActionFile(title, context, item.created, project, input.work ?? false);
+    if (title) await this.createActionFile(title, processingActionInput(title, context, input, project), item.created, project);
     if (project) await this.fileInboxItemToProject(item, project);
     else await this.fileInboxItemToGeneralReference(item);
   }
@@ -259,12 +261,12 @@ export class GtdRepository {
     const item = this.resolveInboxItem(itemOrId);
     const title = input.nextAction?.trim() ?? "";
     const context = input.context?.trim() ?? "";
-    if (title && !context) throw new Error("A context is required when creating a Next Action.");
+    if (title && actionRequiresContext(input.status ?? "next") && !context) throw new Error("A context is required when creating an Action.");
     // Someday/Maybe is for what is not actionable yet, so the Item's own title names the Project.
     const project = await this.prepareProcessingProject(input, "someday", title || item.title, true);
     if (!project) throw new Error("Could not create the Someday/Maybe Project.");
 
-    if (title) await this.createNextActionFile(title, context, item.created, project, input.work ?? false);
+    if (title) await this.createActionFile(title, processingActionInput(title, context, input, project), item.created, project);
     if (input.fileOriginal) await this.fileInboxItemToProject(item, project);
     else await this.trashInboxItem(item);
   }
@@ -557,6 +559,7 @@ export class GtdRepository {
   private async createActionFile(title: string, input: ActionInput, captured: string, project?: Project): Promise<TFile> {
     const context = input.context.trim();
     if (actionRequiresContext(input.status) && !context) throw new Error("A context is required.");
+    validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
     const id = createUlid();
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions");
     const path = this.uniqueMarkdownPath(directory, title, id);
@@ -1028,12 +1031,15 @@ function scheduledDuration(input: ActionInput): number | null {
   return input.durationMinutes ?? null;
 }
 
-function actionInput(title: string, context: string, project?: Project, work = false): ActionInput {
+function processingActionInput(title: string, context: string, input: InboxProcessingInput, project?: Project): ActionInput {
   return {
     title,
-    status: "next",
+    status: input.status ?? "next",
     context,
-    work,
+    work: input.work ?? false,
+    ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
+    ...(input.scheduledStart ? { scheduledStart: input.scheduledStart } : {}),
+    ...(input.durationMinutes !== undefined ? { durationMinutes: input.durationMinutes } : {}),
     ...(project ? { projectId: project.id } : {}),
   };
 }
