@@ -1616,6 +1616,17 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   grid-template-columns: 1fr;
   gap: 6px;
 }
+.dg-modal .dg-project-parent-setting,
+.dg-modal .dg-project-parent-setting > .setting-item,
+.dg-modal .dg-project-parent-setting .setting-item-control,
+.dg-modal .dg-project-parent-setting .dg-fuzzy-field {
+  width: 100%;
+  max-width: none;
+}
+.dg-modal .dg-project-parent-setting .setting-item-control,
+.dg-modal .dg-project-parent-setting .dg-fuzzy-field {
+  flex: 1 1 100%;
+}
 .dg-schedule-setting.is-hidden { display: none; }
 .dg-modal input:not([type="checkbox"]),
 .dg-modal select {
