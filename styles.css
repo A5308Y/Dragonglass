@@ -1635,19 +1635,21 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 
 /* Buttons with a surface lighten on hover. Flat, text-style buttons opt out by
    declaring `background: transparent !important`, which wins over this rule. */
-.dg-view button:not(:disabled):not(.is-active):hover,
-.dg-modal button:not(:disabled):not(.is-active):hover {
-  background: color-mix(in srgb, var(--interactive-normal) 86%, white);
-  border-color: color-mix(in srgb, var(--background-modifier-border) 75%, white);
-}
-.dg-view button.mod-cta:not(:disabled):hover,
-.dg-modal button.mod-cta:not(:disabled):hover {
-  background: var(--interactive-accent-hover);
-  color: var(--text-on-accent);
-}
-.dg-view button.mod-warning:not(:disabled):hover,
-.dg-modal button.mod-warning:not(:disabled):hover {
-  background: color-mix(in srgb, var(--background-modifier-error) 86%, white);
+@media (hover: hover) {
+  .dg-view button:not(:disabled):not(.is-active):hover,
+  .dg-modal button:not(:disabled):not(.is-active):hover {
+    background: color-mix(in srgb, var(--interactive-normal) 86%, white);
+    border-color: color-mix(in srgb, var(--background-modifier-border) 75%, white);
+  }
+  .dg-view button.mod-cta:not(:disabled):hover,
+  .dg-modal button.mod-cta:not(:disabled):hover {
+    background: var(--interactive-accent-hover);
+    color: var(--text-on-accent);
+  }
+  .dg-view button.mod-warning:not(:disabled):hover,
+  .dg-modal button.mod-warning:not(:disabled):hover {
+    background: color-mix(in srgb, var(--background-modifier-error) 86%, white);
+  }
 }
 
 @media (max-width: 600px) {
