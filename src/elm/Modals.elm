@@ -1686,7 +1686,7 @@ projectPickerConfig model =
             else
                 "Search Projects…"
         , label = Hierarchy.breadcrumb model.snapshot.projects
-        , hint = \project -> Just project.file.path
+        , hint = always Nothing
         , tag = ProjectPicker
         }
 
