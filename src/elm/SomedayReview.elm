@@ -152,7 +152,7 @@ view model =
     in
     div [ class "dg-view dg-someday-review" ]
         [ header [ class "dg-view-header" ]
-            [ div [] [ h2 [] [ text "Someday/Maybe Review" ], span [ class "dg-count", title "Ideas waiting for a decision" ] [ text (String.fromInt (List.length pending)) ] ]
+            [ div [] [ h2 [] [ text "Someday/Maybe Review" ], span [ class "dg-count" ] [ text (String.fromInt (List.length pending)) ] ]
             ]
         , Ui.maybeView model.error (\message -> div [ class "dg-panel dg-error" ] [ text message ])
         , if List.isEmpty pending then
@@ -205,12 +205,12 @@ viewItem model project =
         [ div [ class "dg-someday-item-main" ]
             [ button
                 [ class "dg-someday-item-title dg-flat-button"
-                , title ("Open " ++ breadcrumb)
+
                 , onClick (Send (Command.ShowProject project.id))
                 ]
                 [ text project.title ]
             , if breadcrumb /= project.title then
-                div [ class "dg-project-lineage", title breadcrumb ] [ text breadcrumb ]
+                div [ class "dg-project-lineage" ] [ text breadcrumb ]
 
               else
                 text ""
@@ -223,14 +223,14 @@ viewItem model project =
                 )
             ]
         , div [ class "dg-someday-item-decisions" ]
-            [ button [ title "Move to Active", onClick (decide ProjectStatus.Active) ] [ text "Activate" ]
-            , button [ title "Commit to it, but not now", onClick (decide ProjectStatus.Backlog) ] [ text "Backlog" ]
-            , label [ class "dg-someday-wake", title "Activate automatically on this date" ]
+            [ button [ onClick (decide ProjectStatus.Active) ] [ text "Activate" ]
+            , button [ onClick (decide ProjectStatus.Backlog) ] [ text "Backlog" ]
+            , label [ class "dg-someday-wake" ]
                 [ span [] [ text "Wake up" ]
                 , input [ type_ "date", value (wakeDate model project.id), onInput (WakeDateChanged project.id) ] []
                 ]
-            , button [ class "mod-cta", title "Keep it in Someday/Maybe", onClick (Keep project.id) ] [ text "Keep" ]
-            , button [ class "dg-someday-drop", title "Cancel this Project (can be undone)", onClick (decide ProjectStatus.Cancelled) ] [ text "Cancel Project" ]
+            , button [ class "mod-cta", onClick (Keep project.id) ] [ text "Keep" ]
+            , button [ class "dg-someday-drop", onClick (decide ProjectStatus.Cancelled) ] [ text "Cancel Project" ]
             ]
         ]
 

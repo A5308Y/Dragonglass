@@ -497,7 +497,7 @@ setupView model =
         ready =
             selected /= Nothing && not (String.isEmpty (String.trim model.intention)) && plannedMinutes model /= Nothing
     in
-    section [ class "dg-pomodoro-card", attribute "aria-label" "New Pomodoro" ]
+    section [ class "dg-pomodoro-card" ]
         [ h3 [] [ text "New Pomodoro" ]
         , div [ class "dg-pomodoro-field" ]
             [ span [ class "dg-pomodoro-label" ] [ text "Project" ]
@@ -545,13 +545,12 @@ setupView model =
                     , Html.Attributes.min "1"
                     , Html.Attributes.max "180"
                     , value model.minutes
-                    , attribute "aria-label" "Length in minutes"
                     , onInput MinutesChanged
                     ]
                     []
                 , span [] [ text "minutes" ]
                 ]
-            , button [ class "mod-cta", disabled (not ready), title "Start (⌘/Ctrl+Enter in the intention)", onClick Start ] [ text "Start Pomodoro" ]
+            , button [ class "mod-cta", disabled (not ready), onClick Start ] [ text "Start Pomodoro" ]
             ]
         ]
 
@@ -602,7 +601,7 @@ runningView model active =
         progress =
             toFloat (focused model active) / toFloat (active.plannedMinutes * 60) * 100
     in
-    section [ class "dg-pomodoro-card dg-pomodoro-running", attribute "aria-label" "Running Pomodoro" ]
+    section [ class "dg-pomodoro-card dg-pomodoro-running" ]
         [ div [ class "dg-pomodoro-project" ]
             [ span [] [ text ("Since " ++ active.startedTime) ]
             , button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject active.projectId)) ] [ text active.projectTitle ]
@@ -625,7 +624,7 @@ runningView model active =
               else
                 button [ onClick Pause ] [ text "Pause" ]
             , button [ onClick FinishEarly ] [ text "Finish early" ]
-            , button [ class "mod-warning", title "Throw this session away (can be undone)", onClick Discard ] [ text "Discard" ]
+            , button [ class "mod-warning", onClick Discard ] [ text "Discard" ]
             ]
         ]
 
@@ -656,7 +655,6 @@ sessionActions model active =
                         [ type_ "checkbox"
                         , checked done
                         , disabled done
-                        , attribute "aria-label" ("Mark “" ++ action.title ++ "” done")
                         , onCheck (\_ -> CompleteAction action.id)
                         ]
                         []
@@ -695,7 +693,7 @@ wrapUpView model active =
         timeUp =
             remaining model active <= 0
     in
-    section [ class "dg-pomodoro-card dg-pomodoro-wrapup", attribute "aria-label" "Wrap up" ]
+    section [ class "dg-pomodoro-card dg-pomodoro-wrapup" ]
         [ h3 []
             [ text
                 (if timeUp then
@@ -710,7 +708,8 @@ wrapUpView model active =
             , strong [] [ text active.projectTitle ]
             ]
         , blockquote active.intention
-        , div [ class "dg-pomodoro-outcomes", attribute "role" "radiogroup", attribute "aria-label" "Outcome" ]
+        , span [ id "dg-pomodoro-outcome-label", class "dg-sr-only" ] [ text "Outcome" ]
+        , div [ class "dg-pomodoro-outcomes", attribute "role" "radiogroup", attribute "aria-labelledby" "dg-pomodoro-outcome-label" ]
             (List.map
                 (\outcome ->
                     button
@@ -737,13 +736,13 @@ wrapUpView model active =
             ]
         , sessionActions model active
         , div [ class "dg-pomodoro-controls" ]
-            [ button [ class "mod-cta", title "Save to the history (⌘/Ctrl+Enter in the reflection)", onClick Finish ] [ text "Save session" ]
+            [ button [ class "mod-cta", onClick Finish ] [ text "Save session" ]
             , if timeUp then
                 text ""
 
               else
                 button [ onClick KeepGoing ] [ text "Keep going" ]
-            , button [ class "mod-warning", title "Throw this session away (can be undone)", onClick Discard ] [ text "Discard" ]
+            , button [ class "mod-warning", onClick Discard ] [ text "Discard" ]
             ]
         ]
 
@@ -791,15 +790,16 @@ historyView model =
                 _ ->
                     "All Projects"
     in
-    section [ class "dg-pomodoro-history", attribute "aria-label" "Pomodoro history" ]
+    section [ class "dg-pomodoro-history" ]
         [ div [ class "dg-pomodoro-history-heading" ]
             [ h3 [] [ text "History" ]
-            , div [ class "dg-pomodoro-scope", attribute "role" "group", attribute "aria-label" "Show sessions for" ]
-                [ scopeButton model ThisProject "This Project" (scopeProjectId model == Nothing)
+            , div [ class "dg-pomodoro-scope", attribute "role" "group", attribute "aria-labelledby" "dg-pomodoro-scope-label" ]
+                [ span [ id "dg-pomodoro-scope-label", class "dg-sr-only" ] [ text "Show sessions for" ]
+                , scopeButton model ThisProject "This Project" (scopeProjectId model == Nothing)
                 , scopeButton model AllProjects "All Projects" False
                 ]
             ]
-        , div [ class "dg-pomodoro-totals", attribute "aria-label" ("Totals for " ++ scopeTitle) ]
+        , div [ class "dg-pomodoro-totals" ]
             [ totalTile "Today" today (total today)
             , totalTile "This week" week (total week)
             , totalTile "All time" sessions (total sessions)
@@ -900,11 +900,11 @@ sessionView model session =
                 (List.concat
                     [ if model.scope == AllProjects || scopeProjectId model == Nothing then
                         [ if Data.findProject session.projectId model.snapshot.projects /= Nothing then
-                            button [ class "dg-flat-button dg-pomodoro-project-link", title session.projectPath, onClick (Send (Command.ShowProject session.projectId)) ]
+                            button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject session.projectId)) ]
                                 [ text session.projectTitle ]
 
                           else
-                            span [ title "This Project no longer exists" ] [ text session.projectTitle ]
+                            span [] [ text session.projectTitle ]
                         ]
 
                       else

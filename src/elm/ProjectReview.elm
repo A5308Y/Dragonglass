@@ -542,7 +542,7 @@ viewTreeRow model root actions project =
     div []
         [ button
             [ class "dg-flat-button"
-            , title (Hierarchy.breadcrumb model.snapshot.projects project)
+
             , onClick (Send IgnoreReply (Command.OpenFile project.file.path))
             ]
             [ text (relativeLabel model root project) ]
@@ -555,7 +555,7 @@ viewTreeRow model root actions project =
             -- The review is where planned work gets pulled in.
             button
                 [ class "dg-review-activate dg-flat-button"
-                , title "Move this sub-project to Active"
+
                 , onClick (Send IgnoreReply (Command.SetProjectStatus project.id ProjectStatus.Active))
                 ]
                 [ text "Activate" ]
@@ -592,11 +592,8 @@ viewPulse model =
             (List.map
                 (\( emoji, description ) ->
                     button
-                        [ title description
-                        , Html.Attributes.attribute "aria-label" description
-                        , onClick (AddDiaryText (emoji ++ " " ++ description))
-                        ]
-                        [ span [] [ text emoji ] ]
+                        [ onClick (AddDiaryText (emoji ++ " " ++ description)) ]
+                        (Ui.iconLabel emoji description)
                 )
                 emojis
             )
@@ -632,7 +629,7 @@ viewActions model actions =
                 []
             , Picker.view (projectPicker model) (projectSuggestions model) model.project
             , Picker.view (contextPicker model) (contextSuggestions model) model.context
-            , label [ class "dg-capture-toggle", title "Mark as work, independent of the context" ]
+            , label [ class "dg-capture-toggle" ]
                 [ input [ type_ "checkbox", checked model.work, onCheck WorkChanged ] [], span [] [ text "Work" ] ]
             , button [ class "mod-cta", disabled (capture model == Nothing || model.saving), onClick AddActionNow ] [ text "Add" ]
             ]

@@ -521,7 +521,7 @@ view model =
         [ header [ class "dg-view-header" ]
             [ div []
                 [ h2 [] [ text "Brainstorm" ]
-                , span [ class "dg-count", title (Ui.plural (List.length available) "open Action" ++ " with “brainstorm” in the title, waiting for a session") ]
+                , span [ class "dg-count" ]
                     [ text (String.fromInt (List.length available)) ]
                 ]
             , case model.session of
@@ -545,7 +545,7 @@ view model =
                 div [ class "dg-panel dg-undo-bar", attribute "role" "status" ]
                     [ span [] [ text "Your ideas from the last session were set aside." ]
                     , button [ class "mod-cta", onClick RestoreSetAside ] [ text "Undo" ]
-                    , button [ class "dg-flat-button", attribute "aria-label" "Dismiss", onClick DismissSetAside ] [ text "×" ]
+                    , button [ class "dg-flat-button", onClick DismissSetAside ] (Ui.iconLabel "×" "Dismiss")
                     ]
             )
         , case model.session of

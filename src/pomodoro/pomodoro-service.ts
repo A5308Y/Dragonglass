@@ -146,7 +146,6 @@ export class PomodoroService {
     const clock = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`;
     const state = remaining <= 0 ? "wrap up" : active.resumedAt ? clock : `${clock} paused`;
     bar.setText(`🍅 ${state} · ${active.projectTitle}`);
-    bar.setAttribute("aria-label", `Pomodoro for ${active.projectTitle}: ${state}. Click to open.`);
     bar.show();
     if (remaining <= 0 && this.ticker !== null) {
       window.clearInterval(this.ticker);

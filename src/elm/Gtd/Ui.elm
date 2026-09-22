@@ -2,7 +2,9 @@ module Gtd.Ui exposing
     ( Key(..)
     , boolAttribute
     , issuesView
+    , iconLabel
     , keyDecoder
+    , labelled
     , matches
     , maybeList
     , maybeView
@@ -14,6 +16,7 @@ module Gtd.Ui exposing
     , preventDefaultOn
     , preventMouseDown
     , timer
+    , srOnly
     , uniqueSorted
     )
 
@@ -25,8 +28,8 @@ matches on the keys it actually handles and the compiler lists the rest.
 -}
 
 import Gtd.Data exposing (Issue)
-import Html exposing (Html, div, text)
-import Html.Attributes exposing (class, title)
+import Html exposing (Html, div, label, span, text)
+import Html.Attributes exposing (attribute, class, id, title)
 import Html.Events exposing (custom, on)
 import Json.Decode as Decode exposing (Decoder)
 import Set
@@ -227,6 +230,30 @@ issuesView issues =
     else
         div
             [ class "dg-warning"
-            , title (String.join "\n" (List.map (\issue -> issue.path ++ ": " ++ issue.message) issues))
+
             ]
             [ text (String.fromInt (List.length issues) ++ " GTD files have metadata problems.") ]
+
+
+{-| Text only screen readers see. Obsidian turns every `aria-label` into a hover
+tooltip, so accessible names are given as hidden text instead.
+-}
+srOnly : String -> Html msg
+srOnly name =
+    span [ class "dg-sr-only" ] [ text name ]
+
+
+{-| The content of an icon-only button: the icon, hidden from screen readers,
+and its name, hidden from sight.
+-}
+iconLabel : String -> String -> List (Html msg)
+iconLabel icon name =
+    [ span [ attribute "aria-hidden" "true" ] [ text icon ], srOnly name ]
+
+
+{-| Names a control that has no visible label of its own, without a tooltip. The
+wrapping label takes no space in the layout.
+-}
+labelled : String -> Html msg -> Html msg
+labelled name control =
+    label [ class "dg-labelled" ] [ srOnly name, control ]

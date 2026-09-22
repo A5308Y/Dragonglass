@@ -23,20 +23,27 @@ button [ class "dg-foo dg-flat-button", onClick ... ] [ ... ]
 - Buttons meant to look like buttons (`mod-cta`, toolbar buttons, the decision
   buttons in reviews) keep Obsidian's surface and don't get the class.
 
-## Accessibility conventions
+## No tooltips; accessible names as hidden text
 
-- Every form control needs a name. In `Modals.elm` the control helpers
-  (`textInput`, `dateInput`, `toggle`, `statusSelect`) take the row name as their
-  first argument and set `aria-label`; elsewhere use `label [ for id ]`.
-- Icon-only buttons ("•••", "×", "▸") need an `aria-label`.
+- Don't use `title` attributes or Obsidian's `setTooltip`: the user finds the
+  hover tooltips annoying. Put needed information in visible text instead.
+- Don't use `aria-label` either: Obsidian shows a black hover tooltip for every
+  element that has one. Give accessible names with the helpers in `Gtd.Ui`:
+  - icon-only buttons: `button [ ... ] (Ui.iconLabel "•••" "Actions for …")`
+  - controls without a visible label: `Ui.labelled "Name" (input [ ... ] [])`
+    (in `Modals.elm` the control helpers take the name and do this)
+  - groups: `aria-labelledby` pointing at a `Ui.srOnly`-style hidden span with an id
+  - otherwise a real `label [ for id ]`.
 - Focus rings use `outline` (see the end of `styles.css`). `.dg-flat-button`
   removes the box-shadow Obsidian uses for its own ring, so a flat button without
   the shared `:focus-visible` outline has no focus indicator at all.
 - A focusable row or card with single-key shortcuts must ignore keys whose
   target is one of its buttons (check `target.id`, as `onRowKey` / `onCardKey`
   do), or Enter on a child button also fires the row's shortcut.
-- Don't signal state by colour alone (e.g. overdue dates carry "⚠" and a title).
+- Don't signal state by colour alone (e.g. overdue dates carry "⚠").
 - Use Obsidian's font-size variables; the smallest is `--font-ui-smaller`.
+- `.dg-labelled` is `display: contents`, so a CSS rule written as
+  `parent > input` must also allow `parent > .dg-labelled > input`.
 
 ## Destructive actions: Undo first, dialogs for the rest
 

@@ -707,8 +707,8 @@ inboxRow busy item =
             , span [ class "dg-inbox-meta" ] [ text (itemMeta item) ]
             ]
         , div [ class "dg-inbox-row-actions" ]
-            [ button [ class "mod-cta", Html.Attributes.disabled (Set.member item.id busy), title "Process (Enter)", onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
-            , button [ class "mod-warning", Html.Attributes.disabled (Set.member item.id busy), title "Delete (X)", onClick (DeleteItem item.id) ] [ text "Delete" ]
+            [ button [ class "mod-cta", Html.Attributes.disabled (Set.member item.id busy), onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
+            , button [ class "mod-warning", Html.Attributes.disabled (Set.member item.id busy), onClick (DeleteItem item.id) ] [ text "Delete" ]
             ]
         ]
 
@@ -768,14 +768,14 @@ processorView model =
                     , div [ class "dg-processor-buttons" ]
                         [ button
                             [ class "mod-warning"
-                            , title ("Delete & Next (" ++ chordLabel ++ "+Shift+Backspace)")
+
                             , Html.Attributes.disabled busy
                             , onClick (DeleteItem item.id)
                             ]
                             [ text "Delete & Next" ]
                         , button
                             [ class "mod-cta"
-                            , title ("Process (" ++ chordLabel ++ "+Enter)")
+
                             , Html.Attributes.disabled (not decision.ready || busy)
                             , onClick ProcessItem
                             ]
@@ -841,13 +841,13 @@ itemCard model item =
 
 processingForm : Model -> Html Msg
 processingForm model =
-    section [ class "dg-processing-form", attribute "aria-label" "Clarify Inbox Item" ]
+    section [ class "dg-processing-form" ]
         [ div [ class "dg-processing-grid" ]
             ([ processingField True
                 "Project"
                 "Optional. Select an existing Project, or type a new name or “Parent > New sub-project”."
                 [ Picker.view (projectPicker model) (projectSuggestions model) model.project
-                , label [ class "dg-processing-inline-toggle", title "Parks the Project instead of activating it." ]
+                , label [ class "dg-processing-inline-toggle" ]
                     [ input [ type_ "checkbox", checked model.someday, onCheck SetSomeday ] [], span [] [ text "Someday/Maybe" ] ]
                 ]
             , processingField True
@@ -865,7 +865,7 @@ processingForm model =
             , div [ class "dg-processing-field" ]
                 [ div [ class "dg-processing-field-heading" ]
                     [ span [] [ text "Context" ]
-                    , label [ class "dg-processing-inline-toggle", title "Marks the Action as work, independent of its context." ]
+                    , label [ class "dg-processing-inline-toggle" ]
                         [ input [ type_ "checkbox", checked model.work, onCheck SetWork ] [], span [] [ text "Work" ] ]
                     ]
                 , Picker.view (contextPicker model) (contextSuggestions model) model.context

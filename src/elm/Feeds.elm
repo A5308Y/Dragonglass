@@ -345,7 +345,7 @@ view model =
                 [ h2 [] [ text "RSS Feeds" ]
                 , span
                     [ class "dg-count"
-                    , title (String.fromInt openCount ++ " shown of " ++ String.fromInt (Feed.totalUnread model.feeds) ++ " unread")
+
                     ]
                     [ text (String.fromInt openCount) ]
                 ]
@@ -439,33 +439,24 @@ sectionView model indexes entry =
                 [ button
                     [ class "dg-feed-collapse dg-flat-button"
                     , attribute "aria-expanded" (Ui.boolAttribute (not collapsed))
-                    , attribute "aria-label"
-                        (if collapsed then
-                            "Expand " ++ entry.feed.title
-
-                         else
-                            "Collapse " ++ entry.feed.title
-                        )
                     , onClick (ToggleCollapsed entry.feed.id)
                     ]
-                    [ text
-                        (if collapsed then
-                            "▸"
+                    (if collapsed then
+                        Ui.iconLabel "▸" ("Expand " ++ entry.feed.title)
 
-                         else
-                            "▾"
-                        )
-                    ]
+                     else
+                        Ui.iconLabel "▾" ("Collapse " ++ entry.feed.title)
+                    )
                 , div [ class "dg-feed-section-title" ]
-                    [ h3 [] [ text entry.feed.title ]
+                    [ h3 [ id ("dg-feed-heading-" ++ entry.feed.id) ] [ text entry.feed.title ]
                     , span [ class "dg-count" ] [ text (String.fromInt (List.length entry.items)) ]
                     ]
                 ]
             , div [ class "dg-feed-section-controls" ]
-                [ Ui.maybeView (nonEmpty entry.feed.error) (\error -> span [ class "dg-feed-error", title error ] [ text "Fetch failed" ])
+                [ Ui.maybeView (nonEmpty entry.feed.error) (\error -> span [ class "dg-feed-error" ] [ text ("Fetch failed: " ++ error) ])
                 , button
                     [ class "mod-warning dg-feed-discard"
-                    , title "Discard this feed's Items (S on a row)"
+
                     , disabled (count == 0 || busy model)
                     , onClick (DiscardSection entry.feed.id)
                     ]
@@ -476,7 +467,7 @@ sectionView model indexes entry =
             text ""
 
           else
-            Keyed.node "div" [ class "dg-feed-list", attribute "role" "list", attribute "aria-label" entry.feed.title ]
+            Keyed.node "div" [ class "dg-feed-list", attribute "role" "list", attribute "aria-labelledby" ("dg-feed-heading-" ++ entry.feed.id) ]
                 (List.map (\item -> ( item.key, rowView model indexes item )) entry.items)
         ]
 
@@ -516,19 +507,19 @@ rowView model indexes item =
                 text ""
             ]
         , div [ class "dg-feed-row-actions" ]
-            [ button [ title "Open (O)", disabled (String.isEmpty item.link), onClick (Open item.link) ] [ text "Open" ]
+            [ button [ disabled (String.isEmpty item.link), onClick (Open item.link) ] [ text "Open" ]
             , Ui.maybeView (nonEmpty item.commentsUrl)
-                (\url -> button [ title "Comments (C)", onClick (Open url) ] [ text "Comments" ])
+                (\url -> button [ onClick (Open url) ] [ text "Comments" ])
             , button
                 [ class "mod-cta"
-                , title "Keep (K)"
+
                 , disabled (busy model)
                 , onClick (KeepOne item.key)
                 ]
                 [ text "Keep" ]
             , button
                 [ class "mod-warning"
-                , title "Discard (D)"
+
                 , disabled (busy model)
                 , onClick (DiscardOne item.key)
                 ]

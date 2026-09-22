@@ -725,7 +725,7 @@ boardView model =
                 [ h2 [] [ text "Actions" ]
                 , span
                     [ class "dg-count"
-                    , title (String.fromInt shown ++ " shown of " ++ Ui.plural (List.length model.snapshot.actions) "Action")
+
                     ]
                     [ text (String.fromInt shown) ]
                 ]
@@ -759,20 +759,20 @@ toolbar : Model -> Html Msg
 toolbar model =
     div [ class "dg-toolbar" ]
         [ div [ class "dg-view-picker" ]
-            [ select [ attribute "aria-label" "Saved view", onInput SelectSavedView ]
-                (option [ value "", selected (model.activeViewId == Nothing) ] [ text "Board" ]
-                    :: List.map
-                        (\saved -> option [ value saved.id, selected (model.activeViewId == Just saved.id) ] [ text saved.name ])
-                        model.snapshot.settings.savedViews
+            [ Ui.labelled "Saved view"
+                (select [ onInput SelectSavedView ]
+                    (option [ value "", selected (model.activeViewId == Nothing) ] [ text "Board" ]
+                        :: List.map
+                            (\saved -> option [ value saved.id, selected (model.activeViewId == Just saved.id) ] [ text saved.name ])
+                            model.snapshot.settings.savedViews
+                    )
                 )
             , button
                 [ classList [ ( "is-active", model.viewMenuOpen ) ]
-                , attribute "aria-label" "Saved view options"
                 , attribute "aria-expanded" (Ui.boolAttribute model.viewMenuOpen)
-                , title "Save or delete this view"
                 , onClick ToggleViewMenu
                 ]
-                [ text "•••" ]
+                (Ui.iconLabel "•••" "Saved view options")
             , if model.viewMenuOpen then
                 viewMenu model
 
@@ -794,22 +794,26 @@ toolbar model =
                         "Filter (" ++ String.fromInt count ++ ")"
                 )
             ]
-        , choices [ attribute "aria-label" "Group by" ]
-            groupByKey
-            SetGroupBy
-            model.configuration.groupBy
-            (List.map (\groupBy -> ( groupBy, "Group: " ++ Settings.groupByLabel groupBy ))
-                [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+        , Ui.labelled "Group by"
+            (choices []
+                groupByKey
+                SetGroupBy
+                model.configuration.groupBy
+                (List.map (\groupBy -> ( groupBy, "Group: " ++ Settings.groupByLabel groupBy ))
+                    [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+                )
             )
-        , choices [ attribute "aria-label" "Sort by" ]
-            sortFieldKey
-            SetSortField
-            model.configuration.sort.field
-            (List.map (\field -> ( field, "Sort: " ++ Settings.sortFieldLabel field ))
-                [ SortByCreated, SortByDue, SortByTitle, SortByProject ]
+        , Ui.labelled "Sort by"
+            (choices []
+                sortFieldKey
+                SetSortField
+                model.configuration.sort.field
+                (List.map (\field -> ( field, "Sort: " ++ Settings.sortFieldLabel field ))
+                    [ SortByCreated, SortByDue, SortByTitle, SortByProject ]
+                )
             )
-        , button [ attribute "aria-label" "Reverse sort", onClick ReverseSort ]
-            [ text
+        , button [ onClick ReverseSort ]
+            (Ui.iconLabel
                 (case model.configuration.sort.direction of
                     Ascending ->
                         "↑"
@@ -817,7 +821,8 @@ toolbar model =
                     Descending ->
                         "↓"
                 )
-            ]
+                "Reverse sort"
+            )
         ]
 
 
@@ -873,7 +878,7 @@ filterPanel model =
     div [ class "dg-filter-panel" ]
         [ div [ class "dg-panel" ]
             [ span [ class "dg-panel-label" ] [ text "Projects" ]
-            , label [ class "dg-toolbar-toggle", title "Also show Actions of Backlog, Someday/Maybe, Completed and Cancelled Projects" ]
+            , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.allProjects, onCheck ToggleAllProjects ] [], span [] [ text "Include inactive Projects" ] ]
             ]
         , filterBuilder model
@@ -1065,13 +1070,12 @@ cardView model action =
         , onCardKey action.id
         ]
         [ div [ class "dg-card-title-row" ]
-            [ span [ class "dg-card-title dg-action-card-title", title action.title ] [ text action.title ]
+            [ span [ class "dg-card-title dg-action-card-title" ] [ text action.title ]
             , button
                 [ class "dg-icon-button dg-flat-button"
-                , attribute "aria-label" ("Actions for " ++ action.title)
                 , Ui.onPointer (\x y -> Send IgnoreReply (actionMenu x y model action))
                 ]
-                [ text "•••" ]
+                (Ui.iconLabel "•••" ("Actions for " ++ action.title))
             ]
         , case ( action.projectId, breadcrumb ) of
             ( Just projectId, Just name ) ->
@@ -1079,7 +1083,7 @@ cardView model action =
                     labelled =
                         withStatusSymbol model projectId name
                 in
-                button [ class "dg-project-link dg-flat-button", title labelled, onClick (Send IgnoreReply (Command.ShowProject projectId)) ] [ text labelled ]
+                button [ class "dg-project-link dg-flat-button", onClick (Send IgnoreReply (Command.ShowProject projectId)) ] [ text labelled ]
 
             ( Just _, Nothing ) ->
                 span [ class "dg-missing" ] [ text "Missing project" ]
@@ -1093,10 +1097,10 @@ cardView model action =
                 (\due ->
                     -- Overdue is said in words and a symbol too, not by colour alone.
                     if overdue then
-                        span [ class "is-overdue", title ("Overdue since " ++ due) ] [ text ("⚠ " ++ due) ]
+                        span [ class "is-overdue" ] [ text ("⚠ " ++ due) ]
 
                     else
-                        span [ title ("Due " ++ due) ] [ text due ]
+                        span [] [ text due ]
                 )
             , if action.status == ActionStatus.Waiting then
                 span [] [ text ("Waiting since " ++ Maybe.withDefault "—" action.waitingSince) ]

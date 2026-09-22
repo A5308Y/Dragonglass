@@ -1368,15 +1368,16 @@ scheduleRows schedule =
             else
                 [ settingRow "Duration"
                     "Minutes reserved on the calendar."
-                    [ input
-                        [ type_ "number"
-                        , attribute "aria-label" "Duration in minutes"
-                        , Html.Attributes.min "1"
-                        , step "1"
-                        , value schedule.duration
-                        , onInput (TextChanged DurationField)
-                        ]
-                        []
+                    [ Ui.labelled "Duration in minutes"
+                        (input
+                            [ type_ "number"
+                            , Html.Attributes.min "1"
+                            , step "1"
+                            , value schedule.duration
+                            , onInput (TextChanged DurationField)
+                            ]
+                            []
+                        )
                     ]
                 ]
            )
@@ -1409,15 +1410,16 @@ importView model target fields =
     , projectRow model projectName projectHint fields.project
     , settingRow "Pasted list"
         listHint
-        [ textarea
-            [ class "dg-import-input"
-            , attribute "aria-label" "Pasted list"
-            , rows 10
-            , value fields.text
-            , placeholder listPlaceholder
-            , onInput (TextChanged ImportTextField)
-            ]
-            []
+        [ Ui.labelled "Pasted list"
+            (textarea
+                [ class "dg-import-input"
+                , rows 10
+                , value fields.text
+                , placeholder listPlaceholder
+                , onInput (TextChanged ImportTextField)
+                ]
+                []
+            )
         ]
     , div [ class "dg-import-summary" ] [ text (importSummary target fields) ]
     , noticeView model
@@ -1615,44 +1617,47 @@ a label around a Picker would read its suggestions out as part of the name.
 -}
 textInput : String -> String -> String -> String -> (String -> Msg) -> Bool -> Html Msg
 textInput name kind current hint toMessage autofocus =
-    input
-        ([ type_ kind, attribute "aria-label" name, value current, placeholder hint, onInput toMessage ]
-            ++ (if autofocus then
-                    [ Html.Attributes.autofocus True ]
+    Ui.labelled name
+        (input
+            ([ type_ kind, value current, placeholder hint, onInput toMessage ]
+                ++ (if autofocus then
+                        [ Html.Attributes.autofocus True ]
 
-                else
-                    []
-               )
+                    else
+                        []
+                   )
+            )
+            []
         )
-        []
 
 
 dateInput : String -> String -> Field -> Html Msg
 dateInput name current field =
-    input [ type_ "date", attribute "aria-label" name, value current, onInput (TextChanged field) ] []
+    Ui.labelled name (input [ type_ "date", value current, onInput (TextChanged field) ] [])
 
 
 toggle : String -> Bool -> (Bool -> Msg) -> Html Msg
 toggle name current toMessage =
-    input [ type_ "checkbox", attribute "aria-label" name, checked current, onCheck toMessage ] []
+    Ui.labelled name (input [ type_ "checkbox", checked current, onCheck toMessage ] [])
 
 
 statusSelect : String -> List status -> (status -> String) -> (status -> String) -> (status -> Msg) -> status -> Html Msg
 statusSelect name all toKey toLabel toMessage current =
-    select
-        [ attribute "aria-label" name
-        , value (toKey current)
-        , onInput
-            (\raw ->
-                List.filter (\candidate -> toKey candidate == raw) all
-                    |> List.head
-                    |> Maybe.map toMessage
-                    |> Maybe.withDefault NoOp
+    Ui.labelled name
+        (select
+            [ value (toKey current)
+            , onInput
+                (\raw ->
+                    List.filter (\candidate -> toKey candidate == raw) all
+                        |> List.head
+                        |> Maybe.map toMessage
+                        |> Maybe.withDefault NoOp
+                )
+            ]
+            (List.map
+                (\candidate -> option [ value (toKey candidate), selected (toKey candidate == toKey current) ] [ text (toLabel candidate) ])
+                all
             )
-        ]
-        (List.map
-            (\candidate -> option [ value (toKey candidate), selected (toKey candidate == toKey current) ] [ text (toLabel candidate) ])
-            all
         )
 
 

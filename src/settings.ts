@@ -363,7 +363,7 @@ export class GtdSettingTab extends PluginSettingTab {
     for (const source of sources) {
       new Setting(sectionEl)
         .setName("Title")
-        .setDesc(`${source.url} · ${feeds.getStore().states[source.id]?.unread.length ?? 0} unread`)
+        .setDesc(`${source.url} · ${feeds.getStore().states[source.id]?.unread.length ?? 0} unread · The switch turns fetching this feed on or off.`)
         .addText((text) => text
           .setValue(source.title)
           .onChange(async (value) => {
@@ -372,7 +372,6 @@ export class GtdSettingTab extends PluginSettingTab {
             await feeds.updateFeed(source.id, { title });
           }))
         .addToggle((toggle) => toggle
-          .setTooltip("Fetch this feed")
           .setValue(source.enabled)
           .onChange(async (value) => {
             await feeds.updateFeed(source.id, { enabled: value });
@@ -518,12 +517,12 @@ export class GtdSettingTab extends PluginSettingTab {
 
       new Setting(sectionEl)
         .setName("Label")
-        .setDesc("Recorded on every Inbox Item this account produces.")
+        .setDesc("Recorded on every Inbox Item this account produces. The switch turns importing from this account on or off.")
         .addText((text) => text.setValue(account.label).onChange(async (value) => {
           account.label = value.trim() || "Mail";
           await save();
         }))
-        .addToggle((toggle) => toggle.setTooltip("Import from this account").setValue(account.enabled).onChange(async (value) => {
+        .addToggle((toggle) => toggle.setValue(account.enabled).onChange(async (value) => {
           account.enabled = value;
           await save();
         }));

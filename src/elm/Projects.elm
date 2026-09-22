@@ -695,12 +695,12 @@ viewBoard model =
                 [ h2 [] [ text "Projects" ]
                 , span
                     [ class "dg-count"
-                    , title (String.fromInt (List.length (visibleProjects model)) ++ " shown of " ++ Ui.plural (List.length model.snapshot.projects) "Project")
+
                     ]
                     [ text (String.fromInt (List.length (visibleProjects model))) ]
                 ]
             , div [ class "dg-header-actions" ]
-                [ button [ title "Decide on every Someday/Maybe Project", onClick (Send IgnoreReply Command.OpenSomedayReview) ]
+                [ button [ onClick (Send IgnoreReply Command.OpenSomedayReview) ]
                     [ text ("Review Someday/Maybe (" ++ String.fromInt (List.length (somedayQueue model)) ++ ")") ]
                 , button [ onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
                 , button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewProjectModal Nothing)) ] [ text "New Project" ]
@@ -708,7 +708,7 @@ viewBoard model =
             ]
         , div [ class "dg-toolbar dg-project-toolbar" ]
             [ input [ type_ "search", placeholder "Search Projects", value model.search, onInput SearchChanged ] []
-            , label [ class "dg-toolbar-toggle", title "Show only Projects with Action issues" ]
+            , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.issuesOnly, onCheck ToggleIssues ] [], span [] [ text "Issues only" ] ]
             , button [ classList [ ( "is-active", model.columnsOpen ) ], onClick ToggleColumns ] [ text "Columns" ]
             , button
@@ -717,9 +717,9 @@ viewBoard model =
                 , onClick ToggleSelecting
                 ]
                 [ text "Select" ]
-            , label [ class "dg-toolbar-toggle", title "Show project images on board cards" ]
+            , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.showImages, onCheck ToggleImages ] [], span [] [ text "Images" ] ]
-            , label [ class "dg-toolbar-toggle", title "Show sub-projects on the board" ]
+            , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.showSubprojects, onCheck ToggleSubprojects ] [], span [] [ text "Sub-projects" ] ]
             ]
         , if model.columnsOpen then
@@ -813,7 +813,7 @@ viewCollapsedColumn model status =
         ]
         [ button
             [ class "dg-project-column-expand dg-flat-button"
-            , title ("Show " ++ ProjectStatus.label status)
+
             , attribute "aria-expanded" "false"
             , onClick (ToggleColumnExpanded status)
             ]
@@ -845,7 +845,7 @@ viewProjectColumn model status =
             [ if isSecondaryColumn status then
                 button
                     [ class "dg-project-column-collapse dg-flat-button"
-                    , title ("Hide " ++ ProjectStatus.label status)
+
                     , attribute "aria-expanded" "true"
                     , onClick (ToggleColumnExpanded status)
                     ]
@@ -853,10 +853,10 @@ viewProjectColumn model status =
 
               else
                 span [] [ text (ProjectStatus.label status) ]
-            , span [ class "dg-project-column-counts", title "Projects in column" ]
+            , span [ class "dg-project-column-counts" ]
                 (text (String.fromInt (List.length projects) ++ " Projects")
                     :: (if status == ProjectStatus.Active then
-                            [ span [ class "dg-project-column-health", title "Active Projects with Action issues" ]
+                            [ span [ class "dg-project-column-health" ]
                                 [ text (String.fromInt issues ++ " issues") ]
                             ]
 
@@ -921,7 +921,7 @@ viewProjectCard model project =
                 text ""
             , button
                 [ class "dg-card-title dg-flat-button"
-                , title meta.breadcrumb
+
                 , onClick
                     (if model.selecting then
                         NoOp
@@ -933,22 +933,21 @@ viewProjectCard model project =
                 [ text project.title ]
             , button
                 [ class "dg-icon-button dg-flat-button"
-                , attribute "aria-label" ("Actions for " ++ project.title)
                 , Ui.onPointer (\x y -> Send IgnoreReply (projectMenu x y model project))
                 ]
-                [ text "•••" ]
+                (Ui.iconLabel "•••" ("Actions for " ++ project.title))
             ]
         , if meta.breadcrumb /= project.title then
-            div [ class "dg-project-lineage", title meta.breadcrumb ] [ text meta.breadcrumb ]
+            div [ class "dg-project-lineage" ] [ text meta.breadcrumb ]
 
           else
             text ""
         , Ui.maybeView project.area (\area -> div [ class "dg-project-area" ] [ text area ])
         , div [ class "dg-project-tags" ] (List.map viewTag project.tags)
         , div [ class "dg-project-metrics" ]
-            [ span [ title "Open Actions" ] [ strong [] [ text (String.fromInt openCount) ], text " open" ]
-            , span [ title "Active sub-projects, at any depth" ] [ strong [] [ text (String.fromInt meta.activeSubprojects) ], text " sub" ]
-            , span [ title "Project support material files" ] [ strong [] [ text (String.fromInt meta.supportFiles) ], text " files" ]
+            [ span [] [ strong [] [ text (String.fromInt openCount) ], text " open" ]
+            , span [] [ strong [] [ text (String.fromInt meta.activeSubprojects) ], text " sub" ]
+            , span [] [ strong [] [ text (String.fromInt meta.supportFiles) ], text " files" ]
             ]
         , Ui.maybeView project.reviewed (\reviewed -> div [ class "dg-project-reviewed" ] [ text ("Reviewed " ++ reviewed) ])
         , if project.status == ProjectStatus.Someday then
@@ -1015,7 +1014,7 @@ viewDetail model project =
                 , span [ class ("dg-status dg-status-" ++ ProjectStatus.key project.status) ] [ text (ProjectStatus.label project.status) ]
                 ]
             , div [ class "dg-header-actions" ]
-                [ button [ title "Focus on this Project for one time slice", onClick (Send IgnoreReply (Command.OpenPomodoro project.id)) ] [ text "Start Pomodoro" ]
+                [ button [ onClick (Send IgnoreReply (Command.OpenPomodoro project.id)) ] [ text "Start Pomodoro" ]
                 , button [ onClick (Send IgnoreReply (Command.OpenFile project.file.path)) ] [ text "Open note" ]
                 , button [ onClick (Send IgnoreReply (Command.EditProjectModal project.id)) ] [ text "Edit" ]
                 ]
@@ -1199,24 +1198,25 @@ viewActionRow action =
             action.status == ActionStatus.Done
     in
     article [ class "dg-action-row" ]
-        [ input
-            [ class "dg-action-row-checkbox"
-            , type_ "checkbox"
-            , checked done
-            , attribute "aria-label"
-                ((if done then
-                    "Reopen "
+        [ Ui.labelled
+            ((if done then
+                "Reopen "
 
-                  else
-                    "Complete "
-                 )
-                    ++ action.title
-                )
-            , onCheck (\checkedNow -> Send IgnoreReply (Command.SetActionStatus action.id (completionStatus checkedNow)))
-            ]
-            []
+              else
+                "Complete "
+             )
+                ++ action.title
+            )
+            (input
+                [ class "dg-action-row-checkbox"
+                , type_ "checkbox"
+                , checked done
+                , onCheck (\checkedNow -> Send IgnoreReply (Command.SetActionStatus action.id (completionStatus checkedNow)))
+                ]
+                []
+            )
         , div [ class "dg-action-row-main" ]
-            [ span [ class "dg-action-row-title", title action.title ] [ text action.title ]
+            [ span [ class "dg-action-row-title" ] [ text action.title ]
             , div [ class "dg-action-row-meta" ]
                 ((if action.status == ActionStatus.Next then
                     []
@@ -1381,13 +1381,12 @@ viewSubprojectCard model project =
             (Decode.succeed { message = DropSubproject project.status (Just project.id), stopPropagation = True, preventDefault = True })
         ]
         [ div [ class "dg-subproject-card-heading" ]
-            [ button [ class "dg-subproject-title dg-flat-button", title project.title, onClick (SelectProject project.id) ] [ text project.title ]
+            [ button [ class "dg-subproject-title dg-flat-button", onClick (SelectProject project.id) ] [ text project.title ]
             , button
                 [ class "dg-icon-button dg-flat-button"
-                , attribute "aria-label" ("Actions for " ++ project.title)
                 , Ui.onPointer (\x y -> Send IgnoreReply (subprojectMenu x y model project))
                 ]
-                [ text "•••" ]
+                (Ui.iconLabel "•••" ("Actions for " ++ project.title))
             ]
         , if List.isEmpty project.tags then
             text ""
@@ -1398,7 +1397,7 @@ viewSubprojectCard model project =
             text ""
 
           else
-            div [ class "dg-subproject-blocked", title (String.join ", " blockers) ]
+            div [ class "dg-subproject-blocked" ]
                 [ text
                     ("Blocked by "
                         ++ (case blockers of
@@ -1485,7 +1484,7 @@ viewSupport model =
           else
             div [ class "dg-support-folders" ]
                 [ span [] [ text "Folders" ]
-                , div [] (List.map (\folder -> span [ title folder.path ] [ text ("📁 " ++ folder.label) ]) folders)
+                , div [] (List.map (\folder -> span [] [ text ("📁 " ++ folder.label) ]) folders)
                 ]
         , div [ class "dg-support-notes" ] (List.map (viewSupportFile model) readable)
         , if List.isEmpty attachments then
@@ -1524,7 +1523,7 @@ viewSupportFile model file =
                 , onClick (ToggleSupport file)
                 , attribute "aria-expanded" (Ui.boolAttribute open)
                 ]
-                [ span [] [ text (disclosure open) ], span [ title file.label ] [ text file.label ] ]
+                [ span [] [ text (disclosure open) ], span [] [ text file.label ] ]
             , div []
                 (button [ class "dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile file.path)) ] [ text "Open" ]
                     :: (if file.kind == SupportNote then
