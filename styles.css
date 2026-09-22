@@ -292,15 +292,15 @@ body.is-phone .workspace-leaf-content:is(
   gap: 8px;
   height: auto;
   padding: 10px 0;
-  border: 0;
+  border: 0 !important;
   border-radius: inherit;
   color: var(--text-muted);
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
   font-size: var(--font-ui-small);
   cursor: pointer;
 }
-.dg-project-column-expand:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
+.dg-project-column-expand:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
 .dg-project-column-expand-label { writing-mode: vertical-rl; white-space: nowrap; }
 .dg-project-column-expand-count { font-size: var(--font-ui-smaller); font-variant-numeric: tabular-nums; }
 .dg-column-header > button.dg-project-column-collapse {
@@ -308,10 +308,10 @@ body.is-phone .workspace-leaf-content:is(
   height: auto;
   padding: 0;
   overflow: hidden;
-  border: 0;
+  border: 0 !important;
   color: inherit;
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
   font: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1704,7 +1704,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 
 /* Buttons with a surface lighten on hover. Flat, text-style buttons opt out by
-   declaring `background: transparent !important`, which wins over this rule. */
+   declaring `background: transparent !important`, which wins over this rule.
+   The `!important` is required, not optional: Obsidian's own
+   `button:not(.clickable-icon)` rule outranks a single-class selector and paints
+   every button with a gray surface and shadow. Always reset flat buttons with
+   `background: transparent !important; box-shadow: none !important; border: 0 !important;`. */
 @media (hover: hover) {
   .dg-view button:not(:disabled):not(.is-active):hover,
   .dg-modal button:not(:disabled):not(.is-active):hover {
@@ -1985,10 +1989,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   display: block;
   height: auto;
   padding: 0;
-  border: 0;
+  border: 0 !important;
   color: var(--text-normal);
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
   font-weight: var(--font-semibold);
   text-align: left;
   white-space: normal;
