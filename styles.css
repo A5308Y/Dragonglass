@@ -812,6 +812,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   max-height: 100%;
 }
 .dg-project-column .dg-card-list { overflow-y: auto; }
+/* Action columns scroll their own cards below a fixed header, like Project columns,
+   instead of the whole board scrolling cards underneath a sticky header. */
+.dg-board-view .dg-column { max-height: 100%; }
+.dg-board-view .dg-column .dg-card-list { flex: 1 1 auto; min-height: 46px; overflow-y: auto; }
 .dg-project-card-image {
   width: 100%;
   aspect-ratio: 16 / 9;
