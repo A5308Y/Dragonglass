@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  describeImport,
+  describeMailboxState,
+  emptyImportResult,
   openBacklog,
   emptyMailboxState,
   emptyMailStore,
@@ -26,6 +29,54 @@ const stateWith = (changes: Partial<MailboxState> = {}): MailboxState => ({ ...e
 const candidate = (uid: number, messageId = `id-${uid}@example.com`): MailCandidate => ({ uid, messageId });
 /** A mailbox that has already been baselined, which is the ordinary steady state. */
 const ready = (changes: Partial<MailboxState> = {}) => stateWith({ baselined: true, ...changes });
+
+describe("Import reporting", () => {
+  it("distinguishes an ordinary empty import from an idle configuration", () => {
+    expect(describeImport(emptyImportResult())).toBe("No new mail since the last import.");
+    expect(describeImport({ ...emptyImportResult(), idle: true }))
+      .toBe("No enabled account has a mailbox to import from.");
+  });
+
+  it("explains the first baseline instead of reporting zero imports", () => {
+    expect(describeImport({ ...emptyImportResult(), baselined: 1 })).toBe(
+      "1 mailbox set to start from now — existing mail was left alone, and new mail will be imported from here",
+    );
+  });
+
+  it("reports every material outcome in one description", () => {
+    expect(describeImport({
+      ...emptyImportResult(),
+      imported: 2,
+      deferred: 3,
+      unarchived: 1,
+      failed: 1,
+    }, "Work: authentication failed")).toBe(
+      "2 messages imported · 3 waiting for the next import · 1 could not be archived · 1 failed: Work: authentication failed",
+    );
+  });
+
+  it("surfaces a service-level error even when no account was attempted", () => {
+    expect(describeImport(emptyImportResult(), "Email can only be imported on the desktop app."))
+      .toBe("Email can only be imported on the desktop app.");
+  });
+
+  it("describes untouched, healthy, and failed mailbox state", () => {
+    expect(describeMailboxState(emptyMailboxState())).toBe(
+      "Not yet synced — the next import records where to start and imports nothing",
+    );
+    expect(describeMailboxState(ready({
+      lastUid: 42,
+      seen: ["one@example.com", "two@example.com"],
+      fetched: "2026-09-22T05:30:00.000Z",
+    }))).toBe("Importing mail above UID 42 · last checked 2026-09-22 05:30 · 2 remembered");
+    expect(describeMailboxState(stateWith({
+      fetched: "2026-09-22T05:31:00.000Z",
+      error: "The mailbox could not be opened.",
+    }))).toBe(
+      "Not yet synced — the next import records where to start and imports nothing · last checked 2026-09-22 05:31 · Error: The mailbox could not be opened.",
+    );
+  });
+});
 
 describe("The day-one baseline", () => {
   it("imports nothing the first time it sees a mailbox", () => {

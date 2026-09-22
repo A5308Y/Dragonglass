@@ -240,6 +240,72 @@ export function findAccount(accounts: readonly MailAccount[], accountId: string)
   return accounts.find((account) => account.id === accountId);
 }
 
+export interface MailImportResult {
+  imported: number;
+  /** Messages matched but held back by the cap, which the next import will take. */
+  deferred: number;
+  /** Mailboxes whose existing contents were recorded as a starting point. */
+  baselined: number;
+  failed: number;
+  /** Messages whose Inbox Item exists but which could not be archived. */
+  unarchived: number;
+  /** Set when there was nothing to run: no enabled account with a mailbox. */
+  idle: boolean;
+}
+
+export function emptyImportResult(): MailImportResult {
+  return { imported: 0, deferred: 0, baselined: 0, failed: 0, unarchived: 0, idle: false };
+}
+
+/**
+ * Says what an import actually did.
+ *
+ * Importing nothing is the correct outcome in three quite different situations — a
+ * mailbox's first sync, a mailbox with no new mail, and a mailbox that could not be
+ * opened at all — and reporting all three as "0 imported" makes a working import
+ * look broken. Each gets its own sentence.
+ */
+export function describeImport(result: MailImportResult, error = ""): string {
+  if (result.idle) return "No enabled account has a mailbox to import from.";
+
+  const parts: string[] = [];
+  if (result.baselined) {
+    parts.push(
+      `${result.baselined} mailbox${result.baselined === 1 ? "" : "es"} set to start from now — `
+      + "existing mail was left alone, and new mail will be imported from here",
+    );
+  }
+  if (result.imported) parts.push(`${result.imported} message${result.imported === 1 ? "" : "s"} imported`);
+  if (result.deferred) parts.push(`${result.deferred} waiting for the next import`);
+  if (result.unarchived) parts.push(`${result.unarchived} could not be archived`);
+  if (result.failed) parts.push(`${result.failed} failed${error ? `: ${error}` : ""}`);
+
+  // A platform or service-level failure can prevent an import before an account is
+  // attempted, so it has no failed count of its own. Do not call that "no new mail".
+  if (!parts.length && error) return error;
+  // The quiet, ordinary case, which otherwise reads as a failure.
+  if (!parts.length) return "No new mail since the last import.";
+  return parts.join(" · ");
+}
+
+/**
+ * Where one mailbox has got to, for the settings tab.
+ *
+ * The one place that can distinguish "nothing to import" from "never managed to
+ * read this mailbox", which is the question anyone debugging an empty import has.
+ */
+export function describeMailboxState(state: MailboxState): string {
+  const parts: string[] = [];
+  if (!state.baselined) parts.push("Not yet synced — the next import records where to start and imports nothing");
+  else if (state.lastUid) parts.push(`Importing mail above UID ${state.lastUid}`);
+  else parts.push("Importing all new mail");
+
+  if (state.fetched) parts.push(`last checked ${state.fetched.slice(0, 16).replace("T", " ")}`);
+  if (state.seen.length) parts.push(`${state.seen.length} remembered`);
+  if (state.error) parts.push(`Error: ${state.error}`);
+  return parts.join(" · ");
+}
+
 /**
  * A port is only ever the implicit-TLS one unless the user says otherwise.
  *

@@ -2,7 +2,7 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
 import { addImagePathSetting } from "./ui/image-input";
-import { normalizeMailPort } from "./domain/mail";
+import { describeImport, describeMailboxState, mailboxState, normalizeMailPort } from "./domain/mail";
 import { createUlid as createAccountId } from "./utils/ulid";
 import { isPathInDirectory, normalizeVaultPath } from "./utils/path";
 
@@ -330,6 +330,7 @@ export class GtdSettingTab extends PluginSettingTab {
    */
   private displayMail(containerEl: HTMLElement): void {
     const mail = this.plugin.getMailService();
+    const mailboxStateSettings: Array<{ setting: Setting; accountId: string; mailbox: string }> = [];
     containerEl.createEl("h3", { text: "Email" });
     containerEl.createEl("p", {
       text: "Mirrors IMAP mailboxes into the Inbox: every message it accepts becomes an ordinary Inbox Item. "
@@ -411,11 +412,7 @@ export class GtdSettingTab extends PluginSettingTab {
         button.setDisabled(true);
         try {
           const result = await this.plugin.importMail();
-          new Notice(
-            result.baselined
-              ? `${result.baselined} mailbox${result.baselined === 1 ? "" : "es"} set to start from now. Nothing was imported.`
-              : `Imported ${result.imported} message${result.imported === 1 ? "" : "s"}.`,
-          );
+          new Notice(describeImport(result, this.plugin.getMailStatus().error ?? ""), 12_000);
         } catch (error) {
           new Notice(error instanceof Error ? error.message : "Email could not be imported.");
         } finally {
@@ -423,7 +420,12 @@ export class GtdSettingTab extends PluginSettingTab {
           this.display();
         }
       }));
-    const refreshMailStatus = () => importSetting.setDesc(mailStatusText(this.plugin.getMailStatus()));
+    const refreshMailStatus = () => {
+      importSetting.setDesc(mailStatusText(this.plugin.getMailStatus()));
+      for (const entry of mailboxStateSettings) {
+        entry.setting.setDesc(describeMailboxState(mailboxState(mail.getStore(), entry.accountId, entry.mailbox)));
+      }
+    };
     refreshMailStatus();
     this.unsubscribeMailStatus = mail.subscribe(refreshMailStatus);
 
@@ -521,6 +523,14 @@ export class GtdSettingTab extends PluginSettingTab {
           await save();
         }));
 
+      for (const mailbox of account.mailboxes) {
+        const setting = new Setting(containerEl)
+          .setName(mailbox)
+          .setDesc(describeMailboxState(mailboxState(mail.getStore(), account.id, mailbox)))
+          .setClass("dg-mail-mailbox-state");
+        mailboxStateSettings.push({ setting, accountId: account.id, mailbox });
+      }
+
       new Setting(containerEl)
         .setName("Existing mail")
         .setDesc("Whatever is in these mailboxes now is skipped. Import it if you do want the backlog \u2014 subject to the per-import limit above.")
@@ -553,12 +563,9 @@ export class GtdSettingTab extends PluginSettingTab {
 
 function mailStatusText(status: ReturnType<DragonglassGtdPlugin["getMailStatus"]>): string {
   if (status.state === "unavailable") return status.error ?? "Importing is unavailable on this device.";
-  if (status.state === "success") {
-    const result = status.result;
-    const detail = result
-      ? `${result.imported} imported${result.deferred ? `, ${result.deferred} waiting` : ""}${result.baselined ? `, ${result.baselined} set to start from now` : ""}`
-      : "";
-    return `Last import ${status.lastImport ? new Date(status.lastImport).toLocaleString() : "succeeded"}. ${detail}`.trim();
+  if (status.result && (status.state === "success" || status.state === "error" || status.state === "idle")) {
+    const when = status.lastImport ? new Date(status.lastImport).toLocaleString() : "completed";
+    return `Last import ${when}. ${describeImport(status.result, status.error ?? "")}`;
   }
   if (status.state === "error") return status.error ?? "The last import failed.";
   if (status.state === "importing") return "Importing\u2026";

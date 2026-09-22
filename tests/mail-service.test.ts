@@ -371,7 +371,36 @@ describe("When mail cannot be imported here", () => {
 
     const result = await service.importAll();
     expect(result.imported).toBe(0);
+    expect(result.idle).toBe(false);
     expect(service.getStatus().state).toBe("unavailable");
     expect(service.getStatus().error).toMatch(/desktop app/);
+  });
+
+  it("distinguishes having no configured mailbox from an empty mailbox", async () => {
+    const app = {
+      vault: {
+        adapter: {
+          read: async () => {
+            throw new Error("none");
+          },
+        },
+      },
+    } as unknown as App;
+    const service = new MailService(
+      app,
+      { createIdentifiedInboxItem: async () => ({ id: "x" }) } as unknown as GtdRepository,
+      () => ({ enabled: true, storePath: "GTD/mail.json", refreshMinutes: 30, importCap: 50, accounts: [] }),
+      () => "",
+      {
+        connect: async () => {
+          throw new Error("should never be reached");
+        },
+        available: () => true,
+      },
+    );
+
+    const result = await service.importAll();
+    expect(result.idle).toBe(true);
+    expect(service.getStatus()).toMatchObject({ state: "idle", result: { idle: true } });
   });
 });

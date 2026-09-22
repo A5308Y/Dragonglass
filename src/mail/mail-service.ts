@@ -11,7 +11,9 @@ import {
   withMailboxState,
   withSyncError,
   openBacklog,
+  emptyImportResult,
   type MailAccount,
+  type MailImportResult,
   type MailCandidate,
   type MailStoreData,
 } from "../domain/mail";
@@ -28,17 +30,6 @@ export interface MailSettingsView {
   /** How many messages one sync will import before deferring the rest. */
   importCap: number;
   accounts: MailAccount[];
-}
-
-export interface MailImportResult {
-  imported: number;
-  /** Messages matched but held back by the cap, which the next sync will take. */
-  deferred: number;
-  /** Mailboxes whose existing contents were recorded as a starting point. */
-  baselined: number;
-  failed: number;
-  /** Messages whose Inbox Item exists but which could not be archived. */
-  unarchived: number;
 }
 
 export interface MailSyncStatus {
@@ -186,17 +177,18 @@ export class MailService {
 
     if (!this.available()) {
       this.setStatus({ state: "unavailable", error: MOBILE_EXPLANATION });
-      return emptyResult();
+      return emptyImportResult();
     }
     const accounts = this.getSettings().accounts.filter((account) => account.enabled && account.mailboxes.length);
     if (!accounts.length) {
-      this.setStatus({ state: "idle", lastImport: new Date().toISOString() });
-      return emptyResult();
+      const idle = { ...emptyImportResult(), idle: true };
+      this.setStatus({ state: "idle", lastImport: new Date().toISOString(), result: idle });
+      return idle;
     }
 
     this.setStatus({ ...this.status, state: "importing" });
     const run = (async () => {
-      const total = emptyResult();
+      const total = emptyImportResult();
       const failures: string[] = [];
       // One account at a time: several simultaneous IMAP sessions from one vault is
       // how a provider decides you are not a mail client.
@@ -233,7 +225,7 @@ export class MailService {
     const password = this.getPassword(account.id);
     if (!password) throw new Error(`${account.label} has no app password configured.`);
 
-    const result = emptyResult();
+    const result = emptyImportResult();
     const connection = await this.openSession(account, password);
     try {
       for (const mailbox of account.mailboxes) {
@@ -372,10 +364,6 @@ export class MailService {
   }
 }
 
-function emptyResult(): MailImportResult {
-  return { imported: 0, deferred: 0, baselined: 0, failed: 0, unarchived: 0 };
-}
-
 async function ensureParent(vault: Vault, path: string): Promise<void> {
   const index = path.lastIndexOf("/");
   if (index <= 0) return;
@@ -383,3 +371,5 @@ async function ensureParent(vault: Vault, path: string): Promise<void> {
   if (await vault.adapter.exists(folder)) return;
   await vault.adapter.mkdir(folder);
 }
+
+export type { MailImportResult };

@@ -4,7 +4,7 @@ import { FeedService, type FeedFetchResult, type FeedSyncStatus } from "./feeds/
 import { MailService, type MailImportResult, type MailSyncStatus } from "./mail/mail-service";
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import { projectsDueForActivation } from "./domain/project-activation";
-import { normalizeMailPort } from "./domain/mail";
+import { describeImport, normalizeMailPort } from "./domain/mail";
 import type { GtdSettings, MailAccountSettings, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
@@ -428,13 +428,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (!this.mail.available()) return void new Notice("Email can only be imported on the desktop app.");
     try {
       const result = await this.mail.importAll();
-      const parts: string[] = [];
-      if (result.baselined) parts.push(`${result.baselined} mailbox${result.baselined === 1 ? "" : "es"} set to start from now`);
-      parts.push(`${result.imported} Inbox Item${result.imported === 1 ? "" : "s"} created`);
-      if (result.deferred) parts.push(`${result.deferred} waiting for the next import`);
-      if (result.unarchived) parts.push(`${result.unarchived} could not be archived`);
-      if (result.failed) parts.push(`${result.failed} failed`);
-      new Notice(parts.join(" · "));
+      new Notice(describeImport(result, this.mail.getStatus().error ?? ""), 10_000);
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "Email could not be imported.");
     }
