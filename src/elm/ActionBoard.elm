@@ -9,7 +9,7 @@ import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ActionId, ProjectId)
-import Gtd.ProjectStatus as ProjectStatus
+import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Settings as Settings
     exposing
         ( BoardConfiguration
@@ -95,6 +95,7 @@ type alias Model =
     , activeViewId : Maybe String
     , configuration : BoardConfiguration
     , search : String
+    , allProjects : Bool
     , filterOpen : Bool
     , columnsOpen : Bool
     , draft : FilterDraft
@@ -110,6 +111,7 @@ type alias Model =
 type Msg
     = GotHost Decode.Value
     | SearchChanged String
+    | ToggleAllProjects Bool
     | ToggleFilters
     | ToggleColumns
     | SelectSavedView String
@@ -179,6 +181,7 @@ initialModel snapshot active configuration =
     , activeViewId = active
     , configuration = configuration
     , search = ""
+    , allProjects = False
     , filterOpen = False
     , columnsOpen = False
     , draft = initialDraft snapshot.today
@@ -209,6 +212,9 @@ update msg model =
 
         SearchChanged query ->
             ( { model | search = query }, Cmd.none )
+
+        ToggleAllProjects shown ->
+            ( { model | allProjects = shown }, Cmd.none )
 
         ToggleFilters ->
             ( { model | filterOpen = not model.filterOpen }, Cmd.none )
@@ -696,6 +702,8 @@ toolbar model =
                     model.snapshot.settings.savedViews
             )
         , input [ type_ "search", placeholder "Search Actions or Projects", value model.search, onInput SearchChanged ] []
+        , label [ class "dg-toolbar-toggle", title "Also show Actions of Backlog, Someday/Maybe, Completed and Cancelled Projects" ]
+            [ input [ type_ "checkbox", checked model.allProjects, onCheck ToggleAllProjects ] [], span [] [ text "All projects" ] ]
         , button [ classList [ ( "is-active", model.filterOpen ) ], onClick ToggleFilters ] [ text "Filter" ]
         , choices [ attribute "aria-label" "Group by" ]
             groupByKey
@@ -924,7 +932,11 @@ cardView model action =
             ]
         , case ( action.projectId, breadcrumb ) of
             ( Just projectId, Just name ) ->
-                button [ class "dg-project-link", title name, onClick (Send IgnoreReply (Command.ShowProject projectId)) ] [ text name ]
+                let
+                    labelled =
+                        withStatusSymbol model projectId name
+                in
+                button [ class "dg-project-link", title labelled, onClick (Send IgnoreReply (Command.ShowProject projectId)) ] [ text labelled ]
 
             ( Just _, Nothing ) ->
                 span [ class "dg-missing" ] [ text "Missing project" ]
@@ -1070,7 +1082,9 @@ groupLabel model key =
             "No project"
 
         ProjectGroup (Just projectId) ->
-            Hierarchy.breadcrumbFor model.snapshot.projects projectId |> Maybe.withDefault "Missing project"
+            Hierarchy.breadcrumbFor model.snapshot.projects projectId
+                |> Maybe.map (withStatusSymbol model projectId)
+                |> Maybe.withDefault "Missing project"
 
         ContextGroup Nothing ->
             "No context"
@@ -1083,6 +1097,38 @@ groupLabel model key =
 
         EnergyGroup (Just energy) ->
             capitalized energy
+
+
+{-| Prefixes a Project name with a symbol for its status, so Actions of a Project
+that is not Active stand out once the board shows every Project.
+-}
+withStatusSymbol : Model -> ProjectId -> String -> String
+withStatusSymbol model projectId name =
+    case Data.findProject projectId model.snapshot.projects |> Maybe.andThen (.status >> statusSymbol) of
+        Just symbol ->
+            symbol ++ " " ++ name
+
+        Nothing ->
+            name
+
+
+statusSymbol : ProjectStatus -> Maybe String
+statusSymbol status =
+    case status of
+        ProjectStatus.Active ->
+            Nothing
+
+        ProjectStatus.Backlog ->
+            Just "⏸"
+
+        ProjectStatus.Someday ->
+            Just "☁"
+
+        ProjectStatus.Completed ->
+            Just "✓"
+
+        ProjectStatus.Cancelled ->
+            Just "✕"
 
 
 capitalized : String -> String
@@ -1116,7 +1162,7 @@ matchesAll model action =
                 |> Maybe.andThen (Hierarchy.breadcrumbFor model.snapshot.projects)
                 |> Maybe.withDefault ""
     in
-    belongsToActiveProject model action
+    (model.allProjects || belongsToActiveProject model action)
         && Ui.matches model.search [ action.title, projectText ]
         && List.all (matchesFilter model action) model.configuration.filters
 
