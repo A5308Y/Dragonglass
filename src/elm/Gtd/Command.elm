@@ -50,6 +50,7 @@ type Command
     | ProjectDependenciesModal ProjectId
       -- Actions
     | SetActionStatus ActionId ActionStatus
+    | SetActionPriorities (List ActionId)
     | SetActionProject ActionId (Maybe ProjectId)
     | SetActionContext ActionId String
     | TrashAction ActionId
@@ -280,6 +281,10 @@ encode command =
         SetActionStatus actionId status ->
             object "set-action-status"
                 [ ( "actionId", Encode.string actionId ), ( "status", ActionStatus.encode status ) ]
+
+        SetActionPriorities actionIds ->
+            object "set-action-priorities"
+                [ ( "actionIds", Encode.list Encode.string actionIds ) ]
 
         SetActionProject actionId maybeId ->
             object "update-action"

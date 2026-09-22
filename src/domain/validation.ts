@@ -89,6 +89,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const waitingSince = optionalString(frontmatter, "waiting_since");
   const scheduledStart = optionalString(frontmatter, "scheduled_start");
   const durationMinutes = optionalNumber(frontmatter, "duration_minutes");
+  const priority = optionalNumber(frontmatter, "priority");
   const completed = optionalString(frontmatter, "completed");
   if (projectId) action.projectId = projectId;
   if (projectLink) action.projectLink = projectLink;
@@ -101,6 +102,10 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (durationMinutes !== undefined) {
     if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) throw new Error("Invalid 'duration_minutes'");
     action.durationMinutes = durationMinutes;
+  }
+  if (priority !== undefined) {
+    if (!Number.isInteger(priority)) throw new Error("Invalid 'priority'");
+    action.priority = priority;
   }
   if (completed) {
     if (Number.isNaN(Date.parse(completed))) throw new Error("Invalid 'completed' timestamp");

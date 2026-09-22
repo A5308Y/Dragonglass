@@ -224,6 +224,10 @@ describe("Elm adapter protocol", () => {
       input: { work: "false" },
     }))).toBeNull();
 
+    expect(parseActionBoardCommand(envelope({ type: "set-action-priorities", actionIds: ["A2", "A1"] }))?.command.type)
+      .toBe("set-action-priorities");
+    expect(parseActionBoardCommand(envelope({ type: "set-action-priorities", actionIds: [] }))).toBeNull();
+
     expect(parseActionBoardCommand(envelope({ type: "upsert-saved-view", view, activate: true }))?.command.type)
       .toBe("upsert-saved-view");
     expect(parseActionBoardCommand(envelope({ type: "upsert-saved-view", view: { ...view, sort: {} }, activate: true })))

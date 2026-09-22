@@ -93,6 +93,13 @@ describe("query model", () => {
     expect(parseAction({ id: "A8", title: "Buy milk", status: "next", created: "2026-09-19" }, file("A8.md")).work).toBeUndefined();
   });
 
+  it("reads an integer Action priority from frontmatter", () => {
+    expect(parseAction({ id: "A-priority", title: "First", status: "next", created: "2026-09-19", priority: 1_000 }, file("Priority.md")).priority)
+      .toBe(1_000);
+    expect(() => parseAction({ id: "A-bad-priority", title: "Broken", status: "next", created: "2026-09-19", priority: 1.5 }, file("Broken.md")))
+      .toThrow("Invalid 'priority'");
+  });
+
   it("reads and normalizes scheduled Action timing", () => {
     const parsed = parseAction({
       id: "A10",

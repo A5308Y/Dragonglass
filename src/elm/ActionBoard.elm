@@ -24,7 +24,7 @@ import Gtd.Settings as Settings
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, button, div, h2, header, input, label, option, section, select, span, text)
 import Html.Attributes exposing (attribute, checked, class, classList, disabled, draggable, id, placeholder, selected, tabindex, title, type_, value)
-import Html.Events exposing (on, onCheck, onClick, onInput)
+import Html.Events exposing (custom, on, onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Task
@@ -129,6 +129,7 @@ type Msg
     | DragStarted ActionId
     | DragOver
     | DropOn ActionStatus
+    | DropBefore ActionId
     | CardKey ActionId Key
     | Focused (Result Browser.Dom.Error ())
     | Send Pending Command
@@ -358,6 +359,20 @@ update msg model =
             case model.dragged of
                 Just actionId ->
                     moveAction actionId status { model | dragged = Nothing }
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        DropBefore targetId ->
+            case model.dragged of
+                Just actionId ->
+                    if actionId == targetId then
+                        ( { model | dragged = Nothing }, Cmd.none )
+
+                    else
+                        send IgnoreReply
+                            (Command.SetActionPriorities (priorityOrder model actionId targetId))
+                            { model | dragged = Nothing }
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -880,6 +895,8 @@ cardView model action =
         , tabindex 0
         , draggable "true"
         , on "dragstart" (Decode.succeed (DragStarted action.id))
+        , custom "dragover" (Decode.succeed { message = NoOp, stopPropagation = False, preventDefault = True })
+        , custom "drop" (Decode.succeed { message = DropBefore action.id, stopPropagation = True, preventDefault = True })
         , Ui.onKeyDown (CardKey action.id)
         ]
         [ div [ class "dg-card-title-row" ]
@@ -1193,6 +1210,14 @@ sortActions model actions =
             model.configuration.sort.direction == Descending
 
         compareActions left right =
+            case comparePriority left right of
+                EQ ->
+                    compareByConfiguredSort left right
+
+                priorityComparison ->
+                    priorityComparison
+
+        compareByConfiguredSort left right =
             if model.configuration.sort.field == SortByDue then
                 -- An Action with no due date sorts last in both directions.
                 case ( left.due, right.due ) of
@@ -1219,6 +1244,65 @@ sortActions model actions =
                 compare ( key left, left.id ) ( key right, right.id )
     in
     List.sortWith compareActions actions
+
+
+{-| A manually ranked Action always comes before an unranked one. The selected
+sort remains the stable fallback until an Action receives a priority.
+-}
+comparePriority : Action -> Action -> Order
+comparePriority left right =
+    case ( left.priority, right.priority ) of
+        ( Just leftPriority, Just rightPriority ) ->
+            compare ( leftPriority, left.id ) ( rightPriority, right.id )
+
+        ( Just _, Nothing ) ->
+            LT
+
+        ( Nothing, Just _ ) ->
+            GT
+
+        ( Nothing, Nothing ) ->
+            EQ
+
+
+{-| Preserve the order visible on the board, then append anything currently
+outside its filters so one dropped card establishes a complete global ranking.
+-}
+priorityOrder : Model -> ActionId -> ActionId -> List ActionId
+priorityOrder model actionId targetId =
+    let
+        visible =
+            buildGroups model |> List.concatMap (.actions >> List.map .id)
+
+        moved =
+            insertBefore actionId targetId visible
+
+        remaining =
+            model.snapshot.actions
+                |> List.map (\action -> { action | status = Dict.get action.id model.optimistic |> Maybe.withDefault action.status })
+                |> List.filter (\action -> not (List.member action.id moved))
+                |> sortActions model
+                |> List.map .id
+    in
+    moved ++ remaining
+
+
+insertBefore : ActionId -> ActionId -> List ActionId -> List ActionId
+insertBefore actionId targetId actionIds =
+    let
+        withoutDragged =
+            List.filter ((/=) actionId) actionIds
+    in
+    List.foldr
+        (\candidate result ->
+            if candidate == targetId then
+                actionId :: candidate :: result
+
+            else
+                candidate :: result
+        )
+        []
+        withoutDragged
 
 
 {-| The options a value filter offers for the field the draft names.

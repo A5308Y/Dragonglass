@@ -91,6 +91,9 @@ export class ElmActionBoardHost {
         await this.services.repository.setActionStatus(command.actionId, command.status);
         return;
       }
+      case "set-action-priorities":
+        await this.services.repository.setActionPriorities(command.actionIds);
+        return;
       case "update-action":
         await this.services.repository.updateAction(command.actionId, {
           ...(command.projectId !== undefined ? { projectId: command.projectId } : {}),

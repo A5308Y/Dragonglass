@@ -17,6 +17,7 @@ type Command
     | ShowProject ProjectId
     | EditActionModal ActionId
     | SetActionStatus ActionId ActionStatus
+    | SetActionPriorities (List ActionId)
     | SetActionProject ActionId (Maybe ProjectId)
     | SetActionContext ActionId String
     | TrashAction ActionId
@@ -57,6 +58,9 @@ toBase command =
 
         SetActionStatus actionId status ->
             Base.SetActionStatus actionId status
+
+        SetActionPriorities actionIds ->
+            Base.SetActionPriorities actionIds
 
         SetActionProject actionId projectId ->
             Base.SetActionProject actionId projectId

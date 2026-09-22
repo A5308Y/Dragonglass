@@ -280,6 +280,7 @@ type ElmNonMenuCommand =
   | { type: "show-project"; projectId: string }
   | { type: "edit-action"; actionId: string }
   | { type: "set-action-status"; actionId: string; status: Action["status"] }
+  | { type: "set-action-priorities"; actionIds: string[] }
   | { type: "update-action"; actionId: string; projectId?: string; context?: string }
   | { type: "trash-action"; actionId: string }
   | { type: "edit-project"; projectId: string }
@@ -363,7 +364,7 @@ interface ElmProjectsMenuCommand {
 
 export type ElmActionBoardCommand = Extract<ElmNonMenuCommand,
   | { type: "create-action" | "quick-capture" | "open-inbox" | "show-project" | "edit-action" }
-  | { type: "set-action-status" | "update-action" | "trash-action" }
+  | { type: "set-action-status" | "set-action-priorities" | "update-action" | "trash-action" }
   | { type: "set-active-saved-view" | "upsert-saved-view" | "delete-saved-view" | "prompt" }
 > | ElmActionBoardMenuCommand;
 
@@ -472,7 +473,7 @@ function isModalCommand(value: unknown): value is ElmModalCommand {
 
 const ACTION_BOARD_COMMANDS = new Set([
   "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
-  "trash-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt", "show-menu",
+  "set-action-priorities", "trash-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt", "show-menu",
 ]);
 const ACTION_BOARD_MENU_COMMANDS = new Set([...ACTION_BOARD_COMMANDS].filter((type) => type !== "show-menu"));
 const PROJECTS_COMMANDS = new Set([
@@ -605,6 +606,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "set-action-status":
       return typeof value.actionId === "string"
         && ["next", "waiting", "scheduled", "done", "cancelled"].includes(String(value.status));
+    case "set-action-priorities":
+      return isStringArray(value.actionIds) && value.actionIds.length > 0;
     case "update-action":
       return typeof value.actionId === "string"
         && (value.projectId === undefined || typeof value.projectId === "string")

@@ -49,6 +49,8 @@ export interface Action {
   completed?: string;
   /** Marks the Action as work, independent of its context. */
   work?: boolean;
+  /** Persistent, user-defined priority on the Actions Board. Lower comes first. */
+  priority?: number;
 }
 
 export interface Project {

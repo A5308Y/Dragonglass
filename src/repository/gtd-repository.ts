@@ -404,6 +404,18 @@ export class GtdRepository {
     return this.updateAction(id, { status });
   }
 
+  /** Rewrites the supplied complete priority sequence at roomy numeric intervals. */
+  async setActionPriorities(actionIds: readonly string[]): Promise<void> {
+    const ids = [...new Set(actionIds)];
+    if (!ids.length) return;
+    const actions = ids.map((id) => this.requireAction(id));
+    await Promise.all(actions.map((action, index) => this.enqueue(action.file.path, () =>
+      this.app.fileManager.processFrontMatter(action.file, (frontmatter) => {
+        frontmatter.priority = (index + 1) * 1_000;
+      })
+    )));
+  }
+
   async reopenAction(id: string): Promise<void> {
     return this.updateAction(id, { status: "next" });
   }
