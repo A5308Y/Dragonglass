@@ -227,6 +227,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       callback: () => this.openProjectPicker(),
     });
     this.addCommand({ id: "start-project-review", name: "Start Project Review", callback: () => void this.activateView(REVIEW_VIEW_TYPE) });
+    this.addCommand({ id: "start-someday-review", name: "Start Someday/Maybe Review", callback: () => void this.openSomedayReview() });
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
     this.addCommand({ id: "open-feeds", name: "Open RSS Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
     this.addCommand({ id: "fetch-feeds", name: "Fetch RSS Feeds", callback: () => void this.fetchFeedsWithNotice() });
@@ -438,6 +439,11 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (!this.settings.feeds.enabled) return void new Notice("Feeds are switched off in Dragonglass settings.");
     const result = await this.feeds.fetchAll();
     new Notice(result.added ? `Fetched ${result.added} new Feed Item${result.added === 1 ? "" : "s"}.` : "No new Feed Items.");
+  }
+
+  private async openSomedayReview(): Promise<void> {
+    const leaf = await this.activateView(PROJECTS_VIEW_TYPE);
+    if (leaf.view instanceof GtdProjectsView) leaf.view.showSomedayReview();
   }
 
   private async openProjectDetail(id: string): Promise<void> {

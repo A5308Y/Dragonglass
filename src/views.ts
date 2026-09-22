@@ -179,6 +179,12 @@ export class GtdProjectsView extends ItemView {
     else this.refresh();
   }
 
+  showSomedayReview(): void {
+    this.projectId = null;
+    if (!this.host) this.refresh();
+    this.host?.showSomedayReview();
+  }
+
   refresh(): void {
     if (this.host) {
       this.host.refresh();

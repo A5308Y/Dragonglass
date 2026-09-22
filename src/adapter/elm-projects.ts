@@ -71,6 +71,11 @@ export class ElmProjectsHost {
     this.setSelection(projectId);
   }
 
+  showSomedayReview(): void {
+    this.onProjectChange(null);
+    this.send({ type: "show-someday-review" });
+  }
+
   setSelection(projectId: string | null): void {
     this.onProjectChange(projectId);
     this.send({ type: "show-project", projectId });
@@ -208,6 +213,10 @@ export class ElmProjectsHost {
         return this.services.repository.readProjectSupportNote(command.projectId, command.path);
       case "update-support-note":
         await this.services.repository.updateProjectSupportNote(command.projectId, command.path, command.body);
+        return;
+      case "review-someday-project":
+        // Keeping an idea is a decision too; the date lets it wake itself up later.
+        await this.services.repository.updateProject(command.projectId, { activateAt: command.activateAt, reviewed: localDate() });
         return;
       case "save-project-preferences":
         await this.services.saveSettings({

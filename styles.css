@@ -1954,3 +1954,66 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 @media (prefers-reduced-motion: reduce) {
   .dg-view * { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Someday/Maybe Review */
+.dg-someday-review { --dg-bar-inset: max(16px, calc((100% - 1080px) / 2)); }
+.dg-someday-review-body {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  padding: 12px 16px 24px;
+  overflow-y: auto;
+}
+.dg-someday-review-intro { margin: 0 0 12px; color: var(--text-muted); font-size: var(--font-ui-small); }
+.dg-someday-review-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+.dg-someday-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.dg-someday-item:first-child { border-top: 0; }
+.dg-someday-item-main { flex: 1 1 280px; min-width: 0; }
+.dg-someday-item-title {
+  display: block;
+  height: auto;
+  padding: 0;
+  border: 0;
+  color: var(--text-normal);
+  background: transparent;
+  box-shadow: none;
+  font-weight: var(--font-semibold);
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+.dg-someday-item-title:hover { color: var(--text-accent); }
+.dg-someday-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.dg-someday-item-decisions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.dg-someday-wake {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.dg-someday-drop { color: var(--text-error); }

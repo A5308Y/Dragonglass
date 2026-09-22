@@ -301,6 +301,7 @@ type ElmNonMenuCommand =
   | { type: "read-support-note"; projectId: string; path: string }
   | { type: "update-support-note"; projectId: string; path: string; body: string }
   | { type: "save-project-preferences"; columns: Project["status"][]; showImages: boolean }
+  | { type: "review-someday-project"; projectId: string; activateAt: string }
   | { type: "load-review-project"; projectId: string }
   | { type: "create-review-action"; title: string; projectId: string; context: string; work: boolean }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
@@ -374,7 +375,7 @@ export type ElmProjectsCommand = Extract<ElmNonMenuCommand,
   | { type: "trash-project" | "trash-projects" | "batch-project-tags" | "batch-project-parent" | "project-dependencies" }
   | { type: "import-actions" | "import-subprojects" | "load-project-detail" | "set-desired-outcome" | "add-diary-entry" }
   | { type: "create-support-note" | "create-support-folder" | "read-support-note" | "update-support-note" }
-  | { type: "save-project-preferences" | "open-file" }
+  | { type: "save-project-preferences" | "open-file" | "review-someday-project" }
 > | ElmProjectsMenuCommand;
 
 export type ElmInboxCommand = Extract<ElmNonMenuCommand,
@@ -481,7 +482,7 @@ const PROJECTS_COMMANDS = new Set([
   "edit-project", "set-project-status", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
   "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
   "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
-  "update-support-note", "save-project-preferences", "open-file", "show-menu",
+  "update-support-note", "save-project-preferences", "open-file", "review-someday-project", "show-menu",
 ]);
 const PROJECTS_MENU_COMMANDS = new Set([...PROJECTS_COMMANDS].filter((type) => type !== "show-menu"));
 const INBOX_COMMANDS = new Set(["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"]);
@@ -571,6 +572,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.projectId === "string" && typeof value.path === "string";
     case "update-support-note":
       return typeof value.projectId === "string" && typeof value.path === "string" && typeof value.body === "string";
+    case "review-someday-project":
+      return typeof value.projectId === "string" && typeof value.activateAt === "string";
     case "save-project-preferences":
       return Array.isArray(value.columns)
         && value.columns.length > 0
@@ -803,6 +806,7 @@ export type ElmProjectsEvent =
   | { type: "project-meta"; projectMeta: ElmProjectMetaDto[] }
   | { type: "project-detail"; detail: ElmProjectDetailDto }
   | { type: "show-project"; projectId: string | null }
+  | { type: "show-someday-review" }
   | ElmCommandResultEvent;
 export type ElmInboxEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
