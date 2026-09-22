@@ -74,7 +74,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addRibbonIcon("folder-kanban", "Open GTD Projects", () => void this.activateView(PROJECTS_VIEW_TYPE));
     this.addRibbonIcon("clipboard-check", "Start GTD Project Review", () => void this.activateView(REVIEW_VIEW_TYPE));
     this.addRibbonIcon("lightbulb", "Open GTD Brainstorm", () => void this.activateView(BRAINSTORM_VIEW_TYPE));
-    this.addRibbonIcon("rss", "Open GTD Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
+    this.addRibbonIcon("rss", "Open RSS Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
     this.addSettingTab(new GtdSettingTab(this.app, this));
     this.registerCommands();
 
@@ -228,8 +228,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     });
     this.addCommand({ id: "start-project-review", name: "Start Project Review", callback: () => void this.activateView(REVIEW_VIEW_TYPE) });
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
-    this.addCommand({ id: "open-feeds", name: "Open Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
-    this.addCommand({ id: "fetch-feeds", name: "Fetch Feeds", callback: () => void this.fetchFeedsWithNotice() });
+    this.addCommand({ id: "open-feeds", name: "Open RSS Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
+    this.addCommand({ id: "fetch-feeds", name: "Fetch RSS Feeds", callback: () => void this.fetchFeedsWithNotice() });
     this.addCommand({ id: "import-email", name: "Import Email", callback: () => void this.importMailWithNotice() });
     this.addCommand({ id: "quick-capture-inbox-item", name: "Quick Capture Inbox Item", callback: () => this.quickCapture() });
     this.addCommand({ id: "new-action", name: "New Action", callback: () => this.createAction() });

@@ -60,7 +60,7 @@ export class GtdFeedsView extends ItemView {
 
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices, private readonly feeds: FeedService) { super(leaf); }
   getViewType(): string { return FEEDS_VIEW_TYPE; }
-  getDisplayText(): string { return "GTD Feeds"; }
+  getDisplayText(): string { return "RSS Feeds"; }
   getIcon(): string { return "rss"; }
   async onOpen(): Promise<void> { this.refresh(); }
   async onClose(): Promise<void> {

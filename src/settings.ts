@@ -218,7 +218,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private displayFeeds(containerEl: HTMLElement): void {
     const section = containerEl.createEl("details", { cls: "dg-settings-section" });
     section.open = this.feedsExpanded;
-    section.createEl("summary", { text: "Feeds", cls: "dg-settings-section-summary" });
+    section.createEl("summary", { text: "RSS Feeds", cls: "dg-settings-section-summary" });
     section.addEventListener("toggle", () => {
       this.feedsExpanded = section.open;
     });

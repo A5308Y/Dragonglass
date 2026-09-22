@@ -106,8 +106,8 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 - **GTD: Open Project** (fuzzy Project picker; Cmd/Ctrl+Shift+O by default)
 - **GTD: Start Project Review**
 - **GTD: Open Brainstorm**
-- **GTD: Open Feeds**
-- **GTD: Fetch Feeds**
+- **GTD: Open RSS Feeds**
+- **GTD: Fetch RSS Feeds**
 - **GTD: Import Email**
 - **GTD: Quick Capture Inbox Item**
 - **GTD: New Action**
