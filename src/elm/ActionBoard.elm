@@ -99,6 +99,7 @@ type alias Model =
     , columnsOpen : Bool
     , draft : FilterDraft
     , dragged : Maybe ActionId
+    , priorityDropTarget : Maybe ActionId
     , optimistic : Dict ActionId ActionStatus
     , savedViewSeed : Int
     , requests : Requests Pending
@@ -128,6 +129,8 @@ type Msg
     | ToggleColumn GroupKey
     | DragStarted ActionId
     | DragOver
+    | DragOverCard ActionId
+    | DragEnded
     | DropOn ActionStatus
     | DropBefore ActionId
     | CardKey ActionId Key
@@ -180,6 +183,7 @@ initialModel snapshot active configuration =
     , columnsOpen = False
     , draft = initialDraft snapshot.today
     , dragged = Nothing
+    , priorityDropTarget = Nothing
     , optimistic = Dict.empty
     , savedViewSeed = 1
     , requests = Host.noRequests
@@ -350,15 +354,21 @@ update msg model =
             ( { model | configuration = withConfiguration model (\config -> { config | visibleColumns = OnlyColumns next }) }, Cmd.none )
 
         DragStarted actionId ->
-            ( { model | dragged = Just actionId }, Cmd.none )
+            ( { model | dragged = Just actionId, priorityDropTarget = Nothing }, Cmd.none )
 
         DragOver ->
-            ( model, Cmd.none )
+            ( { model | priorityDropTarget = Nothing }, Cmd.none )
+
+        DragOverCard actionId ->
+            ( { model | priorityDropTarget = Just actionId }, Cmd.none )
+
+        DragEnded ->
+            ( { model | dragged = Nothing, priorityDropTarget = Nothing }, Cmd.none )
 
         DropOn status ->
             case model.dragged of
                 Just actionId ->
-                    moveAction actionId status { model | dragged = Nothing }
+                    moveAction actionId status { model | dragged = Nothing, priorityDropTarget = Nothing }
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -367,12 +377,12 @@ update msg model =
             case model.dragged of
                 Just actionId ->
                     if actionId == targetId then
-                        ( { model | dragged = Nothing }, Cmd.none )
+                        ( { model | dragged = Nothing, priorityDropTarget = Nothing }, Cmd.none )
 
                     else
                         send IgnoreReply
                             (Command.SetActionPriorities (priorityOrder model actionId targetId))
-                            { model | dragged = Nothing }
+                            { model | dragged = Nothing, priorityDropTarget = Nothing }
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -888,14 +898,18 @@ cardView model action =
                 |> Maybe.withDefault False
     in
     article
-        [ class "dg-card"
+        [ classList
+            [ ( "dg-card", True )
+            , ( "is-drop-before", model.priorityDropTarget == Just action.id )
+            ]
         , attribute "role" "listitem"
         , attribute "data-card" action.id
         , id (cardDomId action.id)
         , tabindex 0
         , draggable "true"
         , on "dragstart" (Decode.succeed (DragStarted action.id))
-        , custom "dragover" (Decode.succeed { message = NoOp, stopPropagation = False, preventDefault = True })
+        , on "dragend" (Decode.succeed DragEnded)
+        , custom "dragover" (Decode.succeed { message = DragOverCard action.id, stopPropagation = True, preventDefault = True })
         , custom "drop" (Decode.succeed { message = DropBefore action.id, stopPropagation = True, preventDefault = True })
         , Ui.onKeyDown (CardKey action.id)
         ]
