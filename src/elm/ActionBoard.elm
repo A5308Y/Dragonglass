@@ -1085,8 +1085,25 @@ matchesAll model action =
                 |> Maybe.andThen (Hierarchy.breadcrumbFor model.snapshot.projects)
                 |> Maybe.withDefault ""
     in
-    Ui.matches model.search [ action.title, projectText ]
+    belongsToActiveProject model action
+        && Ui.matches model.search [ action.title, projectText ]
         && List.all (matchesFilter model action) model.configuration.filters
+
+
+{-| The Actions Board is for current project work. An Action without a Project
+remains a valid standalone Action; an Action whose referenced Project is missing
+is not surfaced as active work.
+-}
+belongsToActiveProject : Model -> Action -> Bool
+belongsToActiveProject model action =
+    case action.projectId of
+        Nothing ->
+            True
+
+        Just projectId ->
+            Data.findProject projectId model.snapshot.projects
+                |> Maybe.map (\project -> project.status == ProjectStatus.Active)
+                |> Maybe.withDefault False
 
 
 matchesFilter : Model -> Action -> Filter -> Bool
