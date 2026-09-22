@@ -432,7 +432,7 @@ sectionView model indexes entry =
         [ div [ class "dg-feed-section-header" ]
             [ div [ class "dg-feed-section-heading" ]
                 [ button
-                    [ class "dg-feed-collapse"
+                    [ class "dg-feed-collapse dg-flat-button"
                     , attribute "aria-expanded" (Ui.boolAttribute (not collapsed))
                     , onClick (ToggleCollapsed entry.feed.id)
                     ]
@@ -486,7 +486,7 @@ rowView model indexes item =
         , Ui.onKeyDown (RowKey index item.key)
         ]
         [ div [ class "dg-feed-main" ]
-            [ button [ class "dg-feed-title", onClick (ToggleExpanded item.key) ] [ text item.title ]
+            [ button [ class "dg-feed-title dg-flat-button", onClick (ToggleExpanded item.key) ] [ text item.title ]
             , span [ class "dg-feed-meta" ] [ text (itemMeta item) ]
             , if expanded then
                 p [ class "dg-feed-summary" ]

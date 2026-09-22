@@ -818,7 +818,7 @@ viewCollapsedColumn model status =
         , on "drop" (Decode.succeed (DropProject status))
         ]
         [ button
-            [ class "dg-project-column-expand"
+            [ class "dg-project-column-expand dg-flat-button"
             , title ("Show " ++ ProjectStatus.label status)
             , attribute "aria-expanded" "false"
             , onClick (ToggleColumnExpanded status)
@@ -855,7 +855,7 @@ viewProjectColumn model status =
         [ header [ class "dg-column-header" ]
             [ if isSecondaryColumn status then
                 button
-                    [ class "dg-project-column-collapse"
+                    [ class "dg-project-column-collapse dg-flat-button"
                     , title ("Hide " ++ ProjectStatus.label status)
                     , attribute "aria-expanded" "true"
                     , onClick (ToggleColumnExpanded status)
@@ -943,7 +943,7 @@ viewProjectCard model project =
                 ]
                 [ text project.title ]
             , button
-                [ class "dg-icon-button"
+                [ class "dg-icon-button dg-flat-button"
                 , attribute "aria-label" ("Actions for " ++ project.title)
                 , Ui.onPointer (\x y -> Send IgnoreReply (projectMenu x y project))
                 ]
@@ -1121,7 +1121,7 @@ viewSomedayItem model project =
     in
     article [ class "dg-someday-item", attribute "data-project-card" project.id ]
         [ div [ class "dg-someday-item-main" ]
-            [ button [ class "dg-someday-item-title", title meta.breadcrumb, onClick (SelectProject project.id) ] [ text project.title ]
+            [ button [ class "dg-someday-item-title dg-flat-button", title meta.breadcrumb, onClick (SelectProject project.id) ] [ text project.title ]
             , if meta.breadcrumb /= project.title then
                 div [ class "dg-project-lineage", title meta.breadcrumb ] [ text meta.breadcrumb ]
 
@@ -1244,7 +1244,7 @@ viewActionsSection model project openActions completedActions =
 
           else
             section [ class "dg-detail-section dg-completed-actions-panel" ]
-                [ button [ class "dg-disclosure", onClick ToggleCompleted ]
+                [ button [ class "dg-disclosure dg-flat-button", onClick ToggleCompleted ]
                     [ span [] [ text (disclosure model.showCompleted ++ " Completed Actions") ]
                     , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length completedActions)) ]
                     ]
@@ -1314,8 +1314,8 @@ viewActionRow action =
                 )
             ]
         , div [ class "dg-action-row-actions" ]
-            [ button [ class "dg-action-row-edit", onClick (Send IgnoreReply (Command.EditActionModal action.id)) ] [ text "Edit" ]
-            , button [ class "dg-action-row-delete", onClick (Send IgnoreReply (Command.TrashAction action.id)) ] [ text "Delete" ]
+            [ button [ class "dg-action-row-edit dg-flat-button", onClick (Send IgnoreReply (Command.EditActionModal action.id)) ] [ text "Edit" ]
+            , button [ class "dg-action-row-delete dg-flat-button", onClick (Send IgnoreReply (Command.TrashAction action.id)) ] [ text "Delete" ]
             ]
         ]
 
@@ -1393,7 +1393,7 @@ viewSubprojects model project =
         , div [ class "dg-subproject-columns dg-subproject-columns-primary" ]
             (List.map (viewSubprojectColumn model primary) [ ProjectStatus.Active, ProjectStatus.Backlog ])
         , div [ classList [ ( "dg-subproject-secondary", True ), ( "is-open", model.showSecondary ) ] ]
-            [ button [ class "dg-disclosure dg-subproject-secondary-toggle", onClick ToggleSecondary ]
+            [ button [ class "dg-disclosure dg-subproject-secondary-toggle dg-flat-button", onClick ToggleSecondary ]
                 [ span [] [ text (disclosure model.showSecondary ++ " Someday/Maybe and Done") ]
                 , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length secondary)) ]
                 ]
@@ -1464,9 +1464,9 @@ viewSubprojectCard model project =
             (Decode.succeed { message = DropSubproject project.status (Just project.id), stopPropagation = True, preventDefault = True })
         ]
         [ div [ class "dg-subproject-card-heading" ]
-            [ button [ class "dg-subproject-title", title project.title, onClick (SelectProject project.id) ] [ text project.title ]
+            [ button [ class "dg-subproject-title dg-flat-button", title project.title, onClick (SelectProject project.id) ] [ text project.title ]
             , button
-                [ class "dg-icon-button"
+                [ class "dg-icon-button dg-flat-button"
                 , Ui.onPointer (\x y -> Send IgnoreReply (subprojectMenu x y model project))
                 ]
                 [ text "•••" ]
@@ -1578,7 +1578,7 @@ viewSupport model =
                 [ span [] [ text "Other files" ]
                 , div []
                     (List.map
-                        (\file -> button [ onClick (Send IgnoreReply (Command.OpenFile file.path)) ] [ text file.label ])
+                        (\file -> button [ class "dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile file.path)) ] [ text file.label ])
                         attachments
                     )
                 ]
@@ -1602,15 +1602,15 @@ viewSupportFile model file =
     article [ classList [ ( "dg-support-note", True ), ( "dg-support-image", file.kind == SupportImage ), ( "is-open", open ) ] ]
         [ header []
             [ button
-                [ class "dg-support-note-toggle"
+                [ class "dg-support-note-toggle dg-flat-button"
                 , onClick (ToggleSupport file)
                 , attribute "aria-expanded" (Ui.boolAttribute open)
                 ]
                 [ span [] [ text (disclosure open) ], span [ title file.label ] [ text file.label ] ]
             , div []
-                (button [ onClick (Send IgnoreReply (Command.OpenFile file.path)) ] [ text "Open" ]
+                (button [ class "dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile file.path)) ] [ text "Open" ]
                     :: (if file.kind == SupportNote then
-                            [ button [ onClick (BeginSupportEdit file) ] [ text "Edit" ] ]
+                            [ button [ class "dg-flat-button", onClick (BeginSupportEdit file) ] [ text "Edit" ] ]
 
                         else
                             []

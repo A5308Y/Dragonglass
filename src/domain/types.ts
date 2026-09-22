@@ -16,6 +16,14 @@ export const PROJECT_STATUSES = [
   "cancelled",
 ] as const;
 
+/** The Project statuses that own a board column; Cancelled Projects leave the board. */
+export const BOARD_PROJECT_STATUSES = [
+  "active",
+  "backlog",
+  "someday",
+  "completed",
+] as const satisfies readonly (typeof PROJECT_STATUSES)[number][];
+
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 

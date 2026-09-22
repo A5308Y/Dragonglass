@@ -659,10 +659,21 @@ boardView model =
     let
         groups =
             buildGroups model
+
+        -- The count describes the cards on screen, not every Action in the vault.
+        shown =
+            groups |> List.map (.actions >> List.length) |> List.sum
     in
     div [ class "dg-view dg-board-view" ]
         [ header [ class "dg-view-header" ]
-            [ div [] [ h2 [] [ text "Actions" ], span [ class "dg-count" ] [ text (String.fromInt (List.length model.snapshot.actions)) ] ]
+            [ div []
+                [ h2 [] [ text "Actions" ]
+                , span
+                    [ class "dg-count"
+                    , title (String.fromInt shown ++ " shown of " ++ Ui.plural (List.length model.snapshot.actions) "Action")
+                    ]
+                    [ text (String.fromInt shown) ]
+                ]
             , div [ class "dg-header-actions" ]
                 [ button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
                 , button [ onClick (Send IgnoreReply Command.QuickCapture) ] [ text "Quick Capture" ]
@@ -924,7 +935,7 @@ cardView model action =
         [ div [ class "dg-card-title-row" ]
             [ span [ class "dg-card-title dg-action-card-title", title action.title ] [ text action.title ]
             , button
-                [ class "dg-icon-button"
+                [ class "dg-icon-button dg-flat-button"
                 , attribute "aria-label" ("Actions for " ++ action.title)
                 , Ui.onPointer (\x y -> Send IgnoreReply (actionMenu x y model action))
                 ]

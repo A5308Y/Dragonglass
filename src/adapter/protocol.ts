@@ -1,7 +1,8 @@
 import type { FeedStoreData } from "../domain/feed";
 import { feedItemAge } from "../domain/feed-triage";
 import { isAllDaySchedule } from "../domain/schedule";
-import { ACTION_STATUSES, PROJECT_STATUSES } from "../domain/types";
+import { ACTION_STATUSES, BOARD_PROJECT_STATUSES, PROJECT_STATUSES } from "../domain/types";
+import type { ProjectReviewHealth } from "../domain/project-review";
 import type { Action, GtdSettings, GtdSnapshot, InboxItem, InboxProcessingInput, Project, SavedView } from "../domain/types";
 
 export const ELM_PROTOCOL_VERSION = 2;
@@ -363,47 +364,51 @@ interface ElmProjectsMenuCommand {
   entries: ElmMenuEntry<Exclude<ElmProjectsCommand, ElmProjectsMenuCommand>>[];
 }
 
-export type ElmActionBoardCommand = Extract<ElmNonMenuCommand,
-  | { type: "create-action" | "quick-capture" | "open-inbox" | "show-project" | "edit-action" }
-  | { type: "set-action-status" | "set-action-priorities" | "update-action" | "trash-action" }
-  | { type: "set-active-saved-view" | "upsert-saved-view" | "delete-saved-view" | "prompt" }
-> | ElmActionBoardMenuCommand;
+/**
+ * The commands each surface may send. Each list is the one source for both the
+ * surface's command type and its runtime allow-list, and `elm-protocol.test.ts`
+ * checks it against the constructors the matching `Gtd.Command.*` Elm module uses.
+ */
+export const SURFACE_COMMANDS = {
+  actionBoard: [
+    "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
+    "set-action-priorities", "trash-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt",
+    "show-menu",
+  ],
+  projects: [
+    "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",
+    "edit-project", "set-project-status", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
+    "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
+    "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
+    "update-support-note", "save-project-preferences", "open-file", "review-someday-project", "show-menu",
+  ],
+  inbox: ["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"],
+  feeds: ["refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard", "open-link", "open-inbox"],
+  projectReview: [
+    "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
+    "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action", "set-project-status",
+  ],
+  brainstorm: [
+    "load-brainstorm-outcome", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
+    "focus-brainstorm-ideas", "show-project",
+  ],
+  modals: [
+    "save-new-action", "save-action", "schedule-action", "convert-action-to-subproject", "save-new-project", "save-project",
+    "trash-project", "add-project-tags", "set-projects-parent", "set-project-blockers", "parse-import-list",
+    "import-action-list", "import-subproject-list", "capture-inbox-item", "submit-prompt", "close-modal",
+  ],
+} as const satisfies Record<string, readonly (ElmNonMenuCommand["type"] | "show-menu")[]>;
 
-export type ElmProjectsCommand = Extract<ElmNonMenuCommand,
-  | { type: "create-action" | "create-project" | "set-project-selection" | "edit-action" }
-  | { type: "set-action-status" | "trash-action" | "edit-project" | "set-project-status" | "move-subproject" }
-  | { type: "trash-project" | "trash-projects" | "batch-project-tags" | "batch-project-parent" | "project-dependencies" }
-  | { type: "import-actions" | "import-subprojects" | "load-project-detail" | "set-desired-outcome" | "add-diary-entry" }
-  | { type: "create-support-note" | "create-support-folder" | "read-support-note" | "update-support-note" }
-  | { type: "save-project-preferences" | "open-file" | "review-someday-project" }
-> | ElmProjectsMenuCommand;
+type SurfaceCommand<S extends keyof typeof SURFACE_COMMANDS> =
+  Extract<ElmNonMenuCommand, { type: (typeof SURFACE_COMMANDS)[S][number] }>;
 
-export type ElmInboxCommand = Extract<ElmNonMenuCommand,
-  { type: "quick-capture" | "open-file" | "read-inbox-body" | "trash-inbox-item" | "process-inbox" }
->;
-
-export type ElmFeedsCommand = Extract<ElmNonMenuCommand,
-  | { type: "refresh-feeds" | "add-feed" | "keep-feed-items" | "discard-feed-items" }
-  | { type: "undo-feed-discard" | "open-link" | "open-inbox" }
->;
-
-export type ElmProjectReviewCommand = Extract<ElmNonMenuCommand,
-  | { type: "load-review-project" | "create-review-action" | "add-diary-entry" }
-  | { type: "complete-project-review" | "move-review-to-someday" | "trash-project" | "create-project" }
-  | { type: "open-file" | "edit-action" | "set-action-status" | "trash-action" | "set-project-status" }
->;
-
-export type ElmBrainstormCommand = Extract<ElmNonMenuCommand,
-  | { type: "load-brainstorm-outcome" | "save-brainstorm" | "save-standalone-brainstorm" }
-  | { type: "shuffle-brainstorm-words" | "focus-brainstorm-ideas" | "show-project" }
->;
-
-export type ElmModalCommand = Extract<ElmNonMenuCommand,
-  | { type: "save-new-action" | "save-action" | "schedule-action" | "convert-action-to-subproject" }
-  | { type: "save-new-project" | "save-project" | "trash-project" | "add-project-tags" }
-  | { type: "set-projects-parent" | "set-project-blockers" | "parse-import-list" }
-  | { type: "import-action-list" | "import-subproject-list" | "capture-inbox-item" | "submit-prompt" | "close-modal" }
->;
+export type ElmActionBoardCommand = SurfaceCommand<"actionBoard"> | ElmActionBoardMenuCommand;
+export type ElmProjectsCommand = SurfaceCommand<"projects"> | ElmProjectsMenuCommand;
+export type ElmInboxCommand = SurfaceCommand<"inbox">;
+export type ElmFeedsCommand = SurfaceCommand<"feeds">;
+export type ElmProjectReviewCommand = SurfaceCommand<"projectReview">;
+export type ElmBrainstormCommand = SurfaceCommand<"brainstorm">;
+export type ElmModalCommand = SurfaceCommand<"modals">;
 
 export type ElmActionBoardMenuEntry = ElmMenuEntry<Exclude<ElmActionBoardCommand, { type: "show-menu" }>>;
 export type ElmProjectsMenuEntry = ElmMenuEntry<Exclude<ElmProjectsCommand, { type: "show-menu" }>>;
@@ -472,37 +477,15 @@ function isModalCommand(value: unknown): value is ElmModalCommand {
   return isSurfaceCommand(value, MODAL_COMMANDS);
 }
 
-const ACTION_BOARD_COMMANDS = new Set([
-  "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
-  "set-action-priorities", "trash-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt", "show-menu",
-]);
-const ACTION_BOARD_MENU_COMMANDS = new Set([...ACTION_BOARD_COMMANDS].filter((type) => type !== "show-menu"));
-const PROJECTS_COMMANDS = new Set([
-  "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",
-  "edit-project", "set-project-status", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
-  "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
-  "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
-  "update-support-note", "save-project-preferences", "open-file", "review-someday-project", "show-menu",
-]);
-const PROJECTS_MENU_COMMANDS = new Set([...PROJECTS_COMMANDS].filter((type) => type !== "show-menu"));
-const INBOX_COMMANDS = new Set(["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"]);
-const FEEDS_COMMANDS = new Set([
-  "refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard",
-  "open-link", "open-inbox",
-]);
-const PROJECT_REVIEW_COMMANDS = new Set([
-  "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
-  "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action", "set-project-status",
-]);
-const BRAINSTORM_COMMANDS = new Set([
-  "load-brainstorm-outcome", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
-  "focus-brainstorm-ideas", "show-project",
-]);
-const MODAL_COMMANDS = new Set([
-  "save-new-action", "save-action", "schedule-action", "convert-action-to-subproject", "save-new-project", "save-project",
-  "trash-project", "add-project-tags", "set-projects-parent", "set-project-blockers", "parse-import-list",
-  "import-action-list", "import-subproject-list", "capture-inbox-item", "submit-prompt", "close-modal",
-]);
+const ACTION_BOARD_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.actionBoard);
+const ACTION_BOARD_MENU_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.actionBoard.filter((type) => type !== "show-menu"));
+const PROJECTS_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.projects);
+const PROJECTS_MENU_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.projects.filter((type) => type !== "show-menu"));
+const INBOX_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.inbox);
+const FEEDS_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.feeds);
+const PROJECT_REVIEW_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.projectReview);
+const BRAINSTORM_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.brainstorm);
+const MODAL_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.modals);
 
 function isSurfaceCommand(value: unknown, allowed: ReadonlySet<string>, nested?: CommandValidator<unknown>): boolean {
   if (!isRecord(value) || typeof value.type !== "string" || !allowed.has(value.type)) return false;
@@ -552,10 +535,10 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.projectId === "string";
     case "set-project-status":
       return typeof value.projectId === "string"
-        && ["active", "backlog", "someday", "completed", "cancelled"].includes(String(value.status));
+        && isOneOf(PROJECT_STATUSES, value.status);
     case "move-subproject":
       return typeof value.projectId === "string"
-        && ["active", "backlog", "someday", "completed"].includes(String(value.status))
+        && isOneOf(BOARD_PROJECT_STATUSES, value.status)
         && (value.beforeId === undefined || typeof value.beforeId === "string");
     case "trash-projects":
     case "batch-project-tags":
@@ -577,7 +560,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "save-project-preferences":
       return Array.isArray(value.columns)
         && value.columns.length > 0
-        && value.columns.every((status) => ["active", "backlog", "someday", "completed"].includes(String(status)))
+        && value.columns.every((status) => isOneOf(BOARD_PROJECT_STATUSES, status))
         && typeof value.showImages === "boolean";
     case "load-review-project":
     case "load-brainstorm-outcome":
@@ -608,7 +591,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
         && Number(value.end) >= Number(value.start);
     case "set-action-status":
       return typeof value.actionId === "string"
-        && ["next", "waiting", "scheduled", "done", "cancelled"].includes(String(value.status));
+        && isOneOf(ACTION_STATUSES, value.status);
     case "set-action-priorities":
       return isStringArray(value.actionIds) && value.actionIds.length > 0;
     case "update-action":
@@ -684,7 +667,7 @@ function isInboxInput(value: unknown): value is ElmInboxProcessingInput {
     && isOptionalString(value.projectTitle)
     && isOptionalString(value.desiredOutcome)
     && isOptionalString(value.nextAction)
-    && (value.status === undefined || ACTION_STATUSES.includes(value.status as Action["status"]))
+    && (value.status === undefined || isOneOf(ACTION_STATUSES, value.status))
     && isOptionalString(value.context)
     && isOptionalString(value.waitingSince)
     && isOptionalSchedule(value.schedule)
@@ -755,7 +738,7 @@ function isOptionalSchedule(value: unknown): boolean {
 function isNewActionInput(value: unknown): value is ElmNewActionInput {
   return isRecord(value)
     && typeof value.title === "string"
-    && ACTION_STATUSES.includes(value.status as Action["status"])
+    && isOneOf(ACTION_STATUSES, value.status)
     && typeof value.context === "string"
     && typeof value.work === "boolean"
     && (value.projectId === undefined || typeof value.projectId === "string")
@@ -783,13 +766,17 @@ function isNewProjectInput(value: unknown): value is ElmNewProjectInput {
 function isProjectChanges(value: unknown): value is ElmProjectChanges {
   return isRecord(value)
     && typeof value.title === "string"
-    && PROJECT_STATUSES.includes(value.status as Project["status"])
+    && isOneOf(PROJECT_STATUSES, value.status)
     && typeof value.activateAt === "string"
     && typeof value.area === "string"
     && typeof value.image === "string"
     && isStringArray(value.tags)
     && typeof value.reviewed === "string"
     && typeof value.parentProjectId === "string";
+}
+
+function isOneOf<T extends string>(allowed: readonly T[], value: unknown): value is T {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -816,6 +803,7 @@ export type ElmProjectReviewEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "support-counts"; counts: Array<{ projectId: string; count: number }> }
   | { type: "review-project-data"; data: ElmReviewProjectDataDto }
+  | { type: "review-health"; health: ProjectReviewHealth }
   | ElmCommandResultEvent;
 export type ElmBrainstormEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }

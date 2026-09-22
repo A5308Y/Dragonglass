@@ -210,7 +210,7 @@ suggestionView settings activeIndex index candidate =
         [ type_ "button"
         , attribute "role" "option"
         , attribute "aria-selected" (Ui.boolAttribute (index == activeIndex))
-        , classList [ ( "is-active", index == activeIndex ) ]
+        , classList [ ( "dg-flat-button", True ), ( "is-active", index == activeIndex ) ]
         , onMouseEnter (settings.hovered index)
         , Ui.preventMouseDown (settings.chosen candidate)
         ]

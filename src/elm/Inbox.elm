@@ -524,7 +524,7 @@ inboxRow : Set InboxItemId -> InboxItem -> Html Msg
 inboxRow busy item =
     article [ class "dg-inbox-row", attribute "role" "listitem" ]
         [ div [ class "dg-inbox-item-main" ]
-            [ button [ class "dg-project-title", onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ] [ text item.title ]
+            [ button [ class "dg-project-title dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ] [ text item.title ]
             , span [ class "dg-inbox-meta" ] [ text (itemMeta item) ]
             ]
         , div [ class "dg-inbox-row-actions" ]

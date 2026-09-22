@@ -49,6 +49,34 @@ export function projectsBlockingReview(root: Project, members: readonly Project[
   return missing;
 }
 
+export interface ProjectReviewHealth {
+  /** Active Projects with no Next, Scheduled or Waiting Action. */
+  needsAction: string[];
+  /** For each review root, the Projects that stop its tree being marked reviewed. */
+  blockers: Array<{ projectId: string; blockerIds: string[] }>;
+}
+
+/**
+ * The health verdicts the Project Review shows, decided here so the Elm view
+ * never re-implements what counts as a moving Action.
+ */
+export function projectReviewHealth(
+  projects: readonly Project[],
+  actions: readonly Action[],
+  rootIds: readonly string[],
+): ProjectReviewHealth {
+  const byId = new Map(projects.map((project) => [project.id, project]));
+  return {
+    needsAction: activeProjectsWithoutNextAction(projects, actions).map((project) => project.id),
+    blockers: rootIds.flatMap((rootId) => {
+      const root = byId.get(rootId);
+      if (!root) return [];
+      const blockerIds = projectsBlockingReview(root, projectReviewMembers(root, projects), actions).map((project) => project.id);
+      return [{ projectId: root.id, blockerIds }];
+    }),
+  };
+}
+
 export function projectReviewQueue(snapshot: GtdSnapshot, today: string): string[] {
   const candidates = snapshot.projects.filter((project) => project.status === "active" && project.reviewed !== today);
   const roots = new Map<string, Project>();

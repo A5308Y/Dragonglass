@@ -2,7 +2,7 @@ port module ProjectReview exposing (main)
 
 import Browser
 import Dict exposing (Dict)
-import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
+import Gtd.ActionStatus as ActionStatus
 import Gtd.Command.ProjectReview as Command exposing (Command)
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
@@ -16,7 +16,7 @@ import Html.Attributes exposing (checked, class, classList, disabled, placeholde
 import Html.Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
-import Set
+import Set exposing (Set)
 import Time
 
 
@@ -51,10 +51,20 @@ type Pending
     | ClearCapture
 
 
+{-| Which Projects need an Action, and which block each review root. The host
+decides both, so this view never re-implements what counts as a moving Action.
+-}
+type alias Health =
+    { needsAction : Set ProjectId
+    , blockers : Dict ProjectId (List ProjectId)
+    }
+
+
 type alias Model =
     { snapshot : Snapshot
     , queue : List ProjectId
     , total : Int
+    , health : Health
     , supportCounts : Dict ProjectId Int
     , reviewData : Maybe ReviewData
     , desiredOutcome : String
@@ -104,7 +114,7 @@ type alias SupportCount =
 
 
 type alias Flags =
-    { snapshot : Snapshot, queue : List ProjectId, supportCounts : List SupportCount }
+    { snapshot : Snapshot, queue : List ProjectId, health : Health, supportCounts : List SupportCount }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -115,6 +125,7 @@ init flags =
                 { snapshot = decoded.snapshot
                 , queue = decoded.queue
                 , total = List.length decoded.queue
+                , health = decoded.health
                 , supportCounts = countsDict decoded.supportCounts
                 , reviewData = Nothing
                 , desiredOutcome = ""
@@ -319,6 +330,7 @@ type HostEvent
     = SnapshotEvent Snapshot
     | ReviewDataEvent ReviewData
     | SupportCountsEvent (List SupportCount)
+    | HealthEvent Health
     | Replied Host.Outcome
 
 
@@ -337,6 +349,9 @@ receiveHost value model =
 
         Ok (SupportCountsEvent counts) ->
             ( { model | supportCounts = countsDict counts }, Cmd.none )
+
+        Ok (HealthEvent health) ->
+            ( { model | health = health }, Cmd.none )
 
         Ok (ReviewDataEvent data) ->
             if List.head model.queue == Just data.projectId then
@@ -475,7 +490,7 @@ viewProject model project =
                 [ div [ class "dg-review-hero-copy" ]
                     [ span [ class "dg-review-eyebrow" ]
                         [ text ("Project tree " ++ String.fromInt (model.total - List.length model.queue + 1) ++ " of " ++ String.fromInt model.total) ]
-                    , button [ class "dg-project-title", onClick (Send IgnoreReply (Command.OpenFile project.file.path)) ] [ text project.title ]
+                    , button [ class "dg-project-title dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile project.file.path)) ] [ text project.title ]
                     , div [ class "dg-review-project-meta" ]
                         [ span [ class "dg-status" ] [ text (Maybe.withDefault (ProjectStatus.label project.status) project.area) ]
                         , span [] [ text (Ui.plural (List.length members) "Project") ]
@@ -526,19 +541,20 @@ viewTreeRow model root actions project =
     in
     div []
         [ button
-            [ title (Hierarchy.breadcrumb model.snapshot.projects project)
+            [ class "dg-flat-button"
+            , title (Hierarchy.breadcrumb model.snapshot.projects project)
             , onClick (Send IgnoreReply (Command.OpenFile project.file.path))
             ]
             [ text (relativeLabel model root project) ]
         , span [] [ text (ProjectStatus.label project.status) ]
         , span [] [ text (String.fromInt (List.length projectActions) ++ " open · " ++ String.fromInt nextCount ++ " next") ]
-        , if project.status == ProjectStatus.Active && not (List.any (.status >> movesProject) projectActions) then
+        , if needsAction model project then
             strong [] [ text "No Next Action" ]
 
           else if project.status == ProjectStatus.Backlog then
             -- The review is where planned work gets pulled in.
             button
-                [ class "dg-review-activate"
+                [ class "dg-review-activate dg-flat-button"
                 , title "Move this sub-project to Active"
                 , onClick (Send IgnoreReply (Command.SetProjectStatus project.id ProjectStatus.Active))
                 ]
@@ -634,7 +650,7 @@ viewActionRow model action =
             ]
             []
         , div [ class "dg-action-row-main" ]
-            [ button [ class "dg-action-row-title", onClick (Send IgnoreReply (Command.OpenFile action.file.path)) ] [ text action.title ]
+            [ button [ class "dg-action-row-title dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile action.file.path)) ] [ text action.title ]
             , div [ class "dg-action-row-meta" ]
                 (Ui.maybeList action.projectId
                     (\projectId ->
@@ -646,8 +662,8 @@ viewActionRow model action =
                 )
             ]
         , div [ class "dg-action-row-actions" ]
-            [ button [ class "dg-action-row-edit", onClick (Send IgnoreReply (Command.EditActionModal action.id)) ] [ text "Edit" ]
-            , button [ class "dg-action-row-delete", onClick (Send IgnoreReply (Command.TrashAction action.id)) ] [ text "Delete" ]
+            [ button [ class "dg-action-row-edit dg-flat-button", onClick (Send IgnoreReply (Command.EditActionModal action.id)) ] [ text "Edit" ]
+            , button [ class "dg-action-row-delete dg-flat-button", onClick (Send IgnoreReply (Command.TrashAction action.id)) ] [ text "Delete" ]
             ]
         ]
 
@@ -849,27 +865,16 @@ reviewActions model =
 
 missingNextProjects : Model -> List Project
 missingNextProjects model =
-    let
-        nextIds =
-            reviewActions model
-                |> List.filter (.status >> movesProject)
-                |> List.filterMap .projectId
-                |> Set.fromList
-    in
-    reviewMembers model
-        |> List.filter (\project -> project.status == ProjectStatus.Active && not (Set.member project.id nextIds))
+    reviewMembers model |> List.filter (needsAction model)
 
 
-{-| Whether an Action keeps its Project moving. A Waiting Action counts: the
-Project is still active, it is just blocked on someone else.
--}
-movesProject : ActionStatus -> Bool
-movesProject status =
-    List.member status [ ActionStatus.Next, ActionStatus.Scheduled, ActionStatus.Waiting ]
+needsAction : Model -> Project -> Bool
+needsAction model project =
+    Set.member project.id model.health.needsAction
 
 
 {-| The active Projects that still have to name a Next Action before the tree can
-be marked reviewed. A root with active children answers for itself through them.
+be marked reviewed, as the host's review gate decided.
 -}
 blockingProjects : Model -> List Project
 blockingProjects model =
@@ -878,19 +883,9 @@ blockingProjects model =
             []
 
         Just root ->
-            let
-                missing =
-                    missingNextProjects model
-
-                hasActiveChildren =
-                    reviewMembers model
-                        |> List.any (\project -> project.id /= root.id && project.status == ProjectStatus.Active)
-            in
-            if hasActiveChildren then
-                List.filter (\project -> project.id /= root.id) missing
-
-            else
-                missing
+            Dict.get root.id model.health.blockers
+                |> Maybe.withDefault []
+                |> List.filterMap (\projectId -> Data.findProject projectId model.snapshot.projects)
 
 
 relativeLabel : Model -> Project -> Project -> String
@@ -929,10 +924,26 @@ budget total =
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map3 Flags
+    Decode.map4 Flags
         (Decode.field "snapshot" Data.snapshotDecoder)
         (Decode.field "queue" (Decode.list Decode.string))
+        (Decode.field "health" healthDecoder)
         (Decode.field "supportCounts" (Decode.list supportCountDecoder))
+
+
+healthDecoder : Decoder Health
+healthDecoder =
+    Decode.map2 Health
+        (Decode.field "needsAction" (Decode.list Decode.string) |> Decode.map Set.fromList)
+        (Decode.field "blockers"
+            (Decode.list
+                (Decode.map2 Tuple.pair
+                    (Decode.field "projectId" Decode.string)
+                    (Decode.field "blockerIds" (Decode.list Decode.string))
+                )
+            )
+            |> Decode.map Dict.fromList
+        )
 
 
 supportCountDecoder : Decoder SupportCount
@@ -970,6 +981,9 @@ hostEventDecoder =
                     "support-counts" ->
                         Decode.map SupportCountsEvent (Decode.field "counts" (Decode.list supportCountDecoder))
 
+                    "review-health" ->
+                        Decode.map HealthEvent (Decode.field "health" healthDecoder)
+
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder
 
@@ -983,6 +997,7 @@ emptyModel message =
     { snapshot = Data.empty
     , queue = []
     , total = 0
+    , health = { needsAction = Set.empty, blockers = Dict.empty }
     , supportCounts = Dict.empty
     , reviewData = Nothing
     , desiredOutcome = ""

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
-import { activeProjectsWithoutNextAction, projectReviewMembers, projectReviewQueue, projectsBlockingReview } from "../src/domain/project-review";
+import {
+  activeProjectsWithoutNextAction,
+  projectReviewHealth,
+  projectReviewMembers,
+  projectReviewQueue,
+  projectsBlockingReview,
+} from "../src/domain/project-review";
 import type { Action, GtdSnapshot, Project } from "../src/domain/types";
 
 const file = (path: string) => ({ path }) as TFile;
@@ -79,5 +85,25 @@ describe("Next Action gate for marking a tree reviewed", () => {
   it("ignores sub-projects that are not active", () => {
     expect(members().map((project) => project.id)).toEqual(["P1", "P2", "P3"]);
     expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2")]).map((project) => project.id)).toEqual([]);
+  });
+});
+
+describe("Project Review health sent to the review view", () => {
+  it("names the Projects needing an Action and each root's blockers", () => {
+    const { projects } = snapshot();
+    expect(projectReviewHealth(projects, actions, ["P1", "P4", "gone"])).toEqual({
+      needsAction: ["P2", "P4"],
+      blockers: [
+        { projectId: "P1", blockerIds: ["P2"] },
+        { projectId: "P4", blockerIds: ["P4"] },
+      ],
+    });
+  });
+
+  it("clears a blocker once its Project has a Waiting Action", () => {
+    const waiting: Action = { type: "gtd-action", id: "A2", title: "Waiting", status: "waiting", projectId: "P2", created: "2026-09-01", file: file("A2.md") };
+    const health = projectReviewHealth(snapshot().projects, [...actions, waiting], ["P1"]);
+    expect(health.blockers).toEqual([{ projectId: "P1", blockerIds: [] }]);
+    expect(health.needsAction).not.toContain("P2");
   });
 });

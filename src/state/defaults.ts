@@ -1,3 +1,4 @@
+import { BOARD_PROJECT_STATUSES } from "../domain/types";
 import type { GtdSettings, SavedView } from "../domain/types";
 
 const DEFAULT_SORT = { field: "created", direction: "desc" } as const;
@@ -55,7 +56,7 @@ export function defaultSettings(): GtdSettings {
     showProjectBoardImages: true,
     defaultActionStatus: "next",
     showDoneColumn: true,
-    projectBoardColumns: ["active", "backlog", "someday", "completed"],
+    projectBoardColumns: [...BOARD_PROJECT_STATUSES],
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
     googleCalendar: {
