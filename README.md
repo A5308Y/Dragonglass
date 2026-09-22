@@ -108,6 +108,7 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 - **GTD: Open Brainstorm**
 - **GTD: Open Feeds**
 - **GTD: Fetch Feeds**
+- **GTD: Import Email**
 - **GTD: Quick Capture Inbox Item**
 - **GTD: New Action**
 - **GTD: New Project**
@@ -143,6 +144,28 @@ A row's **Comments** button opens the discussion page a feed names separately fr
 Subscriptions and triage state live in a single JSON file in the vault, `GTD/feeds.json` by default, so which Items you have already swept travels with ordinary vault sync rather than with plugin settings. Each feed remembers the keys it has resolved, capped so the file cannot grow without bound; a feed that keeps serving the same window therefore does not refill a list you have already swept. The file is disposable in the sense that a lost one costs only unread Items, but deleting it does forget what was discarded.
 
 Fetching is a direct request to each feed's server, on start-up and on a configurable interval of at least five minutes. Feed documents are parsed into plain values and never into DOM nodes, so nothing a feed publishes becomes markup: summaries are flattened to text, only `http` and `https` links are kept, and text written into a kept Item's note has wikilinks, embeds, and tags escaped so a feed cannot add itself to your graph.
+
+## Email
+
+Email import is an optional IMAP mirror: chosen mailboxes are drained into the Inbox, and every message it accepts becomes an ordinary Inbox Item that goes through the normal Inbox Processing Workflow. It is off by default, takes one account per IMAP server, and is configured entirely in settings.
+
+There is no mail reader here and there is not meant to be one. Your mail client already triages better than anything Dragonglass would build, and it can do the thing IMAP cannot: reply. So importing is the only decision Dragonglass makes about a message — after that it is a capture like any other.
+
+**Nothing that is already in a mailbox is ever imported.** The first sync of a mailbox records where to start and imports none of it, so connecting an account with four thousand messages in it produces four thousand Inbox Items exactly never. Only mail arriving afterwards comes in. **Import backlog**, per account, is the deliberate way to ask for the existing mail if you do want it.
+
+Three guards sit behind that, in the order they bite. A mailbox is baselined on first contact, as above. A watermark then records the point below which everything has been considered, so an ordinary import asks the server about new mail only. And a per-import limit — fifty by default — caps how many messages become Inbox Items at once, so someone bulk-moving five hundred messages into your inbox costs you fifty Items and a note that the rest are waiting. Messages are also recognised by their `Message-ID`, so a mailbox whose UIDs the server has renumbered does not import itself again, and two devices syncing the same mailbox do not both import it.
+
+Point it at `INBOX`, not at Gmail's `[Gmail]/All Mail` or a provider's Archive. Those hold every message you have ever received regardless of whether your inbox is empty, and mirroring one is how an import turns into a flood. **Test** lists the mailboxes exactly as your server spells them, which matters: a German account calls its drafts `Entwürfe`, and IMAP sends that over the wire as `Entw&APw-rfe`.
+
+Set **Move imported mail to** — `Archive`, say — and importing drains your mail inbox as it goes, leaving one queue instead of two. The message moves only after its Inbox Item exists, and messages are never deleted: where a server has no `MOVE`, Dragonglass copies and flags rather than expunging. Left empty, the import is strictly read-only and your mail client sees nothing change.
+
+Reading is read-only regardless: mailboxes are opened with `EXAMINE` and bodies fetched with `BODY.PEEK`, so importing never marks your mail as read. Only the part of a message that carries text is fetched, not its attachments, and a note records the sender, the date, the mailbox, and the `Message-ID` — which is the way back to the original once it has been archived, and is searchable on Gmail as `rfc822msgid:`.
+
+Use a provider-issued **app password**, never your account password. It is revocable, it is scoped to mail, and it is stored as plain text in the plugin's data file — which is also why account credentials are kept out of the vault file the watermarks live in, since that one syncs between devices. Only implicit TLS on port 993 is offered, certificate validation cannot be switched off, and cleartext IMAP on 143 is corrected rather than used.
+
+Everything a sender wrote is treated as hostile. Bodies are flattened to text and never rendered as markup, remote images are never loaded, and wikilinks, embeds, and tags are escaped on the way into a note so that a subject line cannot add itself to your Project graph.
+
+Importing needs the desktop app: Obsidian on mobile cannot open an IMAP connection at all. That costs less than it sounds like — imported messages are ordinary Inbox Items, so they reach your phone through vault sync, and the sync watermarks travel with them so no device re-imports what another already took.
 
 ## Google Calendar
 
@@ -199,8 +222,9 @@ The last view uses `file.backlinks` and the convenience `project` wiki-link. Obs
 - Stable IDs, not filenames, define identity and relationships.
 - Duplicate IDs and malformed GTD metadata are not silently mutated.
 - The in-memory index can always be rebuilt from Markdown files.
-- The plugin uses no external database, Node API, Electron API, telemetry, or custom synchronization.
-- Network access is confined to the two optional integrations you configure yourself: the Google Calendar bridge and Feeds. Both are off by default, and neither sends vault content anywhere a feed or your own Apps Script deployment does not already require.
+- The plugin uses no external database, Electron API, telemetry, or custom synchronization.
+- Network access is confined to the three optional integrations you configure yourself: the Google Calendar bridge, Feeds, and Email. All three are off by default, and none sends vault content anywhere a feed, your mail server, or your own Apps Script deployment does not already require.
+- Email import is the one feature that uses a Node API, because IMAP needs a TLS socket and Obsidian's own API offers no way to open one. It is reached for lazily and only on desktop, so mobile is unaffected rather than broken.
 
 ## Scope
 

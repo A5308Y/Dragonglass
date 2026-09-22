@@ -1,9 +1,11 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { GoogleCalendarSync, type CalendarSyncStatus, type CalendarSyncResult } from "./calendar/calendar-sync";
 import { FeedService, type FeedFetchResult, type FeedSyncStatus } from "./feeds/feed-service";
+import { MailService, type MailImportResult, type MailSyncStatus } from "./mail/mail-service";
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import { projectsDueForActivation } from "./domain/project-activation";
-import type { GtdSettings, SavedView } from "./domain/types";
+import { normalizeMailPort } from "./domain/mail";
+import type { GtdSettings, MailAccountSettings, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
@@ -22,6 +24,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private repository!: GtdRepository;
   private calendarSync!: GoogleCalendarSync;
   private feeds!: FeedService;
+  private mail!: MailService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
 
@@ -31,6 +34,12 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.repository = new GtdRepository(this.app, this.index, () => this.settings);
     this.calendarSync = new GoogleCalendarSync(this.app, this.index, () => this.settings.googleCalendar);
     this.feeds = new FeedService(this.app, () => this.settings.feeds);
+    this.mail = new MailService(
+      this.app,
+      this.repository,
+      () => this.settings.mail,
+      (accountId) => this.settings.mail.passwords[accountId] ?? "",
+    );
     this.services = {
       app: this.app,
       repository: this.repository,
@@ -99,6 +108,19 @@ export default class DragonglassGtdPlugin extends Plugin {
         ? saved.projectBoardColumns.filter((status) => isProjectStatus(status) && status !== "cancelled")
         : defaults.projectBoardColumns,
       schemaVersion: defaults.schemaVersion,
+      mail: {
+        ...defaults.mail,
+        ...(saved?.mail ?? {}),
+        storePath: normalizeVaultPath(saved?.mail?.storePath ?? "") || defaults.mail.storePath,
+        refreshMinutes: Number.isInteger(saved?.mail?.refreshMinutes) && saved!.mail!.refreshMinutes >= 5
+          ? saved!.mail!.refreshMinutes
+          : defaults.mail.refreshMinutes,
+        importCap: Number.isInteger(saved?.mail?.importCap) && saved!.mail!.importCap > 0
+          ? saved!.mail!.importCap
+          : defaults.mail.importCap,
+        accounts: Array.isArray(saved?.mail?.accounts) ? saved.mail.accounts.map(migrateMailAccount) : [],
+        passwords: isStringMap(saved?.mail?.passwords) ? saved.mail.passwords : {},
+      },
       feeds: {
         ...defaults.feeds,
         ...(saved?.feeds ?? {}),
@@ -126,6 +148,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     await this.saveData(this.settings);
     this.calendarSync?.schedule(0);
     this.feeds?.schedule(0);
+    this.mail?.schedule(0);
     if (!refreshViews) return;
     for (const leaf of this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE)) {
       if (leaf.view instanceof ActionBoardView) leaf.view.refresh();
@@ -167,6 +190,18 @@ export default class DragonglassGtdPlugin extends Plugin {
     return this.feeds;
   }
 
+  getMailService(): MailService {
+    return this.mail;
+  }
+
+  getMailStatus(): MailSyncStatus {
+    return this.mail.getStatus();
+  }
+
+  async importMail(): Promise<MailImportResult> {
+    return this.mail.importAll();
+  }
+
   getFeedStatus(): FeedSyncStatus {
     return this.feeds.getStatus();
   }
@@ -195,6 +230,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
     this.addCommand({ id: "open-feeds", name: "Open Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
     this.addCommand({ id: "fetch-feeds", name: "Fetch Feeds", callback: () => void this.fetchFeedsWithNotice() });
+    this.addCommand({ id: "import-email", name: "Import Email", callback: () => void this.importMailWithNotice() });
     this.addCommand({ id: "quick-capture-inbox-item", name: "Quick Capture Inbox Item", callback: () => this.quickCapture() });
     this.addCommand({ id: "new-action", name: "New Action", callback: () => this.createAction() });
     this.addCommand({ id: "import-actions", name: "Import Actions", callback: () => this.importActions() });
@@ -263,6 +299,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     await this.activateScheduledProjects();
     this.register(this.calendarSync.start());
     this.register(this.feeds.start());
+    this.register(this.mail.start());
     this.registerInterval(window.setInterval(() => this.calendarSync.schedule(0), 5 * 60_000));
     this.registerInterval(window.setInterval(() => void this.activateScheduledProjects(), 60_000));
     if (migratedProjects) new Notice(`Migrated ${migratedProjects} waiting Project${migratedProjects === 1 ? "" : "s"} to Active.`);
@@ -380,6 +417,29 @@ export default class DragonglassGtdPlugin extends Plugin {
     });
   }
 
+  /**
+   * Reports an import in the terms that matter: what arrived, and what was held back.
+   *
+   * A baseline is called out explicitly, because "nothing was imported" is the
+   * correct outcome on a mailbox's first sync and looks like a failure otherwise.
+   */
+  private async importMailWithNotice(): Promise<void> {
+    if (!this.settings.mail.enabled) return void new Notice("Email import is switched off in Dragonglass settings.");
+    if (!this.mail.available()) return void new Notice("Email can only be imported on the desktop app.");
+    try {
+      const result = await this.mail.importAll();
+      const parts: string[] = [];
+      if (result.baselined) parts.push(`${result.baselined} mailbox${result.baselined === 1 ? "" : "es"} set to start from now`);
+      parts.push(`${result.imported} Inbox Item${result.imported === 1 ? "" : "s"} created`);
+      if (result.deferred) parts.push(`${result.deferred} waiting for the next import`);
+      if (result.unarchived) parts.push(`${result.unarchived} could not be archived`);
+      if (result.failed) parts.push(`${result.failed} failed`);
+      new Notice(parts.join(" · "));
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Email could not be imported.");
+    }
+  }
+
   private async fetchFeedsWithNotice(): Promise<void> {
     if (!this.settings.feeds.enabled) return void new Notice("Feeds are switched off in Dragonglass settings.");
     const result = await this.feeds.fetchAll();
@@ -390,6 +450,29 @@ export default class DragonglassGtdPlugin extends Plugin {
     const leaf = await this.activateView(PROJECTS_VIEW_TYPE);
     if (leaf.view instanceof GtdProjectsView) leaf.view.showProject(id);
   }
+}
+
+/** Repairs an account read back from the data file, so one bad field cannot break start-up. */
+function migrateMailAccount(account: MailAccountSettings): MailAccountSettings {
+  return {
+    ...account,
+    id: typeof account?.id === "string" && account.id ? account.id : createUlid(),
+    label: typeof account?.label === "string" && account.label.trim() ? account.label : "Mail",
+    host: typeof account?.host === "string" ? account.host.trim() : "",
+    port: normalizeMailPort(account?.port),
+    user: typeof account?.user === "string" ? account.user.trim() : "",
+    mailboxes: Array.isArray(account?.mailboxes)
+      ? account.mailboxes.filter((mailbox): mailbox is string => typeof mailbox === "string" && mailbox.trim().length > 0)
+      : [],
+    criterion: typeof account?.criterion === "string" && account.criterion.trim() ? account.criterion.trim() : "ALL",
+    archiveMailbox: typeof account?.archiveMailbox === "string" ? account.archiveMailbox.trim() : "",
+    enabled: account?.enabled !== false,
+  };
+}
+
+function isStringMap(value: unknown): value is Record<string, string> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+    && Object.values(value as Record<string, unknown>).every((entry) => typeof entry === "string");
 }
 
 function migrateSavedViews(views: SavedView[]): SavedView[] {

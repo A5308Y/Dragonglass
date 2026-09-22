@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { escapeVaultText, feedItemAge, feedItemNote, feedItemTitle } from "../src/domain/feed-triage";
+import { feedItemAge, feedItemNote, feedItemTitle } from "../src/domain/feed-triage";
+import { escapeVaultText } from "../src/domain/text";
 import type { FeedItem } from "../src/domain/feed";
 
 const item = (changes: Partial<FeedItem> = {}): FeedItem => ({

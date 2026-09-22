@@ -70,6 +70,14 @@ export function defaultSettings(): GtdSettings {
       storePath: "GTD/feeds.json",
       refreshMinutes: 30,
     },
-    schemaVersion: 10,
+    mail: {
+      enabled: false,
+      storePath: "GTD/mail.json",
+      refreshMinutes: 30,
+      importCap: 50,
+      accounts: [],
+      passwords: {},
+    },
+    schemaVersion: 11,
   };
 }

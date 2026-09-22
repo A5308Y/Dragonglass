@@ -11,6 +11,10 @@
  * failing on it.
  */
 
+import { decodeEntities } from "./text";
+
+export { decodeEntities };
+
 export interface XmlNode {
   /** The tag name without its namespace prefix, lowercased. */
   name: string;
@@ -22,34 +26,6 @@ export interface XmlNode {
   text: string;
 }
 
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-  hellip: "…",
-  mdash: "—",
-  ndash: "–",
-  lsquo: "‘",
-  rsquo: "’",
-  ldquo: "“",
-  rdquo: "”",
-  laquo: "«",
-  raquo: "»",
-  bull: "•",
-  middot: "·",
-  copy: "©",
-  reg: "®",
-  trade: "™",
-  deg: "°",
-  euro: "€",
-  pound: "£",
-  times: "×",
-};
-
-/** Reads a feed document, or returns `null` when it has no element at all. */
 export function parseXml(source: string): XmlNode | null {
   const root = node("", "");
   const stack: XmlNode[] = [root];
@@ -151,24 +127,6 @@ export function childText(parent: XmlNode | null, ...names: string[]): string {
     }
   }
   return "";
-}
-
-export function decodeEntities(value: string): string {
-  if (!value.includes("&")) return value;
-  return value.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, entity: string) => {
-    if (entity.startsWith("#x") || entity.startsWith("#X")) return codePoint(parseInt(entity.slice(2), 16), match);
-    if (entity.startsWith("#")) return codePoint(parseInt(entity.slice(1), 10), match);
-    return NAMED_ENTITIES[entity.toLowerCase()] ?? match;
-  });
-}
-
-function codePoint(value: number, fallback: string): string {
-  if (!Number.isFinite(value) || value <= 0 || value > 0x10ffff) return fallback;
-  try {
-    return String.fromCodePoint(value);
-  } catch {
-    return fallback;
-  }
 }
 
 function node(name: string, prefix: string): XmlNode {

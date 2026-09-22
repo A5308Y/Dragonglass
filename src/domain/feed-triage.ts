@@ -6,6 +6,7 @@
  */
 
 import type { FeedItem } from "./feed";
+import { escapeVaultText } from "./text";
 
 /** The Inbox Item title a kept Feed Item takes. */
 export function feedItemTitle(item: Pick<FeedItem, "title">): string {
@@ -28,24 +29,6 @@ export function feedItemNote(item: FeedItem, feedTitle: string): string {
   const summary = escapeVaultText(item.summary);
   if (summary) lines.push("", ...summary.split("\n").map((line) => `> ${line}`));
   return lines.join("\n");
-}
-
-/**
- * Neutralises vault syntax in text Dragonglass did not write.
- *
- * Feed text is stored as plain characters, but a note is Markdown: left alone, a
- * feed could put `[[Replace heating system]]` in your graph or `#urgent` on your
- * Projects simply by publishing it. Escaping happens on the way into the vault, so
- * what the row showed is what the note says.
- */
-export function escapeVaultText(value: string): string {
-  return value
-    .replace(/!\[\[/g, "!\\[\\[")
-    .replace(/\[\[/g, "\\[\\[")
-    .replace(/\]\]/g, "\\]\\]")
-    .replace(/(^|\s)#(?=[^\s#])/g, "$1\\#")
-    .replace(/^(\s*)([-*+>])\s/gm, "$1\\$2 ")
-    .replace(/^(\s*)(\d{1,9})([.)])\s/gm, "$1$2\\$3 ");
 }
 
 /** How old an Item reads on a row: short while it matters, then just the date. */

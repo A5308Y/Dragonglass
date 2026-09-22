@@ -203,6 +203,7 @@ export interface GtdSettings {
   activeSavedViewId: string | null;
   googleCalendar: GoogleCalendarSettings;
   feeds: FeedSettings;
+  mail: MailSettings;
   schemaVersion: number;
 }
 
@@ -212,6 +213,38 @@ export interface FeedSettings {
   storePath: string;
   /** Minutes between automatic fetches. Five is the floor. */
   refreshMinutes: number;
+}
+
+export interface MailSettings {
+  enabled: boolean;
+  /** The vault-relative JSON file holding sync watermarks, which syncs between devices. */
+  storePath: string;
+  /** Minutes between automatic imports. Five is the floor. */
+  refreshMinutes: number;
+  /** How many messages one import turns into Inbox Items before deferring the rest. */
+  importCap: number;
+  accounts: MailAccountSettings[];
+  /**
+   * App passwords by account id.
+   *
+   * Stored as plain text in the plugin data file, like the calendar shared secret,
+   * and deliberately not in the vault file the watermarks live in — that one syncs.
+   */
+  passwords: Record<string, string>;
+}
+
+export interface MailAccountSettings {
+  id: string;
+  label: string;
+  host: string;
+  port: number;
+  user: string;
+  mailboxes: string[];
+  /** An IMAP SEARCH criterion narrowing what counts, such as `ALL` or `UNSEEN`. */
+  criterion: string;
+  /** Where an imported message is moved, or `""` to leave the server untouched. */
+  archiveMailbox: string;
+  enabled: boolean;
 }
 
 export interface GoogleCalendarSettings {

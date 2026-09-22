@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { htmlToText, itemKey, parseFeed, publishedAt, safeLink, SUMMARY_LIMIT } from "../src/domain/feed-parse";
+import { itemKey, parseFeed, publishedAt, safeLink } from "../src/domain/feed-parse";
+import { htmlToText, SUMMARY_LIMIT } from "../src/domain/text";
 import { childText, decodeEntities, parseXml } from "../src/domain/feed-xml";
 
 describe("XML reading", () => {

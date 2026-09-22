@@ -2,11 +2,14 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
 import { addImagePathSetting } from "./ui/image-input";
+import { normalizeMailPort } from "./domain/mail";
+import { createUlid as createAccountId } from "./utils/ulid";
 import { isPathInDirectory, normalizeVaultPath } from "./utils/path";
 
 export class GtdSettingTab extends PluginSettingTab {
   private unsubscribeCalendarStatus: (() => void) | undefined;
   private unsubscribeFeedStatus: (() => void) | undefined;
+  private unsubscribeMailStatus: (() => void) | undefined;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
@@ -17,6 +20,8 @@ export class GtdSettingTab extends PluginSettingTab {
     this.unsubscribeCalendarStatus = undefined;
     this.unsubscribeFeedStatus?.();
     this.unsubscribeFeedStatus = undefined;
+    this.unsubscribeMailStatus?.();
+    this.unsubscribeMailStatus = undefined;
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Dragonglass GTD" });
@@ -85,6 +90,7 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     this.displayFeeds(containerEl);
+    this.displayMail(containerEl);
 
     containerEl.createEl("h3", { text: "Google Calendar" });
     containerEl.createEl("p", {
@@ -315,13 +321,249 @@ export class GtdSettingTab extends PluginSettingTab {
     }
   }
 
+  /**
+   * Email import.
+   *
+   * Accounts and their app passwords live here, in the plugin's own data file, and
+   * deliberately not in the vault file the sync watermarks live in — that one syncs
+   * between devices and a mail password has no business travelling with it.
+   */
+  private displayMail(containerEl: HTMLElement): void {
+    const mail = this.plugin.getMailService();
+    containerEl.createEl("h3", { text: "Email" });
+    containerEl.createEl("p", {
+      text: "Mirrors IMAP mailboxes into the Inbox: every message it accepts becomes an ordinary Inbox Item. "
+        + "A mailbox's existing contents are never imported \u2014 the first sync records where to start, so only mail "
+        + "arriving afterwards comes in. Desktop only; imported Items reach your other devices through vault sync.",
+    });
+    if (!mail.available()) {
+      containerEl.createEl("p", { text: "This device cannot open an IMAP connection, so importing is unavailable here." });
+    }
+
+    new Setting(containerEl)
+      .setName("Enable email import")
+      .setDesc("Import on start-up and on the refresh interval.")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.mail.enabled).onChange(async (value) => {
+        this.plugin.settings.mail.enabled = value;
+        await this.plugin.saveSettings(false);
+        this.display();
+      }));
+
+    new Setting(containerEl)
+      .setName("Refresh interval")
+      .setDesc("Minutes between automatic imports. Five is the minimum.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "5";
+        text.setValue(String(this.plugin.settings.mail.refreshMinutes)).onChange(async (value) => {
+          const minutes = Number(value);
+          if (!Number.isInteger(minutes) || minutes < 5) return;
+          this.plugin.settings.mail.refreshMinutes = minutes;
+          await this.plugin.saveSettings(false);
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Messages per import")
+      .setDesc("How many messages one import turns into Inbox Items. The rest wait for the next one, so a bulk arrival cannot flood the Inbox.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "1";
+        text.setValue(String(this.plugin.settings.mail.importCap)).onChange(async (value) => {
+          const cap = Number(value);
+          if (!Number.isInteger(cap) || cap < 1) return;
+          this.plugin.settings.mail.importCap = cap;
+          await this.plugin.saveSettings(false);
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Sync store")
+      .setDesc("Vault-relative JSON file recording how far each mailbox has been read. It syncs, so two devices do not import the same message twice.")
+      .addText((text) => text.setValue(this.plugin.settings.mail.storePath).onChange(async (value) => {
+        const path = normalizeVaultPath(value) || "GTD/mail.json";
+        if (isPathInDirectory(path, this.plugin.settings.inboxDirectory)) {
+          new Notice("The sync store cannot live inside the Inbox directory, where every file becomes an Inbox Item.");
+          return;
+        }
+        this.plugin.settings.mail.storePath = path;
+        await this.plugin.saveSettings(false);
+      }));
+
+    const importSetting = new Setting(containerEl)
+      .setName("Accounts")
+      .addButton((button) => button.setButtonText("Add account").onClick(async () => {
+        this.plugin.settings.mail.accounts.push({
+          id: createAccountId(),
+          label: "Mail",
+          host: "",
+          port: 993,
+          user: "",
+          mailboxes: ["INBOX"],
+          criterion: "ALL",
+          archiveMailbox: "",
+          enabled: true,
+        });
+        await this.plugin.saveSettings(false);
+        this.display();
+      }))
+      .addButton((button) => button.setButtonText("Import now").setCta().onClick(async () => {
+        button.setDisabled(true);
+        try {
+          const result = await this.plugin.importMail();
+          new Notice(
+            result.baselined
+              ? `${result.baselined} mailbox${result.baselined === 1 ? "" : "es"} set to start from now. Nothing was imported.`
+              : `Imported ${result.imported} message${result.imported === 1 ? "" : "s"}.`,
+          );
+        } catch (error) {
+          new Notice(error instanceof Error ? error.message : "Email could not be imported.");
+        } finally {
+          button.setDisabled(false);
+          this.display();
+        }
+      }));
+    const refreshMailStatus = () => importSetting.setDesc(mailStatusText(this.plugin.getMailStatus()));
+    refreshMailStatus();
+    this.unsubscribeMailStatus = mail.subscribe(refreshMailStatus);
+
+    if (!this.plugin.settings.mail.accounts.length) {
+      containerEl.createEl("p", { text: "No accounts yet." });
+      return;
+    }
+
+    for (const account of this.plugin.settings.mail.accounts) {
+      const save = async () => this.plugin.saveSettings(false);
+      containerEl.createEl("h4", { text: account.label || "Mail" });
+
+      new Setting(containerEl)
+        .setName("Label")
+        .setDesc("Recorded on every Inbox Item this account produces.")
+        .addText((text) => text.setValue(account.label).onChange(async (value) => {
+          account.label = value.trim() || "Mail";
+          await save();
+        }))
+        .addToggle((toggle) => toggle.setTooltip("Import from this account").setValue(account.enabled).onChange(async (value) => {
+          account.enabled = value;
+          await save();
+        }));
+
+      new Setting(containerEl)
+        .setName("Server and user")
+        .setDesc("IMAP host, port, and username. Only implicit TLS on 993 is offered; cleartext IMAP is not.")
+        .addText((text) => text.setPlaceholder("imap.example.com").setValue(account.host).onChange(async (value) => {
+          account.host = value.trim();
+          await save();
+        }))
+        .addText((text) => {
+          text.inputEl.type = "number";
+          text.inputEl.style.maxWidth = "6em";
+          text.setValue(String(account.port)).onChange(async (value) => {
+            account.port = normalizeMailPort(value);
+            await save();
+          });
+        })
+        .addText((text) => text.setPlaceholder("you@example.com").setValue(account.user).onChange(async (value) => {
+          account.user = value.trim();
+          await save();
+        }));
+
+      let passwordInput: HTMLInputElement;
+      new Setting(containerEl)
+        .setName("App password")
+        .setDesc("Use a provider-issued app password, never your account password: it is revocable and stored as plain text in this plugin's data file.")
+        .addText((text) => {
+          passwordInput = text.inputEl;
+          text.inputEl.type = "password";
+          text.setValue(this.plugin.settings.mail.passwords[account.id] ?? "").onChange(async (value) => {
+            this.plugin.settings.mail.passwords[account.id] = value.trim();
+            await save();
+          });
+        })
+        .addButton((button) => button.setButtonText("Show").onClick(() => {
+          const visible = passwordInput.type === "text";
+          passwordInput.type = visible ? "password" : "text";
+          button.setButtonText(visible ? "Show" : "Hide");
+        }))
+        .addButton((button) => button.setButtonText("Test").onClick(async () => {
+          button.setDisabled(true);
+          try {
+            const mailboxes = await mail.listMailboxes(account, this.plugin.settings.mail.passwords[account.id] ?? "");
+            new Notice(`Connected. ${mailboxes.length} mailboxes:\n${mailboxes.slice(0, 25).join("\n")}`, 15_000);
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : "Could not connect.", 10_000);
+          } finally {
+            button.setDisabled(false);
+          }
+        }));
+
+      new Setting(containerEl)
+        .setName("Mailboxes")
+        .setDesc("Comma-separated, exactly as the server spells them \u2014 use Test above to see the list. Mirror INBOX, not All Mail or Archive, which hold every message ever.")
+        .addText((text) => text.setPlaceholder("INBOX").setValue(account.mailboxes.join(", ")).onChange(async (value) => {
+          account.mailboxes = value.split(",").map((mailbox) => mailbox.trim()).filter(Boolean);
+          await save();
+        }));
+
+      new Setting(containerEl)
+        .setName("Which messages count")
+        .setDesc("An IMAP search criterion. ALL mirrors the whole mailbox; UNSEEN takes only unread mail.")
+        .addText((text) => text.setPlaceholder("ALL").setValue(account.criterion).onChange(async (value) => {
+          account.criterion = value.trim() || "ALL";
+          await save();
+        }));
+
+      new Setting(containerEl)
+        .setName("Move imported mail to")
+        .setDesc("A mailbox such as Archive, so importing drains your mail inbox and leaves you one queue instead of two. Leave empty to leave the server untouched. Messages are never deleted.")
+        .addText((text) => text.setPlaceholder("(leave the server alone)").setValue(account.archiveMailbox).onChange(async (value) => {
+          account.archiveMailbox = value.trim();
+          await save();
+        }));
+
+      new Setting(containerEl)
+        .setName("Existing mail")
+        .setDesc("Whatever is in these mailboxes now is skipped. Import it if you do want the backlog \u2014 subject to the per-import limit above.")
+        .addButton((button) => button.setButtonText("Import backlog").onClick(async () => {
+          if (!window.confirm(`Import the mail already in ${account.label}? Every message there becomes an Inbox Item.`)) return;
+          for (const mailbox of account.mailboxes) await mail.importBacklog(account.id, mailbox);
+          new Notice("The next import will take the existing mail.");
+        }))
+        .addButton((button) => button.setButtonText("Remove account").setWarning().onClick(async () => {
+          if (!window.confirm(`Remove ${account.label}? Its password and sync history are forgotten; no mail is touched.`)) return;
+          this.plugin.settings.mail.accounts = this.plugin.settings.mail.accounts.filter((entry) => entry.id !== account.id);
+          delete this.plugin.settings.mail.passwords[account.id];
+          await mail.forget(account.id);
+          await this.plugin.saveSettings(false);
+          this.display();
+        }));
+    }
+  }
+
   hide(): void {
     this.unsubscribeCalendarStatus?.();
     this.unsubscribeCalendarStatus = undefined;
     this.unsubscribeFeedStatus?.();
     this.unsubscribeFeedStatus = undefined;
+    this.unsubscribeMailStatus?.();
+    this.unsubscribeMailStatus = undefined;
     super.hide();
   }
+}
+
+function mailStatusText(status: ReturnType<DragonglassGtdPlugin["getMailStatus"]>): string {
+  if (status.state === "unavailable") return status.error ?? "Importing is unavailable on this device.";
+  if (status.state === "success") {
+    const result = status.result;
+    const detail = result
+      ? `${result.imported} imported${result.deferred ? `, ${result.deferred} waiting` : ""}${result.baselined ? `, ${result.baselined} set to start from now` : ""}`
+      : "";
+    return `Last import ${status.lastImport ? new Date(status.lastImport).toLocaleString() : "succeeded"}. ${detail}`.trim();
+  }
+  if (status.state === "error") return status.error ?? "The last import failed.";
+  if (status.state === "importing") return "Importing\u2026";
+  if (status.state === "disabled") return "Email import is switched off.";
+  return "Ready to import.";
 }
 
 function feedStatusText(status: ReturnType<DragonglassGtdPlugin["getFeedStatus"]>): string {
