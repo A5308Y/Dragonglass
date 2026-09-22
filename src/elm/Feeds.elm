@@ -9,11 +9,10 @@ earns one verdict — gone — and only a few are worth clarifying.
 
 So the list is the surface rather than a way into a processor. **Keep** acts on
 one Item immediately, sending it to the Inbox to be clarified there later; there
-is no intermediate "marked" state to sweep afterward. Discarding is coarser on
-purpose — a whole feed's remaining Items, or every open feed's, in one press —
-because that is the actual shape of feed triage: a couple of Items are worth
-keeping and the rest is noise. Nothing here is a vault file until it is kept,
-which is why discarding two hundred rows is one write and can be undone.
+is no intermediate "marked" state to sweep afterward. An Item can be discarded
+on its own, or whole feeds and every open feed can be cleared in one press.
+Nothing here is a vault file until it is kept, which is why discarding two
+hundred rows is one write and can be undone.
 
 -}
 
@@ -67,6 +66,7 @@ type Msg
     | RowKey Int FeedItemKey Key
     | CollapseAll Bool
     | KeepOne FeedItemKey
+    | DiscardOne FeedItemKey
     | DiscardSection FeedId
     | DiscardAll
     | Open String
@@ -147,6 +147,9 @@ update msg model =
         KeepOne key ->
             keepOne key model
 
+        DiscardOne key ->
+            discardKeys [ key ] model
+
         DiscardSection feedId ->
             discardKeys (sectionKeys feedId model) model
 
@@ -197,6 +200,9 @@ rowKey index key pressed model =
 
         Character "k" ->
             keepOne key model
+
+        Character "d" ->
+            discardKeys [ key ] model
 
         Character "o" ->
             case itemUrl .link key model of
@@ -341,7 +347,7 @@ view model =
     div [ class "dg-view dg-feeds-view" ]
         [ header [ class "dg-view-header" ]
             [ div []
-                [ h2 [] [ text "Feeds" ]
+                [ h2 [] [ text "RSS Feeds" ]
                 , span [ class "dg-count" ] [ text (String.fromInt (Feed.totalUnread model.feeds)) ]
                 ]
             , div [ class "dg-header-actions" ]
@@ -525,6 +531,12 @@ rowView model indexes item =
                 , onClick (KeepOne item.key)
                 ]
                 [ text "Keep" ]
+            , button
+                [ class "mod-warning"
+                , disabled (busy model)
+                , onClick (DiscardOne item.key)
+                ]
+                [ text "Discard" ]
             ]
         ]
 

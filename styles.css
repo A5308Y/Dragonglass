@@ -1691,8 +1691,15 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-feed-section-controls { flex: 1 1 100%; justify-content: flex-end; }
   .dg-feed-discard { flex: 1 1 auto; min-height: 38px; }
   .dg-feed-row { flex-direction: column; }
-  .dg-feed-row-actions { width: 100%; }
-  .dg-feed-row-actions button { flex: 1; min-height: 40px; }
+  .dg-feed-row-actions { width: 100%; flex-wrap: nowrap; gap: 4px; }
+  .dg-feed-row-actions button {
+    min-width: 0;
+    flex: 1 1 0;
+    min-height: 40px;
+    padding-inline: 6px;
+    font-size: var(--font-ui-smaller);
+    white-space: nowrap;
+  }
   .dg-processing-grid { grid-template-columns: 1fr; }
   .dg-processing-field.is-wide { grid-column: auto; }
   .dg-processor-action button { min-height: 42px; white-space: normal; }
@@ -1844,12 +1851,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   text-align: left;
   color: var(--text-normal);
   font-weight: var(--font-semibold);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
-.dg-feed-row.is-expanded .dg-feed-title { white-space: normal; }
 .dg-feed-title:hover { color: var(--text-accent); }
 .dg-feed-meta {
   display: block;
