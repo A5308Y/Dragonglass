@@ -11,6 +11,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private unsubscribeFeedStatus: (() => void) | undefined;
   private unsubscribeMailStatus: (() => void) | undefined;
   private feedsExpanded = false;
+  private mailExpanded = false;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
@@ -339,17 +340,24 @@ export class GtdSettingTab extends PluginSettingTab {
   private displayMail(containerEl: HTMLElement): void {
     const mail = this.plugin.getMailService();
     const mailboxStateSettings: Array<{ setting: Setting; accountId: string; mailbox: string }> = [];
-    containerEl.createEl("h3", { text: "Email" });
-    containerEl.createEl("p", {
+    const section = containerEl.createEl("details", { cls: "dg-settings-section" });
+    section.open = this.mailExpanded;
+    section.createEl("summary", { text: "Email", cls: "dg-settings-section-summary" });
+    section.addEventListener("toggle", () => {
+      this.mailExpanded = section.open;
+    });
+    const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
+
+    sectionEl.createEl("p", {
       text: "Mirrors IMAP mailboxes into the Inbox: every message it accepts becomes an ordinary Inbox Item. "
         + "A mailbox's existing contents are never imported \u2014 the first sync records where to start, so only mail "
         + "arriving afterwards comes in. Desktop only; imported Items reach your other devices through vault sync.",
     });
     if (!mail.available()) {
-      containerEl.createEl("p", { text: "This device cannot open an IMAP connection, so importing is unavailable here." });
+      sectionEl.createEl("p", { text: "This device cannot open an IMAP connection, so importing is unavailable here." });
     }
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Enable email import")
       .setDesc("Import on start-up and on the refresh interval.")
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.mail.enabled).onChange(async (value) => {
@@ -358,7 +366,7 @@ export class GtdSettingTab extends PluginSettingTab {
         this.display();
       }));
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Refresh interval")
       .setDesc("Minutes between automatic imports. Five is the minimum.")
       .addText((text) => {
@@ -372,7 +380,7 @@ export class GtdSettingTab extends PluginSettingTab {
         });
       });
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Messages per import")
       .setDesc("How many messages one import turns into Inbox Items. The rest wait for the next one, so a bulk arrival cannot flood the Inbox.")
       .addText((text) => {
@@ -386,7 +394,7 @@ export class GtdSettingTab extends PluginSettingTab {
         });
       });
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Sync store")
       .setDesc("Vault-relative JSON file recording how far each mailbox has been read. It syncs, so two devices do not import the same message twice.")
       .addText((text) => text.setValue(this.plugin.settings.mail.storePath).onChange(async (value) => {
@@ -399,7 +407,7 @@ export class GtdSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings(false);
       }));
 
-    const importSetting = new Setting(containerEl)
+    const importSetting = new Setting(sectionEl)
       .setName("Accounts")
       .addButton((button) => button.setButtonText("Add account").onClick(async () => {
         this.plugin.settings.mail.accounts.push({
@@ -438,15 +446,15 @@ export class GtdSettingTab extends PluginSettingTab {
     this.unsubscribeMailStatus = mail.subscribe(refreshMailStatus);
 
     if (!this.plugin.settings.mail.accounts.length) {
-      containerEl.createEl("p", { text: "No accounts yet." });
+      sectionEl.createEl("p", { text: "No accounts yet." });
       return;
     }
 
     for (const account of this.plugin.settings.mail.accounts) {
       const save = async () => this.plugin.saveSettings(false);
-      containerEl.createEl("h4", { text: account.label || "Mail" });
+      sectionEl.createEl("h4", { text: account.label || "Mail" });
 
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("Label")
         .setDesc("Recorded on every Inbox Item this account produces.")
         .addText((text) => text.setValue(account.label).onChange(async (value) => {
@@ -458,7 +466,7 @@ export class GtdSettingTab extends PluginSettingTab {
           await save();
         }));
 
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("Server and user")
         .setDesc("IMAP host, port, and username. Only implicit TLS on 993 is offered; cleartext IMAP is not.")
         .addText((text) => text.setPlaceholder("imap.example.com").setValue(account.host).onChange(async (value) => {
@@ -479,7 +487,7 @@ export class GtdSettingTab extends PluginSettingTab {
         }));
 
       let passwordInput: HTMLInputElement;
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("App password")
         .setDesc("Use a provider-issued app password, never your account password: it is revocable and stored as plain text in this plugin's data file.")
         .addText((text) => {
@@ -507,7 +515,7 @@ export class GtdSettingTab extends PluginSettingTab {
           }
         }));
 
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("Mailboxes")
         .setDesc("Comma-separated, exactly as the server spells them \u2014 use Test above to see the list. Mirror INBOX, not All Mail or Archive, which hold every message ever.")
         .addText((text) => text.setPlaceholder("INBOX").setValue(account.mailboxes.join(", ")).onChange(async (value) => {
@@ -515,7 +523,7 @@ export class GtdSettingTab extends PluginSettingTab {
           await save();
         }));
 
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("Which messages count")
         .setDesc("An IMAP search criterion. ALL mirrors the whole mailbox; UNSEEN takes only unread mail.")
         .addText((text) => text.setPlaceholder("ALL").setValue(account.criterion).onChange(async (value) => {
@@ -523,7 +531,7 @@ export class GtdSettingTab extends PluginSettingTab {
           await save();
         }));
 
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("Move imported mail to")
         .setDesc("A mailbox such as Archive, so importing drains your mail inbox and leaves you one queue instead of two. Leave empty to leave the server untouched. Messages are never deleted.")
         .addText((text) => text.setPlaceholder("(leave the server alone)").setValue(account.archiveMailbox).onChange(async (value) => {
@@ -532,14 +540,14 @@ export class GtdSettingTab extends PluginSettingTab {
         }));
 
       for (const mailbox of account.mailboxes) {
-        const setting = new Setting(containerEl)
+        const setting = new Setting(sectionEl)
           .setName(mailbox)
           .setDesc(describeMailboxState(mailboxState(mail.getStore(), account.id, mailbox)))
           .setClass("dg-mail-mailbox-state");
         mailboxStateSettings.push({ setting, accountId: account.id, mailbox });
       }
 
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("Existing mail")
         .setDesc("Whatever is in these mailboxes now is skipped. Import it if you do want the backlog \u2014 subject to the per-import limit above.")
         .addButton((button) => button.setButtonText("Import backlog").onClick(async () => {
