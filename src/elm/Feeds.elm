@@ -24,9 +24,9 @@ import Gtd.Feed as Feed exposing (Feed, Feeds, Item)
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (FeedId, FeedItemKey)
 import Gtd.Ui as Ui exposing (Key(..))
-import Html exposing (Html, article, button, div, h2, h3, header, input, p, section, small, span, text)
-import Html.Attributes exposing (attribute, class, classList, disabled, id, placeholder, tabindex, type_, value)
-import Html.Events exposing (onClick, onFocus, onInput)
+import Html exposing (Html, article, button, div, h2, h3, header, p, section, small, span, text)
+import Html.Attributes exposing (attribute, class, classList, disabled, id, tabindex)
+import Html.Events exposing (onClick, onFocus)
 import Html.Keyed as Keyed
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -49,7 +49,6 @@ type Pending
 
 type alias Model =
     { feeds : Feeds
-    , search : String
     , collapsed : Set FeedId
     , expanded : Set FeedItemKey
     , focusIndex : Maybe Int
@@ -60,7 +59,6 @@ type alias Model =
 
 type Msg
     = GotHost Decode.Value
-    | SearchChanged String
     | ToggleCollapsed FeedId
     | ToggleExpanded FeedItemKey
     | SetFocus Int
@@ -98,7 +96,6 @@ init flags =
 initialModel : Feeds -> Model
 initialModel feeds =
     { feeds = feeds
-    , search = ""
     , collapsed = Set.empty
     , expanded = Set.empty
     , focusIndex = Nothing
@@ -117,9 +114,6 @@ update msg model =
     case msg of
         GotHost value ->
             receiveHost value model
-
-        SearchChanged search ->
-            ( { model | search = search }, Cmd.none )
 
         ToggleCollapsed feedId ->
             ( { model | collapsed = toggle feedId model.collapsed }, Cmd.none )
@@ -389,19 +383,7 @@ view model =
             div []
                 [ toolbar model openCount sections
                 , if List.isEmpty sections then
-                    emptyState
-                        (if String.isEmpty model.search then
-                            "All caught up."
-
-                         else
-                            "Nothing matches this search."
-                        )
-                        (if String.isEmpty model.search then
-                            "Every subscribed feed has been kept or discarded."
-
-                         else
-                            "Clear the search to see the rest."
-                        )
+                    emptyState "All caught up." "Every subscribed feed has been kept or discarded."
 
                   else
                     div [ class "dg-feed-sections" ] (List.map (sectionView model (rowIndexes model)) sections)
@@ -418,8 +400,7 @@ toolbar model openCount sections =
                 && List.all (\entry -> Set.member entry.feed.id model.collapsed) sections
     in
     div [ class "dg-toolbar dg-feeds-toolbar" ]
-        [ input [ type_ "search", placeholder "Search Feed Items", value model.search, onInput SearchChanged ] []
-        , button
+        [ button
             [ disabled (List.isEmpty sections), onClick (CollapseAll (not allCollapsed)) ]
             [ text
                 (if allCollapsed then
@@ -429,7 +410,6 @@ toolbar model openCount sections =
                     "Collapse feeds"
                 )
             ]
-        , span [ class "dg-batch-spacer" ] []
         , button
             [ class "mod-warning dg-feed-discard"
             , disabled (openCount == 0 || busy model)
@@ -570,12 +550,12 @@ rowDomId index =
 -- QUERIES
 
 
-{-| The feeds with Items the current search leaves visible, in subscription order.
+{-| The feeds with unread Items, in subscription order.
 -}
 visibleSections : Model -> List Section
 visibleSections model =
     model.feeds.feeds
-        |> List.map (\feed -> { feed = feed, items = List.filter (matchesSearch model.search) feed.items })
+        |> List.map (\feed -> { feed = feed, items = feed.items })
         |> List.filter (\entry -> not (List.isEmpty entry.items))
 
 
@@ -622,11 +602,6 @@ itemUrl field key model =
         |> List.filter (\item -> item.key == key)
         |> List.head
         |> Maybe.andThen (field >> nonEmpty)
-
-
-matchesSearch : String -> Item -> Bool
-matchesSearch search item =
-    Ui.matches search [ item.title, item.author, item.summary ]
 
 
 nonEmpty : String -> Maybe String

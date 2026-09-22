@@ -1686,19 +1686,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-inbox-row-actions button { flex: 1; min-height: 40px; }
   .dg-feeds-view { --dg-bar-inset: 8px; }
   .dg-feed-sections { padding: 8px; gap: 8px; }
-  .dg-feeds-toolbar {
-    flex-wrap: wrap;
-    overflow-x: hidden;
-  }
-  .dg-feeds-toolbar input[type="search"] {
-    width: 100%;
-    min-width: 0;
-    flex: 1 1 100%;
-  }
-  .dg-feeds-toolbar > .dg-batch-spacer { display: none; }
+  .dg-feeds-toolbar { overflow-x: hidden; }
   .dg-feeds-toolbar > button {
     min-width: 0;
-    flex: 1 1 calc(50% - 3px);
+    flex: 1 1 0;
     padding-inline: 6px;
     font-size: var(--font-ui-smaller);
     white-space: nowrap;
@@ -1788,7 +1779,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 /* Feeds */
 
 .dg-feeds-view { overflow: auto; }
-.dg-feeds-toolbar input[type="search"] { width: min(320px, 40vw); }
 .dg-feed-discard { white-space: nowrap; }
 .dg-feed-undo:not(:disabled) { color: var(--text-accent); }
 
