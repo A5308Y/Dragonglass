@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import process from "node:process";
 
 export function buildElm(production = false) {
-  const entryPoints = ["src/elm/ActionBoard.elm", "src/elm/Inbox.elm", "src/elm/Projects.elm", "src/elm/ProjectReview.elm", "src/elm/Brainstorm.elm", "src/elm/Modals.elm", "src/elm/Feeds.elm"];
+  const entryPoints = ["src/elm/ActionBoard.elm", "src/elm/Inbox.elm", "src/elm/Projects.elm", "src/elm/ProjectReview.elm", "src/elm/SomedayReview.elm", "src/elm/Brainstorm.elm", "src/elm/Modals.elm", "src/elm/Feeds.elm"];
   assertUniquePorts(entryPoints);
   mkdirSync(".generated", { recursive: true });
   const env = { ...process.env, ELM_HOME: resolve(".elm-home") };

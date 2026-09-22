@@ -97,7 +97,7 @@ type alias Model =
     , search : String
     , allProjects : Bool
     , filterOpen : Bool
-    , columnsOpen : Bool
+    , viewMenuOpen : Bool
     , draft : FilterDraft
     , dragged : Maybe ActionId
     , priorityDropTarget : Maybe ActionId
@@ -113,7 +113,7 @@ type Msg
     | SearchChanged String
     | ToggleAllProjects Bool
     | ToggleFilters
-    | ToggleColumns
+    | ToggleViewMenu
     | SelectSavedView String
     | SetGroupBy GroupBy
     | SetSortField SortField
@@ -183,7 +183,7 @@ initialModel snapshot active configuration =
     , search = ""
     , allProjects = False
     , filterOpen = False
-    , columnsOpen = False
+    , viewMenuOpen = False
     , draft = initialDraft snapshot.today
     , dragged = Nothing
     , priorityDropTarget = Nothing
@@ -219,8 +219,8 @@ update msg model =
         ToggleFilters ->
             ( { model | filterOpen = not model.filterOpen }, Cmd.none )
 
-        ToggleColumns ->
-            ( { model | columnsOpen = not model.columnsOpen }, Cmd.none )
+        ToggleViewMenu ->
+            ( { model | viewMenuOpen = not model.viewMenuOpen }, Cmd.none )
 
         SelectSavedView savedId ->
             let
@@ -262,18 +262,22 @@ update msg model =
             )
 
         SaveView ->
-            case model.activeViewId of
+            let
+                closed =
+                    { model | viewMenuOpen = False }
+            in
+            case closed.activeViewId of
                 Just _ ->
-                    saveCurrentView model
+                    saveCurrentView closed
 
                 Nothing ->
-                    promptForView False model
+                    promptForView False closed
 
         SaveViewAs ->
-            promptForView True model
+            promptForView True { model | viewMenuOpen = False }
 
         DeleteView ->
-            deleteCurrentView model
+            deleteCurrentView { model | viewMenuOpen = False }
 
         SetFilterField field ->
             let
@@ -386,9 +390,23 @@ update msg model =
                         ( { model | dragged = Nothing, priorityDropTarget = Nothing }, Cmd.none )
 
                     else
-                        send IgnoreReply
-                            (Command.SetActionPriorities (priorityOrder model actionId targetId))
-                            { model | dragged = Nothing, priorityDropTarget = Nothing }
+                        let
+                            ( ranked, rankCmd ) =
+                                send IgnoreReply
+                                    (Command.SetActionPriorities (priorityOrder model actionId targetId))
+                                    { model | dragged = Nothing, priorityDropTarget = Nothing }
+                        in
+                        -- A card dropped onto a card in another status column joins that status too.
+                        case crossColumnStatus model actionId targetId of
+                            Just status ->
+                                let
+                                    ( moved, moveCmd ) =
+                                        moveAction actionId status ranked
+                                in
+                                ( moved, Cmd.batch [ rankCmd, moveCmd ] )
+
+                            Nothing ->
+                                ( ranked, rankCmd )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -397,6 +415,21 @@ update msg model =
             case key of
                 Character "d" ->
                     moveAction actionId ActionStatus.Done model
+
+                Character "n" ->
+                    moveAction actionId ActionStatus.Next model
+
+                Character "w" ->
+                    moveAction actionId ActionStatus.Waiting model
+
+                Character "s" ->
+                    moveAction actionId ActionStatus.Scheduled model
+
+                Character "e" ->
+                    send IgnoreReply (Command.EditActionModal actionId) model
+
+                Enter ->
+                    send IgnoreReply (Command.EditActionModal actionId) model
 
                 ArrowDown ->
                     ( model, focusAdjacent 1 actionId model )
@@ -470,6 +503,28 @@ moveAction actionId status model =
                     )
                     (Command.SetActionStatus actionId status)
                     model
+
+
+{-| The status of the column a card was dropped into, when the board is grouped by
+status and that column is not the card's own.
+-}
+crossColumnStatus : Model -> ActionId -> ActionId -> Maybe ActionStatus
+crossColumnStatus model actionId targetId =
+    let
+        statusOf id =
+            Data.findAction id model.snapshot.actions
+                |> Maybe.map (\action -> Dict.get action.id model.optimistic |> Maybe.withDefault action.status)
+    in
+    case ( model.configuration.groupBy, statusOf actionId, statusOf targetId ) of
+        ( GroupByStatus, Just own, Just target ) ->
+            if own /= target && target /= ActionStatus.Cancelled then
+                Just target
+
+            else
+                Nothing
+
+        _ ->
+            Nothing
 
 
 focusAdjacent : Int -> ActionId -> Model -> Cmd Msg
@@ -646,7 +701,7 @@ view model =
     case model.fatalError of
         Just error ->
             div [ class "dg-view dg-board-view" ]
-                [ div [ class "dg-warning" ] [ text ("Elm adapter error: " ++ error) ]
+                [ div [ class "dg-panel dg-error" ] [ text ("Elm adapter error: " ++ error) ]
                 , boardView model
                 ]
 
@@ -683,16 +738,13 @@ boardView model =
         , Ui.issuesView model.snapshot.issues
         , toolbar model
         , if model.filterOpen then
-            filterBuilder model
-
-          else
-            text ""
-        , if model.columnsOpen then
-            columnPicker model
+            filterPanel model
 
           else
             text ""
         , filterChips model
+        , div [ class "dg-shortcut-bar" ]
+            [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · S Scheduled · D Done · E or Enter edit" ] ]
         , div [ class "dg-board", attribute "role" "list" ]
             (if List.isEmpty groups then
                 [ div [ class "dg-empty" ] [ text "No Actions match this view." ] ]
@@ -706,16 +758,42 @@ boardView model =
 toolbar : Model -> Html Msg
 toolbar model =
     div [ class "dg-toolbar" ]
-        [ select [ attribute "aria-label" "Saved view", onInput SelectSavedView ]
-            (option [ value "", selected (model.activeViewId == Nothing) ] [ text "Board" ]
-                :: List.map
-                    (\saved -> option [ value saved.id, selected (model.activeViewId == Just saved.id) ] [ text saved.name ])
-                    model.snapshot.settings.savedViews
-            )
+        [ div [ class "dg-view-picker" ]
+            [ select [ attribute "aria-label" "Saved view", onInput SelectSavedView ]
+                (option [ value "", selected (model.activeViewId == Nothing) ] [ text "Board" ]
+                    :: List.map
+                        (\saved -> option [ value saved.id, selected (model.activeViewId == Just saved.id) ] [ text saved.name ])
+                        model.snapshot.settings.savedViews
+                )
+            , button
+                [ classList [ ( "is-active", model.viewMenuOpen ) ]
+                , attribute "aria-label" "Saved view options"
+                , attribute "aria-expanded" (Ui.boolAttribute model.viewMenuOpen)
+                , title "Save or delete this view"
+                , onClick ToggleViewMenu
+                ]
+                [ text "•••" ]
+            , if model.viewMenuOpen then
+                viewMenu model
+
+              else
+                text ""
+            ]
         , input [ type_ "search", placeholder "Search Actions or Projects", value model.search, onInput SearchChanged ] []
-        , label [ class "dg-toolbar-toggle", title "Also show Actions of Backlog, Someday/Maybe, Completed and Cancelled Projects" ]
-            [ input [ type_ "checkbox", checked model.allProjects, onCheck ToggleAllProjects ] [], span [] [ text "All projects" ] ]
-        , button [ classList [ ( "is-active", model.filterOpen ) ], onClick ToggleFilters ] [ text "Filter" ]
+        , button
+            [ classList [ ( "is-active", model.filterOpen ) ]
+            , attribute "aria-expanded" (Ui.boolAttribute model.filterOpen)
+            , onClick ToggleFilters
+            ]
+            [ text
+                (case activeRefinements model of
+                    0 ->
+                        "Filter"
+
+                    count ->
+                        "Filter (" ++ String.fromInt count ++ ")"
+                )
+            ]
         , choices [ attribute "aria-label" "Group by" ]
             groupByKey
             SetGroupBy
@@ -740,14 +818,66 @@ toolbar model =
                         "↓"
                 )
             ]
-        , button [ classList [ ( "is-active", model.columnsOpen ) ], onClick ToggleColumns ] [ text "Columns" ]
-        , button [ onClick SaveView ] [ text "Save" ]
-        , button [ onClick SaveViewAs ] [ text "Save As" ]
-        , if model.activeViewId /= Nothing then
-            button [ attribute "aria-label" "Delete saved view", onClick DeleteView ] [ text "Delete" ]
+        ]
 
-          else
-            text ""
+
+{-| Managing a saved view is occasional, so it sits behind the picker's menu.
+On the unsaved Board, saving always means naming a new view.
+-}
+viewMenu : Model -> Html Msg
+viewMenu model =
+    let
+        activeName =
+            model.activeViewId
+                |> Maybe.andThen (Settings.findSavedView model.snapshot.settings.savedViews)
+                |> Maybe.map .name
+    in
+    div [ class "dg-popover", attribute "role" "menu" ]
+        (case activeName of
+            Just name ->
+                [ button [ class "dg-flat-button", attribute "role" "menuitem", onClick SaveView ] [ text ("Save changes to “" ++ name ++ "”") ]
+                , button [ class "dg-flat-button", attribute "role" "menuitem", onClick SaveViewAs ] [ text "Save as new view…" ]
+                , button [ class "dg-flat-button dg-popover-danger", attribute "role" "menuitem", onClick DeleteView ] [ text "Delete view" ]
+                ]
+
+            Nothing ->
+                [ button [ class "dg-flat-button", attribute "role" "menuitem", onClick SaveViewAs ] [ text "Save as new view…" ] ]
+        )
+
+
+{-| How many ways the board is narrowed beyond search, for the Filter button.
+-}
+activeRefinements : Model -> Int
+activeRefinements model =
+    List.length model.configuration.filters
+        + (if model.allProjects then
+            1
+
+           else
+            0
+          )
+        + (case model.configuration.visibleColumns of
+            AllColumns ->
+                0
+
+            OnlyColumns _ ->
+                1
+          )
+
+
+{-| Everything that narrows the board, in one place: which Projects count, the
+filters, and which columns show.
+-}
+filterPanel : Model -> Html Msg
+filterPanel model =
+    div [ class "dg-filter-panel" ]
+        [ div [ class "dg-panel" ]
+            [ span [ class "dg-panel-label" ] [ text "Projects" ]
+            , label [ class "dg-toolbar-toggle", title "Also show Actions of Backlog, Someday/Maybe, Completed and Cancelled Projects" ]
+                [ input [ type_ "checkbox", checked model.allProjects, onCheck ToggleAllProjects ] [], span [] [ text "Include inactive Projects" ] ]
+            ]
+        , filterBuilder model
+        , columnPicker model
         ]
 
 
@@ -771,7 +901,8 @@ filterBuilder model =
             model.draft
     in
     div [ class "dg-panel dg-filter-builder" ]
-        [ choices []
+        [ span [ class "dg-panel-label" ] [ text "Add filter" ]
+        , choices []
             filterFieldKey
             SetFilterField
             draft.field
@@ -865,7 +996,8 @@ columnPicker model =
                     columns
     in
     div [ class "dg-panel dg-column-picker" ]
-        (List.map
+        (span [ class "dg-panel-label" ] [ text "Columns" ]
+            :: List.map
             (\key ->
                 label []
                     [ input
@@ -930,7 +1062,7 @@ cardView model action =
         , on "dragend" (Decode.succeed DragEnded)
         , custom "dragover" (Decode.succeed { message = DragOverCard action.id, stopPropagation = True, preventDefault = True })
         , custom "drop" (Decode.succeed { message = DropBefore action.id, stopPropagation = True, preventDefault = True })
-        , Ui.onKeyDown (CardKey action.id)
+        , onCardKey action.id
         ]
         [ div [ class "dg-card-title-row" ]
             [ span [ class "dg-card-title dg-action-card-title", title action.title ] [ text action.title ]
@@ -966,6 +1098,23 @@ cardView model action =
             , Ui.maybeView (Data.scheduleText action) (\schedule -> span [] [ text schedule ])
             ]
         ]
+
+
+{-| Keys pressed on the card itself; a key on its menu or Project link is theirs.
+-}
+onCardKey : ActionId -> Html.Attribute Msg
+onCardKey actionId =
+    on "keydown"
+        (Decode.at [ "target", "id" ] Decode.string
+            |> Decode.andThen
+                (\targetId ->
+                    if targetId == cardDomId actionId then
+                        Decode.map (CardKey actionId) Ui.keyDecoder
+
+                    else
+                        Decode.fail "key on a child of the card"
+                )
+        )
 
 
 cardDomId : ActionId -> String

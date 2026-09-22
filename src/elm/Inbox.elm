@@ -1,6 +1,7 @@
 port module Inbox exposing (main)
 
 import Browser
+import Browser.Dom
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
 import Gtd.Command as Base exposing (ScheduleInput(..))
 import Gtd.Command.Inbox as Command exposing (Command, Disposition(..))
@@ -9,13 +10,14 @@ import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (InboxItemId)
 import Gtd.Picker as Picker exposing (Picker)
-import Gtd.Ui as Ui
-import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, option, p, section, select, small, span, text, textarea)
-import Html.Attributes exposing (attribute, checked, class, classList, controls, placeholder, preload, selected, src, style, title, type_, value)
+import Gtd.Ui as Ui exposing (Key(..))
+import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, option, p, section, select, small, span, strong, text, textarea)
+import Html.Attributes exposing (attribute, checked, class, classList, controls, id, placeholder, preload, selected, src, style, tabindex, title, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
+import Task
 import Time
 
 
@@ -88,6 +90,9 @@ type Msg
     | SetFileOriginal Bool
     | DeleteItem InboxItemId
     | ProcessItem
+    | RowKey InboxItemId Key
+    | ProcessorChord Chord
+    | Focused
     | Send Pending Command
 
 
@@ -254,7 +259,61 @@ update msg model =
             ( { model | fileOriginal = fileOriginal }, Cmd.none )
 
         DeleteItem itemId ->
-            sendForItem itemId (Command.TrashInboxItem itemId) model
+            let
+                ( next, cmd ) =
+                    sendForItem itemId (Command.TrashInboxItem itemId) model
+            in
+            -- In the list, focus stays on the row that takes the deleted one's place.
+            if model.processing then
+                ( next, cmd )
+
+            else
+                ( next, Cmd.batch [ cmd, focusRow (neighbourRow itemId model) ] )
+
+        RowKey itemId key ->
+            case key of
+                ArrowDown ->
+                    ( model, focusRow (adjacentRow 1 itemId model) )
+
+                ArrowUp ->
+                    ( model, focusRow (adjacentRow -1 itemId model) )
+
+                Enter ->
+                    enterProcessing (Just itemId) model
+
+                Character "o" ->
+                    case List.filter (\item -> item.id == itemId) model.snapshot.inboxItems of
+                        item :: _ ->
+                            send IgnoreReply (Command.OpenFile item.file.path) model
+
+                        [] ->
+                            ( model, Cmd.none )
+
+                Character "x" ->
+                    update (DeleteItem itemId) model
+
+                Delete ->
+                    update (DeleteItem itemId) model
+
+                Backspace ->
+                    update (DeleteItem itemId) model
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ProcessorChord chord ->
+            case ( chord, currentItem model ) of
+                ( ProcessChord, _ ) ->
+                    update ProcessItem model
+
+                ( DeleteChord, Just item ) ->
+                    update (DeleteItem item.id) model
+
+                ( DeleteChord, Nothing ) ->
+                    ( model, Cmd.none )
+
+        Focused ->
+            ( model, Cmd.none )
 
         ProcessItem ->
             case currentItem model of
@@ -329,6 +388,119 @@ resetCurrent model =
                     , fileOriginal = False
                     , error = Nothing
                 }
+                |> Tuple.mapSecond (\loadCmd -> Cmd.batch [ loadCmd, focus nextActionId ])
+
+
+{-| The two shortcuts the processor answers from anywhere inside it.
+-}
+type Chord
+    = ProcessChord
+    | DeleteChord
+
+
+{-| ⌘/Ctrl+Enter processes; ⌘/Ctrl+Shift+Backspace deletes and moves on. Plain
+⌘/Ctrl+Backspace is left alone, because it deletes text in a field.
+-}
+onProcessorChord : Html.Attribute Msg
+onProcessorChord =
+    Html.Events.custom "keydown"
+        (Decode.map4
+            (\key meta ctrl shift ->
+                let
+                    modifier =
+                        meta || ctrl
+                in
+                if modifier && key == "Enter" then
+                    Decode.succeed { message = ProcessorChord ProcessChord, stopPropagation = True, preventDefault = True }
+
+                else if modifier && shift && key == "Backspace" then
+                    Decode.succeed { message = ProcessorChord DeleteChord, stopPropagation = True, preventDefault = True }
+
+                else
+                    Decode.fail "not a processor shortcut"
+            )
+            (Decode.field "key" Decode.string)
+            (Decode.field "metaKey" Decode.bool)
+            (Decode.field "ctrlKey" Decode.bool)
+            (Decode.field "shiftKey" Decode.bool)
+            |> Decode.andThen identity
+        )
+
+
+{-| Keys pressed on the row itself; a key on one of its buttons is that button's.
+-}
+onRowKey : InboxItemId -> Html.Attribute Msg
+onRowKey itemId =
+    Html.Events.on "keydown"
+        (Decode.at [ "target", "id" ] Decode.string
+            |> Decode.andThen
+                (\targetId ->
+                    if targetId == rowId itemId then
+                        Decode.map (RowKey itemId) Ui.keyDecoder
+
+                    else
+                        Decode.fail "key on a child of the row"
+                )
+        )
+
+
+nextActionId : String
+nextActionId =
+    "dg-inbox-next-action"
+
+
+rowId : InboxItemId -> String
+rowId itemId =
+    "dg-inbox-row-" ++ itemId
+
+
+focus : String -> Cmd Msg
+focus domId =
+    Browser.Dom.focus domId |> Task.attempt (\_ -> Focused)
+
+
+focusRow : Maybe InboxItemId -> Cmd Msg
+focusRow =
+    Maybe.map (rowId >> focus) >> Maybe.withDefault Cmd.none
+
+
+{-| The rows the list shows, in order: the search narrows them.
+-}
+listedItems : Model -> List InboxItem
+listedItems model =
+    sortedItems model.snapshot.inboxItems
+        |> List.filter (\item -> Ui.matches model.search [ item.title ])
+
+
+adjacentRow : Int -> InboxItemId -> Model -> Maybe InboxItemId
+adjacentRow offset itemId model =
+    let
+        ids =
+            List.map .id (listedItems model)
+    in
+    indexOfId itemId ids
+        |> Maybe.andThen (\index -> List.drop (index + offset) ids |> List.head)
+
+
+{-| The row that takes a deleted row's place: the one after it, or else the one before.
+-}
+neighbourRow : InboxItemId -> Model -> Maybe InboxItemId
+neighbourRow itemId model =
+    case adjacentRow 1 itemId model of
+        Just next ->
+            Just next
+
+        Nothing ->
+            adjacentRow -1 itemId model
+
+
+indexOfId : InboxItemId -> List InboxItemId -> Maybe Int
+indexOfId wanted ids =
+    ids
+        |> List.indexedMap Tuple.pair
+        |> List.filter (\( _, id ) -> id == wanted)
+        |> List.head
+        |> Maybe.map Tuple.first
 
 
 send : Pending -> Command -> Model -> ( Model, Cmd Msg )
@@ -474,7 +646,7 @@ view model =
                 ]
             , div [ class "dg-header-actions" ]
                 [ if model.processing then
-                    button [ onClick ShowList ] [ text "List" ]
+                    button [ onClick ShowList ] [ text "Back to list" ]
 
                   else
                     button [ Html.Attributes.disabled (List.isEmpty model.snapshot.inboxItems), onClick (StartProcessing Nothing) ] [ text "Process Inbox" ]
@@ -482,7 +654,7 @@ view model =
                 ]
             ]
         , Ui.issuesView model.snapshot.issues
-        , Ui.maybeView model.error (\message -> div [ class "dg-warning" ] [ text message ])
+        , Ui.maybeView model.error (\message -> div [ class "dg-panel dg-error" ] [ text message ])
         , if model.processing then
             processorView model
 
@@ -495,12 +667,13 @@ listView : Model -> Html Msg
 listView model =
     let
         items =
-            sortedItems model.snapshot.inboxItems
-                |> List.filter (\item -> Ui.matches model.search [ item.title ])
+            listedItems model
     in
     div []
         [ div [ class "dg-toolbar dg-inbox-toolbar" ]
-            [ input [ type_ "search", placeholder "Search Inbox", value model.search, onInput SearchChanged ] [] ]
+            [ input [ type_ "search", placeholder "Search Inbox", value model.search, onInput SearchChanged ] []
+            , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · Enter process · O open · X delete" ]
+            ]
         , div [ class "dg-inbox-list", attribute "role" "list" ]
             (if List.isEmpty items then
                 [ div [ class "dg-empty-row" ]
@@ -522,14 +695,20 @@ listView model =
 
 inboxRow : Set InboxItemId -> InboxItem -> Html Msg
 inboxRow busy item =
-    article [ class "dg-inbox-row", attribute "role" "listitem" ]
+    article
+        [ class "dg-inbox-row"
+        , attribute "role" "listitem"
+        , id (rowId item.id)
+        , tabindex 0
+        , onRowKey item.id
+        ]
         [ div [ class "dg-inbox-item-main" ]
             [ button [ class "dg-project-title dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ] [ text item.title ]
             , span [ class "dg-inbox-meta" ] [ text (itemMeta item) ]
             ]
         , div [ class "dg-inbox-row-actions" ]
-            [ button [ class "mod-cta", Html.Attributes.disabled (Set.member item.id busy), onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
-            , button [ class "mod-warning", Html.Attributes.disabled (Set.member item.id busy), onClick (DeleteItem item.id) ] [ text "Delete" ]
+            [ button [ class "mod-cta", Html.Attributes.disabled (Set.member item.id busy), title "Process (Enter)", onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
+            , button [ class "mod-warning", Html.Attributes.disabled (Set.member item.id busy), title "Delete (X)", onClick (DeleteItem item.id) ] [ text "Delete" ]
             ]
         ]
 
@@ -543,6 +722,11 @@ itemMeta item =
             else
                 ""
            )
+
+
+chordLabel : String
+chordLabel =
+    "⌘/Ctrl"
 
 
 processorView : Model -> Html Msg
@@ -570,24 +754,33 @@ processorView model =
                     else
                         toFloat processed / toFloat model.sessionTotal * 100
             in
-            div [ class "dg-processor" ]
+            div [ class "dg-processor", onProcessorChord ]
                 [ div [ class "dg-workflow-progress" ]
                     [ span [] [ text (String.fromInt processed ++ " / " ++ String.fromInt model.sessionTotal ++ " processed") ]
                     , span [ classList [ ( "is-overdue", model.seconds == 0 ) ] ] [ text (Ui.timer model.seconds) ]
                     ]
                 , div [ class "dg-progress-track" ] [ span [ style "width" (String.fromFloat progress ++ "%") ] [] ]
                 , itemCard model item
-                , section [ class "dg-processor-action" ]
-                    [ button [ class "mod-warning", Html.Attributes.disabled busy, onClick (DeleteItem item.id) ] [ text "Delete & Next" ] ]
                 , processingForm model
                 , section [ class "dg-processor-action" ]
-                    [ button
-                        [ class "mod-cta"
-                        , title decision.label
-                        , Html.Attributes.disabled (not decision.ready || busy)
-                        , onClick ProcessItem
+                    [ p [ class "dg-processor-outcome", attribute "aria-live" "polite" ]
+                        [ span [] [ text "Outcome" ], strong [] [ text decision.label ] ]
+                    , div [ class "dg-processor-buttons" ]
+                        [ button
+                            [ class "mod-warning"
+                            , title ("Delete & Next (" ++ chordLabel ++ "+Shift+Backspace)")
+                            , Html.Attributes.disabled busy
+                            , onClick (DeleteItem item.id)
+                            ]
+                            [ text "Delete & Next" ]
+                        , button
+                            [ class "mod-cta"
+                            , title ("Process (" ++ chordLabel ++ "+Enter)")
+                            , Html.Attributes.disabled (not decision.ready || busy)
+                            , onClick ProcessItem
+                            ]
+                            [ text "Process" ]
                         ]
-                        [ text decision.label ]
                     ]
                 , if model.seconds == 0 then
                     div [ class "dg-warning" ] [ text "Two minutes elapsed. Make the smallest clear decision and keep moving." ]
@@ -664,7 +857,7 @@ processingForm model =
             , processingField False
                 "Action"
                 (actionHint model.actionStatus)
-                [ input [ value model.nextAction, placeholder "What is the next physical Action?", onInput NextActionChanged ] [] ]
+                [ input [ id nextActionId, value model.nextAction, placeholder "What is the next physical Action?", onInput NextActionChanged ] [] ]
             , processingField False
                 "Action status"
                 "Choose Next, Waiting, or Scheduled."

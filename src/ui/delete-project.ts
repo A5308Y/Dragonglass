@@ -1,4 +1,5 @@
 import { Notice } from "obsidian";
+import { confirmDialog } from "./confirm";
 import { planProjectDeletion } from "../domain/project-board";
 import type { GtdServices } from "./services";
 
@@ -25,9 +26,12 @@ export async function confirmDeleteProject(services: GtdServices, projectId: str
   const supportDescription = project.supportPath
     ? `${supportFiles} support file${supportFiles === 1 ? "" : "s"} in “${project.supportPath}”`
     : "no configured support folder";
-  const confirmed = window.confirm(
-    `Delete “${project.title}”?\n\nThis moves the Project note, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, and ${supportDescription} to Obsidian's trash.`,
-  );
+  const confirmed = await confirmDialog(services.app, {
+    title: `Delete “${project.title}”?`,
+    message: `This moves the Project note, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, and ${supportDescription} to Obsidian's trash.`,
+    confirmText: "Delete Project",
+    warning: true,
+  });
   if (!confirmed) return false;
 
   try {
@@ -64,12 +68,14 @@ export async function confirmDeleteProjects(services: GtdServices, projectIds: r
   const skipped = plan.blocked.length
     ? `\n\nSkipping ${plan.blocked.length} Project${plan.blocked.length === 1 ? "" : "s"} that still ha${plan.blocked.length === 1 ? "s" : "ve"} sub-projects outside the selection.`
     : "";
-  const confirmed = window.confirm(
-    `Delete ${plan.order.length} Project${plan.order.length === 1 ? "" : "s"}?\n\n`
-    + `This moves the Project notes, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, `
-    + `and ${supportFiles} support file${supportFiles === 1 ? "" : "s"} to Obsidian's trash.${skipped}\n\n`
-    + listed.join("\n"),
-  );
+  const confirmed = await confirmDialog(services.app, {
+    title: `Delete ${plan.order.length} Project${plan.order.length === 1 ? "" : "s"}?`,
+    message: `This moves the Project notes, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, `
+      + `and ${supportFiles} support file${supportFiles === 1 ? "" : "s"} to Obsidian's trash.${skipped}\n\n`
+      + listed.join("\n"),
+    confirmText: `Delete ${plan.order.length} Project${plan.order.length === 1 ? "" : "s"}`,
+    warning: true,
+  });
   if (!confirmed) return 0;
 
   let deleted = 0;

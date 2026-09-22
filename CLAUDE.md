@@ -23,6 +23,16 @@ button [ class "dg-foo dg-flat-button", onClick ... ] [ ... ]
 - Buttons meant to look like buttons (`mod-cta`, toolbar buttons, the decision
   buttons in reviews) keep Obsidian's surface and don't get the class.
 
+## Destructive actions: Undo first, dialogs for the rest
+
+- A reversible single change (deleting one Inbox Item or Action, cancelling a
+  Project) happens immediately and offers Undo: `showUndoNotice` /
+  `trashWithUndo` in `src/ui/undo.ts`. Elm-only state (e.g. Brainstorm text) keeps
+  its own set-aside copy with an Undo bar.
+- Anything irreversible or touching many files (deleting Projects, settings that
+  forget data) asks first with `confirmDialog` from `src/ui/confirm.ts`.
+- Don't use `window.confirm`.
+
 ## Building and deploying
 
 - `npm run build` type-checks, compiles Elm, bundles `main.js` and deploys to

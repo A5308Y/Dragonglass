@@ -39,6 +39,8 @@ type Key
     | ArrowUp
     | Enter
     | Escape
+    | Backspace
+    | Delete
     | Character String
     | OtherKey
 
@@ -62,6 +64,12 @@ fromEventKey raw =
 
         "Escape" ->
             Escape
+
+        "Backspace" ->
+            Backspace
+
+        "Delete" ->
+            Delete
 
         _ ->
             if String.length raw == 1 then

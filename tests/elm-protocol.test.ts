@@ -8,6 +8,7 @@ import {
   parseInboxCommand,
   parseModalCommand,
   parseProjectReviewCommand,
+  parseSomedayReviewCommand,
   parseProjectsCommand,
 } from "../src/adapter/protocol";
 import { defaultSettings } from "../src/state/defaults";
@@ -127,11 +128,14 @@ describe("Elm adapter protocol", () => {
       .toBe("move-subproject");
     expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: ["active", "someday"], showImages: true }))?.command.type)
       .toBe("save-project-preferences");
-    expect(parseProjectsCommand(envelope({ type: "review-someday-project", projectId: "P3", activateAt: "2026-10-01" }))?.command.type)
+    expect(parseSomedayReviewCommand(envelope({ type: "review-someday-project", projectId: "P3", activateAt: "2026-10-01" }))?.command.type)
       .toBe("review-someday-project");
-    expect(parseProjectsCommand(envelope({ type: "review-someday-project", projectId: "P3", activateAt: "" }))?.command.type)
+    expect(parseSomedayReviewCommand(envelope({ type: "review-someday-project", projectId: "P3", activateAt: "" }))?.command.type)
       .toBe("review-someday-project");
-    expect(parseProjectsCommand(envelope({ type: "review-someday-project", projectId: "P3" }))).toBeNull();
+    expect(parseSomedayReviewCommand(envelope({ type: "review-someday-project", projectId: "P3" }))).toBeNull();
+    // The review moved to its own view, so the Projects board no longer accepts it.
+    expect(parseProjectsCommand(envelope({ type: "review-someday-project", projectId: "P3", activateAt: "" }))).toBeNull();
+    expect(parseProjectsCommand(envelope({ type: "open-someday-review" }))?.command.type).toBe("open-someday-review");
     expect(parseProjectsCommand(envelope({ type: "move-subproject", projectId: "P2", status: "next" }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "trash-projects", projectIds: ["P1", 2] }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: [], showImages: true }))).toBeNull();

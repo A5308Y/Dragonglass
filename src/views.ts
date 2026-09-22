@@ -5,6 +5,7 @@ import { ElmFeedsHost } from "./adapter/elm-feeds";
 import { ElmInboxHost } from "./adapter/elm-inbox";
 import { ElmProjectsHost } from "./adapter/elm-projects";
 import { ElmProjectReviewHost } from "./adapter/elm-project-review";
+import { ElmSomedayReviewHost } from "./adapter/elm-someday-review";
 import type { FeedService } from "./feeds/feed-service";
 import type { GtdServices } from "./ui/services";
 
@@ -14,6 +15,7 @@ export const FEEDS_VIEW_TYPE = "dragonglass-feeds";
 export const INBOX_VIEW_TYPE = "dragonglass-inbox";
 export const PROJECTS_VIEW_TYPE = "dragonglass-projects";
 export const REVIEW_VIEW_TYPE = "dragonglass-project-review";
+export const SOMEDAY_VIEW_TYPE = "dragonglass-someday-review";
 
 export class GtdBrainstormView extends ItemView {
   private host: ElmBrainstormHost | null = null;
@@ -52,6 +54,26 @@ export class GtdProjectReviewView extends ItemView {
     if (this.host) return this.host.refresh();
     this.contentEl.empty();
     this.host = new ElmProjectReviewHost(this.contentEl, this.services);
+  }
+}
+
+export class GtdSomedayReviewView extends ItemView {
+  private host: ElmSomedayReviewHost | null = null;
+
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) { super(leaf); }
+  getViewType(): string { return SOMEDAY_VIEW_TYPE; }
+  getDisplayText(): string { return "GTD Someday/Maybe Review"; }
+  getIcon(): string { return "cloud"; }
+  async onOpen(): Promise<void> { this.refresh(); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
+  refresh(): void {
+    if (this.host) return this.host.refresh();
+    this.contentEl.empty();
+    this.host = new ElmSomedayReviewHost(this.contentEl, this.services);
   }
 }
 
@@ -179,11 +201,6 @@ export class GtdProjectsView extends ItemView {
     else this.refresh();
   }
 
-  showSomedayReview(): void {
-    this.projectId = null;
-    if (!this.host) this.refresh();
-    this.host?.showSomedayReview();
-  }
 
   refresh(): void {
     if (this.host) {

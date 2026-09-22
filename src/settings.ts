@@ -1,4 +1,5 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { confirmDialog } from "./ui/confirm";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
 import { addImagePathSetting } from "./ui/image-input";
@@ -152,8 +153,12 @@ export class GtdSettingTab extends PluginSettingTab {
         }
       }))
       .addButton((button) => button.setButtonText("Generate").onClick(async () => {
-        if (this.plugin.settings.googleCalendar.sharedSecret
-          && !window.confirm("Replace the current shared secret? You will also need to update the SHARED_SECRET Script Property.")) return;
+        if (this.plugin.settings.googleCalendar.sharedSecret && !await confirmDialog(this.app, {
+          title: "Replace the shared secret?",
+          message: "The current secret stops working. You will also need to update the SHARED_SECRET Script Property.",
+          confirmText: "Replace secret",
+          warning: true,
+        })) return;
         const secret = randomSecret();
         this.plugin.settings.googleCalendar.sharedSecret = secret;
         await this.plugin.saveSettings(false);
@@ -322,7 +327,12 @@ export class GtdSettingTab extends PluginSettingTab {
             this.display();
           }))
         .addButton((button) => button.setButtonText("Unsubscribe").setWarning().onClick(async () => {
-          if (!window.confirm(`Unsubscribe from “${source.title}”? Its unread Items and swept history are forgotten.`)) return;
+          if (!await confirmDialog(this.app, {
+            title: `Unsubscribe from “${source.title}”?`,
+            message: "Its unread Items and swept history are forgotten.",
+            confirmText: "Unsubscribe",
+            warning: true,
+          })) return;
           await feeds.removeFeed(source.id);
           new Notice(`Unsubscribed from “${source.title}”.`);
           this.display();
@@ -551,12 +561,21 @@ export class GtdSettingTab extends PluginSettingTab {
         .setName("Existing mail")
         .setDesc("Whatever is in these mailboxes now is skipped. Import it if you do want the backlog \u2014 subject to the per-import limit above.")
         .addButton((button) => button.setButtonText("Import backlog").onClick(async () => {
-          if (!window.confirm(`Import the mail already in ${account.label}? Every message there becomes an Inbox Item.`)) return;
+          if (!await confirmDialog(this.app, {
+            title: `Import the mail already in ${account.label}?`,
+            message: "Every message there becomes an Inbox Item.",
+            confirmText: "Import backlog",
+          })) return;
           for (const mailbox of account.mailboxes) await mail.importBacklog(account.id, mailbox);
           new Notice("The next import will take the existing mail.");
         }))
         .addButton((button) => button.setButtonText("Remove account").setWarning().onClick(async () => {
-          if (!window.confirm(`Remove ${account.label}? Its password and sync history are forgotten; no mail is touched.`)) return;
+          if (!await confirmDialog(this.app, {
+            title: `Remove ${account.label}?`,
+            message: "Its password and sync history are forgotten; no mail is touched.",
+            confirmText: "Remove account",
+            warning: true,
+          })) return;
           this.plugin.settings.mail.accounts = this.plugin.settings.mail.accounts.filter((entry) => entry.id !== account.id);
           delete this.plugin.settings.mail.passwords[account.id];
           await mail.forget(account.id);

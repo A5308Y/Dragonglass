@@ -35,7 +35,7 @@ type Command
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
     | SaveProjectPreferences (List ProjectStatus) Bool
-    | ReviewSomedayProject ProjectId String
+    | OpenSomedayReview
     | OpenFile String
     | ShowMenu Float Float (List MenuEntry)
 
@@ -125,8 +125,8 @@ toBase command =
         SaveProjectPreferences columns showImages ->
             Base.SaveProjectPreferences columns showImages
 
-        ReviewSomedayProject projectId activateAt ->
-            Base.ReviewSomedayProject projectId activateAt
+        OpenSomedayReview ->
+            Base.OpenSomedayReview
 
         OpenFile path ->
             Base.OpenFile path

@@ -177,6 +177,12 @@ onKey key suggestions toLabel picker =
         Character _ ->
             picker
 
+        Backspace ->
+            picker
+
+        Delete ->
+            picker
+
         OtherKey ->
             picker
 

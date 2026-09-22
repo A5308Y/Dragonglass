@@ -25,7 +25,7 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (FeedId, FeedItemKey)
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, button, div, h2, h3, header, p, section, small, span, text)
-import Html.Attributes exposing (attribute, class, classList, disabled, id, tabindex)
+import Html.Attributes exposing (attribute, class, classList, disabled, id, tabindex, title)
 import Html.Events exposing (onClick, onFocus)
 import Html.Keyed as Keyed
 import Json.Decode as Decode exposing (Decoder)
@@ -343,7 +343,11 @@ view model =
         [ header [ class "dg-view-header" ]
             [ div []
                 [ h2 [] [ text "RSS Feeds" ]
-                , span [ class "dg-count" ] [ text (String.fromInt (Feed.totalUnread model.feeds)) ]
+                , span
+                    [ class "dg-count"
+                    , title (String.fromInt openCount ++ " shown of " ++ String.fromInt (Feed.totalUnread model.feeds) ++ " unread")
+                    ]
+                    [ text (String.fromInt openCount) ]
                 ]
             , div [ class "dg-header-actions" ]
                 [ if model.feeds.undoCount > 0 then
@@ -372,7 +376,7 @@ view model =
                     ]
                 ]
             ]
-        , Ui.maybeView model.error (\message -> div [ class "dg-warning" ] [ text message ])
+        , Ui.maybeView model.error (\message -> div [ class "dg-panel dg-error" ] [ text message ])
         , if not model.feeds.enabled then
             emptyState "Feeds are switched off." "Turn them on in Dragonglass settings, then subscribe to a feed."
 
@@ -416,6 +420,7 @@ toolbar model openCount sections =
             , onClick DiscardAll
             ]
             [ text ("Discard all (" ++ String.fromInt openCount ++ ")") ]
+        , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · Enter expand · K keep · D discard · O open · C comments · S discard feed" ]
         ]
 
 
@@ -434,6 +439,13 @@ sectionView model indexes entry =
                 [ button
                     [ class "dg-feed-collapse dg-flat-button"
                     , attribute "aria-expanded" (Ui.boolAttribute (not collapsed))
+                    , attribute "aria-label"
+                        (if collapsed then
+                            "Expand " ++ entry.feed.title
+
+                         else
+                            "Collapse " ++ entry.feed.title
+                        )
                     , onClick (ToggleCollapsed entry.feed.id)
                     ]
                     [ text
@@ -450,9 +462,10 @@ sectionView model indexes entry =
                     ]
                 ]
             , div [ class "dg-feed-section-controls" ]
-                [ Ui.maybeView (nonEmpty entry.feed.error) (\_ -> span [ class "dg-feed-error" ] [ text "Fetch failed" ])
+                [ Ui.maybeView (nonEmpty entry.feed.error) (\error -> span [ class "dg-feed-error", title error ] [ text "Fetch failed" ])
                 , button
                     [ class "mod-warning dg-feed-discard"
+                    , title "Discard this feed's Items (S on a row)"
                     , disabled (count == 0 || busy model)
                     , onClick (DiscardSection entry.feed.id)
                     ]
@@ -503,17 +516,19 @@ rowView model indexes item =
                 text ""
             ]
         , div [ class "dg-feed-row-actions" ]
-            [ button [ disabled (String.isEmpty item.link), onClick (Open item.link) ] [ text "Open" ]
+            [ button [ title "Open (O)", disabled (String.isEmpty item.link), onClick (Open item.link) ] [ text "Open" ]
             , Ui.maybeView (nonEmpty item.commentsUrl)
-                (\url -> button [ onClick (Open url) ] [ text "Comments" ])
+                (\url -> button [ title "Comments (C)", onClick (Open url) ] [ text "Comments" ])
             , button
                 [ class "mod-cta"
+                , title "Keep (K)"
                 , disabled (busy model)
                 , onClick (KeepOne item.key)
                 ]
                 [ text "Keep" ]
             , button
                 [ class "mod-warning"
+                , title "Discard (D)"
                 , disabled (busy model)
                 , onClick (DiscardOne item.key)
                 ]

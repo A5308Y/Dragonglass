@@ -16,7 +16,7 @@ import type { GtdServices } from "./ui/services";
 import { localDate } from "./utils/date";
 import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
-import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE } from "./views";
+import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdSomedayReviewView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
 
 export default class DragonglassGtdPlugin extends Plugin {
   declare settings: GtdSettings;
@@ -61,6 +61,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       editAction: (id, allowProjectConversion) => this.editAction(id, allowProjectConversion),
       editProject: (id) => this.editProject(id),
       showProjectDetail: (id) => void this.openProjectDetail(id),
+      openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
     };
 
     this.registerView(BOARD_VIEW_TYPE, (leaf) => new ActionBoardView(leaf, this.services));
@@ -69,6 +70,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.registerView(INBOX_VIEW_TYPE, (leaf) => new GtdInboxView(leaf, this.services));
     this.registerView(PROJECTS_VIEW_TYPE, (leaf) => new GtdProjectsView(leaf, this.services));
     this.registerView(REVIEW_VIEW_TYPE, (leaf) => new GtdProjectReviewView(leaf, this.services));
+    this.registerView(SOMEDAY_VIEW_TYPE, (leaf) => new GtdSomedayReviewView(leaf, this.services));
     this.addRibbonIcon("list-checks", "Open GTD Action Board", () => void this.activateView(BOARD_VIEW_TYPE));
     this.addRibbonIcon("inbox", "Open GTD Inbox", () => void this.activateView(INBOX_VIEW_TYPE));
     this.addRibbonIcon("folder-kanban", "Open GTD Projects", () => void this.activateView(PROJECTS_VIEW_TYPE));
@@ -88,6 +90,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(INBOX_VIEW_TYPE)) leaf.detach();
     for (const leaf of this.app.workspace.getLeavesOfType(PROJECTS_VIEW_TYPE)) leaf.detach();
     for (const leaf of this.app.workspace.getLeavesOfType(REVIEW_VIEW_TYPE)) leaf.detach();
+    for (const leaf of this.app.workspace.getLeavesOfType(SOMEDAY_VIEW_TYPE)) leaf.detach();
   }
 
   async loadSettings(): Promise<void> {
@@ -162,6 +165,9 @@ export default class DragonglassGtdPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(REVIEW_VIEW_TYPE)) {
       if (leaf.view instanceof GtdProjectReviewView) leaf.view.refresh();
     }
+    for (const leaf of this.app.workspace.getLeavesOfType(SOMEDAY_VIEW_TYPE)) {
+      if (leaf.view instanceof GtdSomedayReviewView) leaf.view.refresh();
+    }
     for (const leaf of this.app.workspace.getLeavesOfType(BRAINSTORM_VIEW_TYPE)) {
       if (leaf.view instanceof GtdBrainstormView) leaf.view.refresh();
     }
@@ -227,7 +233,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       callback: () => this.openProjectPicker(),
     });
     this.addCommand({ id: "start-project-review", name: "Start Project Review", callback: () => void this.activateView(REVIEW_VIEW_TYPE) });
-    this.addCommand({ id: "start-someday-review", name: "Start Someday/Maybe Review", callback: () => void this.openSomedayReview() });
+    this.addCommand({ id: "start-someday-review", name: "Start Someday/Maybe Review", callback: () => void this.activateView(SOMEDAY_VIEW_TYPE) });
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
     this.addCommand({ id: "open-feeds", name: "Open RSS Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
     this.addCommand({ id: "fetch-feeds", name: "Fetch RSS Feeds", callback: () => void this.fetchFeedsWithNotice() });
@@ -439,11 +445,6 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (!this.settings.feeds.enabled) return void new Notice("Feeds are switched off in Dragonglass settings.");
     const result = await this.feeds.fetchAll();
     new Notice(result.added ? `Fetched ${result.added} new Feed Item${result.added === 1 ? "" : "s"}.` : "No new Feed Items.");
-  }
-
-  private async openSomedayReview(): Promise<void> {
-    const leaf = await this.activateView(PROJECTS_VIEW_TYPE);
-    if (leaf.view instanceof GtdProjectsView) leaf.view.showSomedayReview();
   }
 
   private async openProjectDetail(id: string): Promise<void> {

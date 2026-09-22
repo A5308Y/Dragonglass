@@ -303,6 +303,7 @@ type ElmNonMenuCommand =
   | { type: "update-support-note"; projectId: string; path: string; body: string }
   | { type: "save-project-preferences"; columns: Project["status"][]; showImages: boolean }
   | { type: "review-someday-project"; projectId: string; activateAt: string }
+  | { type: "open-someday-review" }
   | { type: "load-review-project"; projectId: string }
   | { type: "create-review-action"; title: string; projectId: string; context: string; work: boolean }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
@@ -380,7 +381,7 @@ export const SURFACE_COMMANDS = {
     "edit-project", "set-project-status", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
     "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
-    "update-support-note", "save-project-preferences", "open-file", "review-someday-project", "show-menu",
+    "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "show-menu",
   ],
   inbox: ["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"],
   feeds: ["refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard", "open-link", "open-inbox"],
@@ -392,6 +393,7 @@ export const SURFACE_COMMANDS = {
     "load-brainstorm-outcome", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
     "focus-brainstorm-ideas", "show-project",
   ],
+  somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project"],
   modals: [
     "save-new-action", "save-action", "schedule-action", "convert-action-to-subproject", "save-new-project", "save-project",
     "trash-project", "add-project-tags", "set-projects-parent", "set-project-blockers", "parse-import-list",
@@ -409,6 +411,7 @@ export type ElmFeedsCommand = SurfaceCommand<"feeds">;
 export type ElmProjectReviewCommand = SurfaceCommand<"projectReview">;
 export type ElmBrainstormCommand = SurfaceCommand<"brainstorm">;
 export type ElmModalCommand = SurfaceCommand<"modals">;
+export type ElmSomedayReviewCommand = SurfaceCommand<"somedayReview">;
 
 export type ElmActionBoardMenuEntry = ElmMenuEntry<Exclude<ElmActionBoardCommand, { type: "show-menu" }>>;
 export type ElmProjectsMenuEntry = ElmMenuEntry<Exclude<ElmProjectsCommand, { type: "show-menu" }>>;
@@ -428,6 +431,9 @@ export const parseFeedsCommand = parserFor<ElmFeedsCommand>(isFeedsCommand);
 export const parseProjectReviewCommand = parserFor<ElmProjectReviewCommand>(isProjectReviewCommand);
 export const parseBrainstormCommand = parserFor<ElmBrainstormCommand>(isBrainstormCommand);
 export const parseModalCommand = parserFor<ElmModalCommand>(isModalCommand);
+export const parseSomedayReviewCommand = parserFor<ElmSomedayReviewCommand>(
+  (value): value is ElmSomedayReviewCommand => isSurfaceCommand(value, SOMEDAY_REVIEW_COMMANDS),
+);
 
 function parserFor<C>(validator: CommandValidator<C>): (value: unknown) => ElmCommandEnvelope<C> | null {
   return (value) => parseCommandEnvelope(value, validator);
@@ -486,6 +492,7 @@ const FEEDS_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.feeds);
 const PROJECT_REVIEW_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.projectReview);
 const BRAINSTORM_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.brainstorm);
 const MODAL_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.modals);
+const SOMEDAY_REVIEW_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.somedayReview);
 
 function isSurfaceCommand(value: unknown, allowed: ReadonlySet<string>, nested?: CommandValidator<unknown>): boolean {
   if (!isRecord(value) || typeof value.type !== "string" || !allowed.has(value.type)) return false;
@@ -520,6 +527,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return value.projectId === undefined || typeof value.projectId === "string";
     case "quick-capture":
     case "open-inbox":
+    case "open-someday-review":
       return true;
     case "show-project":
       return typeof value.projectId === "string";
@@ -793,7 +801,6 @@ export type ElmProjectsEvent =
   | { type: "project-meta"; projectMeta: ElmProjectMetaDto[] }
   | { type: "project-detail"; detail: ElmProjectDetailDto }
   | { type: "show-project"; projectId: string | null }
-  | { type: "show-someday-review" }
   | ElmCommandResultEvent;
 export type ElmInboxEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
@@ -811,3 +818,4 @@ export type ElmBrainstormEvent =
   | ElmCommandResultEvent;
 export type ElmFeedsEvent = { type: "feeds"; feeds: ElmFeedsDto } | ElmCommandResultEvent;
 export type ElmModalEvent = ElmCommandResultEvent;
+export type ElmSomedayReviewEvent = { type: "snapshot"; snapshot: ElmSnapshotDto } | ElmCommandResultEvent;

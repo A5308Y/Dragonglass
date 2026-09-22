@@ -212,6 +212,43 @@ body.is-phone .workspace-leaf-content:is(
   box-shadow: inset 0 0 0 1px var(--interactive-accent);
 }
 
+.dg-panel-label {
+  min-width: 72px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+}
+.dg-filter-panel > .dg-panel + .dg-panel { border-top: 0; }
+
+/* The Actions toolbar wraps instead of scrolling, so the view menu is not clipped. */
+.dg-board-view > .dg-toolbar { flex-wrap: wrap; overflow: visible; }
+
+/* The saved-view picker carries its options in a small menu. */
+.dg-view-picker { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
+.dg-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+}
+.dg-popover > button {
+  justify-content: flex-start;
+  padding: 6px 10px;
+  color: var(--text-normal);
+  text-align: left;
+  white-space: nowrap;
+}
+.dg-popover > button:hover { background: var(--background-modifier-hover) !important; }
+.dg-popover > button.dg-popover-danger { color: var(--text-error); }
+
 .dg-column-picker label {
   display: flex;
   align-items: center;
@@ -1259,6 +1296,20 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-processor-action {
   margin-top: 12px;
 }
+.dg-processor-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0 0 8px;
+  font-size: var(--font-ui-small);
+}
+.dg-processor-outcome > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-processor-buttons {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 8px;
+}
 .dg-processor-action button {
   width: 100%;
   min-width: 0;
@@ -1989,3 +2040,62 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   font-size: var(--font-ui-smaller);
 }
 .dg-someday-drop { color: var(--text-error); }
+
+/* Undo, offered in place of asking first. */
+.dg-undo-notice { display: flex; align-items: center; gap: 12px; }
+.dg-undo-notice button { flex: 0 0 auto; }
+.dg-undo-bar { display: flex; align-items: center; gap: 10px; margin: 8px var(--dg-bar-inset, 12px) 0; }
+.dg-undo-bar > span { flex: 1; }
+
+/* Keyboard shortcut hints: quiet, and dropped where space is short. */
+.dg-shortcut-hint {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+.dg-toolbar .dg-shortcut-hint { margin-left: auto; }
+.dg-shortcut-bar { padding: 4px var(--dg-bar-inset, 12px) 0; }
+@media (hover: none), (max-width: 600px) {
+  .dg-shortcut-hint, .dg-shortcut-bar { display: none; }
+}
+
+/* Project detail tabs */
+.dg-detail-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 var(--dg-bar-inset, 16px);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.dg-detail-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 9px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+}
+.dg-detail-tab:hover,
+.dg-detail-tab.is-active { color: var(--text-normal); }
+.dg-detail-tab.is-active::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  left: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--interactive-accent);
+}
+.dg-detail-tab-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}

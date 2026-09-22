@@ -67,6 +67,16 @@ type alias ProjectDetail =
     }
 
 
+{-| The parts of Project detail, one shown at a time so a large Project does not
+become one long scroll.
+-}
+type DetailTab
+    = OverviewTab
+    | SubprojectsTab
+    | DiaryTab
+    | FilesTab
+
+
 type alias SubprojectDropTarget =
     { status : ProjectStatus
     , beforeId : Maybe ProjectId
@@ -97,9 +107,8 @@ type alias Model =
     , selectedIds : Set ProjectId
     , showCompleted : Bool
     , showSecondary : Bool
+    , detailTab : DetailTab
     , expandedColumns : List ProjectStatus
-    , somedayReview : Bool
-    , wakeDrafts : Dict ProjectId String
     , tagFilters : Set String
     , outcomeEditing : Bool
     , outcomeDraft : String
@@ -134,11 +143,8 @@ type Msg
     | BackToBoard
     | ToggleCompleted
     | ToggleSecondary
+    | SelectTab DetailTab
     | ToggleColumnExpanded ProjectStatus
-    | OpenSomedayReview
-    | CloseSomedayReview
-    | WakeDateChanged ProjectId String
-    | KeepSomeday ProjectId
     | ToggleTag String
     | ClearTags
     | BeginOutcome
@@ -199,7 +205,7 @@ init flags =
                     , detail = Nothing
                     , search = ""
                     , issuesOnly = False
-                    , showSubprojects = True
+                    , showSubprojects = False
                     , showImages = decoded.snapshot.settings.showProjectBoardImages
                     , visibleColumns =
                         if List.isEmpty columns then
@@ -212,9 +218,8 @@ init flags =
                     , selectedIds = Set.empty
                     , showCompleted = False
                     , showSecondary = False
+                    , detailTab = OverviewTab
                     , expandedColumns = []
-                    , somedayReview = False
-                    , wakeDrafts = Dict.empty
                     , tagFilters = Set.empty
                     , outcomeEditing = False
                     , outcomeDraft = ""
@@ -310,19 +315,8 @@ update msg model =
         ToggleSecondary ->
             ( { model | showSecondary = not model.showSecondary }, Cmd.none )
 
-        OpenSomedayReview ->
-            ( { model | somedayReview = True, wakeDrafts = Dict.empty }, Cmd.none )
-
-        CloseSomedayReview ->
-            ( { model | somedayReview = False, wakeDrafts = Dict.empty }, Cmd.none )
-
-        WakeDateChanged projectId date ->
-            ( { model | wakeDrafts = Dict.insert projectId date model.wakeDrafts }, Cmd.none )
-
-        KeepSomeday projectId ->
-            send IgnoreReply
-                (Command.ReviewSomedayProject projectId (wakeDate model projectId))
-                { model | wakeDrafts = Dict.remove projectId model.wakeDrafts }
+        SelectTab tab ->
+            ( { model | detailTab = tab }, Cmd.none )
 
         ToggleColumnExpanded status ->
             ( { model
@@ -464,8 +458,8 @@ update msg model =
             case model.draggedProject of
                 Just projectId ->
                     send IgnoreReply
-                        (if status == ProjectStatus.Backlog && isTopLevel model projectId then
-                            -- Joining the Backlog queue at the end gives the Project a rank.
+                        (if isTopLevel model projectId then
+                            -- Joining a column at the end gives the Project a rank there.
                             Command.MoveSubproject projectId status Nothing
 
                          else
@@ -512,6 +506,7 @@ selectProject projectId model =
                 , detail = Nothing
                 , showCompleted = False
                 , showSecondary = False
+                , detailTab = OverviewTab
                 , tagFilters = Set.empty
                 , outcomeEditing = False
                 , editingSupport = Nothing
@@ -554,7 +549,6 @@ type HostEvent
     | ProjectMetaEvent (List ProjectMeta)
     | ProjectDetailEvent ProjectDetail
     | ShowProjectEvent (Maybe ProjectId)
-    | ShowSomedayReviewEvent
     | Replied Host.Outcome
 
 
@@ -600,9 +594,6 @@ receiveHost value model =
 
                 Nothing ->
                     ( { model | selectedProjectId = Nothing, detail = Nothing }, Cmd.none )
-
-        Ok ShowSomedayReviewEvent ->
-            ( { model | selectedProjectId = Nothing, detail = Nothing, somedayReview = True, wakeDrafts = Dict.empty }, Cmd.none )
 
         Ok (Replied outcome) ->
             let
@@ -693,20 +684,23 @@ viewBody model =
             viewDetail model project
 
         Nothing ->
-            if model.somedayReview then
-                viewSomedayReview model
-
-            else
-                viewBoard model
+            viewBoard model
 
 
 viewBoard : Model -> Html Msg
 viewBoard model =
     div [ class "dg-view dg-projects-view" ]
         [ header [ class "dg-view-header" ]
-            [ div [] [ h2 [] [ text "Projects" ], span [ class "dg-count" ] [ text (String.fromInt (List.length model.snapshot.projects)) ] ]
+            [ div []
+                [ h2 [] [ text "Projects" ]
+                , span
+                    [ class "dg-count"
+                    , title (String.fromInt (List.length (visibleProjects model)) ++ " shown of " ++ Ui.plural (List.length model.snapshot.projects) "Project")
+                    ]
+                    [ text (String.fromInt (List.length (visibleProjects model))) ]
+                ]
             , div [ class "dg-header-actions" ]
-                [ button [ title "Decide on every Someday/Maybe Project", onClick OpenSomedayReview ]
+                [ button [ title "Decide on every Someday/Maybe Project", onClick (Send IgnoreReply Command.OpenSomedayReview) ]
                     [ text ("Review Someday/Maybe (" ++ String.fromInt (List.length (somedayQueue model)) ++ ")") ]
                 , button [ onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
                 , button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewProjectModal Nothing)) ] [ text "New Project" ]
@@ -836,12 +830,7 @@ viewProjectColumn model status =
         projects =
             visibleProjects model
                 |> List.filter (\project -> project.status == status)
-                |> (if status == ProjectStatus.Backlog then
-                        rankBacklog
-
-                    else
-                        identity
-                   )
+                |> ranked
 
         issues =
             projects |> List.filter (\project -> (projectMeta project.id model).actionIssue /= Nothing) |> List.length
@@ -917,7 +906,7 @@ viewProjectCard model project =
                 NoOp
             )
          ]
-            ++ backlogDropAttributes model project
+            ++ rankDropAttributes model project
         )
         [ if model.showImages && not (String.isEmpty meta.imageUrl) then
             div [ class "dg-project-card-image" ] [ img [ src meta.imageUrl, alt "" ] [] ]
@@ -945,7 +934,7 @@ viewProjectCard model project =
             , button
                 [ class "dg-icon-button dg-flat-button"
                 , attribute "aria-label" ("Actions for " ++ project.title)
-                , Ui.onPointer (\x y -> Send IgnoreReply (projectMenu x y project))
+                , Ui.onPointer (\x y -> Send IgnoreReply (projectMenu x y model project))
                 ]
                 [ text "•••" ]
             ]
@@ -971,16 +960,16 @@ viewProjectCard model project =
         ]
 
 
-{-| A top-level Backlog card accepts another top-level Project dropped before it,
-which ranks the queue. Sub-projects are ranked on their parent's board instead.
+{-| A top-level card accepts another top-level Project dropped before it, which
+ranks its column. Sub-projects are ranked on their parent's board instead.
 -}
-backlogDropAttributes : Model -> Project -> List (Html.Attribute Msg)
-backlogDropAttributes model project =
+rankDropAttributes : Model -> Project -> List (Html.Attribute Msg)
+rankDropAttributes model project =
     let
         draggingTopLevel =
             model.draggedProject |> Maybe.map (isTopLevel model) |> Maybe.withDefault False
     in
-    if project.status == ProjectStatus.Backlog && project.parentProjectId == Nothing && draggingTopLevel then
+    if project.parentProjectId == Nothing && draggingTopLevel then
         [ Html.Events.custom "dragover"
             (Decode.succeed { message = DragOverSubproject project.status (Just project.id), stopPropagation = True, preventDefault = True })
         , Html.Events.custom "drop"
@@ -1021,15 +1010,7 @@ viewDetail model project =
         [ header [ class "dg-view-header" ]
             [ div [ class "dg-detail-heading" ]
                 [ Ui.maybeView parent (\item -> button [ class "dg-parent-back", onClick (SelectProject item.id) ] [ text ("← " ++ item.title) ])
-                , button [ onClick BackToBoard ]
-                    [ text
-                        (if model.somedayReview then
-                            "← Someday/Maybe Review"
-
-                         else
-                            "← Projects"
-                        )
-                    ]
+                , button [ onClick BackToBoard ] [ text "← Projects" ]
                 , h2 [] [ text project.title ]
                 , span [ class ("dg-status dg-status-" ++ ProjectStatus.key project.status) ] [ text (ProjectStatus.label project.status) ]
                 ]
@@ -1040,127 +1021,62 @@ viewDetail model project =
             ]
         , Ui.maybeView meta.actionIssue
             (\issue -> div [ class "dg-warning" ] [ text ("Action issue: " ++ issue) ])
-        , main_ [ class "dg-project-detail-content" ]
-            [ if String.isEmpty imageUrl then
-                text ""
+        , viewDetailTabs model project openActions
+        , main_ [ class "dg-project-detail-content", attribute "role" "tabpanel" ]
+            (case model.detailTab of
+                OverviewTab ->
+                    [ if String.isEmpty imageUrl then
+                        text ""
 
-              else
-                div [ class "dg-project-main-image" ] [ img [ src imageUrl, alt ("Main image for " ++ project.title) ] [] ]
-            , viewOutcome model project
-            , viewActionsSection model project openActions completedActions
-            , viewSubprojects model project
-            , viewDiary model
-            , viewSupport model
-            ]
-        ]
-
-
-
--- SOMEDAY/MAYBE REVIEW
-
-
-viewSomedayReview : Model -> Html Msg
-viewSomedayReview model =
-    let
-        pending =
-            somedayQueue model
-
-        kept =
-            model.snapshot.projects
-                |> List.filter (\project -> project.status == ProjectStatus.Someday && project.reviewed == Just model.snapshot.today)
-                |> List.length
-    in
-    div [ class "dg-view dg-projects-view dg-someday-review" ]
-        [ header [ class "dg-view-header" ]
-            [ div [ class "dg-detail-heading" ]
-                [ button [ onClick CloseSomedayReview ] [ text "← Projects" ]
-                , h2 [] [ text "Someday/Maybe Review" ]
-                , span [ class "dg-count" ] [ text (String.fromInt (List.length pending)) ]
-                ]
-            ]
-        , if List.isEmpty pending then
-            div [ class "dg-workflow-complete" ]
-                [ span [] [ text "✅" ]
-                , h3 [] [ text "Someday/Maybe reviewed" ]
-                , p []
-                    [ text
-                        (if kept > 0 then
-                            Ui.plural kept "idea" ++ " kept for later today."
-
-                         else
-                            "No Someday/Maybe Projects are waiting for a decision."
-                        )
+                      else
+                        div [ class "dg-project-main-image" ] [ img [ src imageUrl, alt ("Main image for " ++ project.title) ] [] ]
+                    , viewOutcome model project
+                    , viewActionsSection model project openActions completedActions
                     ]
-                ]
 
-          else
-            div [ class "dg-someday-review-body" ]
-                [ p [ class "dg-someday-review-intro" ]
-                    [ text "Decide on each idea: Activate it now, commit to it in the Backlog, keep it for later (optionally waking it up on a date), or drop it." ]
-                , div [ class "dg-someday-review-list" ] (List.map (viewSomedayItem model) pending)
-                ]
+                SubprojectsTab ->
+                    [ viewSubprojects model project ]
+
+                DiaryTab ->
+                    [ viewDiary model ]
+
+                FilesTab ->
+                    [ viewSupport model ]
+            )
         ]
 
 
-viewSomedayItem : Model -> Project -> Html Msg
-viewSomedayItem model project =
+viewDetailTabs : Model -> Project -> List Action -> Html Msg
+viewDetailTabs model project openActions =
     let
-        meta =
-            projectMeta project.id model
+        childCount =
+            List.filter (\child -> child.parentProjectId == Just project.id) model.snapshot.projects |> List.length
 
-        openCount =
-            projectActions model project |> List.filter (\action -> ActionStatus.isOpen action.status) |> List.length
+        diaryCount =
+            Maybe.map (.diary >> List.length) model.detail
 
-        decide status =
-            if status == ProjectStatus.Backlog then
-                -- Committing places it at the end of its Backlog queue.
-                Command.MoveSubproject project.id status Nothing
+        fileCount =
+            Maybe.map (.supportFiles >> List.length) model.detail
 
-            else
-                Command.SetProjectStatus project.id status
-    in
-    article [ class "dg-someday-item", attribute "data-project-card" project.id ]
-        [ div [ class "dg-someday-item-main" ]
-            [ button [ class "dg-someday-item-title dg-flat-button", title meta.breadcrumb, onClick (SelectProject project.id) ] [ text project.title ]
-            , if meta.breadcrumb /= project.title then
-                div [ class "dg-project-lineage", title meta.breadcrumb ] [ text meta.breadcrumb ]
-
-              else
-                text ""
-            , div [ class "dg-someday-item-meta" ]
-                (Ui.maybeList project.area (\area -> span [] [ text area ])
-                    ++ List.map viewTag project.tags
-                    ++ [ span [] [ text (Maybe.map ((++) "Reviewed ") project.reviewed |> Maybe.withDefault "Never reviewed") ]
-                       , span [] [ text (Ui.plural openCount "open Action") ]
-                       ]
-                )
-            ]
-        , div [ class "dg-someday-item-decisions" ]
-            [ button [ title "Move to Active", onClick (Send IgnoreReply (decide ProjectStatus.Active)) ] [ text "Activate" ]
-            , button [ title "Commit to it, but not now", onClick (Send IgnoreReply (decide ProjectStatus.Backlog)) ] [ text "Backlog" ]
-            , label [ class "dg-someday-wake", title "Activate automatically on this date" ]
-                [ span [] [ text "Wake up" ]
-                , input [ type_ "date", value (wakeDate model project.id), onInput (WakeDateChanged project.id) ] []
+        tab target label count =
+            button
+                [ classList [ ( "dg-detail-tab dg-flat-button", True ), ( "is-active", model.detailTab == target ) ]
+                , attribute "role" "tab"
+                , attribute "aria-selected" (Ui.boolAttribute (model.detailTab == target))
+                , onClick (SelectTab target)
                 ]
-            , button [ class "mod-cta", title "Keep it in Someday/Maybe", onClick (KeepSomeday project.id) ] [ text "Keep" ]
-            , button [ class "dg-someday-drop", title "Cancel this Project", onClick (Send IgnoreReply (decide ProjectStatus.Cancelled)) ] [ text "Drop" ]
-            ]
+                (text label
+                    :: Ui.maybeList count (\n -> span [ class "dg-detail-tab-count" ] [ text (String.fromInt n) ])
+                )
+    in
+    div [ class "dg-detail-tabs", attribute "role" "tablist" ]
+        [ tab OverviewTab "Overview" (Just (List.length openActions))
+        , tab SubprojectsTab "Sub-projects" (Just childCount)
+        , tab DiaryTab "Diary" diaryCount
+        , tab FilesTab "Files" fileCount
         ]
 
 
-{-| The activation date a Keep would save: the one typed in this review, or the
-one the Project already has.
--}
-wakeDate : Model -> ProjectId -> String
-wakeDate model projectId =
-    case Dict.get projectId model.wakeDrafts of
-        Just draft ->
-            draft
-
-        Nothing ->
-            Data.findProject projectId model.snapshot.projects
-                |> Maybe.andThen .activateAt
-                |> Maybe.withDefault ""
 
 
 viewOutcome : Model -> Project -> Html Msg
@@ -1394,7 +1310,7 @@ viewSubprojects model project =
             (List.map (viewSubprojectColumn model primary) [ ProjectStatus.Active, ProjectStatus.Backlog ])
         , div [ classList [ ( "dg-subproject-secondary", True ), ( "is-open", model.showSecondary ) ] ]
             [ button [ class "dg-disclosure dg-subproject-secondary-toggle dg-flat-button", onClick ToggleSecondary ]
-                [ span [] [ text (disclosure model.showSecondary ++ " Someday/Maybe and Done") ]
+                [ span [] [ text (disclosure model.showSecondary ++ " Someday/Maybe and Completed") ]
                 , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length secondary)) ]
                 ]
             , if model.showSecondary then
@@ -1680,11 +1596,17 @@ dragOver =
 -- MENUS
 
 
-projectMenu : Float -> Float -> Project -> Command
-projectMenu x y project =
+projectMenu : Float -> Float -> Model -> Project -> Command
+projectMenu x y model project =
     Command.ShowMenu x
         y
         (statusEntries project (\status -> Command.SetProjectStatus project.id status)
+            ++ (if project.parentProjectId == Nothing then
+                    MenuSeparator :: rankEntries model project
+
+                else
+                    []
+               )
             ++ [ MenuSeparator
                , MenuItem "New Action…" (Command.NewActionModal (Just project.id))
                , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id))
@@ -1696,36 +1618,41 @@ projectMenu x y project =
         )
 
 
-subprojectMenu : Float -> Float -> Model -> Project -> Command
-subprojectMenu x y model project =
+{-| Move up and Move down among the Projects sharing this one's parent and status,
+the keyboard-friendly twin of dragging a card.
+-}
+rankEntries : Model -> Project -> List MenuEntry
+rankEntries model project =
     let
         siblings =
             model.snapshot.projects
                 |> List.filter (\candidate -> candidate.parentProjectId == project.parentProjectId && candidate.status == project.status)
                 |> List.sortWith Hierarchy.compareByOrder
-
-        priorityEntries =
-            case indexOf project.id siblings of
-                Nothing ->
-                    []
-
-                Just position ->
-                    Ui.maybeList (itemAt (position - 1) siblings)
-                        (\before -> MenuItem "Move up" (Command.MoveSubproject project.id project.status (Just before.id)))
-                        ++ (if position < List.length siblings - 1 then
-                                [ MenuItem "Move down"
-                                    (Command.MoveSubproject project.id project.status (itemAt (position + 2) siblings |> Maybe.map .id))
-                                ]
-
-                            else
-                                []
-                           )
     in
+    case indexOf project.id siblings of
+        Nothing ->
+            []
+
+        Just position ->
+            Ui.maybeList (itemAt (position - 1) siblings)
+                (\before -> MenuItem "Move up" (Command.MoveSubproject project.id project.status (Just before.id)))
+                ++ (if position < List.length siblings - 1 then
+                        [ MenuItem "Move down"
+                            (Command.MoveSubproject project.id project.status (itemAt (position + 2) siblings |> Maybe.map .id))
+                        ]
+
+                    else
+                        []
+                   )
+
+
+subprojectMenu : Float -> Float -> Model -> Project -> Command
+subprojectMenu x y model project =
     Command.ShowMenu x
         y
         (statusEntries project (\status -> Command.MoveSubproject project.id status Nothing)
             ++ [ MenuSeparator ]
-            ++ priorityEntries
+            ++ rankEntries model project
             ++ [ MenuSeparator
                , MenuItem "Blocked by…" (Command.ProjectDependenciesModal project.id)
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
@@ -1788,11 +1715,11 @@ somedayQueue model =
         |> List.sortBy (\project -> ( Maybe.withDefault "" project.reviewed, String.toLower (projectMeta project.id model).breadcrumb ))
 
 
-{-| Top-level Backlog Projects in their ranked order, then any sub-projects shown
+{-| Top-level Projects in their ranked order, then any sub-projects shown
 alongside them, which keep the board's usual order.
 -}
-rankBacklog : List Project -> List Project
-rankBacklog projects =
+ranked : List Project -> List Project
+ranked projects =
     let
         ( topLevel, nested ) =
             List.partition (\project -> project.parentProjectId == Nothing) projects
@@ -1947,9 +1874,6 @@ hostEventDecoder =
                     "show-project" ->
                         Decode.map ShowProjectEvent (Decode.field "projectId" (Decode.maybe Decode.string))
 
-                    "show-someday-review" ->
-                        Decode.succeed ShowSomedayReviewEvent
-
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder
 
@@ -1966,7 +1890,7 @@ emptyModel message =
     , detail = Nothing
     , search = ""
     , issuesOnly = False
-    , showSubprojects = True
+    , showSubprojects = False
     , showImages = False
     , visibleColumns = ProjectStatus.board
     , columnsOpen = False
@@ -1974,9 +1898,8 @@ emptyModel message =
     , selectedIds = Set.empty
     , showCompleted = False
     , showSecondary = False
+    , detailTab = OverviewTab
     , expandedColumns = []
-    , somedayReview = False
-    , wakeDrafts = Dict.empty
     , tagFilters = Set.empty
     , outcomeEditing = False
     , outcomeDraft = ""

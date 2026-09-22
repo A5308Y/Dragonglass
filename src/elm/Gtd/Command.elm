@@ -78,6 +78,7 @@ type Command
     | UpdateSupportNote ProjectId String String
     | SaveProjectPreferences (List ProjectStatus) Bool
     | ReviewSomedayProject ProjectId String
+    | OpenSomedayReview
       -- Review
     | LoadReviewProject ProjectId
     | CreateReviewAction { title : String, projectId : ProjectId, context : String, work : Bool }
@@ -451,6 +452,9 @@ encode command =
         ReviewSomedayProject projectId activateAt ->
             object "review-someday-project"
                 [ ( "projectId", Encode.string projectId ), ( "activateAt", Encode.string activateAt ) ]
+
+        OpenSomedayReview ->
+            object "open-someday-review" []
 
         LoadReviewProject projectId ->
             object "load-review-project" [ ( "projectId", Encode.string projectId ) ]

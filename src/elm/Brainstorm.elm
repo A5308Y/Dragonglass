@@ -8,7 +8,7 @@ import Gtd.Host as Host exposing (RequestId, Requests)
 import Gtd.Id exposing (ActionId)
 import Gtd.Ui as Ui
 import Html exposing (Html, button, div, h2, h3, header, input, label, p, section, small, span, text, textarea)
-import Html.Attributes exposing (attribute, autofocus, class, classList, disabled, placeholder, value)
+import Html.Attributes exposing (attribute, autofocus, class, classList, disabled, placeholder, title, value)
 import Html.Events exposing (on, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -45,9 +45,21 @@ type Pending
     | FinishSave
 
 
+{-| What Shuffle or Change topic set aside, so one slip does not cost a session.
+-}
+type alias SetAside =
+    { session : Maybe Session
+    , topicDraft : String
+    , desiredOutcome : String
+    , ideas : String
+    , seconds : Int
+    }
+
+
 type alias Model =
     { snapshot : Snapshot
     , session : Maybe Session
+    , setAside : Maybe SetAside
     , topicDraft : String
     , desiredOutcome : String
     , ideas : String
@@ -69,6 +81,8 @@ type Msg
     | AbandonTopic
     | ShuffleTask
     | ShufflePrompts
+    | RestoreSetAside
+    | DismissSetAside
     | OutcomeChanged String
     | IdeasChanged String
     | IdeasSelected Int Int
@@ -118,6 +132,7 @@ emptyModel : Snapshot -> List String -> Maybe Session -> Model
 emptyModel snapshot words session =
     { snapshot = snapshot
     , session = session
+    , setAside = Nothing
     , topicDraft = ""
     , desiredOutcome = ""
     , ideas = ""
@@ -182,6 +197,7 @@ update msg model =
             in
             ( { model
                 | session = Maybe.map TaskSession resumed
+                , setAside = setAside model
                 , topicDraft = ""
                 , ideas = ""
                 , desiredOutcome = ""
@@ -203,7 +219,29 @@ update msg model =
                 next =
                     itemAt (modBy (max 1 (List.length available)) (position + 1)) available
             in
-            newSession { model | session = Maybe.map (.id >> TaskSession) next }
+            newSession { model | session = Maybe.map (.id >> TaskSession) next, setAside = setAside model }
+
+        RestoreSetAside ->
+            case model.setAside of
+                Just saved ->
+                    ( { model
+                        | session = saved.session
+                        , topicDraft = saved.topicDraft
+                        , desiredOutcome = saved.desiredOutcome
+                        , ideas = saved.ideas
+                        , seconds = saved.seconds
+                        , selectionStart = String.length saved.ideas
+                        , selectionEnd = String.length saved.ideas
+                        , setAside = Nothing
+                      }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        DismissSetAside ->
+            ( { model | setAside = Nothing }, Cmd.none )
 
         ShufflePrompts ->
             send ApplyWords Command.ShuffleBrainstormWords model
@@ -297,6 +335,23 @@ save model =
                 ( model, Cmd.none )
 
 
+{-| The work Shuffle or Change topic is about to clear, when there is any.
+-}
+setAside : Model -> Maybe SetAside
+setAside model =
+    if String.isEmpty (String.trim model.ideas) && String.isEmpty (String.trim model.desiredOutcome) then
+        model.setAside
+
+    else
+        Just
+            { session = model.session
+            , topicDraft = model.topicDraft
+            , desiredOutcome = model.desiredOutcome
+            , ideas = model.ideas
+            , seconds = model.seconds
+            }
+
+
 newSession : Model -> ( Model, Cmd Msg )
 newSession model =
     let
@@ -372,7 +427,8 @@ receiveHost value model =
         Ok (OutcomeEvent projectId outcome) ->
             case currentProject model of
                 Just project ->
-                    if project.id == projectId then
+                    -- Only fill an empty field, so a late reply never overwrites restored or typed text.
+                    if project.id == projectId && String.isEmpty model.desiredOutcome then
                         ( { model | desiredOutcome = outcome }, Cmd.none )
 
                     else
@@ -463,7 +519,11 @@ view model =
     in
     div [ class "dg-view dg-brainstorm-view" ]
         [ header [ class "dg-view-header" ]
-            [ div [] [ h2 [] [ text "Brainstorm" ], span [ class "dg-count" ] [ text (String.fromInt (List.length available)) ] ]
+            [ div []
+                [ h2 [] [ text "Brainstorm" ]
+                , span [ class "dg-count", title (Ui.plural (List.length available) "open Action" ++ " with “brainstorm” in the title, waiting for a session") ]
+                    [ text (String.fromInt (List.length available)) ]
+                ]
             , case model.session of
                 Just _ ->
                     span [ classList [ ( "dg-brainstorm-timer", True ), ( "is-done", model.seconds == 0 ) ] ]
@@ -480,6 +540,14 @@ view model =
                     text ""
             ]
         , Ui.maybeView model.error (\message -> div [ class "dg-panel dg-error" ] [ text message ])
+        , Ui.maybeView model.setAside
+            (\_ ->
+                div [ class "dg-panel dg-undo-bar", attribute "role" "status" ]
+                    [ span [] [ text "Your ideas from the last session were set aside." ]
+                    , button [ class "mod-cta", onClick RestoreSetAside ] [ text "Undo" ]
+                    , button [ class "dg-flat-button", attribute "aria-label" "Dismiss", onClick DismissSetAside ] [ text "×" ]
+                    ]
+            )
         , case model.session of
             Just session ->
                 viewSession model session

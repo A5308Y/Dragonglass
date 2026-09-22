@@ -1228,16 +1228,16 @@ view model =
 
             PromptForm fields ->
                 [ heading fields.title
-                , settingRow "Title" "" [ textInput "text" fields.value fields.placeholder (TextChanged PromptValueField) True ]
+                , settingRow "Name" "" [ textInput "text" fields.value fields.placeholder (TextChanged PromptValueField) True ]
                 , noticeView model
-                , actions model [] (submitButton model "Create")
+                , actions model [] (submitButton model "Save")
                 ]
 
             CaptureForm typed ->
                 [ heading "Quick Capture Inbox Item"
                 , settingRow "Title" "" [ textInput "text" typed "What's on your mind?" (TextChanged PromptValueField) True ]
                 , noticeView model
-                , actions model [] (submitButton model "Create")
+                , actions model [] (submitButton model "Capture")
                 ]
 
             ActionForm mode fields ->

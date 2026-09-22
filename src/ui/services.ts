@@ -20,4 +20,5 @@ export interface GtdServices {
   editAction: (id: string, allowProjectConversion?: boolean) => void;
   editProject: (id: string) => void;
   showProjectDetail: (id: string) => void;
+  openSomedayReview: () => void;
 }
