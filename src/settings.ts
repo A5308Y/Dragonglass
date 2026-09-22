@@ -10,6 +10,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private unsubscribeCalendarStatus: (() => void) | undefined;
   private unsubscribeFeedStatus: (() => void) | undefined;
   private unsubscribeMailStatus: (() => void) | undefined;
+  private feedsExpanded = false;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
@@ -215,13 +216,20 @@ export class GtdSettingTab extends PluginSettingTab {
    * lives here, where deleting a feed's triage state is a deliberate act.
    */
   private displayFeeds(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Feeds" });
-    containerEl.createEl("p", {
+    const section = containerEl.createEl("details", { cls: "dg-settings-section" });
+    section.open = this.feedsExpanded;
+    section.createEl("summary", { text: "Feeds", cls: "dg-settings-section-summary" });
+    section.addEventListener("toggle", () => {
+      this.feedsExpanded = section.open;
+    });
+    const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
+
+    sectionEl.createEl("p", {
       text: "Fetches subscribed RSS and Atom feeds for triage in the Feeds view. Feed Items are not vault files until you keep one, "
         + "which makes it an ordinary Inbox Item. Fetching contacts each feed's server directly.",
     });
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Enable feeds")
       .setDesc("Fetch subscribed feeds on start-up and on the refresh interval.")
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.feeds.enabled).onChange(async (value) => {
@@ -230,7 +238,7 @@ export class GtdSettingTab extends PluginSettingTab {
         this.display();
       }));
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Refresh interval")
       .setDesc("Minutes between automatic fetches. Five is the minimum.")
       .addText((text) => {
@@ -245,7 +253,7 @@ export class GtdSettingTab extends PluginSettingTab {
         });
       });
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Feed store")
       .setDesc("Vault-relative JSON file holding subscriptions and what has already been swept. It syncs with the vault, so read state follows you between devices.")
       .addText((text) => text.setValue(this.plugin.settings.feeds.storePath).onChange(async (value) => {
@@ -260,7 +268,7 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     const feeds = this.plugin.getFeedService();
-    const fetchSetting = new Setting(containerEl)
+    const fetchSetting = new Setting(sectionEl)
       .setName("Subscriptions")
       .addButton((button) => button.setButtonText("Add feed").onClick(async () => {
         const url = await this.plugin.promptForFeedUrl();
@@ -291,11 +299,11 @@ export class GtdSettingTab extends PluginSettingTab {
 
     const sources = feeds.getStore().sources;
     if (!sources.length) {
-      containerEl.createEl("p", { text: "No feeds yet." });
+      sectionEl.createEl("p", { text: "No feeds yet." });
       return;
     }
     for (const source of sources) {
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("Title")
         .setDesc(`${source.url} · ${feeds.getStore().states[source.id]?.unread.length ?? 0} unread`)
         .addText((text) => text

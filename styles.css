@@ -59,6 +59,20 @@ body.is-phone .workspace-leaf-content:is(
   font: inherit;
 }
 
+.dg-settings-section {
+  margin: 1.4em 0;
+}
+
+.dg-settings-section-summary {
+  cursor: pointer;
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-semibold);
+}
+
+.dg-settings-section-content {
+  margin-top: 0.75em;
+}
+
 .dg-view-header {
   min-height: 54px;
   padding: 10px var(--dg-bar-inset, 14px);

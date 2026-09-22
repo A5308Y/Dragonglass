@@ -437,7 +437,7 @@ listView model =
     div []
         [ div [ class "dg-toolbar dg-inbox-toolbar" ]
             [ input [ type_ "search", placeholder "Search Inbox", value model.search, onInput SearchChanged ] [] ]
-        , div [ class "dg-inbox-list", attribute "role" "list", attribute "aria-label" "Inbox Items" ]
+        , div [ class "dg-inbox-list", attribute "role" "list" ]
             (if List.isEmpty items then
                 [ div [ class "dg-empty-row" ]
                     [ text
