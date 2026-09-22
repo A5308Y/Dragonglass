@@ -496,7 +496,7 @@ rowView model indexes item =
         , id (rowDomId index)
         , tabindex 0
         , onFocus (SetFocus index)
-        , Ui.onKeyDown (RowKey index item.key)
+        , onRowKey index item.key
         ]
         [ div [ class "dg-feed-main" ]
             [ button [ class "dg-feed-title dg-flat-button", onClick (ToggleExpanded item.key) ] [ text item.title ]
@@ -554,6 +554,23 @@ emptyState heading detail =
 itemMeta : Item -> String
 itemMeta item =
     [ item.age, item.author ] |> List.filter (String.isEmpty >> not) |> String.join " · "
+
+
+{-| Keys pressed on the row itself; a key on one of its buttons is that button's.
+-}
+onRowKey : Int -> FeedItemKey -> Html.Attribute Msg
+onRowKey index key =
+    Html.Events.on "keydown"
+        (Decode.at [ "target", "id" ] Decode.string
+            |> Decode.andThen
+                (\targetId ->
+                    if targetId == rowDomId index then
+                        Decode.map (RowKey index key) Ui.keyDecoder
+
+                    else
+                        Decode.fail "key on a child of the row"
+                )
+        )
 
 
 rowDomId : Int -> String

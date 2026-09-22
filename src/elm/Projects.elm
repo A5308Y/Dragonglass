@@ -1383,6 +1383,7 @@ viewSubprojectCard model project =
             [ button [ class "dg-subproject-title dg-flat-button", title project.title, onClick (SelectProject project.id) ] [ text project.title ]
             , button
                 [ class "dg-icon-button dg-flat-button"
+                , attribute "aria-label" ("Actions for " ++ project.title)
                 , Ui.onPointer (\x y -> Send IgnoreReply (subprojectMenu x y model project))
                 ]
                 [ text "•••" ]

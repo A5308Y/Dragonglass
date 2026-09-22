@@ -193,6 +193,10 @@ view settings suggestions picker =
         [ input
             [ value picker.query
             , placeholder settings.placeholder
+            , attribute "role" "combobox"
+            , attribute "aria-autocomplete" "list"
+            , attribute "aria-expanded" (Ui.boolAttribute (picker.open && not (List.isEmpty suggestions)))
+            , attribute "aria-label" (String.replace "…" "" settings.placeholder)
             , attribute "autocomplete" "off"
             , type_ "text"
             , onFocus (settings.focused True)

@@ -23,6 +23,21 @@ button [ class "dg-foo dg-flat-button", onClick ... ] [ ... ]
 - Buttons meant to look like buttons (`mod-cta`, toolbar buttons, the decision
   buttons in reviews) keep Obsidian's surface and don't get the class.
 
+## Accessibility conventions
+
+- Every form control needs a name. In `Modals.elm` the control helpers
+  (`textInput`, `dateInput`, `toggle`, `statusSelect`) take the row name as their
+  first argument and set `aria-label`; elsewhere use `label [ for id ]`.
+- Icon-only buttons ("•••", "×", "▸") need an `aria-label`.
+- Focus rings use `outline` (see the end of `styles.css`). `.dg-flat-button`
+  removes the box-shadow Obsidian uses for its own ring, so a flat button without
+  the shared `:focus-visible` outline has no focus indicator at all.
+- A focusable row or card with single-key shortcuts must ignore keys whose
+  target is one of its buttons (check `target.id`, as `onRowKey` / `onCardKey`
+  do), or Enter on a child button also fires the row's shortcut.
+- Don't signal state by colour alone (e.g. overdue dates carry "⚠" and a title).
+- Use Obsidian's font-size variables; the smallest is `--font-ui-smaller`.
+
 ## Destructive actions: Undo first, dialogs for the rest
 
 - A reversible single change (deleting one Inbox Item or Action, cancelling a

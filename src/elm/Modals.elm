@@ -19,7 +19,7 @@ import Gtd.Picker as Picker exposing (Picker)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ui as Ui
 import Html exposing (Html, button, div, h2, input, option, p, select, span, text, textarea)
-import Html.Attributes exposing (checked, class, disabled, placeholder, rows, selected, step, type_, value)
+import Html.Attributes exposing (attribute, checked, class, disabled, placeholder, rows, selected, step, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -1228,14 +1228,14 @@ view model =
 
             PromptForm fields ->
                 [ heading fields.title
-                , settingRow "Name" "" [ textInput "text" fields.value fields.placeholder (TextChanged PromptValueField) True ]
+                , settingRow "Name" "" [ textInput "Name" "text" fields.value fields.placeholder (TextChanged PromptValueField) True ]
                 , noticeView model
                 , actions model [] (submitButton model "Save")
                 ]
 
             CaptureForm typed ->
                 [ heading "Quick Capture Inbox Item"
-                , settingRow "Title" "" [ textInput "text" typed "What's on your mind?" (TextChanged PromptValueField) True ]
+                , settingRow "Title" "" [ textInput "Title" "text" typed "What's on your mind?" (TextChanged PromptValueField) True ]
                 , noticeView model
                 , actions model [] (submitButton model "Capture")
                 ]
@@ -1283,10 +1283,10 @@ actionView : Model -> ActionMode -> ActionFields -> List (Html Msg)
 actionView model mode fields =
     let
         statusRow =
-            settingRow "Status" "" [ statusSelect ActionStatus.all ActionStatus.key ActionStatus.label ActionStatusChanged fields.status ]
+            settingRow "Status" "" [ statusSelect "Status" ActionStatus.all ActionStatus.key ActionStatus.label ActionStatusChanged fields.status ]
 
         titleRow editing =
-            settingRow "Title" "" [ textInput "text" fields.title "What is the next physical Action?" (TextChanged TitleField) (not editing) ]
+            settingRow "Title" "" [ textInput "Title" "text" fields.title "What is the next physical Action?" (TextChanged TitleField) (not editing) ]
 
         contextRow =
             settingRow "Context"
@@ -1295,7 +1295,7 @@ actionView model mode fields =
 
         conditionalRows =
             (if fields.status == ActionStatus.Waiting then
-                [ settingRow "Waiting since" "The day this Action started waiting." [ dateInput fields.waitingSince WaitingField ] ]
+                [ settingRow "Waiting since" "The day this Action started waiting." [ dateInput "Waiting since" fields.waitingSince WaitingField ] ]
 
              else
                 []
@@ -1308,7 +1308,7 @@ actionView model mode fields =
                    )
 
         workRow =
-            settingRow "Work" "Independent of the Action's context." [ toggle fields.work ToggleWork ]
+            settingRow "Work" "Independent of the Action's context." [ toggle "Work" fields.work ToggleWork ]
     in
     case mode of
         NewAction ->
@@ -1327,9 +1327,9 @@ actionView model mode fields =
             , statusRow
             , projectRow model "Project" "Type to fuzzy-search. Clear the field for no Project." fields.project
             , contextRow
-            , settingRow "Energy" "" [ textInput "text" fields.energy "medium" (TextChanged EnergyField) False ]
-            , settingRow "Due" "" [ dateInput fields.due DueField ]
-            , settingRow "Defer until" "" [ dateInput fields.deferUntil DeferField ]
+            , settingRow "Energy" "" [ textInput "Energy" "text" fields.energy "medium" (TextChanged EnergyField) False ]
+            , settingRow "Due" "" [ dateInput "Due" fields.due DueField ]
+            , settingRow "Defer until" "" [ dateInput "Defer until" fields.deferUntil DeferField ]
             ]
                 ++ conditionalRows
                 ++ [ workRow
@@ -1347,10 +1347,10 @@ actionView model mode fields =
 
 scheduleRows : ScheduleFields -> List (Html Msg)
 scheduleRows schedule =
-    settingRow "All day" "Reserve the whole day instead of a time of day." [ toggle schedule.allDay ToggleAllDay ]
+    settingRow "All day" "Reserve the whole day instead of a time of day." [ toggle "All day" schedule.allDay ToggleAllDay ]
         :: settingRow "Scheduled start"
             "Local date and time."
-            [ textInput
+            [ textInput "Scheduled start"
                 (if schedule.allDay then
                     "date"
 
@@ -1370,6 +1370,7 @@ scheduleRows schedule =
                     "Minutes reserved on the calendar."
                     [ input
                         [ type_ "number"
+                        , attribute "aria-label" "Duration in minutes"
                         , Html.Attributes.min "1"
                         , step "1"
                         , value schedule.duration
@@ -1410,6 +1411,7 @@ importView model target fields =
         listHint
         [ textarea
             [ class "dg-import-input"
+            , attribute "aria-label" "Pasted list"
             , rows 10
             , value fields.text
             , placeholder listPlaceholder
@@ -1476,8 +1478,8 @@ projectView model mode fields =
                  else
                     "New Sub-project"
                 )
-            , settingRow "Title" "" [ textInput "text" fields.title "Project title" (TextChanged TitleField) True ]
-            , settingRow "Area" "" [ textInput "text" fields.area "" (TextChanged AreaField) False ]
+            , settingRow "Title" "" [ textInput "Title" "text" fields.title "Project title" (TextChanged TitleField) True ]
+            , settingRow "Area" "" [ textInput "Area" "text" fields.area "e.g. Work, Health" (TextChanged AreaField) False ]
             , imageRow
             , tagsRow fields.tags
             , parentProjectRow model "Parent Project" "Optional. Type to fuzzy-search the full Project hierarchy." fields.parent
@@ -1487,23 +1489,23 @@ projectView model mode fields =
 
         EditProject _ ->
             [ heading "Edit Project"
-            , settingRow "Title" "" [ textInput "text" fields.title "" (TextChanged TitleField) False ]
-            , settingRow "Status" "" [ statusSelect ProjectStatus.all ProjectStatus.key ProjectStatus.label ProjectStatusChanged fields.status ]
+            , settingRow "Title" "" [ textInput "Title" "text" fields.title "Project title" (TextChanged TitleField) False ]
+            , settingRow "Status" "" [ statusSelect "Status" ProjectStatus.all ProjectStatus.key ProjectStatus.label ProjectStatusChanged fields.status ]
             ]
                 ++ (if fields.status == ProjectStatus.Someday then
                         [ settingRow "Activate at"
                             "On this date, move the Someday/Maybe Project to Active and show the activation on the calendar."
-                            [ dateInput fields.activateAt ActivateField ]
+                            [ dateInput "Activate at" fields.activateAt ActivateField ]
                         ]
 
                     else
                         []
                    )
-                ++ [ settingRow "Area" "" [ textInput "text" fields.area "" (TextChanged AreaField) False ]
+                ++ [ settingRow "Area" "" [ textInput "Area" "text" fields.area "e.g. Work, Health" (TextChanged AreaField) False ]
                    , imageRow
                    , tagsRow fields.tags
                    , parentProjectRow model "Parent Project" "Optional. Descendants are excluded to prevent hierarchy cycles." fields.parent
-                   , settingRow "Reviewed" "" [ dateInput fields.reviewed ReviewedField ]
+                   , settingRow "Reviewed" "" [ dateInput "Reviewed" fields.reviewed ReviewedField ]
                    , noticeView model
                    , actions model
                         [ button
@@ -1538,7 +1540,7 @@ blockersView model project blockers =
                 (\candidate ->
                     settingRow candidate.title
                         (Hierarchy.breadcrumb model.snapshot.projects candidate)
-                        [ toggle (Set.member candidate.id blockers) (ToggleBlocker candidate.id) ]
+                        [ toggle ("Blocked by " ++ candidate.title) (Set.member candidate.id blockers) (ToggleBlocker candidate.id) ]
                 )
                 candidates
         )
@@ -1605,13 +1607,16 @@ parentProjectRow model name description picker =
 
 tagsRow : String -> Html Msg
 tagsRow tags =
-    settingRow "Tags" "Comma-separated. Used to filter Project boards." [ textInput "text" tags "planning, home" (TextChanged TagsField) False ]
+    settingRow "Tags" "Comma-separated. Used to filter Project boards." [ textInput "Tags" "text" tags "planning, home" (TextChanged TagsField) False ]
 
 
-textInput : String -> String -> String -> (String -> Msg) -> Bool -> Html Msg
-textInput kind current hint toMessage autofocus =
+{-| Every control carries its row's name, because the row itself is not a `<label>`:
+a label around a Picker would read its suggestions out as part of the name.
+-}
+textInput : String -> String -> String -> String -> (String -> Msg) -> Bool -> Html Msg
+textInput name kind current hint toMessage autofocus =
     input
-        ([ type_ kind, value current, placeholder hint, onInput toMessage ]
+        ([ type_ kind, attribute "aria-label" name, value current, placeholder hint, onInput toMessage ]
             ++ (if autofocus then
                     [ Html.Attributes.autofocus True ]
 
@@ -1622,20 +1627,21 @@ textInput kind current hint toMessage autofocus =
         []
 
 
-dateInput : String -> Field -> Html Msg
-dateInput current field =
-    input [ type_ "date", value current, onInput (TextChanged field) ] []
+dateInput : String -> String -> Field -> Html Msg
+dateInput name current field =
+    input [ type_ "date", attribute "aria-label" name, value current, onInput (TextChanged field) ] []
 
 
-toggle : Bool -> (Bool -> Msg) -> Html Msg
-toggle current toMessage =
-    input [ type_ "checkbox", checked current, onCheck toMessage ] []
+toggle : String -> Bool -> (Bool -> Msg) -> Html Msg
+toggle name current toMessage =
+    input [ type_ "checkbox", attribute "aria-label" name, checked current, onCheck toMessage ] []
 
 
-statusSelect : List status -> (status -> String) -> (status -> String) -> (status -> Msg) -> status -> Html Msg
-statusSelect all toKey toLabel toMessage current =
+statusSelect : String -> List status -> (status -> String) -> (status -> String) -> (status -> Msg) -> status -> Html Msg
+statusSelect name all toKey toLabel toMessage current =
     select
-        [ value (toKey current)
+        [ attribute "aria-label" name
+        , value (toKey current)
         , onInput
             (\raw ->
                 List.filter (\candidate -> toKey candidate == raw) all

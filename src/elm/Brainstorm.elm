@@ -8,7 +8,7 @@ import Gtd.Host as Host exposing (RequestId, Requests)
 import Gtd.Id exposing (ActionId)
 import Gtd.Ui as Ui
 import Html exposing (Html, button, div, h2, h3, header, input, label, p, section, small, span, text, textarea)
-import Html.Attributes exposing (attribute, autofocus, class, classList, disabled, placeholder, title, value)
+import Html.Attributes exposing (attribute, autofocus, class, classList, disabled, for, id, placeholder, title, value)
 import Html.Events exposing (on, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -564,10 +564,11 @@ viewEmpty model =
         , h3 [] [ text "Start a standalone brainstorm" ]
         , p [] [ text "No “brainstorm” Action is required. The result will be captured as an Inbox Item." ]
         , section [ class "dg-brainstorm-field dg-brainstorm-start-field" ]
-            [ label [] [ text "Brainstorming topic" ]
+            [ label [ for "dg-brainstorm-topic" ] [ text "Brainstorming topic" ]
             , div [ class "dg-brainstorm-start" ]
                 [ input
-                    [ autofocus True
+                    [ id "dg-brainstorm-topic"
+                    , autofocus True
                     , value model.topicDraft
                     , placeholder "What do you want to brainstorm?"
                     , onInput TopicChanged
@@ -655,14 +656,15 @@ viewSession model session =
         , Ui.maybeView project
             (\_ ->
                 section [ class "dg-brainstorm-field" ]
-                    [ label [] [ text "Desired outcome" ]
-                    , textarea [ value model.desiredOutcome, placeholder "What future state are you working toward?", onInput OutcomeChanged ] []
+                    [ label [ for "dg-brainstorm-outcome" ] [ text "Desired outcome" ]
+                    , textarea [ id "dg-brainstorm-outcome", value model.desiredOutcome, placeholder "What future state are you working toward?", onInput OutcomeChanged ] []
                     ]
             )
         , section [ class "dg-brainstorm-field dg-ideas-field" ]
-            [ label [] [ text "Your ideas" ]
+            [ label [ for "dg-brainstorm-ideas" ] [ text "Your ideas" ]
             , textarea
-                [ autofocus True
+                [ id "dg-brainstorm-ideas"
+                , autofocus True
                 , attribute "data-brainstorm-ideas" "true"
                 , value model.ideas
                 , placeholder "Let it flow—there are no wrong answers.\n\nTry another angle. Reverse it. Find the simplest version. Imagine unlimited resources."

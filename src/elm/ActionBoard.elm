@@ -1089,7 +1089,15 @@ cardView model action =
         , div [ class "dg-card-meta" ]
             [ Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
             , Ui.maybeView action.energy (\energy -> span [] [ text energy ])
-            , Ui.maybeView action.due (\due -> span [ classList [ ( "is-overdue", overdue ) ] ] [ text due ])
+            , Ui.maybeView action.due
+                (\due ->
+                    -- Overdue is said in words and a symbol too, not by colour alone.
+                    if overdue then
+                        span [ class "is-overdue", title ("Overdue since " ++ due) ] [ text ("⚠ " ++ due) ]
+
+                    else
+                        span [ title ("Due " ++ due) ] [ text due ]
+                )
             , if action.status == ActionStatus.Waiting then
                 span [] [ text ("Waiting since " ++ Maybe.withDefault "—" action.waitingSince) ]
 
