@@ -1266,7 +1266,7 @@ view model =
 
             ParentForm ids picker ->
                 [ heading ("Set parent Project — " ++ projectCount (List.length ids))
-                , projectRow model
+                , parentProjectRow model
                     "Parent Project"
                     "Clear the field to make the selection top-level. The selected Projects and their descendants are excluded."
                     picker
@@ -1480,7 +1480,7 @@ projectView model mode fields =
             , settingRow "Area" "" [ textInput "text" fields.area "" (TextChanged AreaField) False ]
             , imageRow
             , tagsRow fields.tags
-            , projectRow model "Parent Project" "Optional. Type to fuzzy-search the full Project hierarchy." fields.parent
+            , parentProjectRow model "Parent Project" "Optional. Type to fuzzy-search the full Project hierarchy." fields.parent
             , noticeView model
             , actions model [] (submitButton model "Create")
             ]
@@ -1502,7 +1502,7 @@ projectView model mode fields =
                 ++ [ settingRow "Area" "" [ textInput "text" fields.area "" (TextChanged AreaField) False ]
                    , imageRow
                    , tagsRow fields.tags
-                   , projectRow model "Parent Project" "Optional. Descendants are excluded to prevent hierarchy cycles." fields.parent
+                   , parentProjectRow model "Parent Project" "Optional. Descendants are excluded to prevent hierarchy cycles." fields.parent
                    , settingRow "Reviewed" "" [ dateInput fields.reviewed ReviewedField ]
                    , noticeView model
                    , actions model
@@ -1596,6 +1596,12 @@ settingRow name description control =
 projectRow : Model -> String -> String -> Picker Project -> Html Msg
 projectRow model name description picker =
     settingRow name description [ Picker.view (projectPickerConfig model) (projectSuggestions model) picker ]
+
+
+parentProjectRow : Model -> String -> String -> Picker Project -> Html Msg
+parentProjectRow model name description picker =
+    div [ class "dg-project-parent-setting" ]
+        [ projectRow model name description picker ]
 
 
 tagsRow : String -> Html Msg

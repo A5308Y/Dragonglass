@@ -1610,6 +1610,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   width: 100%;
   justify-content: stretch;
 }
+.dg-modal .dg-project-parent-setting > .setting-item {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
 .dg-schedule-setting.is-hidden { display: none; }
 .dg-modal input:not([type="checkbox"]),
 .dg-modal select {
