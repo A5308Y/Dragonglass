@@ -1686,7 +1686,23 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-inbox-row-actions button { flex: 1; min-height: 40px; }
   .dg-feeds-view { --dg-bar-inset: 8px; }
   .dg-feed-sections { padding: 8px; gap: 8px; }
-  .dg-feeds-toolbar input[type="search"] { width: 100%; }
+  .dg-feeds-toolbar {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+  }
+  .dg-feeds-toolbar input[type="search"] {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .dg-feeds-toolbar > .dg-batch-spacer { display: none; }
+  .dg-feeds-toolbar > button {
+    min-width: 0;
+    flex: 1 1 calc(50% - 3px);
+    padding-inline: 6px;
+    font-size: var(--font-ui-smaller);
+    white-space: nowrap;
+  }
   .dg-feed-section-heading { flex: 1 1 100%; }
   .dg-feed-section-controls { flex: 1 1 100%; justify-content: flex-end; }
   .dg-feed-discard { flex: 1 1 auto; min-height: 38px; }
