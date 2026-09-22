@@ -16,7 +16,9 @@ import type { GtdServices } from "./ui/services";
 import { localDate } from "./utils/date";
 import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
-import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdSomedayReviewView, INBOX_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
+import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
+import { PomodoroService } from "./pomodoro/pomodoro-service";
+import type { PomodoroSession } from "./domain/pomodoro";
 
 export default class DragonglassGtdPlugin extends Plugin {
   declare settings: GtdSettings;
@@ -25,6 +27,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private calendarSync!: GoogleCalendarSync;
   private feeds!: FeedService;
   private mail!: MailService;
+  private pomodoro!: PomodoroService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
 
@@ -39,6 +42,12 @@ export default class DragonglassGtdPlugin extends Plugin {
       this.repository,
       () => this.settings.mail,
       (accountId) => this.settings.mail.passwords[accountId] ?? "",
+    );
+    this.pomodoro = new PomodoroService(
+      this.app,
+      () => this.settings.pomodoro,
+      (session) => this.logPomodoro(session),
+      () => void this.openPomodoro(),
     );
     this.services = {
       app: this.app,
@@ -62,6 +71,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       editProject: (id) => this.editProject(id),
       showProjectDetail: (id) => void this.openProjectDetail(id),
       openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
+      openPomodoro: (projectId) => void this.openPomodoro(projectId),
     };
 
     this.registerView(BOARD_VIEW_TYPE, (leaf) => new ActionBoardView(leaf, this.services));
@@ -71,11 +81,14 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.registerView(PROJECTS_VIEW_TYPE, (leaf) => new GtdProjectsView(leaf, this.services));
     this.registerView(REVIEW_VIEW_TYPE, (leaf) => new GtdProjectReviewView(leaf, this.services));
     this.registerView(SOMEDAY_VIEW_TYPE, (leaf) => new GtdSomedayReviewView(leaf, this.services));
+    this.registerView(POMODORO_VIEW_TYPE, (leaf) => new GtdPomodoroView(leaf, this.services, this.pomodoro));
+    this.register(this.pomodoro.start(this.addStatusBarItem()));
     this.addRibbonIcon("list-checks", "Open GTD Action Board", () => void this.activateView(BOARD_VIEW_TYPE));
     this.addRibbonIcon("inbox", "Open GTD Inbox", () => void this.activateView(INBOX_VIEW_TYPE));
     this.addRibbonIcon("folder-kanban", "Open GTD Projects", () => void this.activateView(PROJECTS_VIEW_TYPE));
     this.addRibbonIcon("clipboard-check", "Start GTD Project Review", () => void this.activateView(REVIEW_VIEW_TYPE));
     this.addRibbonIcon("lightbulb", "Open GTD Brainstorm", () => void this.activateView(BRAINSTORM_VIEW_TYPE));
+    this.addRibbonIcon("timer", "Open GTD Pomodoro", () => void this.openPomodoro());
     this.addRibbonIcon("rss", "Open RSS Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
     this.addSettingTab(new GtdSettingTab(this.app, this));
     this.registerCommands();
@@ -91,6 +104,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(PROJECTS_VIEW_TYPE)) leaf.detach();
     for (const leaf of this.app.workspace.getLeavesOfType(REVIEW_VIEW_TYPE)) leaf.detach();
     for (const leaf of this.app.workspace.getLeavesOfType(SOMEDAY_VIEW_TYPE)) leaf.detach();
+    for (const leaf of this.app.workspace.getLeavesOfType(POMODORO_VIEW_TYPE)) leaf.detach();
   }
 
   async loadSettings(): Promise<void> {
@@ -123,6 +137,16 @@ export default class DragonglassGtdPlugin extends Plugin {
           : defaults.mail.importCap,
         accounts: Array.isArray(saved?.mail?.accounts) ? saved.mail.accounts.map(migrateMailAccount) : [],
         passwords: isStringMap(saved?.mail?.passwords) ? saved.mail.passwords : {},
+      },
+      pomodoro: {
+        ...defaults.pomodoro,
+        ...(saved?.pomodoro ?? {}),
+        storePath: normalizeVaultPath(saved?.pomodoro?.storePath ?? "") || defaults.pomodoro.storePath,
+        focusMinutes: Number.isInteger(saved?.pomodoro?.focusMinutes)
+          && saved!.pomodoro!.focusMinutes >= 1 && saved!.pomodoro!.focusMinutes <= 180
+          ? saved!.pomodoro!.focusMinutes
+          : defaults.pomodoro.focusMinutes,
+        logToDiary: saved?.pomodoro?.logToDiary === true,
       },
       feeds: {
         ...defaults.feeds,
@@ -167,6 +191,9 @@ export default class DragonglassGtdPlugin extends Plugin {
     }
     for (const leaf of this.app.workspace.getLeavesOfType(SOMEDAY_VIEW_TYPE)) {
       if (leaf.view instanceof GtdSomedayReviewView) leaf.view.refresh();
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType(POMODORO_VIEW_TYPE)) {
+      if (leaf.view instanceof GtdPomodoroView) leaf.view.refresh();
     }
     for (const leaf of this.app.workspace.getLeavesOfType(BRAINSTORM_VIEW_TYPE)) {
       if (leaf.view instanceof GtdBrainstormView) leaf.view.refresh();
@@ -235,6 +262,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "start-project-review", name: "Start Project Review", callback: () => void this.activateView(REVIEW_VIEW_TYPE) });
     this.addCommand({ id: "start-someday-review", name: "Start Someday/Maybe Review", callback: () => void this.activateView(SOMEDAY_VIEW_TYPE) });
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
+    this.addCommand({ id: "open-pomodoro", name: "Open Pomodoro", callback: () => void this.openPomodoro() });
+    this.addCommand({ id: "start-pomodoro", name: "Start Pomodoro…", callback: () => this.pickPomodoroProject() });
     this.addCommand({ id: "open-feeds", name: "Open RSS Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
     this.addCommand({ id: "fetch-feeds", name: "Fetch RSS Feeds", callback: () => void this.fetchFeedsWithNotice() });
     this.addCommand({ id: "import-email", name: "Import Email", callback: () => void this.importMailWithNotice() });
@@ -381,6 +410,34 @@ export default class DragonglassGtdPlugin extends Plugin {
   private editProject(id: string): void {
     if (!this.index.getSnapshot().projectsById.has(id)) return void new Notice("This Project is missing or has a duplicate ID.");
     new ElmModal(this.services, { kind: "edit-project", projectId: id }).open();
+  }
+
+  private async openPomodoro(projectId?: string): Promise<void> {
+    const leaf = await this.activateView(POMODORO_VIEW_TYPE);
+    if (projectId && leaf.view instanceof GtdPomodoroView) leaf.view.selectProject(projectId);
+  }
+
+  /** Picks the Project for a new session from those still open. */
+  private pickPomodoroProject(): void {
+    const projects = this.index.getSnapshot().projects.filter((project) => project.status !== "completed" && project.status !== "cancelled");
+    if (!projects.length) return void new Notice("There are no open Projects to focus on.");
+    new OpenProjectModal(this.app, projects, (project) => void this.openPomodoro(project.id)).open();
+  }
+
+  /** Optionally notes a finished session in its Project's Diary. */
+  private async logPomodoro(session: PomodoroSession): Promise<void> {
+    if (!this.settings.pomodoro.logToDiary || !this.index.getSnapshot().projectsById.has(session.projectId)) return;
+    const outcome = session.outcome === "achieved" ? "achieved" : session.outcome === "partly" ? "partly achieved" : session.outcome === "missed" ? "not achieved" : "";
+    const parts = [
+      `🍅 ${Math.round(session.focusedSeconds / 60)} min: ${session.intention}`,
+      outcome,
+      session.reflection,
+    ].filter(Boolean);
+    try {
+      await this.repository.addProjectDiaryEntry(session.projectId, parts.join(" — "));
+    } catch {
+      new Notice("The Pomodoro was saved, but could not be added to the Project Diary.");
+    }
   }
 
   private openProjectPicker(): void {

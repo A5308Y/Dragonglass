@@ -1,4 +1,6 @@
 import type { FeedStoreData } from "../domain/feed";
+import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../domain/pomodoro";
+import { addLocalDays, localDate } from "../utils/date";
 import { feedItemAge } from "../domain/feed-triage";
 import { isAllDaySchedule } from "../domain/schedule";
 import { ACTION_STATUSES, BOARD_PROJECT_STATUSES, PROJECT_STATUSES } from "../domain/types";
@@ -108,6 +110,98 @@ export interface ElmFeedsDto {
   /** How many Items the last sweep took, and therefore what Undo would put back. */
   undoCount: number;
   feeds: ElmFeedDto[];
+}
+
+/** The running session, with times as epoch milliseconds so Elm can count down without parsing dates. */
+export interface ElmActivePomodoroDto {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  intention: string;
+  focusActionIds: string[];
+  completedActionIds: string[];
+  plannedMinutes: number;
+  /** Seconds focused before the current running stretch. */
+  focusedBefore: number;
+  /** When the current running stretch began, or `null` while paused. */
+  resumedAtMs: number | null;
+  /** Local wall-clock start, e.g. `14:05`. */
+  startedTime: string;
+}
+
+/** A finished session, already placed on the local calendar for grouping. */
+export interface ElmPomodoroSessionDto {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  projectPath: string;
+  intention: string;
+  /** Local `YYYY-MM-DD`. */
+  day: string;
+  /** Local wall-clock start and end, e.g. `14:05`. */
+  startedTime: string;
+  endedTime: string;
+  focusedMinutes: number;
+  status: "completed" | "stopped";
+  outcome: PomodoroOutcome | null;
+  reflection: string;
+  completedActions: number;
+}
+
+export interface ElmPomodoroDto {
+  focusMinutes: number;
+  active: ElmActivePomodoroDto | null;
+  sessions: ElmPomodoroSessionDto[];
+  today: string;
+  /** The Monday that starts the current week, local `YYYY-MM-DD`. */
+  weekStart: string;
+}
+
+/** How many finished sessions the view is sent; the log itself keeps more. */
+const POMODORO_HISTORY_LIMIT = 500;
+
+export function elmPomodoro(store: PomodoroStore, focusMinutes: number, now = new Date()): ElmPomodoroDto {
+  const today = localDate(now);
+  const active = store.active;
+  return {
+    focusMinutes,
+    active: active
+      ? {
+        id: active.id,
+        projectId: active.projectId,
+        projectTitle: active.projectTitle,
+        intention: active.intention,
+        focusActionIds: [...active.focusActionIds],
+        completedActionIds: [...active.completedActionIds],
+        plannedMinutes: active.plannedMinutes,
+        focusedBefore: active.focusedBefore,
+        resumedAtMs: active.resumedAt ? Date.parse(active.resumedAt) : null,
+        startedTime: clockTime(active.startedAt),
+      }
+      : null,
+    sessions: store.sessions.slice(0, POMODORO_HISTORY_LIMIT).map((session) => ({
+      id: session.id,
+      projectId: session.projectId,
+      projectTitle: session.projectTitle,
+      projectPath: session.projectPath,
+      intention: session.intention,
+      day: localDate(new Date(session.startedAt)),
+      startedTime: clockTime(session.startedAt),
+      endedTime: clockTime(session.endedAt),
+      focusedMinutes: Math.round(session.focusedSeconds / 60),
+      status: session.status,
+      outcome: session.outcome,
+      reflection: session.reflection,
+      completedActions: session.completedActionIds.length,
+    })),
+    today,
+    weekStart: addLocalDays(today, -((now.getDay() + 6) % 7)),
+  };
+}
+
+function clockTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 export interface ElmSnapshotDto {
@@ -304,6 +398,13 @@ type ElmNonMenuCommand =
   | { type: "save-project-preferences"; columns: Project["status"][]; showImages: boolean }
   | { type: "review-someday-project"; projectId: string; activateAt: string }
   | { type: "open-someday-review" }
+  | { type: "open-pomodoro"; projectId: string }
+  | { type: "start-pomodoro"; projectId: string; intention: string; focusActionIds: string[]; minutes: number }
+  | { type: "pause-pomodoro" }
+  | { type: "resume-pomodoro" }
+  | { type: "finish-pomodoro"; outcome: PomodoroOutcome | null; reflection: string }
+  | { type: "discard-pomodoro" }
+  | { type: "complete-pomodoro-action"; actionId: string }
   | { type: "load-review-project"; projectId: string }
   | { type: "create-review-action"; title: string; projectId: string; context: string; work: boolean }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
@@ -381,7 +482,7 @@ export const SURFACE_COMMANDS = {
     "edit-project", "set-project-status", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
     "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
-    "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "show-menu",
+    "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
   ],
   inbox: ["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"],
   feeds: ["refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard", "open-link", "open-inbox"],
@@ -394,6 +495,10 @@ export const SURFACE_COMMANDS = {
     "focus-brainstorm-ideas", "show-project",
   ],
   somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project"],
+  pomodoro: [
+    "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro",
+    "complete-pomodoro-action", "show-project",
+  ],
   modals: [
     "save-new-action", "save-action", "schedule-action", "convert-action-to-subproject", "save-new-project", "save-project",
     "trash-project", "add-project-tags", "set-projects-parent", "set-project-blockers", "parse-import-list",
@@ -412,6 +517,7 @@ export type ElmProjectReviewCommand = SurfaceCommand<"projectReview">;
 export type ElmBrainstormCommand = SurfaceCommand<"brainstorm">;
 export type ElmModalCommand = SurfaceCommand<"modals">;
 export type ElmSomedayReviewCommand = SurfaceCommand<"somedayReview">;
+export type ElmPomodoroCommand = SurfaceCommand<"pomodoro">;
 
 export type ElmActionBoardMenuEntry = ElmMenuEntry<Exclude<ElmActionBoardCommand, { type: "show-menu" }>>;
 export type ElmProjectsMenuEntry = ElmMenuEntry<Exclude<ElmProjectsCommand, { type: "show-menu" }>>;
@@ -433,6 +539,9 @@ export const parseBrainstormCommand = parserFor<ElmBrainstormCommand>(isBrainsto
 export const parseModalCommand = parserFor<ElmModalCommand>(isModalCommand);
 export const parseSomedayReviewCommand = parserFor<ElmSomedayReviewCommand>(
   (value): value is ElmSomedayReviewCommand => isSurfaceCommand(value, SOMEDAY_REVIEW_COMMANDS),
+);
+export const parsePomodoroCommand = parserFor<ElmPomodoroCommand>(
+  (value): value is ElmPomodoroCommand => isSurfaceCommand(value, POMODORO_COMMANDS),
 );
 
 function parserFor<C>(validator: CommandValidator<C>): (value: unknown) => ElmCommandEnvelope<C> | null {
@@ -493,6 +602,7 @@ const PROJECT_REVIEW_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.pr
 const BRAINSTORM_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.brainstorm);
 const MODAL_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.modals);
 const SOMEDAY_REVIEW_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.somedayReview);
+const POMODORO_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.pomodoro);
 
 function isSurfaceCommand(value: unknown, allowed: ReadonlySet<string>, nested?: CommandValidator<unknown>): boolean {
   if (!isRecord(value) || typeof value.type !== "string" || !allowed.has(value.type)) return false;
@@ -528,7 +638,23 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "quick-capture":
     case "open-inbox":
     case "open-someday-review":
+    case "pause-pomodoro":
+    case "resume-pomodoro":
+    case "discard-pomodoro":
       return true;
+    case "open-pomodoro":
+      return typeof value.projectId === "string";
+    case "start-pomodoro":
+      return typeof value.projectId === "string"
+        && typeof value.intention === "string"
+        && isStringArray(value.focusActionIds)
+        && Number.isInteger(value.minutes)
+        && Number(value.minutes) >= 1
+        && Number(value.minutes) <= 180;
+    case "finish-pomodoro":
+      return (value.outcome === null || isOneOf(POMODORO_OUTCOMES, value.outcome)) && typeof value.reflection === "string";
+    case "complete-pomodoro-action":
+      return typeof value.actionId === "string";
     case "show-project":
       return typeof value.projectId === "string";
     case "edit-action":
@@ -819,3 +945,8 @@ export type ElmBrainstormEvent =
 export type ElmFeedsEvent = { type: "feeds"; feeds: ElmFeedsDto } | ElmCommandResultEvent;
 export type ElmModalEvent = ElmCommandResultEvent;
 export type ElmSomedayReviewEvent = { type: "snapshot"; snapshot: ElmSnapshotDto } | ElmCommandResultEvent;
+export type ElmPomodoroEvent =
+  | { type: "snapshot"; snapshot: ElmSnapshotDto }
+  | { type: "pomodoro"; pomodoro: ElmPomodoroDto }
+  | { type: "select-project"; projectId: string }
+  | ElmCommandResultEvent;

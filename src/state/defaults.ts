@@ -66,6 +66,11 @@ export function defaultSettings(): GtdSettings {
       sourceId: "",
       defaultDurationMinutes: 30,
     },
+    pomodoro: {
+      storePath: "GTD/pomodoros.json",
+      focusMinutes: 25,
+      logToDiary: false,
+    },
     feeds: {
       enabled: false,
       storePath: "GTD/feeds.json",

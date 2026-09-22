@@ -159,6 +159,9 @@ export class ElmProjectsHost {
       case "open-someday-review":
         this.services.openSomedayReview();
         return;
+      case "open-pomodoro":
+        this.services.openPomodoro(command.projectId);
+        return;
       case "set-project-status":
         return setProjectStatus(this.services, command.projectId, command.status);
       case "move-subproject":

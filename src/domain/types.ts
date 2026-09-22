@@ -219,7 +219,17 @@ export interface GtdSettings {
   googleCalendar: GoogleCalendarSettings;
   feeds: FeedSettings;
   mail: MailSettings;
+  pomodoro: PomodoroSettings;
   schemaVersion: number;
+}
+
+export interface PomodoroSettings {
+  /** The vault-relative JSON file holding the running session and the session log. */
+  storePath: string;
+  /** The length a new session starts with. */
+  focusMinutes: number;
+  /** Also add one line per finished session to the Project's Diary. */
+  logToDiary: boolean;
 }
 
 export interface FeedSettings {

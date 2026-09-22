@@ -21,4 +21,6 @@ export interface GtdServices {
   editProject: (id: string) => void;
   showProjectDetail: (id: string) => void;
   openSomedayReview: () => void;
+  /** Opens the Pomodoro view, with this Project chosen when no session is running. */
+  openPomodoro: (projectId?: string) => void;
 }

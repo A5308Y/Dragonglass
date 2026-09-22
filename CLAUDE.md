@@ -48,6 +48,19 @@ button [ class "dg-foo dg-flat-button", onClick ... ] [ ... ]
   forget data) asks first with `confirmDialog` from `src/ui/confirm.ts`.
 - Don't use `window.confirm`.
 
+## Pomodoro and time tracking
+
+- Session rules live in `src/domain/pomodoro.ts` (tested in
+  `tests/pomodoro.test.ts`); `src/pomodoro/pomodoro-service.ts` owns the running
+  session, the time-up notice and the status bar, so a session survives closing
+  the view. `Pomodoro.elm` only renders and counts down from the times it is sent.
+- The log is `GTD/pomodoros.json` (setting `pomodoro.storePath`).
+- A time-tracking sync should: read finished sessions from the service's store,
+  convert each with `toTimeEntry` (key = session id, stable across re-syncs),
+  and record what it sent in `session.external[<integration>] = { id, syncedAt }`
+  so a re-run updates rather than duplicates. `parsePomodoroStore` already keeps
+  `external` links, and nothing else writes them.
+
 ## Building and deploying
 
 - `npm run build` type-checks, compiles Elm, bundles `main.js` and deploys to

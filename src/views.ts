@@ -6,6 +6,8 @@ import { ElmInboxHost } from "./adapter/elm-inbox";
 import { ElmProjectsHost } from "./adapter/elm-projects";
 import { ElmProjectReviewHost } from "./adapter/elm-project-review";
 import { ElmSomedayReviewHost } from "./adapter/elm-someday-review";
+import { ElmPomodoroHost } from "./adapter/elm-pomodoro";
+import type { PomodoroService } from "./pomodoro/pomodoro-service";
 import type { FeedService } from "./feeds/feed-service";
 import type { GtdServices } from "./ui/services";
 
@@ -16,6 +18,7 @@ export const INBOX_VIEW_TYPE = "dragonglass-inbox";
 export const PROJECTS_VIEW_TYPE = "dragonglass-projects";
 export const REVIEW_VIEW_TYPE = "dragonglass-project-review";
 export const SOMEDAY_VIEW_TYPE = "dragonglass-someday-review";
+export const POMODORO_VIEW_TYPE = "dragonglass-pomodoro";
 
 export class GtdBrainstormView extends ItemView {
   private host: ElmBrainstormHost | null = null;
@@ -74,6 +77,35 @@ export class GtdSomedayReviewView extends ItemView {
     if (this.host) return this.host.refresh();
     this.contentEl.empty();
     this.host = new ElmSomedayReviewHost(this.contentEl, this.services);
+  }
+}
+
+export class GtdPomodoroView extends ItemView {
+  private host: ElmPomodoroHost | null = null;
+  private pendingProjectId: string | null = null;
+
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices, private readonly pomodoro: PomodoroService) { super(leaf); }
+  getViewType(): string { return POMODORO_VIEW_TYPE; }
+  getDisplayText(): string { return "GTD Pomodoro"; }
+  getIcon(): string { return "timer"; }
+  async onOpen(): Promise<void> { this.refresh(); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
+
+  /** Chooses the Project for the next session; a running session is left alone. */
+  selectProject(projectId: string): void {
+    if (this.host) this.host.selectProject(projectId);
+    else this.pendingProjectId = projectId;
+  }
+
+  refresh(): void {
+    if (this.host) return this.host.refresh();
+    this.contentEl.empty();
+    this.host = new ElmPomodoroHost(this.contentEl, this.services, this.pomodoro, this.pendingProjectId);
+    this.pendingProjectId = null;
   }
 }
 

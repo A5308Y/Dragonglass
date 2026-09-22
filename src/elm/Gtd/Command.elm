@@ -24,6 +24,7 @@ one place.
 
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
 import Gtd.Id exposing (ActionId, FeedItemKey, InboxItemId, ProjectId)
+import Gtd.PomodoroOutcome as PomodoroOutcome exposing (PomodoroOutcome)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Settings as Settings exposing (SavedView)
 import Json.Encode as Encode
@@ -79,6 +80,14 @@ type Command
     | SaveProjectPreferences (List ProjectStatus) Bool
     | ReviewSomedayProject ProjectId String
     | OpenSomedayReview
+      -- Pomodoro
+    | OpenPomodoro ProjectId
+    | StartPomodoro { projectId : ProjectId, intention : String, focusActionIds : List ActionId, minutes : Int }
+    | PausePomodoro
+    | ResumePomodoro
+    | FinishPomodoro (Maybe PomodoroOutcome) String
+    | DiscardPomodoro
+    | CompletePomodoroAction ActionId
       -- Review
     | LoadReviewProject ProjectId
     | CreateReviewAction { title : String, projectId : ProjectId, context : String, work : Bool }
@@ -455,6 +464,35 @@ encode command =
 
         OpenSomedayReview ->
             object "open-someday-review" []
+
+        OpenPomodoro projectId ->
+            object "open-pomodoro" [ ( "projectId", Encode.string projectId ) ]
+
+        StartPomodoro fields ->
+            object "start-pomodoro"
+                [ ( "projectId", Encode.string fields.projectId )
+                , ( "intention", Encode.string fields.intention )
+                , ( "focusActionIds", Encode.list Encode.string fields.focusActionIds )
+                , ( "minutes", Encode.int fields.minutes )
+                ]
+
+        PausePomodoro ->
+            object "pause-pomodoro" []
+
+        ResumePomodoro ->
+            object "resume-pomodoro" []
+
+        FinishPomodoro outcome reflection ->
+            object "finish-pomodoro"
+                [ ( "outcome", Maybe.map PomodoroOutcome.encode outcome |> Maybe.withDefault Encode.null )
+                , ( "reflection", Encode.string reflection )
+                ]
+
+        DiscardPomodoro ->
+            object "discard-pomodoro" []
+
+        CompletePomodoroAction actionId ->
+            object "complete-pomodoro-action" [ ( "actionId", Encode.string actionId ) ]
 
         LoadReviewProject projectId ->
             object "load-review-project" [ ( "projectId", Encode.string projectId ) ]

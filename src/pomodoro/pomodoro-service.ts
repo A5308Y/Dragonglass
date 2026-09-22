@@ -1,0 +1,191 @@
+import { Notice, normalizePath, type App, type Vault } from "obsidian";
+import {
+  discardPomodoro,
+  emptyPomodoroStore,
+  endsAt,
+  finishPomodoro,
+  parsePomodoroStore,
+  pausePomodoro,
+  recordCompletedAction,
+  remainingSeconds,
+  restorePomodoro,
+  resumePomodoro,
+  startPomodoro,
+  type PomodoroSession,
+  type PomodoroStart,
+  type PomodoroStore,
+  type PomodoroWrapUp,
+} from "../domain/pomodoro";
+import type { PomodoroSettings } from "../domain/types";
+import { showUndoNotice } from "../ui/undo";
+
+/**
+ * Owns the running Pomodoro and the session log.
+ *
+ * The session lives here rather than in a view, so it keeps running when the
+ * Pomodoro view is closed and survives a restart: the store file records when the
+ * current stretch began, and time is always derived from that, never counted.
+ */
+export class PomodoroService {
+  private store: PomodoroStore = emptyPomodoroStore();
+  private loaded = false;
+  private writing: Promise<void> = Promise.resolve();
+  private listeners = new Set<() => void>();
+  private alarm: number | null = null;
+  private ticker: number | null = null;
+  private statusBar: HTMLElement | null = null;
+
+  constructor(
+    private readonly app: App,
+    private readonly getSettings: () => PomodoroSettings,
+    private readonly onFinished: (session: PomodoroSession) => Promise<void>,
+    private readonly onOpen: () => void,
+  ) {}
+
+  start(statusBar: HTMLElement): () => void {
+    this.statusBar = statusBar;
+    statusBar.addClass("dg-pomodoro-status", "mod-clickable");
+    statusBar.addEventListener("click", () => this.onOpen());
+    void this.load();
+    return () => {
+      this.clearTimers();
+      this.statusBar = null;
+    };
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  getStore(): PomodoroStore {
+    return this.store;
+  }
+
+  async load(): Promise<void> {
+    if (this.loaded) return;
+    this.loaded = true;
+    try {
+      this.store = parsePomodoroStore(JSON.parse(await this.app.vault.adapter.read(this.storePath())));
+    } catch {
+      // No log yet, or one that is no longer readable: start a fresh one.
+      this.store = emptyPomodoroStore();
+    }
+    this.arm();
+    this.notify();
+  }
+
+  async begin(start: PomodoroStart): Promise<void> {
+    await this.load();
+    await this.update(startPomodoro(this.store, start, new Date()));
+  }
+
+  async pause(): Promise<void> {
+    await this.update(pausePomodoro(this.store, new Date()));
+  }
+
+  async resume(): Promise<void> {
+    await this.update(resumePomodoro(this.store, new Date()));
+  }
+
+  async recordAction(actionId: string): Promise<void> {
+    await this.update(recordCompletedAction(this.store, actionId));
+  }
+
+  async finish(wrapUp: PomodoroWrapUp): Promise<void> {
+    const next = finishPomodoro(this.store, wrapUp, new Date());
+    await this.update(next);
+    await this.onFinished(next.sessions[0]!);
+  }
+
+  /** Throws the running session away, with Undo, since it was never filed. */
+  async discard(): Promise<void> {
+    const active = this.store.active;
+    if (!active) return;
+    await this.update(discardPomodoro(this.store));
+    showUndoNotice(`Discarded the Pomodoro for “${active.projectTitle}”.`, () => this.update(restorePomodoro(this.store, active)));
+  }
+
+  private async update(next: PomodoroStore): Promise<void> {
+    this.store = next;
+    this.arm();
+    this.notify();
+    await this.persist();
+  }
+
+  /** Re-arms the time-up alarm and the status bar ticker for whatever is running now. */
+  private arm(): void {
+    this.clearTimers();
+    const active = this.store.active;
+    const end = active ? endsAt(active, new Date()) : null;
+    if (active && end) {
+      const delay = end.getTime() - Date.now();
+      if (delay > 0) {
+        this.alarm = window.setTimeout(() => {
+          this.alarm = null;
+          new Notice(`Pomodoro finished: “${active.intention}”. Time to wrap up.`, 10_000);
+          this.renderStatus();
+          this.notify();
+        }, delay);
+      }
+      this.ticker = window.setInterval(() => this.renderStatus(), 1_000);
+    }
+    this.renderStatus();
+  }
+
+  private renderStatus(): void {
+    const bar = this.statusBar;
+    if (!bar) return;
+    const active = this.store.active;
+    if (!active) {
+      bar.setText("");
+      bar.hide();
+      return;
+    }
+    const remaining = remainingSeconds(active, new Date());
+    const clock = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`;
+    const state = remaining <= 0 ? "wrap up" : active.resumedAt ? clock : `${clock} paused`;
+    bar.setText(`🍅 ${state} · ${active.projectTitle}`);
+    bar.setAttribute("aria-label", `Pomodoro for ${active.projectTitle}: ${state}. Click to open.`);
+    bar.show();
+    if (remaining <= 0 && this.ticker !== null) {
+      window.clearInterval(this.ticker);
+      this.ticker = null;
+    }
+  }
+
+  private clearTimers(): void {
+    if (this.alarm !== null) window.clearTimeout(this.alarm);
+    if (this.ticker !== null) window.clearInterval(this.ticker);
+    this.alarm = null;
+    this.ticker = null;
+  }
+
+  private storePath(): string {
+    return normalizePath(this.getSettings().storePath.trim() || "GTD/pomodoros.json");
+  }
+
+  /** Writes are serialised, so a pause and an action landing together cannot interleave. */
+  private persist(): Promise<void> {
+    const snapshot = this.store;
+    const write = this.writing.then(async () => {
+      const path = this.storePath();
+      await ensureParent(this.app.vault, path);
+      await this.app.vault.adapter.write(path, `${JSON.stringify(snapshot, null, 2)}\n`);
+    });
+    this.writing = write.catch(() => undefined);
+    return write;
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) listener();
+  }
+}
+
+async function ensureParent(vault: Vault, path: string): Promise<void> {
+  const index = path.lastIndexOf("/");
+  if (index <= 0) return;
+  const folder = path.slice(0, index);
+  if (await vault.adapter.exists(folder)) return;
+  await vault.adapter.mkdir(folder);
+}

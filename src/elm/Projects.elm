@@ -1015,7 +1015,8 @@ viewDetail model project =
                 , span [ class ("dg-status dg-status-" ++ ProjectStatus.key project.status) ] [ text (ProjectStatus.label project.status) ]
                 ]
             , div [ class "dg-header-actions" ]
-                [ button [ onClick (Send IgnoreReply (Command.OpenFile project.file.path)) ] [ text "Open note" ]
+                [ button [ title "Focus on this Project for one time slice", onClick (Send IgnoreReply (Command.OpenPomodoro project.id)) ] [ text "Start Pomodoro" ]
+                , button [ onClick (Send IgnoreReply (Command.OpenFile project.file.path)) ] [ text "Open note" ]
                 , button [ onClick (Send IgnoreReply (Command.EditProjectModal project.id)) ] [ text "Edit" ]
                 ]
             ]
@@ -1609,6 +1610,7 @@ projectMenu x y model project =
                     []
                )
             ++ [ MenuSeparator
+               , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
                , MenuItem "New Action…" (Command.NewActionModal (Just project.id))
                , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id))
                , MenuItem "Open note" (Command.OpenFile project.file.path)
@@ -1658,6 +1660,7 @@ subprojectMenu x y model project =
                , MenuItem "Blocked by…" (Command.ProjectDependenciesModal project.id)
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
                , MenuItem "Open note" (Command.OpenFile project.file.path)
+               , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
                , MenuItem "New Action…" (Command.NewActionModal (Just project.id))
                , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id))
                , MenuSeparator

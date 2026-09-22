@@ -36,6 +36,7 @@ type Command
     | UpdateSupportNote ProjectId String String
     | SaveProjectPreferences (List ProjectStatus) Bool
     | OpenSomedayReview
+    | OpenPomodoro ProjectId
     | OpenFile String
     | ShowMenu Float Float (List MenuEntry)
 
@@ -127,6 +128,9 @@ toBase command =
 
         OpenSomedayReview ->
             Base.OpenSomedayReview
+
+        OpenPomodoro projectId ->
+            Base.OpenPomodoro projectId
 
         OpenFile path ->
             Base.OpenFile path

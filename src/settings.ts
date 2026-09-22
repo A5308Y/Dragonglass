@@ -12,6 +12,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private unsubscribeFeedStatus: (() => void) | undefined;
   private unsubscribeMailStatus: (() => void) | undefined;
   private feedsExpanded = false;
+  private pomodoroExpanded = false;
   private mailExpanded = false;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
@@ -92,6 +93,7 @@ export class GtdSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings();
       }));
 
+    this.displayPomodoro(containerEl);
     this.displayFeeds(containerEl);
     this.displayMail(containerEl);
 
@@ -221,6 +223,56 @@ export class GtdSettingTab extends PluginSettingTab {
    * Subscribing is frequent and lives in the Feeds view; unsubscribing is not, and
    * lives here, where deleting a feed's triage state is a deliberate act.
    */
+  private displayPomodoro(containerEl: HTMLElement): void {
+    const section = containerEl.createEl("details", { cls: "dg-settings-section" });
+    section.open = this.pomodoroExpanded;
+    section.createEl("summary", { text: "Pomodoro", cls: "dg-settings-section-summary" });
+    section.addEventListener("toggle", () => {
+      this.pomodoroExpanded = section.open;
+    });
+    const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
+    sectionEl.createEl("p", {
+      text: "Focused time slices on one Project, each with an intention and a short reflection. "
+        + "Finished sessions are kept in a log that a time-tracking integration can later sync from.",
+    });
+
+    new Setting(sectionEl)
+      .setName("Session length")
+      .setDesc("Minutes a new Pomodoro starts with. It can be changed before each session.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "1";
+        text.inputEl.max = "180";
+        text.setValue(String(this.plugin.settings.pomodoro.focusMinutes)).onChange(async (value) => {
+          const minutes = Number(value);
+          if (!Number.isInteger(minutes) || minutes < 1 || minutes > 180) return;
+          this.plugin.settings.pomodoro.focusMinutes = minutes;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(sectionEl)
+      .setName("Log to Project Diary")
+      .setDesc("Also add one line per finished session to the Project's Diary: length, intention, outcome and reflection.")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.pomodoro.logToDiary).onChange(async (value) => {
+        this.plugin.settings.pomodoro.logToDiary = value;
+        await this.plugin.saveSettings(false);
+      }));
+
+    new Setting(sectionEl)
+      .setName("Session log")
+      .setDesc("Vault-relative JSON file holding the running session and every finished one. It syncs with the vault. Changes apply after reloading the plugin.")
+      .addText((text) => text.setValue(this.plugin.settings.pomodoro.storePath).onChange(async (value) => {
+        const path = normalizeVaultPath(value) || "GTD/pomodoros.json";
+        if (isPathInDirectory(path, this.plugin.settings.inboxDirectory)) {
+          new Notice("The session log cannot live inside the Inbox directory, where every file becomes an Inbox Item.");
+          return;
+        }
+        this.plugin.settings.pomodoro.storePath = path;
+        await this.plugin.saveSettings(false);
+      }));
+  }
+
   private displayFeeds(containerEl: HTMLElement): void {
     const section = containerEl.createEl("details", { cls: "dg-settings-section" });
     section.open = this.feedsExpanded;
