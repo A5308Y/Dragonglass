@@ -63,9 +63,9 @@ describe("Next Action gate for marking a tree reviewed", () => {
     expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2")])).toEqual([]);
   });
 
-  it("accepts a Scheduled Action, but not a Waiting Action", () => {
+  it("accepts a Scheduled or Waiting Action", () => {
     expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2", "scheduled")])).toEqual([]);
-    expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2", "waiting")]).map((project) => project.id)).toEqual(["P2"]);
+    expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2", "waiting")])).toEqual([]);
   });
 
   it("still requires a Next Action for a root with no active sub-projects", () => {

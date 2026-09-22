@@ -43,7 +43,7 @@ describe("Sub-project board metadata", () => {
     expect(projectActionIssue(active, [active], [action("done")])).toBe("No open Actions");
     expect(projectActionIssue(active, [active], [action("next")])).toBeNull();
     expect(projectActionIssue(active, [active], [action("scheduled")])).toBeNull();
-    expect(projectActionIssue(active, [active], [action("waiting")])).toBe("No Next Action");
+    expect(projectActionIssue(active, [active], [action("waiting")])).toBeNull();
     expect(projectActionIssue({ ...active, status: "someday" }, [active], [])).toBeNull();
   });
 
@@ -65,7 +65,7 @@ describe("Sub-project board metadata", () => {
 
     expect(projectActionIssue(parent, projects, [action("A1", child.id, "next")])).toBeNull();
     expect(projectActionIssue(parent, projects, [])).toBe("No open Actions");
-    expect(projectActionIssue(parent, projects, [action("A1", child.id, "waiting")])).toBe("No Next Action");
+    expect(projectActionIssue(parent, projects, [action("A1", child.id, "waiting")])).toBeNull();
     expect(projectActionIssue(parent, projects, [action("A1", parent.id, "next")])).toBe("No open Actions");
   });
 

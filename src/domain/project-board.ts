@@ -3,7 +3,7 @@ import { projectReviewMembers, projectsBlockingReview } from "./project-review";
 import type { Action, Project, ProjectStatus } from "./types";
 import { normalizeVaultPath } from "../utils/path";
 
-export type ProjectActionIssue = "No open Actions" | "No Next Action";
+export type ProjectActionIssue = "No open Actions";
 
 /**
  * The Action-health issue displayed on an Active Project card, using the same
@@ -15,19 +15,9 @@ export function projectActionIssue(
   actions: readonly Action[],
 ): ProjectActionIssue | null {
   if (project.status !== "active") return null;
+  // Every open Action status keeps a Project moving, so a blocker has none left.
   const blockers = projectsBlockingReview(project, projectReviewMembers(project, projects), actions);
-  if (!blockers.length) return null;
-
-  const blockerIds = new Set(blockers.map((blocker) => blocker.id));
-  const projectsWithOpenActions = new Set(actions
-    .filter((action) => action.projectId
-      && blockerIds.has(action.projectId)
-      && action.status !== "done"
-      && action.status !== "cancelled")
-    .map((action) => action.projectId!));
-  return blockers.some((blocker) => !projectsWithOpenActions.has(blocker.id))
-    ? "No open Actions"
-    : "No Next Action";
+  return blockers.length ? "No open Actions" : null;
 }
 
 /** Whether a file or folder belongs anywhere in a Project's full support-material subtree. */

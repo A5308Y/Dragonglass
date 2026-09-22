@@ -24,9 +24,13 @@ export function projectReviewMembers(root: Project, projects: readonly Project[]
   return members;
 }
 
+/**
+ * Active Projects with nothing moving them forward. A Waiting Action counts: the
+ * Project is still active, it is just blocked on someone else.
+ */
 export function activeProjectsWithoutNextAction(projects: readonly Project[], actions: readonly Action[]): Project[] {
   const nextProjectIds = new Set(actions
-    .filter((action) => (action.status === "next" || action.status === "scheduled") && action.projectId)
+    .filter((action) => (action.status === "next" || action.status === "scheduled" || action.status === "waiting") && action.projectId)
     .map((action) => action.projectId!));
   return projects.filter((project) => project.status === "active" && !nextProjectIds.has(project.id));
 }
@@ -34,7 +38,7 @@ export function activeProjectsWithoutNextAction(projects: readonly Project[], ac
 /**
  * Active Projects that still block marking this review tree as reviewed.
  *
- * Every active sub-project needs a Next or Scheduled Action. The root only
+ * Every active sub-project needs a Next, Scheduled or Waiting Action. The root only
  * needs one itself when it has no active sub-projects to carry the work.
  * Returns the Projects to fix, empty when nothing blocks.
  */

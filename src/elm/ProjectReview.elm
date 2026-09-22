@@ -2,7 +2,7 @@ port module ProjectReview exposing (main)
 
 import Browser
 import Dict exposing (Dict)
-import Gtd.ActionStatus as ActionStatus
+import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
 import Gtd.Command.ProjectReview as Command exposing (Command)
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
@@ -532,7 +532,7 @@ viewTreeRow model root actions project =
             [ text (relativeLabel model root project) ]
         , span [] [ text (ProjectStatus.label project.status) ]
         , span [] [ text (String.fromInt (List.length projectActions) ++ " open · " ++ String.fromInt nextCount ++ " next") ]
-        , if project.status == ProjectStatus.Active && nextCount == 0 then
+        , if project.status == ProjectStatus.Active && not (List.any (.status >> movesProject) projectActions) then
             strong [] [ text "No Next Action" ]
 
           else
@@ -843,12 +843,20 @@ missingNextProjects model =
     let
         nextIds =
             reviewActions model
-                |> List.filter (\action -> action.status == ActionStatus.Next)
+                |> List.filter (.status >> movesProject)
                 |> List.filterMap .projectId
                 |> Set.fromList
     in
     reviewMembers model
         |> List.filter (\project -> project.status == ProjectStatus.Active && not (Set.member project.id nextIds))
+
+
+{-| Whether an Action keeps its Project moving. A Waiting Action counts: the
+Project is still active, it is just blocked on someone else.
+-}
+movesProject : ActionStatus -> Bool
+movesProject status =
+    List.member status [ ActionStatus.Next, ActionStatus.Scheduled, ActionStatus.Waiting ]
 
 
 {-| The active Projects that still have to name a Next Action before the tree can
