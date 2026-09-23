@@ -2,6 +2,7 @@ port module Inbox exposing (main)
 
 import Browser
 import Browser.Dom
+import Dict exposing (Dict)
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
 import Gtd.Command as Base exposing (ScheduleInput(..))
 import Gtd.Command.Inbox as Command exposing (Command, Disposition(..))
@@ -49,6 +50,8 @@ type alias ScheduleFields =
 
 type alias Model =
     { snapshot : Snapshot
+    , hostSnapshot : Snapshot
+    , setAside : Dict InboxItemId String
     , search : String
     , processing : Bool
     , cursor : Int
@@ -134,6 +137,8 @@ init flagsValue =
 initialModel : Snapshot -> Model
 initialModel snapshot =
     { snapshot = snapshot
+    , hostSnapshot = snapshot
+    , setAside = Dict.empty
     , search = ""
     , processing = False
     , cursor = 0
@@ -335,8 +340,11 @@ update msg model =
                     if not decision.ready then
                         ( model, Cmd.none )
 
+                    else if Set.member item.id (busyItems model) then
+                        ( model, Cmd.none )
+
                     else
-                        sendForItem item.id (Command.ProcessInbox item.id decision.operation (processingInput model)) model
+                        processAndMoveOn item.id (Command.ProcessInbox item.id decision.operation (processingInput model)) model
 
         Send pending command ->
             send pending command model
@@ -520,6 +528,53 @@ send pending command model =
     ( { model | requests = requests }, inboxToHost (Host.envelope requestId (Command.encode command)) )
 
 
+{-| Processes an Item and moves straight on to the next one while the host writes,
+so a slow vault never holds up the Inbox. A failure brings the Item back.
+-}
+processAndMoveOn : InboxItemId -> Command -> Model -> ( Model, Cmd Msg )
+processAndMoveOn itemId command model =
+    let
+        ( sent, sendCmd ) =
+            send (Working itemId) command model
+
+        path =
+            List.filter (\item -> item.id == itemId) model.hostSnapshot.inboxItems
+                |> List.head
+                |> Maybe.map (\item -> item.file.path)
+                |> Maybe.withDefault ""
+
+        setAside =
+            Dict.insert itemId path sent.setAside
+
+        moved =
+            { sent | setAside = setAside, snapshot = withoutSetAside setAside sent.hostSnapshot }
+
+        ( next, resetCmd ) =
+            if model.processing then
+                resetCurrent moved
+
+            else
+                ( moved, Cmd.none )
+    in
+    ( next, Cmd.batch [ sendCmd, resetCmd ] )
+
+
+withoutSetAside : Dict InboxItemId String -> Snapshot -> Snapshot
+withoutSetAside setAside snapshot =
+    if Dict.isEmpty setAside then
+        snapshot
+
+    else
+        let
+            paths =
+                Set.fromList (Dict.values setAside)
+
+            hidden item =
+                Dict.member item.id setAside || Set.member item.file.path paths
+        in
+        { snapshot | inboxItems = List.filter (not << hidden) snapshot.inboxItems }
+
+
 {-| One command per Item at a time: a second click while a write is in flight is a slip.
 -}
 sendForItem : InboxItemId -> Command -> Model -> ( Model, Cmd Msg )
@@ -561,10 +616,18 @@ type HostEvent
 receiveHost : Decode.Value -> Model -> ( Model, Cmd Msg )
 receiveHost value model =
     case Decode.decodeValue hostEventDecoder value of
-        Ok (SnapshotEvent snapshot) ->
+        Ok (SnapshotEvent hostSnapshot) ->
             let
+                -- An Item stays set aside until its file has left the Inbox. Keyed by path, since
+                -- a capture half-way through becoming an Action briefly reads as another Item.
+                setAside =
+                    Dict.filter (\_ path -> List.any (\item -> item.file.path == path) hostSnapshot.inboxItems) model.setAside
+
+                snapshot =
+                    withoutSetAside setAside hostSnapshot
+
                 next =
-                    { model | snapshot = snapshot }
+                    { model | snapshot = snapshot, hostSnapshot = hostSnapshot, setAside = setAside }
 
                 arrived =
                     model.requested |> Maybe.andThen (\wanted -> indexOf wanted (sortedItems snapshot.inboxItems))
@@ -610,6 +673,26 @@ receiveHost value model =
                     { model | requests = requests }
             in
             case ( outcome.result, Maybe.withDefault IgnoreReply pending ) of
+                ( Err message, Working itemId ) ->
+                    -- Processing failed, so the Item comes back to the Inbox with the reason.
+                    let
+                        setAside =
+                            Dict.remove itemId next.setAside
+
+                        title =
+                            List.filter (\item -> item.id == itemId) next.hostSnapshot.inboxItems
+                                |> List.head
+                                |> Maybe.map (\item -> "Could not process “" ++ item.title ++ "”: ")
+                                |> Maybe.withDefault ""
+                    in
+                    ( { next
+                        | error = Just (title ++ message)
+                        , setAside = setAside
+                        , snapshot = withoutSetAside setAside next.hostSnapshot
+                      }
+                    , Cmd.none
+                    )
+
                 ( Err message, _ ) ->
                     ( { next | error = Just message }, Cmd.none )
 

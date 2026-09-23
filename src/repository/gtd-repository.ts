@@ -135,8 +135,10 @@ export class GtdRepository {
         frontmatter.created = localDate();
         frontmatter.completed = null;
       });
-      if (title !== oldTitle) await this.updateGeneratedHeading(item.file, oldTitle, title);
-      await this.ensureDoneWhenSection(item.file);
+      // Heading and Done-when section in one write, and none when both are already right.
+      const body = (content: string) => withDoneWhenSection(title === oldTitle ? content : retitledHeading(content, oldTitle, title));
+      const content = await this.app.vault.read(item.file);
+      if (body(content) !== content) await this.app.vault.process(item.file, body);
       const target = this.uniqueMarkdownPath(directory, title, actionId);
       if (target !== item.file.path) await this.app.fileManager.renameFile(item.file, target);
     });
@@ -987,24 +989,28 @@ export class GtdRepository {
   }
 
   private async updateGeneratedHeading(file: TFile, oldTitle: string, newTitle: string): Promise<void> {
-    await this.app.vault.process(file, (content) => {
-      const oldHeading = `# ${oldTitle}`;
-      const index = content.indexOf(oldHeading);
-      if (index < 0) return content;
-      const lineStart = content.lastIndexOf("\n", index - 1) + 1;
-      const lineEnd = content.indexOf("\n", index);
-      if (lineStart !== index || content.slice(index, lineEnd < 0 ? undefined : lineEnd) !== oldHeading) return content;
-      return `${content.slice(0, index)}# ${newTitle}${content.slice(index + oldHeading.length)}`;
-    });
+    await this.app.vault.process(file, (content) => retitledHeading(content, oldTitle, newTitle));
   }
 
   private async updateSupportPathInBody(file: TFile, oldPath: string, newPath: string): Promise<void> {
     await this.app.vault.process(file, (content) => content.replace(`\`${oldPath}/\``, `\`${newPath}/\``));
   }
 
-  private async ensureDoneWhenSection(file: TFile): Promise<void> {
-    await this.app.vault.process(file, (content) => /^## Done when\s*$/m.test(content) ? content : `${content.trimEnd()}\n\n## Done when\n\n`);
-  }
+}
+
+/** Replaces the generated `# Old title` heading line, leaving any other content alone. */
+function retitledHeading(content: string, oldTitle: string, newTitle: string): string {
+  const oldHeading = `# ${oldTitle}`;
+  const index = content.indexOf(oldHeading);
+  if (index < 0) return content;
+  const lineStart = content.lastIndexOf("\n", index - 1) + 1;
+  const lineEnd = content.indexOf("\n", index);
+  if (lineStart !== index || content.slice(index, lineEnd < 0 ? undefined : lineEnd) !== oldHeading) return content;
+  return `${content.slice(0, index)}# ${newTitle}${content.slice(index + oldHeading.length)}`;
+}
+
+function withDoneWhenSection(content: string): string {
+  return /^## Done when\s*$/m.test(content) ? content : `${content.trimEnd()}\n\n## Done when\n\n`;
 }
 
 function markdown(frontmatter: Record<string, unknown>, body: string): string {
