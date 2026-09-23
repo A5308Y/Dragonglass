@@ -9,6 +9,7 @@ import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ProjectId)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
+import Gtd.Ranking as Ranking
 import Gtd.Ui as Ui
 import Html exposing (Html, article, button, div, h2, h3, header, img, input, label, main_, node, p, section, small, span, strong, text, textarea)
 import Html.Attributes exposing (alt, attribute, checked, class, classList, disabled, draggable, placeholder, rows, src, title, type_, value)
@@ -89,10 +90,21 @@ type Pending
     | ReadSupport String
     | AppendDiary
     | OpenNewSupportNote
+    | MoveProjects (List ProjectId)
+
+
+{-| A drop already shown on the board while the host writes it. `order` is left
+alone when only the status changes; `confirmed` means the host has answered, so
+the next snapshot is authoritative whether or not it matches.
+-}
+type alias PendingMove =
+    { status : ProjectStatus, order : Maybe Int, confirmed : Bool }
 
 
 type alias Model =
     { snapshot : Snapshot
+    , hostSnapshot : Snapshot
+    , pendingMoves : Dict ProjectId PendingMove
     , meta : Dict ProjectId ProjectMeta
     , selectedProjectId : Maybe ProjectId
     , detail : Maybe ProjectDetail
@@ -201,6 +213,8 @@ init flags =
 
                 model =
                     { snapshot = decoded.snapshot
+                    , hostSnapshot = decoded.snapshot
+                    , pendingMoves = Dict.empty
                     , meta = metaDict decoded.projectMeta
                     , selectedProjectId = decoded.initialProjectId
                     , detail = Nothing
@@ -462,15 +476,18 @@ update msg model =
         DropProject status ->
             case model.draggedProject of
                 Just projectId ->
-                    send IgnoreReply
-                        (if isTopLevel model projectId then
-                            -- Joining a column at the end gives the Project a rank there.
-                            Command.MoveSubproject projectId status Nothing
+                    let
+                        dropped =
+                            { model | draggedProject = Nothing, subprojectDropTarget = Nothing }
+                    in
+                    if isTopLevel model projectId then
+                        -- Joining a column at the end gives the Project a rank there.
+                        moveProject projectId status Nothing dropped
 
-                         else
-                            Command.SetProjectStatus projectId status
-                        )
-                        { model | draggedProject = Nothing, subprojectDropTarget = Nothing }
+                    else
+                        showMove (Dict.singleton projectId { status = status, order = Nothing, confirmed = False })
+                            (Command.SetProjectStatus projectId status)
+                            dropped
 
                 Nothing ->
                     ( { model | subprojectDropTarget = Nothing }, Cmd.none )
@@ -478,9 +495,7 @@ update msg model =
         DropSubproject status beforeId ->
             case model.draggedProject of
                 Just projectId ->
-                    send IgnoreReply
-                        (Command.MoveSubproject projectId status beforeId)
-                        { model | draggedProject = Nothing, subprojectDropTarget = Nothing }
+                    moveProject projectId status beforeId { model | draggedProject = Nothing, subprojectDropTarget = Nothing }
 
                 Nothing ->
                     ( { model | subprojectDropTarget = Nothing }, Cmd.none )
@@ -490,6 +505,144 @@ update msg model =
 
         NoOp ->
             ( model, Cmd.none )
+
+
+{-| Moves a Project within its siblings, showing the result before the host writes it.
+-}
+moveProject : ProjectId -> ProjectStatus -> Maybe ProjectId -> Model -> ( Model, Cmd Msg )
+moveProject projectId status beforeId model =
+    showMove (placementsAfterMove model projectId status beforeId) (Command.MoveSubproject projectId status beforeId) model
+
+
+{-| Shows the moves at once and sends the command that writes them. Completing a
+Project may still ask for confirmation, so that move waits for the vault instead.
+-}
+showMove : Dict ProjectId PendingMove -> Command -> Model -> ( Model, Cmd Msg )
+showMove moves command model =
+    if Dict.isEmpty moves || List.any (\move -> move.status == ProjectStatus.Completed) (Dict.values moves) then
+        send IgnoreReply command model
+
+    else
+        let
+            pendingMoves =
+                Dict.union moves model.pendingMoves
+        in
+        send (MoveProjects (Dict.keys moves))
+            command
+            { model | pendingMoves = pendingMoves, snapshot = withPendingMoves pendingMoves model.hostSnapshot }
+
+
+{-| The placements the host will write for a move, worked out the same way as
+`projectPlacementsAfterMove` in `src/domain/project-board.ts`, so the snapshot
+that confirms the move can be recognised.
+-}
+placementsAfterMove : Model -> ProjectId -> ProjectStatus -> Maybe ProjectId -> Dict ProjectId PendingMove
+placementsAfterMove model projectId status beforeId =
+    case Data.findProject projectId model.snapshot.projects of
+        Nothing ->
+            Dict.empty
+
+        Just moving ->
+            if beforeId == Just projectId && moving.status == status then
+                Dict.empty
+
+            else
+                let
+                    column =
+                        model.snapshot.projects
+                            |> List.filter
+                                (\project ->
+                                    project.parentProjectId == moving.parentProjectId
+                                        && project.status == status
+                                        && project.id /= projectId
+                                )
+                            |> List.sortWith compareProjectPriority
+
+                    ( before, after ) =
+                        case beforeId |> Maybe.andThen (\id -> indexOf id column) of
+                            Just index ->
+                                ( List.take index column, List.drop index column )
+
+                            Nothing ->
+                                ( column, [] )
+
+                    ordered =
+                        before ++ moving :: after
+                in
+                ordered
+                    |> List.map
+                        (\project ->
+                            ( project.id
+                            , if project.id == projectId then
+                                -- The moved Project always takes a fresh rank.
+                                Nothing
+
+                              else
+                                project.order
+                            )
+                        )
+                    |> Ranking.ranksForOrder
+                    |> Dict.map (\_ order -> { status = status, order = Just order, confirmed = False })
+
+
+{-| `compareProjectPriority` from the host: rank, then title, then id.
+-}
+compareProjectPriority : Project -> Project -> Order
+compareProjectPriority left right =
+    case ( left.order, right.order ) of
+        ( Just leftOrder, Just rightOrder ) ->
+            compare ( leftOrder, left.title, left.id ) ( rightOrder, right.title, right.id )
+
+        ( Just _, Nothing ) ->
+            LT
+
+        ( Nothing, Just _ ) ->
+            GT
+
+        ( Nothing, Nothing ) ->
+            compare ( left.title, left.id ) ( right.title, right.id )
+
+
+withPendingMoves : Dict ProjectId PendingMove -> Snapshot -> Snapshot
+withPendingMoves moves snapshot =
+    if Dict.isEmpty moves then
+        snapshot
+
+    else
+        { snapshot
+            | projects =
+                List.map
+                    (\project ->
+                        case Dict.get project.id moves of
+                            Just move ->
+                                { project
+                                    | status = move.status
+                                    , order =
+                                        if move.order == Nothing then
+                                            project.order
+
+                                        else
+                                            move.order
+                                }
+
+                            Nothing ->
+                                project
+                    )
+                    snapshot.projects
+        }
+
+
+{-| Whether the vault now holds what a pending move showed. A Project that has
+gone leaves nothing to wait for.
+-}
+moveLanded : ProjectId -> PendingMove -> Snapshot -> Bool
+moveLanded projectId move snapshot =
+    case Data.findProject projectId snapshot.projects of
+        Just project ->
+            project.status == move.status && (move.order == Nothing || project.order == move.order)
+
+        Nothing ->
+            True
 
 
 withSelected : Model -> (ProjectId -> ( Model, Cmd Msg )) -> ( Model, Cmd Msg )
@@ -567,13 +720,24 @@ receiveHost value model =
         Err _ ->
             ( model, Cmd.none )
 
-        Ok (SnapshotEvent snapshot) ->
+        Ok (SnapshotEvent hostSnapshot) ->
             let
+                pendingMoves =
+                    Dict.filter (\projectId move -> not move.confirmed && not (moveLanded projectId move hostSnapshot)) model.pendingMoves
+
+                snapshot =
+                    withPendingMoves pendingMoves hostSnapshot
+
                 ids =
                     Set.fromList (List.map .id snapshot.projects)
 
                 next =
-                    { model | snapshot = snapshot, selectedIds = Set.intersect ids model.selectedIds }
+                    { model
+                        | snapshot = snapshot
+                        , hostSnapshot = hostSnapshot
+                        , pendingMoves = pendingMoves
+                        , selectedIds = Set.intersect ids model.selectedIds
+                    }
             in
             case next.selectedProjectId of
                 Just projectId ->
@@ -609,11 +773,26 @@ receiveHost value model =
                 ( pending, requests ) =
                     Host.resolve outcome.requestId model.requests
             in
-            case outcome.result of
-                Err message ->
+            case ( outcome.result, pending ) of
+                ( Err message, Just (MoveProjects projectIds) ) ->
+                    -- The write failed, so the cards go back to where the vault still has them.
+                    let
+                        pendingMoves =
+                            List.foldl Dict.remove model.pendingMoves projectIds
+                    in
+                    ( { model
+                        | requests = requests
+                        , error = Just message
+                        , pendingMoves = pendingMoves
+                        , snapshot = withPendingMoves pendingMoves model.hostSnapshot
+                      }
+                    , Cmd.none
+                    )
+
+                ( Err message, _ ) ->
                     ( { model | requests = requests, error = Just message }, Cmd.none )
 
-                Ok resultValue ->
+                ( Ok resultValue, _ ) ->
                     finish (Maybe.withDefault IgnoreReply pending) resultValue { model | requests = requests, error = Nothing }
 
 
@@ -667,6 +846,17 @@ finish pending resultValue model =
 
                 Err _ ->
                     ( model, Cmd.none )
+
+        MoveProjects projectIds ->
+            -- Written. The snapshot that follows is the truth, even if it differs from what was shown.
+            ( { model
+                | pendingMoves =
+                    List.foldl (\projectId moves -> Dict.update projectId (Maybe.map (\move -> { move | confirmed = True })) moves)
+                        model.pendingMoves
+                        projectIds
+              }
+            , Cmd.none
+            )
 
         IgnoreReply ->
             ( model, Cmd.none )
@@ -1977,6 +2167,8 @@ hostEventDecoder =
 emptyModel : String -> Model
 emptyModel message =
     { snapshot = Data.empty
+    , hostSnapshot = Data.empty
+    , pendingMoves = Dict.empty
     , meta = Dict.empty
     , selectedProjectId = Nothing
     , detail = Nothing
