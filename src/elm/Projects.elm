@@ -1008,7 +1008,7 @@ viewDetail model project =
     div [ class "dg-view dg-project-detail" ]
         [ header [ class "dg-view-header" ]
             [ div [ class "dg-detail-heading" ]
-                [ Ui.maybeView parent (\item -> button [ class "dg-parent-back", onClick (SelectProject item.id) ] [ text ("← " ++ item.title) ])
+                [ Ui.maybeView parent (\item -> button [ class "dg-parent-back", onClick (SelectProject item.id) ] [ span [ class "dg-parent-back-label" ] [ text ("← " ++ item.title) ] ])
                 , button [ onClick BackToBoard ] [ text "← Projects" ]
                 , h2 [] [ text project.title ]
                 , span [ class ("dg-status dg-status-" ++ ProjectStatus.key project.status) ] [ text (ProjectStatus.label project.status) ]

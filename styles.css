@@ -545,6 +545,11 @@ body.is-phone .workspace-leaf-content:is(
   min-width: 0;
   max-width: min(240px, 35%);
   overflow: hidden;
+}
+/* Obsidian makes buttons inline-flex, where text-overflow has no effect, so the label truncates. */
+.dg-parent-back-label {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
