@@ -1130,7 +1130,7 @@ viewOutcome model project =
     in
     section [ class "dg-detail-section dg-project-outcome-panel" ]
         [ div [ class "dg-detail-section-heading" ]
-            [ div [] [ span [ class "dg-detail-eyebrow" ] [ text "Outcome" ], h3 [] [ text "Desired outcome" ] ]
+            [ h3 [ class "dg-detail-eyebrow" ] [ text "Desired outcome" ]
             , if model.outcomeEditing then
                 text ""
 
@@ -1189,7 +1189,7 @@ viewActionsSection model project openActions completedActions =
     div []
         [ section [ class "dg-detail-section dg-project-actions-panel" ]
             [ div [ class "dg-detail-section-heading" ]
-                [ div [] [ span [ class "dg-detail-eyebrow" ] [ text "Work" ], h3 [] [ text "Open Actions" ] ]
+                [ h3 [ class "dg-detail-eyebrow" ] [ text "Open Actions" ]
                 , div [ class "dg-detail-section-actions" ]
                     [ span [ class "dg-detail-count" ] [ text (String.fromInt (List.length openActions)) ]
                     , button [ onClick (Send IgnoreReply (Command.ImportActionsModal project.id)) ] [ text "Import…" ]
@@ -1314,7 +1314,7 @@ viewSubprojects model project =
     in
     section [ class "dg-detail-section dg-subprojects-panel" ]
         [ div [ class "dg-detail-section-heading" ]
-            [ div [] [ span [ class "dg-detail-eyebrow" ] [ text "Board" ], h3 [] [ text "Sub-projects" ] ]
+            [ h3 [ class "dg-detail-eyebrow" ] [ text "Sub-projects" ]
             , div [ class "dg-detail-section-actions" ]
                 [ span [ class "dg-detail-count" ]
                     [ text
@@ -1463,7 +1463,7 @@ viewDiary model =
     in
     section [ class "dg-detail-section dg-project-diary-panel" ]
         [ div [ class "dg-detail-section-heading" ]
-            [ div [] [ span [ class "dg-detail-eyebrow" ] [ text "Log" ], h3 [] [ text "Diary" ] ]
+            [ h3 [ class "dg-detail-eyebrow" ] [ text "Diary" ]
             , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length entries)) ]
             ]
         , div [ class "dg-diary-add" ]
@@ -1507,7 +1507,7 @@ viewSupport model =
     in
     section [ class "dg-detail-section dg-support-panel" ]
         [ div [ class "dg-detail-section-heading" ]
-            [ div [] [ span [ class "dg-detail-eyebrow" ] [ text "Files" ], h3 [] [ text "Project Support Material" ] ]
+            [ h3 [ class "dg-detail-eyebrow" ] [ text "Project Support Material" ]
             , span [ class "dg-detail-count" ]
                 [ text (String.fromInt (List.length files) ++ " files · " ++ String.fromInt (List.length folders) ++ " folders") ]
             ]

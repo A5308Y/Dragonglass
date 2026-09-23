@@ -608,7 +608,10 @@ body.is-phone .workspace-leaf-content:is(
 }
 .dg-detail-section-actions { display: flex; align-items: center; gap: 8px; }
 .dg-detail-section-actions button { min-height: 30px; }
-.dg-detail-eyebrow {
+/* Section titles on Project detail: one small uppercase heading per section. */
+.dg-detail-eyebrow,
+.dg-detail-section h3.dg-detail-eyebrow {
+  margin: 0;
   color: var(--text-accent);
   font-size: var(--font-ui-smaller);
   font-weight: var(--font-semibold);
