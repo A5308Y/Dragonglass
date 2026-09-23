@@ -17,8 +17,9 @@ export async function setProjectStatus(services: GtdServices, projectId: string,
 }
 
 /**
- * Moves a Project into a status column before `beforeId`, or to its end, and
- * re-ranks its siblings. Top-level Projects are siblings of each other.
+ * Moves a Project into a status column before `beforeId`, or to its end. Usually
+ * only the moved Project's file is written; see `projectPlacementsAfterMove`.
+ * Top-level Projects are siblings of each other.
  */
 export async function moveProject(
   services: GtdServices,

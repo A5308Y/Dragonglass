@@ -1,5 +1,6 @@
 import { wouldCreateProjectCycle } from "./project-hierarchy";
 import { projectReviewMembers, projectsBlockingReview } from "./project-review";
+import { ranksForOrder } from "./ranking";
 import type { Action, Project, ProjectStatus } from "./types";
 import { normalizeVaultPath } from "../utils/path";
 
@@ -56,6 +57,11 @@ export function compareProjectPriority(left: Project, right: Project): number {
   return left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
 }
 
+/**
+ * The placements that move a Project into a status column before `beforeId`, or to
+ * its end. Only what changes is returned: the moved Project, plus a sibling only when
+ * no rank is left between its new neighbours. Leaving a column needs no renumbering.
+ */
 export function projectPlacementsAfterMove(
   projects: readonly Project[],
   projectId: string,
@@ -63,38 +69,20 @@ export function projectPlacementsAfterMove(
   beforeId?: string,
 ): Map<string, ProjectPlacement> {
   const moving = projects.find((project) => project.id === projectId);
-  if (!moving) return new Map();
+  // Dropped onto itself: it is already where it was asked to go.
+  if (!moving || (beforeId === projectId && moving.status === targetStatus)) return new Map();
 
-  const sourceStatus = moving.status;
   const target = projects
-    .filter((project) => project.status === targetStatus)
+    .filter((project) => project.status === targetStatus && project.id !== projectId)
     .sort(compareProjectPriority);
+  const requestedIndex = beforeId ? target.findIndex((project) => project.id === beforeId) : target.length;
+  target.splice(requestedIndex < 0 ? target.length : requestedIndex, 0, moving);
 
-  if (sourceStatus === targetStatus && beforeId === projectId) {
-    return rankedPlacements(target, targetStatus);
-  }
-
-  const targetWithoutMoving = target.filter((project) => project.id !== projectId);
-  const requestedIndex = beforeId
-    ? targetWithoutMoving.findIndex((project) => project.id === beforeId)
-    : targetWithoutMoving.length;
-  const insertionIndex = requestedIndex < 0 ? targetWithoutMoving.length : requestedIndex;
-  targetWithoutMoving.splice(insertionIndex, 0, moving);
-
-  const placements = rankedPlacements(targetWithoutMoving, targetStatus);
-  if (sourceStatus !== targetStatus) {
-    const sourceWithoutMoving = projects
-      .filter((project) => project.status === sourceStatus && project.id !== projectId)
-      .sort(compareProjectPriority);
-    for (const [id, placement] of rankedPlacements(sourceWithoutMoving, sourceStatus)) {
-      placements.set(id, placement);
-    }
-  }
-  return placements;
-}
-
-function rankedPlacements(projects: readonly Project[], status: ProjectStatus): Map<string, ProjectPlacement> {
-  return new Map(projects.map((project, index) => [project.id, { status, order: (index + 1) * 1_000 }]));
+  // The moved Project always takes a fresh rank, so its neighbours keep theirs.
+  const ranks = ranksForOrder(target.map((project) =>
+    project.id === projectId || project.order === undefined ? { id: project.id } : { id: project.id, rank: project.order }
+  ));
+  return new Map([...ranks].map(([id, order]) => [id, { status: targetStatus, order }]));
 }
 
 export function wouldCreateProjectDependencyCycle(

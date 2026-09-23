@@ -18,6 +18,7 @@ import type {
   ProjectInput,
 } from "../domain/types";
 import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
+import { ranksForOrder } from "../domain/ranking";
 import { actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { normalizeScheduledStart } from "../domain/validation";
@@ -404,13 +405,13 @@ export class GtdRepository {
   }
 
   /** Rewrites the supplied complete priority sequence at roomy numeric intervals. */
+  /** Puts these Actions in this order, rewriting only the ones whose priority has to change. */
   async setActionPriorities(actionIds: readonly string[]): Promise<void> {
-    const ids = [...new Set(actionIds)];
-    if (!ids.length) return;
-    const actions = ids.map((id) => this.requireAction(id));
-    await Promise.all(actions.map((action, index) => this.enqueue(action.file.path, () =>
+    const actions = [...new Set(actionIds)].map((id) => this.requireAction(id));
+    const ranks = ranksForOrder(actions.map((action) => ({ id: action.id, ...(action.priority === undefined ? {} : { rank: action.priority }) })));
+    await Promise.all(actions.filter((action) => ranks.has(action.id)).map((action) => this.enqueue(action.file.path, () =>
       this.app.fileManager.processFrontMatter(action.file, (frontmatter) => {
-        frontmatter.priority = (index + 1) * 1_000;
+        frontmatter.priority = ranks.get(action.id);
       })
     )));
   }

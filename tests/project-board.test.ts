@@ -80,7 +80,22 @@ describe("Sub-project board metadata", () => {
     expect(normalizeProjectTags([" #Home ", "planning", "home", ""])).toEqual(["Home", "planning"]);
   });
 
-  it("re-ranks a whole column when moving a card", () => {
+  it("rewrites only the moved card when its new neighbours leave room", () => {
+    const projects = [
+      project("A", "A", { order: 1_000 }),
+      project("B", "B", { order: 2_000 }),
+      project("C", "C", { order: 3_000 }),
+    ];
+
+    expect([...projectPlacementsAfterMove(projects, "C", "active", "B")]).toEqual([
+      ["C", { status: "active", order: 1_500 }],
+    ]);
+    expect([...projectPlacementsAfterMove(projects, "A", "active")]).toEqual([
+      ["A", { status: "active", order: 4_000 }],
+    ]);
+  });
+
+  it("orders cards that share a rank by writing the fewest", () => {
     const projects = [
       project("A", "A", { order: 1_000 }),
       project("B", "B", { order: 1_000 }),
@@ -88,13 +103,12 @@ describe("Sub-project board metadata", () => {
     ];
 
     expect([...projectPlacementsAfterMove(projects, "C", "active", "A")]).toEqual([
-      ["C", { status: "active", order: 1_000 }],
-      ["A", { status: "active", order: 2_000 }],
-      ["B", { status: "active", order: 3_000 }],
+      ["C", { status: "active", order: -1_000 }],
+      ["A", { status: "active", order: 0 }],
     ]);
   });
 
-  it("re-ranks both columns when moving between statuses", () => {
+  it("leaves the source column alone when moving between statuses", () => {
     const projects = [
       project("A", "A", { order: 1_000 }),
       project("B", "B", { order: 2_000 }),
@@ -102,9 +116,10 @@ describe("Sub-project board metadata", () => {
     ];
 
     expect([...projectPlacementsAfterMove(projects, "B", "backlog", "C")]).toEqual([
-      ["B", { status: "backlog", order: 1_000 }],
-      ["C", { status: "backlog", order: 2_000 }],
-      ["A", { status: "active", order: 1_000 }],
+      ["B", { status: "backlog", order: 0 }],
+    ]);
+    expect([...projectPlacementsAfterMove(projects, "A", "backlog")]).toEqual([
+      ["A", { status: "backlog", order: 2_000 }],
     ]);
   });
 

@@ -1547,26 +1547,15 @@ comparePriority left right =
             EQ
 
 
-{-| Preserve the order visible on the board, then append anything currently
-outside its filters so one dropped card establishes a complete global ranking.
+{-| The order visible on the board with the dropped card moved. The host keeps
+every priority that already fits it, so a drop usually rewrites one Action, and
+Actions outside the current filters keep theirs.
 -}
 priorityOrder : Model -> ActionId -> ActionId -> List ActionId
 priorityOrder model actionId targetId =
-    let
-        visible =
-            buildGroups model |> List.concatMap (.actions >> List.map .id)
-
-        moved =
-            insertBefore actionId targetId visible
-
-        remaining =
-            model.snapshot.actions
-                |> List.map (\action -> { action | status = Dict.get action.id model.optimistic |> Maybe.withDefault action.status })
-                |> List.filter (\action -> not (List.member action.id moved))
-                |> sortActions model
-                |> List.map .id
-    in
-    moved ++ remaining
+    buildGroups model
+        |> List.concatMap (.actions >> List.map .id)
+        |> insertBefore actionId targetId
 
 
 insertBefore : ActionId -> ActionId -> List ActionId -> List ActionId
