@@ -337,6 +337,7 @@ function actionInput(input: ElmNewActionInput): ActionInput {
     ...(input.projectId ? { projectId: input.projectId } : {}),
     context: input.context,
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
+    ...(input.followUp ? { followUp: input.followUp } : {}),
     ...scheduleChanges(input.schedule),
     work: input.work,
   };
@@ -350,7 +351,7 @@ function actionChanges(changes: ElmActionChanges) {
     context: changes.context,
     energy: changes.energy,
     due: changes.due,
-    deferUntil: changes.deferUntil,
+    followUp: changes.followUp,
     ...(changes.waitingSince ? { waitingSince: changes.waitingSince } : {}),
     ...scheduleChanges(changes.schedule),
     work: changes.work,

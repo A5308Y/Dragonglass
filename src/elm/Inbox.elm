@@ -62,6 +62,7 @@ type alias Model =
     , actionStatus : ActionStatus
     , work : Bool
     , waitingSince : String
+    , followUp : String
     , schedule : ScheduleFields
     , someday : Bool
     , fileOriginal : Bool
@@ -83,6 +84,7 @@ type Msg
     | ActionStatusChanged ActionStatus
     | SetWork Bool
     | WaitingSinceChanged String
+    | FollowUpChanged String
     | SetAllDay Bool
     | ScheduledStartChanged String
     | ScheduledDurationChanged String
@@ -145,6 +147,7 @@ initialModel snapshot =
     , actionStatus = ActionStatus.Next
     , work = False
     , waitingSince = snapshot.today
+    , followUp = ""
     , schedule = { allDay = False, start = "", duration = String.fromInt snapshot.settings.defaultDurationMinutes }
     , someday = False
     , fileOriginal = False
@@ -213,6 +216,9 @@ update msg model =
 
         WaitingSinceChanged waitingSince ->
             ( { model | waitingSince = waitingSince }, Cmd.none )
+
+        FollowUpChanged followUp ->
+            ( { model | followUp = followUp }, Cmd.none )
 
         SetAllDay allDay ->
             let
@@ -383,6 +389,7 @@ resetCurrent model =
                     , actionStatus = ActionStatus.Next
                     , work = False
                     , waitingSince = model.snapshot.today
+                    , followUp = ""
                     , schedule = { allDay = False, start = "", duration = String.fromInt model.snapshot.settings.defaultDurationMinutes }
                     , someday = False
                     , fileOriginal = False
@@ -923,6 +930,10 @@ waitingFields model =
             "Waiting since"
             "The day this Action started waiting."
             [ input [ type_ "date", value model.waitingSince, onInput WaitingSinceChanged ] [] ]
+        , processingField False
+            "Follow up"
+            "Optional. From this day the Action is marked for chasing up."
+            [ Ui.labelled "Follow up" (input [ type_ "date", value model.followUp, onInput FollowUpChanged ] []) ]
         ]
 
     else
@@ -1140,6 +1151,7 @@ processingInput model =
     , status = model.actionStatus
     , context = Picker.query model.context
     , waitingSince = model.waitingSince
+    , followUp = model.followUp
     , schedule = processingSchedule model
     , work = model.work
     , fileOriginal = model.fileOriginal

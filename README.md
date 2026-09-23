@@ -73,8 +73,8 @@ project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 context: computer
 energy: medium
 due: 2026-09-23
-defer_until:
 waiting_since:
+follow_up:
 scheduled_start: 2026-09-22T12:00:00.000Z
 duration_minutes: 45
 created: 2026-09-18
@@ -85,7 +85,11 @@ completed:
 
 Scheduled Actions use `scheduled_start` as an absolute RFC3339 timestamp and `duration_minutes` as a positive whole number. `due` remains a deadline rather than a calendar time. Moving an Action to Scheduled asks for these values when they are missing.
 
-Waiting Actions always carry a `waiting_since` date and may omit `context`; every other Action status requires one. Moving an Action to Waiting stamps today unless the editor supplies another date, re-editing a Waiting Action keeps the date it is already waiting since, and leaving Waiting clears it so no date outlives the wait it recorded. The Action editor shows the field only while the status is Waiting, and both the board card and the Action row read `Waiting since <date>`. Actions that were already Waiting before the field existed are stamped with the date Dragonglass first loaded the vault after this change.
+Next and Scheduled Actions require a `context`; Waiting, Done and Cancelled Actions may omit it. Waiting Actions always carry a `waiting_since` date. Moving an Action to Waiting stamps today unless the editor supplies another date, re-editing a Waiting Action keeps the date it is already waiting since, and leaving Waiting clears it so no date outlives the wait it recorded. The Action editor shows the field only while the status is Waiting, and both the board card and the Action row read `Waiting since <date>`. Actions that were already Waiting before the field existed are stamped with the date Dragonglass first loaded the vault after this change.
+
+A Waiting Action may also carry a `follow_up` date: the day to chase it up. From that day on its board card is marked `⚑ Follow up since <date>`. The date is optional, the editor shows it only while the status is Waiting, and leaving Waiting clears it.
+
+Actions cannot be deferred. Something that cannot start yet belongs in a Someday/Maybe Project or sub-project with an `activate_at` date, and something that must happen on a particular day is a Scheduled Action. A `defer_until` key left in older files is ignored.
 
 A Project has `type`, ULID `id`, `title`, `status`, `created`, and optional `area`, `reviewed`, `activate_at`, `completed`, `image`, `tags`, `order`, `blocked_by_project_ids`, and `support_path`. The `image` value is a vault-relative image path selected in the Project editor; when absent, the configured default Project image is used. `tags` supplies custom board filters, `order` persists board priority, and `blocked_by_project_ids` records stable-ID dependencies. Supported Project statuses are `active`, `backlog`, `someday`, `completed`, and `cancelled`; the UI labels `someday` as Someday/Maybe. A Someday/Maybe Project can carry an `activate_at` date; Dragonglass adds that date to its calendar feed and changes the Project to Active when the day arrives. Normal notes, PDFs, and other files can live beneath that support path. Generated support folders mirror the full Project hierarchy, for example `Project Support Material/Dragonglass/Project Board`.
 
@@ -117,9 +121,9 @@ Assign any command to an Obsidian hotkey. A plugin's default hotkey is only a su
 
 ## Board behavior
 
-The default board groups by status. It supports Project, status, context, energy, availability, and due-soon filters; Project/context/energy grouping; created/due/title/Project sorting; title and Project search; and named saved views.
+The default board groups by status. It supports Project, status, context, energy, area, work, and due-date filters; Project/context/energy grouping; created/due/title/Project sorting; title and Project search; and named saved views.
 
-On desktop, drag an Action between status columns. On mobile, or whenever drag-and-drop is inconvenient, open the card's menu to change its status, Project, or context. A failed write rolls the optimistic card move back and displays an Obsidian Notice.
+On desktop, drag an Action between status columns. On mobile, or whenever drag-and-drop is inconvenient, open the card's menu to change its status or context; the Project is changed in the Action editor. A failed write rolls the optimistic card move back and displays an Obsidian Notice.
 
 Keyboard navigation inside the board uses Up/Down to move between cards and `D` to mark the focused Action done.
 

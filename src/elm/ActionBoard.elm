@@ -58,7 +58,6 @@ type FilterField
     | FieldEnergy
     | FieldArea
     | FieldDue
-    | FieldAvailable
     | FieldWork
 
 
@@ -918,15 +917,14 @@ filterBuilder model =
             , ( FieldEnergy, "Energy" )
             , ( FieldArea, "Area" )
             , ( FieldDue, "Due date" )
-            , ( FieldAvailable, "Available now" )
             , ( FieldWork, "Work" )
             ]
-        , if List.member draft.field [ FieldDue, FieldAvailable ] then
+        , if draft.field == FieldDue then
             text ""
 
           else
             choices [] operatorKey SetFilterOperator draft.operator [ ( Is, "is" ), ( IsNot, "is not" ) ]
-        , if List.member draft.field [ FieldDue, FieldAvailable, FieldWork ] then
+        , if List.member draft.field [ FieldDue, FieldWork ] then
             text ""
 
           else
@@ -1054,11 +1052,22 @@ cardView model action =
         overdue =
             Maybe.map (\due -> due < model.snapshot.today && action.status /= ActionStatus.Done) action.due
                 |> Maybe.withDefault False
+
+        followUp =
+            if action.status == ActionStatus.Waiting then
+                action.followUp
+
+            else
+                Nothing
+
+        followUpDue =
+            Maybe.map (\date -> date <= model.snapshot.today) followUp |> Maybe.withDefault False
     in
     article
         [ classList
             [ ( "dg-card", True )
             , ( "is-drop-before", model.priorityDropTarget == Just action.id )
+            , ( "is-follow-up-due", followUpDue )
             ]
         , attribute "role" "listitem"
         , attribute "data-card" action.id
@@ -1109,6 +1118,15 @@ cardView model action =
 
               else
                 text ""
+            , Ui.maybeView followUp
+                (\date ->
+                    -- Like overdue, a reached follow-up is said with a symbol and words, not colour alone.
+                    if followUpDue then
+                        span [ class "is-follow-up-due" ] [ text ("⚑ Follow up since " ++ date) ]
+
+                    else
+                        span [] [ text ("Follow up " ++ date) ]
+                )
             , Ui.maybeView (Data.scheduleText action) (\schedule -> span [] [ text schedule ])
             ]
         ]
@@ -1379,9 +1397,6 @@ matchesFilter model action filter =
                 |> List.any (\area -> List.member area values)
                 |> applyOperator operator
 
-        ByAvailability ->
-            Maybe.map (\date -> date <= model.snapshot.today) action.deferUntil |> Maybe.withDefault True
-
         ByWork expected ->
             action.work == expected
 
@@ -1583,9 +1598,6 @@ draftFilter model =
             model.draft
     in
     case draft.field of
-        FieldAvailable ->
-            Just ByAvailability
-
         FieldWork ->
             Just (ByWork (draft.operator == Is))
 
@@ -1644,9 +1656,6 @@ dueRange draft =
 describeFilter : Model -> Filter -> String
 describeFilter model filter =
     case filter of
-        ByAvailability ->
-            "Available now"
-
         ByWork True ->
             "Work"
 
@@ -1835,9 +1844,6 @@ filterFieldKey field =
 
         FieldDue ->
             "due"
-
-        FieldAvailable ->
-            "available"
 
         FieldWork ->
             "work"

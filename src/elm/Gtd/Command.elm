@@ -144,6 +144,7 @@ type alias InboxInput =
     , status : ActionStatus
     , context : String
     , waitingSince : String
+    , followUp : String
     , schedule : Maybe ScheduleInput
     , work : Bool
     , fileOriginal : Bool
@@ -159,6 +160,7 @@ noInboxInput =
     , status = ActionStatus.Next
     , context = ""
     , waitingSince = ""
+    , followUp = ""
     , schedule = Nothing
     , work = False
     , fileOriginal = False
@@ -182,6 +184,7 @@ type alias NewActionInput =
     , projectId : Maybe ProjectId
     , context : String
     , waitingSince : Maybe String
+    , followUp : Maybe String
     , schedule : Maybe ScheduleInput
     , work : Bool
     }
@@ -194,8 +197,8 @@ type alias ActionChanges =
     , context : String
     , energy : String
     , due : String
-    , deferUntil : String
     , waitingSince : Maybe String
+    , followUp : String
     , schedule : Maybe ScheduleInput
     , work : Bool
     }
@@ -315,6 +318,7 @@ encode command =
                          ]
                             ++ maybeIdField "projectId" input.projectId
                             ++ maybeStringField "waitingSince" input.waitingSince
+                            ++ maybeStringField "followUp" input.followUp
                             ++ scheduleField input.schedule
                         )
                   )
@@ -331,7 +335,7 @@ encode command =
                          , ( "context", Encode.string changes.context )
                          , ( "energy", Encode.string changes.energy )
                          , ( "due", Encode.string changes.due )
-                         , ( "deferUntil", Encode.string changes.deferUntil )
+                         , ( "followUp", Encode.string changes.followUp )
                          , ( "work", Encode.bool changes.work )
                          ]
                             ++ maybeStringField "waitingSince" changes.waitingSince
@@ -613,7 +617,7 @@ encodeInboxInput input =
             ++ presentString "nextAction" input.nextAction
             ++ presentString "context" input.context
             ++ (if input.status == ActionStatus.Waiting then
-                    presentString "waitingSince" input.waitingSince
+                    presentString "waitingSince" input.waitingSince ++ presentString "followUp" input.followUp
 
                 else
                     []

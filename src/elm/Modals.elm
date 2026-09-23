@@ -86,8 +86,8 @@ type alias ActionFields =
     , context : Picker String
     , energy : String
     , due : String
-    , deferUntil : String
     , waitingSince : String
+    , followUp : String
     , schedule : ScheduleFields
     , work : Bool
     }
@@ -122,7 +122,7 @@ type Field
     | PromptValueField
     | EnergyField
     | DueField
-    | DeferField
+    | FollowUpField
     | WaitingField
     | StartField
     | DurationField
@@ -312,8 +312,8 @@ newActionFields snapshot maybeProject =
     , context = Picker.init "" Nothing
     , energy = ""
     , due = ""
-    , deferUntil = ""
     , waitingSince = snapshot.today
+    , followUp = ""
     , schedule = { allDay = False, start = "", duration = defaultDuration snapshot }
     , work = False
     }
@@ -338,8 +338,8 @@ editActionFields snapshot action =
     , context = Picker.init (Maybe.withDefault "" action.context) action.context
     , energy = Maybe.withDefault "" action.energy
     , due = Maybe.withDefault "" action.due
-    , deferUntil = Maybe.withDefault "" action.deferUntil
     , waitingSince = Maybe.withDefault snapshot.today action.waitingSince
+    , followUp = Maybe.withDefault "" action.followUp
     , schedule = scheduleFieldsOf snapshot action
     , work = action.work
     }
@@ -625,8 +625,8 @@ setActionField field typed fields =
         DueField ->
             { fields | due = typed }
 
-        DeferField ->
-            { fields | deferUntil = typed }
+        FollowUpField ->
+            { fields | followUp = typed }
 
         WaitingField ->
             { fields | waitingSince = typed }
@@ -923,6 +923,7 @@ submitAction mode fields model =
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
                                 , context = Picker.query fields.context
                                 , waitingSince = waitingSince fields
+                                , followUp = followUp fields
                                 , schedule = schedule
                                 , work = fields.work
                                 }
@@ -938,8 +939,8 @@ submitAction mode fields model =
                                 , context = Picker.query fields.context
                                 , energy = String.trim fields.energy
                                 , due = fields.due
-                                , deferUntil = fields.deferUntil
                                 , waitingSince = waitingSince fields
+                                , followUp = followUp fields |> Maybe.withDefault ""
                                 , schedule = schedule
                                 , work = fields.work
                                 }
@@ -953,6 +954,17 @@ waitingSince : ActionFields -> Maybe String
 waitingSince fields =
     if fields.status == ActionStatus.Waiting && not (String.isEmpty fields.waitingSince) then
         Just fields.waitingSince
+
+    else
+        Nothing
+
+
+{-| The follow-up day is optional, and like the waiting date only a Waiting Action keeps one.
+-}
+followUp : ActionFields -> Maybe String
+followUp fields =
+    if fields.status == ActionStatus.Waiting && not (String.isEmpty fields.followUp) then
+        Just fields.followUp
 
     else
         Nothing
@@ -1295,7 +1307,9 @@ actionView model mode fields =
 
         conditionalRows =
             (if fields.status == ActionStatus.Waiting then
-                [ settingRow "Waiting since" "The day this Action started waiting." [ dateInput "Waiting since" fields.waitingSince WaitingField ] ]
+                [ settingRow "Waiting since" "The day this Action started waiting." [ dateInput "Waiting since" fields.waitingSince WaitingField ]
+                , settingRow "Follow up" "Optional. From this day the Action is marked for chasing up." [ dateInput "Follow up" fields.followUp FollowUpField ]
+                ]
 
              else
                 []
@@ -1329,7 +1343,6 @@ actionView model mode fields =
             , contextRow
             , settingRow "Energy" "" [ textInput "Energy" "text" fields.energy "medium" (TextChanged EnergyField) False ]
             , settingRow "Due" "" [ dateInput "Due" fields.due DueField ]
-            , settingRow "Defer until" "" [ dateInput "Defer until" fields.deferUntil DeferField ]
             ]
                 ++ conditionalRows
                 ++ [ workRow

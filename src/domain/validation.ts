@@ -85,8 +85,8 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const context = optionalString(frontmatter, "context");
   const energy = optionalString(frontmatter, "energy");
   const due = optionalString(frontmatter, "due");
-  const deferUntil = optionalString(frontmatter, "defer_until");
   const waitingSince = optionalString(frontmatter, "waiting_since");
+  const followUp = optionalString(frontmatter, "follow_up");
   const scheduledStart = optionalString(frontmatter, "scheduled_start");
   const durationMinutes = optionalNumber(frontmatter, "duration_minutes");
   const priority = optionalNumber(frontmatter, "priority");
@@ -96,8 +96,8 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (context) action.context = context;
   if (energy) action.energy = energy;
   if (due) action.due = dateOnly(due, "due");
-  if (deferUntil) action.deferUntil = dateOnly(deferUntil, "defer_until");
   if (waitingSince) action.waitingSince = dateOnly(waitingSince, "waiting_since");
+  if (followUp) action.followUp = dateOnly(followUp, "follow_up");
   if (scheduledStart) action.scheduledStart = normalizeScheduledStart(scheduledStart);
   if (durationMinutes !== undefined) {
     if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) throw new Error("Invalid 'duration_minutes'");

@@ -10,7 +10,7 @@ const project: Project = { type: "gtd-project", id: "P1", title: "Heating", file
 const actions: Action[] = [
   { type: "gtd-action", id: "A1", title: "Compare offers", file: file("A1.md"), status: "next", projectId: "P1", context: "computer", energy: "medium", due: "2026-09-20", created: "2026-09-18", work: true },
   { type: "gtd-action", id: "A2", title: "Call installer", file: file("A2.md"), status: "waiting", projectId: "P1", context: "phone", due: "2026-09-25", created: "2026-09-17" },
-  { type: "gtd-action", id: "A3", title: "Future research", file: file("A3.md"), status: "next", deferUntil: "2026-10-01", created: "2026-09-16" },
+  { type: "gtd-action", id: "A3", title: "Future research", file: file("A3.md"), status: "next", created: "2026-09-16" },
 ];
 const projects = new Map([[project.id, project]]);
 
@@ -39,11 +39,6 @@ describe("query model", () => {
       { kind: "value", field: "context", operator: "in", values: ["computer"] },
     ], "", projects);
     expect(result.map((action) => action.id)).toEqual(["A1"]);
-  });
-
-  it("hides future deferred actions from available-now queries", () => {
-    expect(matchesFilter(actions[0]!, { kind: "availability", operator: "available" }, "2026-09-18")).toBe(true);
-    expect(matchesFilter(actions[2]!, { kind: "availability", operator: "available" }, "2026-09-18")).toBe(false);
   });
 
   it("uses inclusive due-soon boundaries", () => {

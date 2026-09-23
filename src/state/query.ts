@@ -22,9 +22,6 @@ export function matchesFilter(
   today = localDate(),
   projectsById: ReadonlyMap<string, Project> = new Map(),
 ): boolean {
-  if (filter.kind === "availability") {
-    return !action.deferUntil || action.deferUntil <= today;
-  }
   if (filter.kind === "work") return Boolean(action.work) === filter.value;
   if (filter.kind === "value") {
     const matched = filter.field === "area"

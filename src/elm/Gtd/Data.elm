@@ -53,8 +53,8 @@ type alias Action =
     , context : Maybe String
     , energy : Maybe String
     , due : Maybe String
-    , deferUntil : Maybe String
     , waitingSince : Maybe String
+    , followUp : Maybe String
     , scheduledStart : Maybe String
     , scheduledLocal : Maybe String
     , durationMinutes : Maybe Int
@@ -253,8 +253,8 @@ actionDecoder =
         |> optional "context" (Decode.maybe Decode.string) Nothing
         |> optional "energy" (Decode.maybe Decode.string) Nothing
         |> optional "due" (Decode.maybe Decode.string) Nothing
-        |> optional "deferUntil" (Decode.maybe Decode.string) Nothing
         |> optional "waitingSince" (Decode.maybe Decode.string) Nothing
+        |> optional "followUp" (Decode.maybe Decode.string) Nothing
         |> optional "scheduledStart" (Decode.maybe Decode.string) Nothing
         |> optional "scheduledLocal" (Decode.maybe Decode.string) Nothing
         |> optional "durationMinutes" (Decode.maybe Decode.int) Nothing

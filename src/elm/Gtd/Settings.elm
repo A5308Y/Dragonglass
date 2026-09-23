@@ -96,7 +96,6 @@ type Filter
     | ByEnergy MatchOperator (List String)
     | ByArea MatchOperator (List String)
     | ByDue DueRange
-    | ByAvailability
     | ByWork Bool
 
 
@@ -348,9 +347,6 @@ filterDecoder =
                     "due" ->
                         Decode.map ByDue dueRangeDecoder
 
-                    "availability" ->
-                        Decode.succeed ByAvailability
-
                     "work" ->
                         Decode.map ByWork (Decode.field "value" Decode.bool)
 
@@ -589,9 +585,6 @@ encodeFilter filter =
                                 []
                        )
                 )
-
-        ByAvailability ->
-            Encode.object [ ( "kind", Encode.string "availability" ), ( "operator", Encode.string "available" ) ]
 
         ByWork expected ->
             Encode.object [ ( "kind", Encode.string "work" ), ( "value", Encode.bool expected ) ]

@@ -462,6 +462,8 @@ body.is-phone .workspace-leaf-content:is(
 
 .dg-card-meta span + span::before { content: "·"; margin-right: 5px; }
 .dg-card-meta .is-overdue { color: var(--text-error); }
+.dg-card-meta .is-follow-up-due { color: var(--text-warning); font-weight: var(--font-semibold); }
+.dg-card.is-follow-up-due { border-left: 3px solid var(--color-orange); }
 .dg-missing,
 .dg-warning-text { color: var(--text-warning); font-size: var(--font-ui-smaller); }
 

@@ -545,6 +545,8 @@ function migrateSavedViews(views: SavedView[]): SavedView[] {
     .map((view) => ({
       ...view,
       filters: view.filters.flatMap((filter) => {
+        // Deferring Actions was removed, and the "Available now" filter with it.
+        if ((filter as { kind: string }).kind === "availability") return [];
         if (filter.kind !== "value" || filter.field !== "status") return [filter];
         const values = filter.values.filter((value) => value !== "inbox" && value !== "someday");
         return values.length ? [{ ...filter, values }] : [];

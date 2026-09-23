@@ -157,7 +157,7 @@ describe("Elm adapter protocol", () => {
     expect(parseModalCommand(envelope({
       type: "save-action",
       actionId: "A1",
-      changes: { ...input, projectId: "", energy: "", due: "", deferUntil: "" },
+      changes: { ...input, projectId: "", energy: "", due: "", followUp: "" },
     }))?.command.type).toBe("save-action");
     expect(parseModalCommand(envelope({
       type: "save-project",

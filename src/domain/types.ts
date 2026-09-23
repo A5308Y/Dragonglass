@@ -49,9 +49,10 @@ export interface Action {
   context?: string;
   energy?: string;
   due?: string;
-  deferUntil?: string;
   /** The day a Waiting Action started waiting. Every Waiting Action carries one. */
   waitingSince?: string;
+  /** The day to chase up a Waiting Action. Only Waiting Actions carry one, and it is optional. */
+  followUp?: string;
   scheduledStart?: string;
   durationMinutes?: number;
   completed?: string;
@@ -89,8 +90,8 @@ export interface ActionInput {
   context: string;
   energy?: string;
   due?: string;
-  deferUntil?: string;
   waitingSince?: string;
+  followUp?: string;
   scheduledStart?: string;
   durationMinutes?: number;
   work?: boolean;
@@ -115,6 +116,7 @@ export interface InboxProcessingInput {
   status?: ActionStatus;
   context?: string;
   waitingSince?: string;
+  followUp?: string;
   scheduledStart?: string;
   durationMinutes?: number;
   work?: boolean;
@@ -123,7 +125,7 @@ export interface InboxProcessingInput {
 }
 
 export type ActionChanges = Partial<
-  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "deferUntil" | "waitingSince" | "scheduledStart" | "durationMinutes" | "work">
+  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes" | "work">
 >;
 
 export type ProjectChanges = Partial<
@@ -168,17 +170,12 @@ export interface DueFilter {
   value?: string | number;
 }
 
-export interface AvailabilityFilter {
-  kind: "availability";
-  operator: "available";
-}
-
 export interface WorkFilter {
   kind: "work";
   value: boolean;
 }
 
-export type ActionFilter = ValueFilter | DueFilter | AvailabilityFilter | WorkFilter;
+export type ActionFilter = ValueFilter | DueFilter | WorkFilter;
 export type GroupBy = "status" | "project" | "context" | "energy";
 export type SortField = "created" | "due" | "title" | "project";
 export type SortDirection = "asc" | "desc";

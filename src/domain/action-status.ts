@@ -16,6 +16,18 @@ export function actionRequiresContext(status: ActionStatus): boolean {
  * already waiting since, and failing both it starts waiting today. Every other status has
  * none, so a date never outlives the wait it recorded.
  */
+/**
+ * Resolves the `follow_up` date an Action should carry for a status.
+ *
+ * Only a Waiting Action has one, and only when asked for: an explicitly supplied value
+ * wins (empty clears it), otherwise it keeps the date it already has. Leaving Waiting
+ * clears it, like `waiting_since`.
+ */
+export function followUpFor(status: ActionStatus, current?: string, requested?: string): string | null {
+  if (status !== "waiting") return null;
+  return (requested === undefined ? current : requested)?.trim() || null;
+}
+
 export function waitingSinceFor(
   status: ActionStatus,
   current?: string,

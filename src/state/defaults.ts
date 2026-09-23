@@ -10,7 +10,6 @@ export function createDefaultViews(): SavedView[] {
       name: "Next Actions",
       filters: [
         { kind: "value", field: "status", operator: "in", values: ["next"] },
-        { kind: "availability", operator: "available" },
       ],
       groupBy: "status",
       sort: { field: "due", direction: "asc" },

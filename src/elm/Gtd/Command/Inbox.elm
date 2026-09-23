@@ -31,6 +31,7 @@ type alias InboxInput =
     , status : ActionStatus
     , context : String
     , waitingSince : String
+    , followUp : String
     , schedule : Maybe Base.ScheduleInput
     , work : Bool
     , fileOriginal : Bool

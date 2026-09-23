@@ -18,7 +18,7 @@ import type {
   ProjectInput,
 } from "../domain/types";
 import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
-import { actionRequiresContext, waitingSinceFor } from "../domain/action-status";
+import { actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
@@ -126,8 +126,8 @@ export class GtdRepository {
         frontmatter.context = context || null;
         frontmatter.energy = input.energy || null;
         frontmatter.due = input.due || null;
-        frontmatter.defer_until = input.deferUntil || null;
         frontmatter.waiting_since = waitingSinceFor(input.status, undefined, input.waitingSince);
+        frontmatter.follow_up = followUpFor(input.status, undefined, input.followUp);
         frontmatter.scheduled_start = input.scheduledStart || null;
         frontmatter.duration_minutes = scheduledDuration(input);
         frontmatter.work = input.work ?? false;
@@ -378,6 +378,8 @@ export class GtdRepository {
         // Waiting owns this date, so only touch the key when the wait itself starts, moves, or ends.
         const waitingSince = waitingSinceFor(changes.status ?? action.status, action.waitingSince, changes.waitingSince);
         if (waitingSince !== (action.waitingSince ?? null)) frontmatter.waiting_since = waitingSince;
+        const followUp = followUpFor(changes.status ?? action.status, action.followUp, changes.followUp);
+        if (followUp !== (action.followUp ?? null)) frontmatter.follow_up = followUp;
         if (changes.projectId !== undefined) {
           frontmatter.project_id = changes.projectId || null;
           frontmatter.project = project ? wikiLink(project) : null;
@@ -385,7 +387,6 @@ export class GtdRepository {
         if (changes.context !== undefined) frontmatter.context = changes.context.trim() || null;
         if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
         if (changes.due !== undefined) frontmatter.due = changes.due || null;
-        if (changes.deferUntil !== undefined) frontmatter.defer_until = changes.deferUntil || null;
         if (changes.scheduledStart !== undefined) frontmatter.scheduled_start = changes.scheduledStart || null;
         if (changes.durationMinutes !== undefined) frontmatter.duration_minutes = changes.durationMinutes;
         // An all-day schedule has no length, so a duration from an earlier time of day must not survive.
@@ -586,8 +587,8 @@ export class GtdRepository {
       context: context || null,
       energy: input.energy || null,
       due: input.due || null,
-      defer_until: input.deferUntil || null,
       waiting_since: waitingSinceFor(status, undefined, input.waitingSince),
+      follow_up: followUpFor(status, undefined, input.followUp),
       scheduled_start: input.scheduledStart || null,
       duration_minutes: scheduledDuration(input),
       work: input.work ?? false,
@@ -1001,7 +1002,9 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
     "context",
     "energy",
     "due",
+    // No longer written, but still removed from files that carry it from earlier versions.
     "defer_until",
+    "follow_up",
     "scheduled_start",
     "duration_minutes",
     "completed",
@@ -1050,6 +1053,7 @@ function processingActionInput(title: string, context: string, input: InboxProce
     context,
     work: input.work ?? false,
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
+    ...(input.followUp ? { followUp: input.followUp } : {}),
     ...(input.scheduledStart ? { scheduledStart: input.scheduledStart } : {}),
     ...(input.durationMinutes !== undefined ? { durationMinutes: input.durationMinutes } : {}),
     ...(project ? { projectId: project.id } : {}),

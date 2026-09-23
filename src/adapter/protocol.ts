@@ -325,15 +325,17 @@ export interface ElmNewActionInput {
   projectId?: string;
   context: string;
   waitingSince?: string;
+  followUp?: string;
   schedule?: ElmScheduleInput;
   work: boolean;
 }
 
-export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId"> {
+export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId" | "followUp"> {
   projectId: string;
   energy: string;
   due: string;
-  deferUntil: string;
+  /** Empty clears the follow-up day. */
+  followUp: string;
 }
 
 /** Inbox processing adds an editor-local schedule which the desktop host resolves to vault time. */
@@ -810,6 +812,7 @@ function isInboxInput(value: unknown): value is ElmInboxProcessingInput {
     && (value.status === undefined || isOneOf(ACTION_STATUSES, value.status))
     && isOptionalString(value.context)
     && isOptionalString(value.waitingSince)
+    && isOptionalString(value.followUp)
     && isOptionalSchedule(value.schedule)
     && isOptionalBoolean(value.work)
     && isOptionalBoolean(value.fileOriginal);
@@ -840,7 +843,6 @@ function isActionFilter(value: unknown): boolean {
     if (value.operator === "withinNextDays") return Number.isInteger(value.value) && Number(value.value) >= 0;
     return (value.operator === "isEmpty" || value.operator === "isNotEmpty") && value.value === undefined;
   }
-  if (value.kind === "availability") return value.operator === "available";
   return value.kind === "work" && typeof value.value === "boolean";
 }
 
@@ -883,6 +885,7 @@ function isNewActionInput(value: unknown): value is ElmNewActionInput {
     && typeof value.work === "boolean"
     && (value.projectId === undefined || typeof value.projectId === "string")
     && (value.waitingSince === undefined || typeof value.waitingSince === "string")
+    && (value.followUp === undefined || typeof value.followUp === "string")
     && isOptionalSchedule(value.schedule);
 }
 
@@ -891,7 +894,7 @@ function isActionChanges(value: unknown): value is ElmActionChanges {
     && typeof (value as ElmActionChanges).projectId === "string"
     && typeof (value as ElmActionChanges).energy === "string"
     && typeof (value as ElmActionChanges).due === "string"
-    && typeof (value as ElmActionChanges).deferUntil === "string";
+    && typeof (value as ElmActionChanges).followUp === "string";
 }
 
 function isNewProjectInput(value: unknown): value is ElmNewProjectInput {
