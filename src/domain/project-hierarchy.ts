@@ -13,18 +13,22 @@ export function projectBreadcrumb(project: Project, projectsById: ReadonlyMap<st
   return titles.join(" > ");
 }
 
-/** The areas of a Project and all of its ancestors, nearest first. */
-export function projectLineageAreas(projectId: string, projectsById: ReadonlyMap<string, Project>): string[] {
-  const areas: string[] = [];
+/** A Project and all of its ancestors, nearest first. */
+export function projectLineage(projectId: string, projectsById: ReadonlyMap<string, Project>): Project[] {
+  const lineage: Project[] = [];
   const seen = new Set<string>();
   let current = projectsById.get(projectId);
   while (current && !seen.has(current.id)) {
     seen.add(current.id);
-    const area = current.area?.trim();
-    if (area) areas.push(area);
+    lineage.push(current);
     current = current.parentProjectId ? projectsById.get(current.parentProjectId) : undefined;
   }
-  return areas;
+  return lineage;
+}
+
+/** The areas of a Project and all of its ancestors, nearest first. */
+export function projectLineageAreas(projectId: string, projectsById: ReadonlyMap<string, Project>): string[] {
+  return projectLineage(projectId, projectsById).flatMap((project) => project.area?.trim() || []);
 }
 
 export function projectBreadcrumbs(projects: readonly Project[]): Map<string, string> {

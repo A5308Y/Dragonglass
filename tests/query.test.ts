@@ -101,6 +101,21 @@ describe("query model", () => {
     expect(notMaintenance.map((action) => action.id)).toEqual(["A-root", "A-middle", "A-none"]);
   });
 
+  it("matches the Actions of a filtered Project's sub-projects at any depth", () => {
+    const root: Project = { ...project, id: "R", title: "Home" };
+    const middle: Project = { ...project, id: "M", title: "Heating", parentProjectId: "R" };
+    const leaf: Project = { ...project, id: "L", title: "Boiler", parentProjectId: "M" };
+    const byId = new Map([root, middle, leaf, project].map((item) => [item.id, item]));
+    const inProject = (id: string, projectId?: string): Action => ({ ...actions[2]!, id, ...(projectId ? { projectId } : {}) });
+    const candidates = [inProject("A-root", "R"), inProject("A-middle", "M"), inProject("A-leaf", "L"), inProject("A-other", "P1"), inProject("A-none")];
+    const underMiddle = candidates.filter((action) =>
+      matchesFilter(action, { kind: "value", field: "project", operator: "in", values: ["M"] }, "2026-09-18", byId));
+    expect(underMiddle.map((action) => action.id)).toEqual(["A-middle", "A-leaf"]);
+    const notUnderRoot = candidates.filter((action) =>
+      matchesFilter(action, { kind: "value", field: "project", operator: "notIn", values: ["R"] }, "2026-09-18", byId));
+    expect(notUnderRoot.map((action) => action.id)).toEqual(["A-other", "A-none"]);
+  });
+
   it("reads an integer Action priority from frontmatter", () => {
     expect(parseAction({ id: "A-priority", title: "First", status: "next", created: "2026-09-19", priority: 1_000 }, file("Priority.md")).priority)
       .toBe(1_000);

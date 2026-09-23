@@ -1398,7 +1398,7 @@ matchesFilter model action filter =
             applyOperator operator (List.member action.status values)
 
         ByProject operator values ->
-            applyOperator operator (List.member action.projectId values)
+            applyOperator operator (List.member action.projectId values || inSubprojectOf model values action)
 
         ByContext operator values ->
             applyOperator operator (List.member (Maybe.withDefault "" action.context) values)
@@ -1415,6 +1415,21 @@ matchesFilter model action filter =
 
         ByDue range ->
             matchesDue model range action.due
+
+
+{-| A Project filter stands for the Project's whole subtree, so the Actions of
+its sub-projects, at any depth, match it too.
+-}
+inSubprojectOf : Model -> List (Maybe ProjectId) -> Action -> Bool
+inSubprojectOf model values action =
+    case action.projectId |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects) of
+        Just project ->
+            values
+                |> List.filterMap identity
+                |> List.any (\rootId -> Hierarchy.isDescendantOf rootId model.snapshot.projects project)
+
+        Nothing ->
+            False
 
 
 applyOperator : MatchOperator -> Bool -> Bool
