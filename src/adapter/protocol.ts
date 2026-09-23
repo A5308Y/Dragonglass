@@ -382,6 +382,7 @@ type ElmNonMenuCommand =
   | { type: "trash-action"; actionId: string }
   | { type: "edit-project"; projectId: string }
   | { type: "set-project-status"; projectId: string; status: Project["status"] }
+  | { type: "set-project-area"; projectId: string; area: string }
   | { type: "move-subproject"; projectId: string; status: Project["status"]; beforeId?: string }
   | { type: "trash-project"; projectId: string }
   | { type: "trash-projects"; projectIds: string[] }
@@ -481,7 +482,7 @@ export const SURFACE_COMMANDS = {
   ],
   projects: [
     "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",
-    "edit-project", "set-project-status", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
+    "edit-project", "set-project-status", "set-project-area", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
     "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
@@ -672,6 +673,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "set-project-status":
       return typeof value.projectId === "string"
         && isOneOf(PROJECT_STATUSES, value.status);
+    case "set-project-area":
+      return typeof value.projectId === "string" && typeof value.area === "string";
     case "move-subproject":
       return typeof value.projectId === "string"
         && isOneOf(BOARD_PROJECT_STATUSES, value.status)

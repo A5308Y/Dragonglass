@@ -164,6 +164,8 @@ export class ElmProjectsHost {
         return;
       case "set-project-status":
         return setProjectStatus(this.services, command.projectId, command.status);
+      case "set-project-area":
+        return this.services.repository.updateProject(command.projectId, { area: command.area.trim() });
       case "move-subproject":
         return moveProject(this.services, command.projectId, command.status, command.beforeId);
       case "trash-project":

@@ -60,6 +60,7 @@ type Command
     | ConvertActionToSubproject { actionId : ActionId, title : String, parentProjectId : ProjectId }
       -- Projects
     | SetProjectStatus ProjectId ProjectStatus
+    | SetProjectArea ProjectId String
     | MoveSubproject ProjectId ProjectStatus (Maybe ProjectId)
     | TrashProject ProjectId
     | TrashProjects (List ProjectId)
@@ -353,6 +354,10 @@ encode command =
         SetProjectStatus projectId status ->
             object "set-project-status"
                 [ ( "projectId", Encode.string projectId ), ( "status", ProjectStatus.encode status ) ]
+
+        SetProjectArea projectId area ->
+            object "set-project-area"
+                [ ( "projectId", Encode.string projectId ), ( "area", Encode.string area ) ]
 
         MoveSubproject projectId status beforeId ->
             object "move-subproject"

@@ -137,6 +137,9 @@ describe("Elm adapter protocol", () => {
     // The review moved to its own view, so the Projects board no longer accepts it.
     expect(parseProjectsCommand(envelope({ type: "review-someday-project", projectId: "P3", activateAt: "" }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "open-someday-review" }))?.command.type).toBe("open-someday-review");
+    expect(parseProjectsCommand(envelope({ type: "set-project-area", projectId: "P2", area: "Work" }))?.command.type)
+      .toBe("set-project-area");
+    expect(parseProjectsCommand(envelope({ type: "set-project-area", projectId: "P2" }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "move-subproject", projectId: "P2", status: "next" }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "trash-projects", projectIds: ["P1", 2] }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: [], showImages: true, groupByArea: false }))).toBeNull();

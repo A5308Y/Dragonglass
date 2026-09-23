@@ -19,6 +19,7 @@ type Command
     | TrashAction ActionId
     | EditProjectModal ProjectId
     | SetProjectStatus ProjectId ProjectStatus
+    | SetProjectArea ProjectId String
     | MoveSubproject ProjectId ProjectStatus (Maybe ProjectId)
     | TrashProject ProjectId
     | TrashProjects (List ProjectId)
@@ -77,6 +78,9 @@ toBase command =
 
         SetProjectStatus projectId status ->
             Base.SetProjectStatus projectId status
+
+        SetProjectArea projectId area ->
+            Base.SetProjectArea projectId area
 
         MoveSubproject projectId status beforeId ->
             Base.MoveSubproject projectId status beforeId

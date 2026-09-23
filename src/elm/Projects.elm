@@ -894,28 +894,43 @@ alphabetically, ignoring case, with Projects that have none last.
 groupByArea : List Project -> List ( Maybe String, List Project )
 groupByArea projects =
     let
-        areaOf project =
-            project.area |> Maybe.map String.trim |> Maybe.andThen (\area -> if String.isEmpty area then Nothing else Just area)
-
-        areas =
-            projects
-                |> List.filterMap areaOf
-                |> Ui.uniqueSorted
-                |> List.sortBy String.toLower
-
         inArea area =
             List.filter (\project -> areaOf project == area) projects
 
         withoutArea =
             inArea Nothing
     in
-    List.map (\area -> ( Just area, inArea (Just area) )) areas
+    List.map (\area -> ( Just area, inArea (Just area) )) (knownAreas projects)
         ++ (if List.isEmpty withoutArea then
                 []
 
             else
                 [ ( Nothing, withoutArea ) ]
            )
+
+
+areaOf : Project -> Maybe String
+areaOf project =
+    project.area
+        |> Maybe.map String.trim
+        |> Maybe.andThen
+            (\area ->
+                if String.isEmpty area then
+                    Nothing
+
+                else
+                    Just area
+            )
+
+
+{-| The distinct areas these Projects use, alphabetically, ignoring case.
+-}
+knownAreas : List Project -> List String
+knownAreas projects =
+    projects
+        |> List.filterMap areaOf
+        |> Ui.uniqueSorted
+        |> List.sortBy String.toLower
 
 
 viewAreaGroup : Model -> ( Maybe String, List Project ) -> Html Msg
@@ -1660,6 +1675,7 @@ projectMenu x y model project =
                 else
                     []
                )
+            ++ areaEntries model project
             ++ [ MenuSeparator
                , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
                , MenuItem "New Action…" (Command.NewActionModal (Just project.id))
@@ -1670,6 +1686,37 @@ projectMenu x y model project =
                , MenuItem "Delete Project…" (Command.TrashProject project.id)
                ]
         )
+
+
+{-| Moves a Project into any area another Project already uses; new areas are
+typed in the edit modal.
+-}
+areaEntries : Model -> Project -> List MenuEntry
+areaEntries model project =
+    let
+        current =
+            areaOf project
+
+        entry label area =
+            MenuItem
+                ((if current == area then
+                    "✓ "
+
+                  else
+                    ""
+                 )
+                    ++ label
+                )
+                (Command.SetProjectArea project.id (Maybe.withDefault "" area))
+    in
+    case knownAreas model.snapshot.projects of
+        [] ->
+            []
+
+        areas ->
+            MenuSeparator
+                :: List.map (\area -> entry ("Area: " ++ area) (Just area)) areas
+                ++ [ entry "No area" Nothing ]
 
 
 {-| Move up and Move down among the Projects sharing this one's parent and status,
