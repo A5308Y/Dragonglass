@@ -38,15 +38,17 @@ export function activeProjectsWithoutNextAction(projects: readonly Project[], ac
 /**
  * Active Projects that still block marking this review tree as reviewed.
  *
- * Every active sub-project needs a Next, Scheduled or Waiting Action. The root only
- * needs one itself when it has no active sub-projects to carry the work.
+ * An active Project needs a Next, Scheduled or Waiting Action only when it has no
+ * active descendants to carry the work, at every level of the tree: a sub-project
+ * without Actions is fine as long as its own active descendants have them.
  * Returns the Projects to fix, empty when nothing blocks.
  */
 export function projectsBlockingReview(root: Project, members: readonly Project[], actions: readonly Action[]): Project[] {
-  const missing = activeProjectsWithoutNextAction(members, actions);
-  const hasActiveSubprojects = members.some((project) => project.id !== root.id && project.status === "active");
-  if (hasActiveSubprojects) return missing.filter((project) => project.id !== root.id);
-  return missing;
+  const hasActiveDescendant = (project: Project) => {
+    const descendants = projectDescendantIds(project.id, members);
+    return members.some((member) => descendants.has(member.id) && member.status === "active");
+  };
+  return activeProjectsWithoutNextAction(members, actions).filter((project) => !hasActiveDescendant(project));
 }
 
 export interface ProjectReviewHealth {

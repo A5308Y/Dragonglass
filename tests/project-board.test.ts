@@ -68,6 +68,12 @@ describe("Sub-project board metadata", () => {
     expect(projectActionIssue(parent, projects, [])).toBe("No open Actions");
     expect(projectActionIssue(parent, projects, [action("A1", child.id, "waiting")])).toBeNull();
     expect(projectActionIssue(parent, projects, [action("A1", parent.id, "next")])).toBe("No open Actions");
+
+    const grandchild = project("G", "Grandchild", { parentProjectId: child.id });
+    const tree = [...projects, grandchild];
+    expect(projectActionIssue(parent, tree, [action("A1", grandchild.id, "next")])).toBeNull();
+    expect(projectActionIssue(child, tree, [action("A1", grandchild.id, "next")])).toBeNull();
+    expect(projectActionIssue(parent, tree, [action("A1", child.id, "next")])).toBe("No open Actions");
   });
 
   it("normalizes custom tags", () => {

@@ -82,6 +82,13 @@ describe("Next Action gate for marking a tree reviewed", () => {
     expect(projectsBlockingReview(root, members(), []).map((project) => project.id)).toEqual(["P2"]);
   });
 
+  it("lets an intermediate sub-project carry no Action once its active descendants have one", () => {
+    const projects = [...snapshot().projects, { ...child, id: "P5", title: "Sub-sub", parentProjectId: "P2" }];
+    const tree = projectReviewMembers(root, projects);
+    expect(projectsBlockingReview(root, tree, [actionFor("A5", "P5")])).toEqual([]);
+    expect(projectsBlockingReview(root, tree, []).map((project) => project.id)).toEqual(["P5"]);
+  });
+
   it("ignores sub-projects that are not active", () => {
     expect(members().map((project) => project.id)).toEqual(["P1", "P2", "P3"]);
     expect(projectsBlockingReview(root, members(), [actionFor("A2", "P2")]).map((project) => project.id)).toEqual([]);
