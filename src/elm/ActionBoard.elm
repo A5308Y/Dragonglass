@@ -390,10 +390,18 @@ update msg model =
 
                     else
                         let
+                            -- Reordering by hand is the Manual sort. The ranking starts from the
+                            -- order on screen, so switching to it moves only the dropped card.
                             ( ranked, rankCmd ) =
                                 send IgnoreReply
                                     (Command.SetActionPriorities (priorityOrder model actionId targetId))
-                                    { model | dragged = Nothing, priorityDropTarget = Nothing }
+                                    { model
+                                        | dragged = Nothing
+                                        , priorityDropTarget = Nothing
+                                        , configuration =
+                                            withConfiguration model
+                                                (\config -> { config | sort = { field = SortByManual, direction = Ascending } })
+                                    }
                         in
                         -- A card dropped onto a card in another status column joins that status too.
                         case crossColumnStatus model actionId targetId of
@@ -818,7 +826,7 @@ toolbar model =
                 SetSortField
                 model.configuration.sort.field
                 (List.map (\field -> ( field, "Sort: " ++ Settings.sortFieldLabel field ))
-                    [ SortByCreated, SortByDue, SortByTitle, SortByProject ]
+                    [ SortByManual, SortByCreated, SortByDue, SortByTitle, SortByProject ]
                 )
             )
         , button [ onClick ReverseSort ]
@@ -1467,19 +1475,33 @@ sortActions model actions =
                 SortByCreated ->
                     action.created
 
+                SortByManual ->
+                    ""
+
         descending =
             model.configuration.sort.direction == Descending
 
+        -- The drag order is one sort among the others, so choosing another field really re-sorts.
         compareActions left right =
-            case comparePriority left right of
-                EQ ->
-                    compareByConfiguredSort left right
+            if model.configuration.sort.field == SortByManual then
+                case ( left.priority, right.priority ) of
+                    ( Just _, Just _ ) ->
+                        if descending then
+                            comparePriority right left
 
-                priorityComparison ->
-                    priorityComparison
+                        else
+                            comparePriority left right
 
-        compareByConfiguredSort left right =
-            if model.configuration.sort.field == SortByDue then
+                    _ ->
+                        -- Unranked Actions follow the ranked ones in both directions.
+                        case comparePriority left right of
+                            EQ ->
+                                compare left.id right.id
+
+                            unranked ->
+                                unranked
+
+            else if model.configuration.sort.field == SortByDue then
                 -- An Action with no due date sorts last in both directions.
                 case ( left.due, right.due ) of
                     ( Nothing, Nothing ) ->
@@ -1507,8 +1529,7 @@ sortActions model actions =
     List.sortWith compareActions actions
 
 
-{-| A manually ranked Action always comes before an unranked one. The selected
-sort remains the stable fallback until an Action receives a priority.
+{-| The Manual sort: a ranked Action always comes before an unranked one.
 -}
 comparePriority : Action -> Action -> Order
 comparePriority left right =
@@ -1797,6 +1818,9 @@ groupByKey groupBy =
 sortFieldKey : SortField -> String
 sortFieldKey field =
     case field of
+        SortByManual ->
+            "manual"
+
         SortByCreated ->
             "created"
 

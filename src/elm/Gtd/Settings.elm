@@ -52,7 +52,8 @@ type GroupBy
 
 
 type SortField
-    = SortByCreated
+    = SortByManual
+    | SortByCreated
     | SortByDue
     | SortByTitle
     | SortByProject
@@ -213,6 +214,9 @@ groupByLabel groupBy =
 sortFieldLabel : SortField -> String
 sortFieldLabel field =
     case field of
+        SortByManual ->
+            "Manual"
+
         SortByCreated ->
             "Created"
 
@@ -315,6 +319,9 @@ sortFieldDecoder =
 
                     "project" ->
                         SortByProject
+
+                    "manual" ->
+                        SortByManual
 
                     _ ->
                         SortByCreated
@@ -525,6 +532,9 @@ groupByKey groupBy =
 sortFieldKey : SortField -> String
 sortFieldKey field =
     case field of
+        SortByManual ->
+            "manual"
+
         SortByCreated ->
             "created"
 

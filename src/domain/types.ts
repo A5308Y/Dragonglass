@@ -168,7 +168,8 @@ export interface DueFilter {
 
 export type ActionFilter = ValueFilter | DueFilter;
 export type GroupBy = "status" | "project" | "context" | "energy";
-export type SortField = "created" | "due" | "title" | "project";
+/** `manual` is the order set by dragging cards, stored as each Action's `priority`. */
+export type SortField = "manual" | "created" | "due" | "title" | "project";
 export type SortDirection = "asc" | "desc";
 
 export interface SortSpec {

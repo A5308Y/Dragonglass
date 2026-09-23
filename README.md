@@ -121,9 +121,9 @@ Assign any command to an Obsidian hotkey. A plugin's default hotkey is only a su
 
 ## Board behavior
 
-The default board groups by status. It supports Project, status, context, energy, area (matching the Action's Project or any ancestor), and due-date filters; Project/context/energy grouping; created/due/title/Project sorting; title and Project search; and named saved views.
+The default board groups by status. It supports Project, status, context, energy, area (matching the Action's Project or any ancestor), and due-date filters; Project/context/energy grouping; manual/created/due/title/Project sorting; title and Project search; and named saved views.
 
-On desktop, drag an Action between status columns. On mobile, or whenever drag-and-drop is inconvenient, open the card's menu to change its status or context; the Project is changed in the Action editor. A failed write rolls the optimistic card move back and displays an Obsidian Notice.
+On desktop, drag an Action between status columns. Dropping a card onto another card ranks it there; that ranking is the **Manual** sort, and reordering by hand switches the view to it, starting from the order that was on screen. Every other sort field ignores the ranking. On mobile, or whenever drag-and-drop is inconvenient, open the card's menu to change its status or context; the Project is changed in the Action editor. A failed write rolls the optimistic card move back and displays an Obsidian Notice.
 
 Keyboard navigation inside the board uses Up/Down to move between cards and `D` to mark the focused Action done.
 

@@ -62,6 +62,14 @@ describe("query model", () => {
     expect(sortActions(actions, { field: "due", direction: "desc" }, projects).at(-1)?.id).toBe("A3");
   });
 
+  it("sorts by the drag order only when Manual is chosen, with unranked Actions last", () => {
+    const ranked = [{ ...actions[0]!, priority: 2_000 }, { ...actions[1]!, priority: 1_000 }, actions[2]!];
+    expect(sortActions(ranked, { field: "manual", direction: "asc" }, projects).map((action) => action.id)).toEqual(["A2", "A1", "A3"]);
+    expect(sortActions(ranked, { field: "manual", direction: "desc" }, projects).map((action) => action.id)).toEqual(["A1", "A2", "A3"]);
+    expect(sortActions(ranked, { field: "title", direction: "asc" }, projects).map((action) => action.id)).toEqual(["A2", "A1", "A3"]);
+    expect(sortActions(ranked, { field: "created", direction: "asc" }, projects).map((action) => action.id)).toEqual(["A3", "A2", "A1"]);
+  });
+
   it("builds serializable project groups", () => {
     const snapshot: GtdSnapshot = {
       revision: 1,

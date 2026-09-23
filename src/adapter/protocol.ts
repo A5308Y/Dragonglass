@@ -844,7 +844,7 @@ function isActionFilter(value: unknown): boolean {
 
 function isSortSpec(value: unknown): boolean {
   return isRecord(value)
-    && ["created", "due", "title", "project"].includes(String(value.field))
+    && ["manual", "created", "due", "title", "project"].includes(String(value.field))
     && (value.direction === "asc" || value.direction === "desc");
 }
 

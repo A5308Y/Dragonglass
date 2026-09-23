@@ -74,7 +74,13 @@ export function sortActions(actions: readonly Action[], spec: SortSpec, projects
       return left.due ? -1 : 1;
     }
     let result: number;
-    if (spec.field === "created") result = compareNullable(left.created, right.created, false);
+    // Unranked Actions follow the ranked ones in both directions, like Actions without a due date.
+    if (spec.field === "manual" && (left.priority === undefined || right.priority === undefined)) {
+      if (left.priority === undefined && right.priority === undefined) return left.id.localeCompare(right.id);
+      return left.priority === undefined ? 1 : -1;
+    }
+    if (spec.field === "manual") result = left.priority! - right.priority!;
+    else if (spec.field === "created") result = compareNullable(left.created, right.created, false);
     else if (spec.field === "due") result = compareNullable(left.due, right.due, true);
     else if (spec.field === "title") result = compareNullable(left.title, right.title, false);
     else {
