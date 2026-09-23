@@ -76,7 +76,7 @@ type Command
     | CreateSupportFolder ProjectId String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
-    | SaveProjectPreferences (List ProjectStatus) Bool
+    | SaveProjectPreferences { columns : List ProjectStatus, showImages : Bool, groupByArea : Bool }
     | ReviewSomedayProject ProjectId String
     | OpenSomedayReview
       -- Pomodoro
@@ -445,10 +445,11 @@ encode command =
                 , ( "body", Encode.string body )
                 ]
 
-        SaveProjectPreferences columns showImages ->
+        SaveProjectPreferences preferences ->
             object "save-project-preferences"
-                [ ( "columns", Encode.list ProjectStatus.encode columns )
-                , ( "showImages", Encode.bool showImages )
+                [ ( "columns", Encode.list ProjectStatus.encode preferences.columns )
+                , ( "showImages", Encode.bool preferences.showImages )
+                , ( "groupByArea", Encode.bool preferences.groupByArea )
                 ]
 
         ReviewSomedayProject projectId activateAt ->

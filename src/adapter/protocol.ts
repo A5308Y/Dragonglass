@@ -217,6 +217,7 @@ export interface ElmSnapshotDto {
 
 export interface ElmSettingsDto {
   showProjectBoardImages: boolean;
+  groupProjectBoardByArea: boolean;
   defaultActionStatus: Action["status"];
   showDoneColumn: boolean;
   projectBoardColumns: Project["status"][];
@@ -285,6 +286,7 @@ export function elmSnapshot(
     issues: snapshot.issues.map((issue) => ({ ...issue })),
     settings: {
       showProjectBoardImages: settings.showProjectBoardImages,
+      groupProjectBoardByArea: settings.groupProjectBoardByArea,
       defaultActionStatus: settings.defaultActionStatus,
       showDoneColumn: settings.showDoneColumn,
       projectBoardColumns: [...settings.projectBoardColumns],
@@ -395,7 +397,7 @@ type ElmNonMenuCommand =
   | { type: "create-support-folder"; projectId: string; path: string }
   | { type: "read-support-note"; projectId: string; path: string }
   | { type: "update-support-note"; projectId: string; path: string; body: string }
-  | { type: "save-project-preferences"; columns: Project["status"][]; showImages: boolean }
+  | { type: "save-project-preferences"; columns: Project["status"][]; showImages: boolean; groupByArea: boolean }
   | { type: "review-someday-project"; projectId: string; activateAt: string }
   | { type: "open-someday-review" }
   | { type: "open-pomodoro"; projectId: string }
@@ -695,7 +697,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return Array.isArray(value.columns)
         && value.columns.length > 0
         && value.columns.every((status) => isOneOf(BOARD_PROJECT_STATUSES, status))
-        && typeof value.showImages === "boolean";
+        && typeof value.showImages === "boolean"
+        && typeof value.groupByArea === "boolean";
     case "load-review-project":
     case "load-brainstorm-outcome":
       return typeof value.projectId === "string";

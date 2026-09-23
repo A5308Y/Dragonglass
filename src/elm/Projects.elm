@@ -100,6 +100,7 @@ type alias Model =
     , issuesOnly : Bool
     , showSubprojects : Bool
     , showImages : Bool
+    , groupByArea : Bool
     , visibleColumns : List ProjectStatus
     , columnsOpen : Bool
     , selecting : Bool
@@ -138,6 +139,7 @@ type Msg
     | ClearSelection
     | ToggleSubprojects Bool
     | ToggleImages Bool
+    | ToggleGroupByArea Bool
     | SelectProject ProjectId
     | BackToBoard
     | ToggleCompleted
@@ -206,6 +208,7 @@ init flags =
                     , issuesOnly = False
                     , showSubprojects = False
                     , showImages = decoded.snapshot.settings.showProjectBoardImages
+                    , groupByArea = decoded.snapshot.settings.groupProjectBoardByArea
                     , visibleColumns =
                         if List.isEmpty columns then
                             ProjectStatus.board
@@ -299,6 +302,9 @@ update msg model =
 
         ToggleImages visible ->
             savePreferences { model | showImages = visible }
+
+        ToggleGroupByArea grouped ->
+            savePreferences { model | groupByArea = grouped }
 
         SelectProject projectId ->
             selectProject projectId model
@@ -536,7 +542,11 @@ send pending command model =
 
 savePreferences : Model -> ( Model, Cmd Msg )
 savePreferences model =
-    send IgnoreReply (Command.SaveProjectPreferences model.visibleColumns model.showImages) model
+    send IgnoreReply
+        (Command.SaveProjectPreferences
+            { columns = model.visibleColumns, showImages = model.showImages, groupByArea = model.groupByArea }
+        )
+        model
 
 
 
@@ -719,6 +729,8 @@ viewBoard model =
             , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.showImages, onCheck ToggleImages ] [], span [] [ text "Images" ] ]
             , label [ class "dg-toolbar-toggle" ]
+                [ input [ type_ "checkbox", checked model.groupByArea, onCheck ToggleGroupByArea ] [], span [] [ text "Group by area" ] ]
+            , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.showSubprojects, onCheck ToggleSubprojects ] [], span [] [ text "Sub-projects" ] ]
             ]
         , if model.columnsOpen then
@@ -867,10 +879,54 @@ viewProjectColumn model status =
             (if List.isEmpty projects then
                 [ div [ class "dg-empty-row" ] [ text ("No " ++ String.toLower (ProjectStatus.label status) ++ " Projects.") ] ]
 
+             else if model.groupByArea then
+                List.map (viewAreaGroup model) (groupByArea projects)
+
              else
                 List.map (viewProjectCard model) projects
             )
         ]
+
+
+{-| Projects split by area, keeping each column's rank inside an area. Areas sort
+alphabetically, ignoring case, with Projects that have none last.
+-}
+groupByArea : List Project -> List ( Maybe String, List Project )
+groupByArea projects =
+    let
+        areaOf project =
+            project.area |> Maybe.map String.trim |> Maybe.andThen (\area -> if String.isEmpty area then Nothing else Just area)
+
+        areas =
+            projects
+                |> List.filterMap areaOf
+                |> Ui.uniqueSorted
+                |> List.sortBy String.toLower
+
+        inArea area =
+            List.filter (\project -> areaOf project == area) projects
+
+        withoutArea =
+            inArea Nothing
+    in
+    List.map (\area -> ( Just area, inArea (Just area) )) areas
+        ++ (if List.isEmpty withoutArea then
+                []
+
+            else
+                [ ( Nothing, withoutArea ) ]
+           )
+
+
+viewAreaGroup : Model -> ( Maybe String, List Project ) -> Html Msg
+viewAreaGroup model ( area, projects ) =
+    section [ class "dg-project-area-group" ]
+        (h3 [ class "dg-project-area-heading" ]
+            [ span [] [ text (Maybe.withDefault "No area" area) ]
+            , span [ class "dg-project-area-count" ] [ text (String.fromInt (List.length projects)) ]
+            ]
+            :: List.map (viewProjectCard model) projects
+        )
 
 
 viewProjectCard : Model -> Project -> Html Msg
@@ -940,7 +996,11 @@ viewProjectCard model project =
 
           else
             text ""
-        , Ui.maybeView project.area (\area -> div [ class "dg-project-area" ] [ text area ])
+        , if model.groupByArea then
+            text ""
+
+          else
+            Ui.maybeView project.area (\area -> div [ class "dg-project-area" ] [ text area ])
         , div [ class "dg-project-tags" ] (List.map viewTag project.tags)
         , div [ class "dg-project-metrics" ]
             [ span [] [ strong [] [ text (String.fromInt openCount) ], text " open" ]
@@ -1887,6 +1947,7 @@ emptyModel message =
     , issuesOnly = False
     , showSubprojects = False
     , showImages = False
+    , groupByArea = False
     , visibleColumns = ProjectStatus.board
     , columnsOpen = False
     , selecting = False

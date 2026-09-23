@@ -9,4 +9,8 @@ describe("Default settings", () => {
   it("shows Project card images initially", () => {
     expect(defaultSettings().showProjectBoardImages).toBe(true);
   });
+
+  it("does not group the Project board by area initially", () => {
+    expect(defaultSettings().groupProjectBoardByArea).toBe(false);
+  });
 });

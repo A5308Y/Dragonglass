@@ -131,6 +131,7 @@ type alias SavedView =
 
 type alias Settings =
     { showProjectBoardImages : Bool
+    , groupProjectBoardByArea : Bool
     , defaultActionStatus : ActionStatus
     , showDoneColumn : Bool
     , projectBoardColumns : List ProjectStatus
@@ -143,6 +144,7 @@ type alias Settings =
 empty : Settings
 empty =
     { showProjectBoardImages = True
+    , groupProjectBoardByArea = False
     , defaultActionStatus = ActionStatus.Next
     , showDoneColumn = True
     , projectBoardColumns = ProjectStatus.board
@@ -233,6 +235,7 @@ decoder : Decoder Settings
 decoder =
     Decode.succeed Settings
         |> required "showProjectBoardImages" Decode.bool
+        |> required "groupProjectBoardByArea" Decode.bool
         |> required "defaultActionStatus" ActionStatus.decoder
         |> required "showDoneColumn" Decode.bool
         |> required "projectBoardColumns" (knownList ProjectStatus.decoder)

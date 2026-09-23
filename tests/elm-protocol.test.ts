@@ -126,8 +126,9 @@ describe("Elm adapter protocol", () => {
 
     expect(parseProjectsCommand(envelope({ type: "move-subproject", projectId: "P2", status: "backlog" }))?.command.type)
       .toBe("move-subproject");
-    expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: ["active", "someday"], showImages: true }))?.command.type)
+    expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: ["active", "someday"], showImages: true, groupByArea: false }))?.command.type)
       .toBe("save-project-preferences");
+    expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: ["active"], showImages: true }))).toBeNull();
     expect(parseSomedayReviewCommand(envelope({ type: "review-someday-project", projectId: "P3", activateAt: "2026-10-01" }))?.command.type)
       .toBe("review-someday-project");
     expect(parseSomedayReviewCommand(envelope({ type: "review-someday-project", projectId: "P3", activateAt: "" }))?.command.type)
@@ -138,7 +139,7 @@ describe("Elm adapter protocol", () => {
     expect(parseProjectsCommand(envelope({ type: "open-someday-review" }))?.command.type).toBe("open-someday-review");
     expect(parseProjectsCommand(envelope({ type: "move-subproject", projectId: "P2", status: "next" }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "trash-projects", projectIds: ["P1", 2] }))).toBeNull();
-    expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: [], showImages: true }))).toBeNull();
+    expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: [], showImages: true, groupByArea: false }))).toBeNull();
   });
 
   it("validates modal commands at the adapter boundary", () => {

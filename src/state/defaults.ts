@@ -54,6 +54,7 @@ export function defaultSettings(): GtdSettings {
     actionsDirectory: "GTD/Actions",
     defaultProjectImage: "",
     showProjectBoardImages: true,
+    groupProjectBoardByArea: false,
     defaultActionStatus: "next",
     showDoneColumn: true,
     projectBoardColumns: [...BOARD_PROJECT_STATUSES],

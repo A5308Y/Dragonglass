@@ -34,7 +34,7 @@ type Command
     | CreateSupportFolder ProjectId String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
-    | SaveProjectPreferences (List ProjectStatus) Bool
+    | SaveProjectPreferences { columns : List ProjectStatus, showImages : Bool, groupByArea : Bool }
     | OpenSomedayReview
     | OpenPomodoro ProjectId
     | OpenFile String
@@ -123,8 +123,8 @@ toBase command =
         UpdateSupportNote projectId path body ->
             Base.UpdateSupportNote projectId path body
 
-        SaveProjectPreferences columns showImages ->
-            Base.SaveProjectPreferences columns showImages
+        SaveProjectPreferences preferences ->
+            Base.SaveProjectPreferences preferences
 
         OpenSomedayReview ->
             Base.OpenSomedayReview
