@@ -328,9 +328,10 @@ body.is-phone .workspace-leaf-content:is(
 }
 .dg-project-column-health { color: var(--text-warning); }
 
-/* Someday/Maybe and Completed collapse to a narrow strip that still accepts drops. */
-.dg-project-column.is-collapsed {
-  width: 40px;
+/* Someday/Maybe and Completed collapse to a strip as wide as their label that still accepts drops. */
+.dg-project-board .dg-project-column.is-collapsed {
+  flex: 0 0 auto;
+  width: auto;
   min-width: 40px;
 }
 .dg-project-column-expand {
@@ -341,14 +342,14 @@ body.is-phone .workspace-leaf-content:is(
   justify-content: flex-start;
   gap: 8px;
   height: auto;
-  padding: 10px 0;
+  padding: 10px 12px;
   border-radius: inherit;
   color: var(--text-muted);
   font-size: var(--font-ui-small);
   cursor: pointer;
 }
 .dg-project-column-expand:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
-.dg-project-column-expand-label { writing-mode: vertical-rl; white-space: nowrap; }
+.dg-project-column-expand-label { white-space: nowrap; }
 .dg-project-column-expand-count { font-size: var(--font-ui-smaller); font-variant-numeric: tabular-nums; }
 .dg-column-header > button.dg-project-column-collapse {
   min-width: 0;

@@ -812,7 +812,6 @@ viewCollapsedColumn model status =
         ]
         [ button
             [ class "dg-project-column-expand dg-flat-button"
-
             , attribute "aria-expanded" "false"
             , onClick (ToggleColumnExpanded status)
             ]
