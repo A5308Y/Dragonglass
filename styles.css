@@ -2186,6 +2186,9 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-pomodoro-card h3 { margin: 0; }
 .dg-pomodoro-field { display: flex; flex-direction: column; gap: 6px; }
 .dg-pomodoro-field textarea { width: 100%; resize: vertical; }
+/* The Project picker spans the card like the Intention field, so long breadcrumbs stay readable. */
+.dg-pomodoro-field > .dg-fuzzy-field { width: 100%; }
+.dg-pomodoro-field > .dg-fuzzy-field input { width: 100%; }
 .dg-pomodoro-label {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
