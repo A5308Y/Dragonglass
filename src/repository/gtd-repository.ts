@@ -753,7 +753,7 @@ export class GtdRepository {
     if (!cleanTitle) throw new Error("A note title is required.");
     const supportPath = await this.ensureProjectSupportPath(project);
     const path = this.uniqueMarkdownPath(supportPath, cleanTitle, createUlid());
-    return this.app.vault.create(path, `# ${cleanTitle}\n\nProject: ${wikiLink(project)}\n\n`);
+    return this.app.vault.create(path, `# ${cleanTitle}\n\n`);
   }
 
   async createProjectSupportFolder(projectId: string, relativePath: string): Promise<string> {
