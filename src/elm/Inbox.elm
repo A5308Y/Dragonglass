@@ -60,7 +60,6 @@ type alias Model =
     , desiredOutcome : String
     , nextAction : String
     , actionStatus : ActionStatus
-    , work : Bool
     , waitingSince : String
     , followUp : String
     , schedule : ScheduleFields
@@ -82,7 +81,6 @@ type Msg
     | DesiredOutcomeChanged String
     | NextActionChanged String
     | ActionStatusChanged ActionStatus
-    | SetWork Bool
     | WaitingSinceChanged String
     | FollowUpChanged String
     | SetAllDay Bool
@@ -145,7 +143,6 @@ initialModel snapshot =
     , desiredOutcome = ""
     , nextAction = ""
     , actionStatus = ActionStatus.Next
-    , work = False
     , waitingSince = snapshot.today
     , followUp = ""
     , schedule = { allDay = False, start = "", duration = String.fromInt snapshot.settings.defaultDurationMinutes }
@@ -210,9 +207,6 @@ update msg model =
 
         ActionStatusChanged actionStatus ->
             ( { model | actionStatus = actionStatus }, Cmd.none )
-
-        SetWork work ->
-            ( { model | work = work }, Cmd.none )
 
         WaitingSinceChanged waitingSince ->
             ( { model | waitingSince = waitingSince }, Cmd.none )
@@ -387,7 +381,6 @@ resetCurrent model =
                     , desiredOutcome = ""
                     , nextAction = prefill
                     , actionStatus = ActionStatus.Next
-                    , work = False
                     , waitingSince = model.snapshot.today
                     , followUp = ""
                     , schedule = { allDay = False, start = "", duration = String.fromInt model.snapshot.settings.defaultDurationMinutes }
@@ -870,11 +863,7 @@ processingForm model =
                 "Choose Next, Waiting, or Calendar."
                 [ actionStatusSelect model.actionStatus ]
             , div [ class "dg-processing-field" ]
-                [ div [ class "dg-processing-field-heading" ]
-                    [ span [] [ text "Context" ]
-                    , label [ class "dg-processing-inline-toggle" ]
-                        [ input [ type_ "checkbox", checked model.work, onCheck SetWork ] [], span [] [ text "Work" ] ]
-                    ]
+                [ div [ class "dg-processing-field-heading" ] [ span [] [ text "Context" ] ]
                 , Picker.view (contextPicker model) (contextSuggestions model) model.context
                 , small [] [ text (if ActionStatus.requiresContext model.actionStatus then "Required for this Action." else "Optional for a Waiting, Done or Cancelled Action.") ]
                 ]
@@ -1153,7 +1142,6 @@ processingInput model =
     , waitingSince = model.waitingSince
     , followUp = model.followUp
     , schedule = processingSchedule model
-    , work = model.work
     , fileOriginal = model.fileOriginal
     }
 

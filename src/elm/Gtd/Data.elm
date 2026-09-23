@@ -58,7 +58,6 @@ type alias Action =
     , scheduledStart : Maybe String
     , scheduledLocal : Maybe String
     , durationMinutes : Maybe Int
-    , work : Bool
     , priority : Maybe Int
     }
 
@@ -258,7 +257,6 @@ actionDecoder =
         |> optional "scheduledStart" (Decode.maybe Decode.string) Nothing
         |> optional "scheduledLocal" (Decode.maybe Decode.string) Nothing
         |> optional "durationMinutes" (Decode.maybe Decode.int) Nothing
-        |> optional "work" Decode.bool False
         |> optional "priority" (Decode.maybe Decode.int) Nothing
 
 

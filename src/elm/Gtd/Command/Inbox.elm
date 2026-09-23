@@ -33,7 +33,6 @@ type alias InboxInput =
     , waitingSince : String
     , followUp : String
     , schedule : Maybe Base.ScheduleInput
-    , work : Bool
     , fileOriginal : Bool
     }
 

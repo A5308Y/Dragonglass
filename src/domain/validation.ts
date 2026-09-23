@@ -111,7 +111,6 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
     if (Number.isNaN(Date.parse(completed))) throw new Error("Invalid 'completed' timestamp");
     action.completed = completed;
   }
-  if (frontmatter.work === true || frontmatter.work === "true") action.work = true;
   return action;
 }
 

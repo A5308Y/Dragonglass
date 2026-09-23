@@ -1612,16 +1612,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-action-capture > .dg-fuzzy-field ~ .dg-fuzzy-field { width: 180px; flex: 0 1 180px; }
 .dg-action-capture > .dg-review-project-input { width: auto; min-width: 0; flex: 1 1 0; }
 .dg-action-capture > .dg-review-context-input { width: 180px; min-width: 0; flex: 0 1 180px; }
-.dg-capture-toggle {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
-  white-space: nowrap;
-}
-.dg-capture-toggle input { width: 16px; height: 16px; margin: 0; }
 .dg-action-capture > .dg-fuzzy-field input { width: 100%; }
 .dg-review-actions-panel .dg-action-rows { margin-top: 12px; }
 .dg-action-capture {
@@ -1900,13 +1890,6 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-inline-form button,
   .dg-action-capture input:not([type="checkbox"]),
   .dg-action-capture button { width: 100% !important; min-height: 40px; }
-  .dg-capture-toggle { justify-content: flex-start; min-height: 40px; }
-  .dg-action-capture .dg-capture-toggle input[type="checkbox"] {
-    width: 16px;
-    max-width: 16px;
-    height: 16px;
-    flex: 0 0 16px;
-  }
   .dg-action-capture > .dg-fuzzy-field { width: 100%; flex: 0 0 auto; }
   .dg-workflow-footer { align-items: stretch; flex-direction: column; }
   .dg-review-content > .dg-workflow-footer { bottom: -8px; margin: 14px -8px -8px; padding: 12px 8px; }

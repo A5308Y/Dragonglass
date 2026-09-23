@@ -72,7 +72,6 @@ type alias Model =
     , actionTitle : String
     , project : Picker Project
     , context : Picker String
-    , work : Bool
     , sessionSeconds : Int
     , projectSeconds : Int
     , requests : Requests Pending
@@ -90,7 +89,6 @@ type Msg
     | ActionTitleChanged String
     | ProjectPicker (Picker.PickerMsg Project)
     | ContextPicker (Picker.PickerMsg String)
-    | WorkChanged Bool
     | AddActionNow
     | CompleteReview
     | MoveToSomeday
@@ -133,7 +131,6 @@ init flags =
                 , actionTitle = ""
                 , project = Picker.init "" Nothing
                 , context = Picker.init "" Nothing
-                , work = False
                 , sessionSeconds = 0
                 , projectSeconds = budget (List.length decoded.queue)
                 , requests = Host.noRequests
@@ -181,9 +178,6 @@ update msg model =
 
         ContextPicker pickerMsg ->
             ( { model | context = Picker.update pickerMsg (contextSuggestions model) identity model.context }, Cmd.none )
-
-        WorkChanged work ->
-            ( { model | work = work }, Cmd.none )
 
         AddActionNow ->
             case capture model of
@@ -317,7 +311,6 @@ resetProjectForm model =
                 Nothing ->
                     Picker.init "" Nothing
         , context = Picker.init "" Nothing
-        , work = False
         , error = Nothing
     }
 
@@ -629,8 +622,6 @@ viewActions model actions =
                 []
             , Picker.view (projectPicker model) (projectSuggestions model) model.project
             , Picker.view (contextPicker model) (contextSuggestions model) model.context
-            , label [ class "dg-capture-toggle" ]
-                [ input [ type_ "checkbox", checked model.work, onCheck WorkChanged ] [], span [] [ text "Work" ] ]
             , button [ class "mod-cta", disabled (capture model == Nothing || model.saving), onClick AddActionNow ] [ text "Add" ]
             ]
         ]
@@ -818,7 +809,7 @@ projectLabel model project =
 
 {-| The Action the capture row would create, once it names all three required parts.
 -}
-capture : Model -> Maybe { title : String, projectId : ProjectId, context : String, work : Bool }
+capture : Model -> Maybe { title : String, projectId : ProjectId, context : String }
 capture model =
     case ( String.trim model.actionTitle, Picker.selection model.project, Picker.query model.context ) of
         ( "", _, _ ) ->
@@ -831,7 +822,7 @@ capture model =
             Nothing
 
         ( actionTitle, Just project, context ) ->
-            Just { title = actionTitle, projectId = project.id, context = context, work = model.work }
+            Just { title = actionTitle, projectId = project.id, context = context }
 
 
 currentProject : Model -> Maybe Project
@@ -1002,7 +993,6 @@ emptyModel message =
     , actionTitle = ""
     , project = Picker.init "" Nothing
     , context = Picker.init "" Nothing
-    , work = False
     , sessionSeconds = 0
     , projectSeconds = 0
     , requests = Host.noRequests

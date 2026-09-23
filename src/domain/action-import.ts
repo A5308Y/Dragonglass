@@ -2,7 +2,6 @@
 export interface ImportedAction {
   title: string;
   contexts: string[];
-  work: boolean;
   done: boolean;
 }
 
@@ -10,14 +9,12 @@ const LIST_MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const CHECKBOX = /^\[([ xX])\]\s*/;
 // A tag starts a word, so the '#' in a URL fragment is left alone.
 const TAG = /(^|\s)#([\p{L}\p{N}][\p{L}\p{N}_\-/]*)/gu;
-const WORK_TAG = "work";
 
 /**
  * Parses a pasted markdown checklist into Actions.
  *
- * `#Work` (in any casing) sets the work flag; every other `#tag` is read as a
- * context. Lines without a list marker are accepted too; blank lines and lines
- * that hold nothing but tags are skipped.
+ * Every `#tag` is read as a context. Lines without a list marker are accepted
+ * too; blank lines and lines that hold nothing but tags are skipped.
  */
 export function parseActionList(text: string): ImportedAction[] {
   const actions: ImportedAction[] = [];
@@ -28,15 +25,13 @@ export function parseActionList(text: string): ImportedAction[] {
     const body = checkbox ? withoutMarker.slice(checkbox[0].length) : withoutMarker;
 
     const contexts: string[] = [];
-    let work = false;
     const title = body.replace(TAG, (_match, lead: string, tag: string) => {
-      if (tag.toLocaleLowerCase() === WORK_TAG) work = true;
-      else contexts.push(tag);
+      contexts.push(tag);
       return lead ? " " : "";
     }).replace(/\s+/g, " ").trim();
     if (!title) continue;
 
-    actions.push({ title, contexts, work, done: checkbox?.[1]?.toLocaleLowerCase() === "x" });
+    actions.push({ title, contexts, done: checkbox?.[1]?.toLocaleLowerCase() === "x" });
   }
   return actions;
 }

@@ -58,7 +58,6 @@ type FilterField
     | FieldEnergy
     | FieldArea
     | FieldDue
-    | FieldWork
 
 
 {-| The comparison a due-date filter draft is set to, before it is given an operand.
@@ -927,14 +926,13 @@ filterBuilder model =
             , ( FieldEnergy, "Energy" )
             , ( FieldArea, "Area" )
             , ( FieldDue, "Due date" )
-            , ( FieldWork, "Work" )
             ]
         , if draft.field == FieldDue then
             text ""
 
           else
             choices [] operatorKey SetFilterOperator draft.operator [ ( Is, "is" ), ( IsNot, "is not" ) ]
-        , if List.member draft.field [ FieldDue, FieldWork ] then
+        , if draft.field == FieldDue then
             text ""
 
           else
@@ -1407,9 +1405,6 @@ matchesFilter model action filter =
                 |> List.any (\area -> List.member area values)
                 |> applyOperator operator
 
-        ByWork expected ->
-            action.work == expected
-
         ByDue range ->
             matchesDue model range action.due
 
@@ -1608,9 +1603,6 @@ draftFilter model =
             model.draft
     in
     case draft.field of
-        FieldWork ->
-            Just (ByWork (draft.operator == Is))
-
         FieldDue ->
             Just (ByDue (dueRange draft))
 
@@ -1666,12 +1658,6 @@ dueRange draft =
 describeFilter : Model -> Filter -> String
 describeFilter model filter =
     case filter of
-        ByWork True ->
-            "Work"
-
-        ByWork False ->
-            "Not work"
-
         ByDue range ->
             describeDue range
 
@@ -1854,9 +1840,6 @@ filterFieldKey field =
 
         FieldDue ->
             "due"
-
-        FieldWork ->
-            "work"
 
 
 dueOperatorKey : DueOperator -> String

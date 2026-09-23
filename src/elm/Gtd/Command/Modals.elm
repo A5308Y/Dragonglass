@@ -32,7 +32,6 @@ type alias NewActionInput =
     , waitingSince : Maybe String
     , followUp : Maybe String
     , schedule : Maybe ScheduleInput
-    , work : Bool
     }
 
 
@@ -46,7 +45,6 @@ type alias ActionChanges =
     , waitingSince : Maybe String
     , followUp : String
     , schedule : Maybe ScheduleInput
-    , work : Bool
     }
 
 
@@ -158,7 +156,6 @@ newActionToBase input =
     , waitingSince = input.waitingSince
     , followUp = input.followUp
     , schedule = Maybe.map scheduleToBase input.schedule
-    , work = input.work
     }
 
 
@@ -173,7 +170,6 @@ actionChangesToBase changes =
     , waitingSince = changes.waitingSince
     , followUp = changes.followUp
     , schedule = Maybe.map scheduleToBase changes.schedule
-    , work = changes.work
     }
 
 

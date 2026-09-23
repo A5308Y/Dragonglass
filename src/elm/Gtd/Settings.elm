@@ -96,7 +96,6 @@ type Filter
     | ByEnergy MatchOperator (List String)
     | ByArea MatchOperator (List String)
     | ByDue DueRange
-    | ByWork Bool
 
 
 {-| Which group columns a board shows.
@@ -347,9 +346,6 @@ filterDecoder =
                     "due" ->
                         Decode.map ByDue dueRangeDecoder
 
-                    "work" ->
-                        Decode.map ByWork (Decode.field "value" Decode.bool)
-
                     _ ->
                         Decode.fail ("Unknown filter kind: " ++ kind)
             )
@@ -585,9 +581,6 @@ encodeFilter filter =
                                 []
                        )
                 )
-
-        ByWork expected ->
-            Encode.object [ ( "kind", Encode.string "work" ), ( "value", Encode.bool expected ) ]
 
 
 valueFilter : String -> MatchOperator -> List String -> Encode.Value

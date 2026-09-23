@@ -196,7 +196,6 @@ export class ElmModal extends Modal {
         const created = await this.services.repository.importActions(parsed.map((action) => ({
           title: action.title,
           status: action.done ? "done" as const : "next" as const,
-          work: action.work,
           context: action.contexts[0] ?? "",
           ...(command.projectId ? { projectId: command.projectId } : {}),
         })));
@@ -316,7 +315,6 @@ function importedActions(text: string): ElmImportedRow[] {
   return parseActionList(text).map((action) => ({
     title: action.title,
     tags: action.contexts,
-    work: action.work,
     done: action.done,
   }));
 }
@@ -325,7 +323,6 @@ function importedSubprojects(text: string): ElmImportedRow[] {
   return parseSubprojectList(text).map((project) => ({
     title: project.title,
     tags: project.tags,
-    work: false,
     done: project.done,
   }));
 }
@@ -339,7 +336,6 @@ function actionInput(input: ElmNewActionInput): ActionInput {
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
     ...(input.followUp ? { followUp: input.followUp } : {}),
     ...scheduleChanges(input.schedule),
-    work: input.work,
   };
 }
 
@@ -354,7 +350,6 @@ function actionChanges(changes: ElmActionChanges) {
     followUp: changes.followUp,
     ...(changes.waitingSince ? { waitingSince: changes.waitingSince } : {}),
     ...scheduleChanges(changes.schedule),
-    work: changes.work,
   };
 }
 

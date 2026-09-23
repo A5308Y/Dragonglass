@@ -97,7 +97,6 @@ export class ElmProjectReviewHost {
           status: "next",
           projectId: command.projectId,
           context: command.context.trim(),
-          work: command.work,
         });
         new Notice("Next Action created from a captured Inbox Item.");
         return;

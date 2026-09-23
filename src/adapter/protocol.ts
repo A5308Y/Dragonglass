@@ -327,7 +327,6 @@ export interface ElmNewActionInput {
   waitingSince?: string;
   followUp?: string;
   schedule?: ElmScheduleInput;
-  work: boolean;
 }
 
 export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId" | "followUp"> {
@@ -366,7 +365,6 @@ export interface ElmProjectChanges {
 export interface ElmImportedRow {
   title: string;
   tags: string[];
-  work: boolean;
   done: boolean;
 }
 
@@ -411,7 +409,7 @@ type ElmNonMenuCommand =
   | { type: "discard-pomodoro" }
   | { type: "complete-pomodoro-action"; actionId: string }
   | { type: "load-review-project"; projectId: string }
-  | { type: "create-review-action"; title: string; projectId: string; context: string; work: boolean }
+  | { type: "create-review-action"; title: string; projectId: string; context: string }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
   | { type: "move-review-to-someday"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
   | { type: "load-brainstorm-outcome"; projectId: string }
@@ -710,8 +708,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "create-review-action":
       return typeof value.title === "string"
         && typeof value.projectId === "string"
-        && typeof value.context === "string"
-        && typeof value.work === "boolean";
+        && typeof value.context === "string";
     case "complete-project-review":
     case "move-review-to-someday":
       return typeof value.projectId === "string"
@@ -814,7 +811,6 @@ function isInboxInput(value: unknown): value is ElmInboxProcessingInput {
     && isOptionalString(value.waitingSince)
     && isOptionalString(value.followUp)
     && isOptionalSchedule(value.schedule)
-    && isOptionalBoolean(value.work)
     && isOptionalBoolean(value.fileOriginal);
 }
 
@@ -843,7 +839,7 @@ function isActionFilter(value: unknown): boolean {
     if (value.operator === "withinNextDays") return Number.isInteger(value.value) && Number(value.value) >= 0;
     return (value.operator === "isEmpty" || value.operator === "isNotEmpty") && value.value === undefined;
   }
-  return value.kind === "work" && typeof value.value === "boolean";
+  return false;
 }
 
 function isSortSpec(value: unknown): boolean {
@@ -882,7 +878,6 @@ function isNewActionInput(value: unknown): value is ElmNewActionInput {
     && typeof value.title === "string"
     && isOneOf(ACTION_STATUSES, value.status)
     && typeof value.context === "string"
-    && typeof value.work === "boolean"
     && (value.projectId === undefined || typeof value.projectId === "string")
     && (value.waitingSince === undefined || typeof value.waitingSince === "string")
     && (value.followUp === undefined || typeof value.followUp === "string")

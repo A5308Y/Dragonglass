@@ -56,8 +56,6 @@ export interface Action {
   scheduledStart?: string;
   durationMinutes?: number;
   completed?: string;
-  /** Marks the Action as work, independent of its context. */
-  work?: boolean;
   /** Persistent, user-defined priority on the Actions Board. Lower comes first. */
   priority?: number;
 }
@@ -94,7 +92,6 @@ export interface ActionInput {
   followUp?: string;
   scheduledStart?: string;
   durationMinutes?: number;
-  work?: boolean;
 }
 
 export interface ProjectInput {
@@ -119,13 +116,12 @@ export interface InboxProcessingInput {
   followUp?: string;
   scheduledStart?: string;
   durationMinutes?: number;
-  work?: boolean;
   /** Keeps the captured file as reference material instead of trashing it once it is processed. */
   fileOriginal?: boolean;
 }
 
 export type ActionChanges = Partial<
-  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes" | "work">
+  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes">
 >;
 
 export type ProjectChanges = Partial<
@@ -170,12 +166,7 @@ export interface DueFilter {
   value?: string | number;
 }
 
-export interface WorkFilter {
-  kind: "work";
-  value: boolean;
-}
-
-export type ActionFilter = ValueFilter | DueFilter | WorkFilter;
+export type ActionFilter = ValueFilter | DueFilter;
 export type GroupBy = "status" | "project" | "context" | "energy";
 export type SortField = "created" | "due" | "title" | "project";
 export type SortDirection = "asc" | "desc";

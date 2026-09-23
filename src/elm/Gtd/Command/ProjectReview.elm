@@ -12,7 +12,7 @@ import Json.Encode as Encode
 
 type Command
     = LoadReviewProject ProjectId
-    | CreateReviewAction { title : String, projectId : ProjectId, context : String, work : Bool }
+    | CreateReviewAction { title : String, projectId : ProjectId, context : String }
     | AddDiaryEntry ProjectId String
     | CompleteProjectReview ProjectId String (List ProjectId)
     | MoveReviewToSomeday ProjectId String (List ProjectId)

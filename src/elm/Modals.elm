@@ -89,7 +89,6 @@ type alias ActionFields =
     , waitingSince : String
     , followUp : String
     , schedule : ScheduleFields
-    , work : Bool
     }
 
 
@@ -108,7 +107,7 @@ type alias ProjectFields =
 {-| One row of a pasted list, as the host parsed it.
 -}
 type alias ImportedRow =
-    { title : String, tags : List String, work : Bool, done : Bool }
+    { title : String, tags : List String, done : Bool }
 
 
 type alias ImportFields =
@@ -158,7 +157,6 @@ type Msg
     | ActionStatusChanged ActionStatus
     | ProjectStatusChanged ProjectStatus
     | ToggleAllDay Bool
-    | ToggleWork Bool
     | ToggleBlocker ProjectId Bool
     | ProjectPicker (Picker.PickerMsg Project)
     | ContextPicker (Picker.PickerMsg String)
@@ -315,7 +313,6 @@ newActionFields snapshot maybeProject =
     , waitingSince = snapshot.today
     , followUp = ""
     , schedule = { allDay = False, start = "", duration = defaultDuration snapshot }
-    , work = False
     }
 
 
@@ -341,7 +338,6 @@ editActionFields snapshot action =
     , waitingSince = Maybe.withDefault snapshot.today action.waitingSince
     , followUp = Maybe.withDefault "" action.followUp
     , schedule = scheduleFieldsOf snapshot action
-    , work = action.work
     }
 
 
@@ -464,9 +460,6 @@ update msg model =
 
         ToggleAllDay allDay ->
             ( { model | form = mapSchedule (toggleAllDay allDay) model.form }, Cmd.none )
-
-        ToggleWork work ->
-            ( { model | form = mapActionFields (\fields -> { fields | work = work }) model.form }, Cmd.none )
 
         ToggleBlocker projectId blocked ->
             case model.form of
@@ -925,7 +918,6 @@ submitAction mode fields model =
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields
                                 , schedule = schedule
-                                , work = fields.work
                                 }
                             )
                             model
@@ -942,7 +934,6 @@ submitAction mode fields model =
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields |> Maybe.withDefault ""
                                 , schedule = schedule
-                                , work = fields.work
                                 }
                             )
                             model
@@ -1327,9 +1318,6 @@ actionView model mode fields =
                     else
                         []
                    )
-
-        workRow =
-            settingRow "Work" "Independent of the Action's context." [ toggle "Work" fields.work ToggleWork ]
     in
     case mode of
         NewAction ->
@@ -1340,7 +1328,7 @@ actionView model mode fields =
             , statusRow
             ]
                 ++ conditionalRows
-                ++ [ workRow, noticeView model, actions model [] (submitButton model "Create Action") ]
+                ++ [ noticeView model, actions model [] (submitButton model "Create Action") ]
 
         EditAction action allowConversion ->
             [ heading "Edit Action"
@@ -1352,8 +1340,7 @@ actionView model mode fields =
             , settingRow "Due" "" [ dateInput "Due" fields.due DueField ]
             ]
                 ++ conditionalRows
-                ++ [ workRow
-                   , noticeView model
+                ++ [ noticeView model
                    , actions model
                         (if allowConversion && action.projectId /= Nothing then
                             [ button [ type_ "button", onClick ConvertToSubproject, disabled model.busy ] [ text "Convert to Sub-project" ] ]
@@ -1425,8 +1412,8 @@ importView model target fields =
         ( listHint, listPlaceholder ) =
             case target of
                 IntoActions ->
-                    ( "One Action per line. “#Work” sets the work flag, any other #tag becomes the context."
-                    , "- [ ] Draft the proposal #Laptop #Work"
+                    ( "One Action per line. Checked items become Done; the first #tag becomes the context."
+                    , "- [ ] Draft the proposal #Laptop"
                     )
 
                 IntoSubprojects ->
@@ -1468,9 +1455,7 @@ importSummary target fields =
         String.join " · "
             (case target of
                 IntoActions ->
-                    [ Ui.plural (List.length fields.rows) "Action"
-                    , String.fromInt (List.length (List.filter .work fields.rows)) ++ " marked Work"
-                    ]
+                    [ Ui.plural (List.length fields.rows) "Action" ]
                         ++ (if List.isEmpty tags then
                                 []
 
@@ -1763,10 +1748,9 @@ flagsDecoder =
 
 importedRowDecoder : Decoder ImportedRow
 importedRowDecoder =
-    Decode.map4 ImportedRow
+    Decode.map3 ImportedRow
         (Decode.field "title" Decode.string)
         (Decode.field "tags" (Decode.list Decode.string))
-        (Decode.oneOf [ Decode.field "work" Decode.bool, Decode.succeed False ])
         (Decode.oneOf [ Decode.field "done" Decode.bool, Decode.succeed False ])
 
 

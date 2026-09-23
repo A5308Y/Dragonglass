@@ -90,7 +90,7 @@ type Command
     | CompletePomodoroAction ActionId
       -- Review
     | LoadReviewProject ProjectId
-    | CreateReviewAction { title : String, projectId : ProjectId, context : String, work : Bool }
+    | CreateReviewAction { title : String, projectId : ProjectId, context : String }
     | CompleteProjectReview ProjectId String (List ProjectId)
     | MoveReviewToSomeday ProjectId String (List ProjectId)
       -- Brainstorm
@@ -146,7 +146,6 @@ type alias InboxInput =
     , waitingSince : String
     , followUp : String
     , schedule : Maybe ScheduleInput
-    , work : Bool
     , fileOriginal : Bool
     }
 
@@ -162,7 +161,6 @@ noInboxInput =
     , waitingSince = ""
     , followUp = ""
     , schedule = Nothing
-    , work = False
     , fileOriginal = False
     }
 
@@ -186,7 +184,6 @@ type alias NewActionInput =
     , waitingSince : Maybe String
     , followUp : Maybe String
     , schedule : Maybe ScheduleInput
-    , work : Bool
     }
 
 
@@ -200,7 +197,6 @@ type alias ActionChanges =
     , waitingSince : Maybe String
     , followUp : String
     , schedule : Maybe ScheduleInput
-    , work : Bool
     }
 
 
@@ -314,7 +310,6 @@ encode command =
                         ([ ( "title", Encode.string input.title )
                          , ( "status", ActionStatus.encode input.status )
                          , ( "context", Encode.string input.context )
-                         , ( "work", Encode.bool input.work )
                          ]
                             ++ maybeIdField "projectId" input.projectId
                             ++ maybeStringField "waitingSince" input.waitingSince
@@ -336,7 +331,6 @@ encode command =
                          , ( "energy", Encode.string changes.energy )
                          , ( "due", Encode.string changes.due )
                          , ( "followUp", Encode.string changes.followUp )
-                         , ( "work", Encode.bool changes.work )
                          ]
                             ++ maybeStringField "waitingSince" changes.waitingSince
                             ++ scheduleField changes.schedule
@@ -505,7 +499,6 @@ encode command =
                 [ ( "title", Encode.string fields.title )
                 , ( "projectId", Encode.string fields.projectId )
                 , ( "context", Encode.string fields.context )
-                , ( "work", Encode.bool fields.work )
                 ]
 
         CompleteProjectReview projectId desiredOutcome activeIds ->
@@ -610,7 +603,7 @@ encodeMenuEntry entry =
 encodeInboxInput : InboxInput -> Encode.Value
 encodeInboxInput input =
     Encode.object
-        ([ ( "status", ActionStatus.encode input.status ), ( "work", Encode.bool input.work ), ( "fileOriginal", Encode.bool input.fileOriginal ) ]
+        ([ ( "status", ActionStatus.encode input.status ), ( "fileOriginal", Encode.bool input.fileOriginal ) ]
             ++ maybeIdField "projectId" input.projectId
             ++ presentString "projectTitle" input.projectTitle
             ++ presentString "desiredOutcome" input.desiredOutcome

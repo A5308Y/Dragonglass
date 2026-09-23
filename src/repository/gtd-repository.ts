@@ -130,7 +130,6 @@ export class GtdRepository {
         frontmatter.follow_up = followUpFor(input.status, undefined, input.followUp);
         frontmatter.scheduled_start = input.scheduledStart || null;
         frontmatter.duration_minutes = scheduledDuration(input);
-        frontmatter.work = input.work ?? false;
         frontmatter.captured = item.created;
         frontmatter.created = localDate();
         frontmatter.completed = null;
@@ -392,7 +391,6 @@ export class GtdRepository {
         // An all-day schedule has no length, so a duration from an earlier time of day must not survive.
         const resolvedStart = changes.scheduledStart ?? action.scheduledStart;
         if (resolvedStart && isAllDaySchedule(resolvedStart)) frontmatter.duration_minutes = null;
-        if (changes.work !== undefined) frontmatter.work = changes.work;
       });
       if (changes.title && changes.title.trim() !== oldTitle) {
         await this.updateGeneratedHeading(action.file, oldTitle, changes.title.trim());
@@ -565,8 +563,8 @@ export class GtdRepository {
     return this.createInboxItem(`Brainstorm - ${cleanTopic}`, `## Ideas\n\n${cleanIdeas}`);
   }
 
-  private async createNextActionFile(title: string, context: string, captured: string, project?: Project, work = false): Promise<TFile> {
-    return this.createActionFile(title, { title, status: "next", context, work }, captured, project);
+  private async createNextActionFile(title: string, context: string, captured: string, project?: Project): Promise<TFile> {
+    return this.createActionFile(title, { title, status: "next", context }, captured, project);
   }
 
   private async createActionFile(title: string, input: ActionInput, captured: string, project?: Project): Promise<TFile> {
@@ -591,7 +589,6 @@ export class GtdRepository {
       follow_up: followUpFor(status, undefined, input.followUp),
       scheduled_start: input.scheduledStart || null,
       duration_minutes: scheduledDuration(input),
-      work: input.work ?? false,
       captured,
       created: localDate(),
       completed: status === "done" ? new Date().toISOString() : null,
@@ -1004,6 +1001,7 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
     "due",
     // No longer written, but still removed from files that carry it from earlier versions.
     "defer_until",
+    "work",
     "follow_up",
     "scheduled_start",
     "duration_minutes",
@@ -1051,7 +1049,6 @@ function processingActionInput(title: string, context: string, input: InboxProce
     title,
     status: input.status ?? "next",
     context,
-    work: input.work ?? false,
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
     ...(input.followUp ? { followUp: input.followUp } : {}),
     ...(input.scheduledStart ? { scheduledStart: input.scheduledStart } : {}),

@@ -147,7 +147,7 @@ describe("Elm adapter protocol", () => {
 
   it("validates modal commands at the adapter boundary", () => {
     const envelope = (command: unknown) => ({ protocolVersion: ELM_PROTOCOL_VERSION, requestId: "7", command });
-    const input = { title: "Draft", status: "next", context: "computer", work: false };
+    const input = { title: "Draft", status: "next", context: "computer" };
 
     expect(parseModalCommand(envelope({ type: "save-new-action", input }))?.command.type).toBe("save-new-action");
     expect(parseModalCommand(envelope({
@@ -212,13 +212,13 @@ describe("Elm adapter protocol", () => {
       type: "process-inbox",
       itemId: "I1",
       operation: "next-action",
-      input: { nextAction: "Call", context: "phone", work: false, fileOriginal: true },
+      input: { nextAction: "Call", context: "phone", fileOriginal: true },
     }))?.command.type).toBe("process-inbox");
     expect(parseInboxCommand(envelope({
       type: "process-inbox",
       itemId: "I1",
       operation: "next-action",
-      input: { nextAction: "Await reply", status: "waiting", waitingSince: "2026-09-22", context: "", work: false, fileOriginal: false },
+      input: { nextAction: "Await reply", status: "waiting", waitingSince: "2026-09-22", context: "", fileOriginal: false },
     }))?.command.type).toBe("process-inbox");
     expect(parseInboxCommand(envelope({
       type: "process-inbox",
@@ -229,7 +229,6 @@ describe("Elm adapter protocol", () => {
         status: "scheduled",
         context: "phone",
         schedule: { kind: "all-day", date: "2026-09-23" },
-        work: false,
         fileOriginal: false,
       },
     }))?.command.type).toBe("process-inbox");
@@ -237,7 +236,7 @@ describe("Elm adapter protocol", () => {
       type: "process-inbox",
       itemId: "I1",
       operation: "next-action",
-      input: { work: "false" },
+      input: { fileOriginal: "false" },
     }))).toBeNull();
 
     expect(parseActionBoardCommand(envelope({ type: "set-action-priorities", actionIds: ["A2", "A1"] }))?.command.type)

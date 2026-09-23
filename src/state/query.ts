@@ -22,7 +22,6 @@ export function matchesFilter(
   today = localDate(),
   projectsById: ReadonlyMap<string, Project> = new Map(),
 ): boolean {
-  if (filter.kind === "work") return Boolean(action.work) === filter.value;
   if (filter.kind === "value") {
     const matched = filter.field === "area"
       ? Boolean(action.projectId) && projectLineageAreas(action.projectId!, projectsById).some((area) => filter.values.includes(area))
