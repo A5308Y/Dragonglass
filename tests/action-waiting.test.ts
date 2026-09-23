@@ -15,10 +15,11 @@ const frontmatter = (changes: Record<string, unknown> = {}) => ({
 });
 
 describe("Waiting since", () => {
-  it("is, with Done, an Action status that does not require a context", () => {
-    expect(actionRequiresContext("waiting")).toBe(false);
-    expect(actionRequiresContext("done")).toBe(false);
-    for (const status of ["next", "scheduled", "cancelled"] as const) {
+  it("is, with Done and Cancelled, an Action status that does not require a context", () => {
+    for (const status of ["waiting", "done", "cancelled"] as const) {
+      expect(actionRequiresContext(status)).toBe(false);
+    }
+    for (const status of ["next", "scheduled"] as const) {
       expect(actionRequiresContext(status)).toBe(true);
     }
   });

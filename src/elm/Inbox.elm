@@ -869,7 +869,7 @@ processingForm model =
                         [ input [ type_ "checkbox", checked model.work, onCheck SetWork ] [], span [] [ text "Work" ] ]
                     ]
                 , Picker.view (contextPicker model) (contextSuggestions model) model.context
-                , small [] [ text (if ActionStatus.requiresContext model.actionStatus then "Required for this Action." else "Optional for a Waiting or Done Action.") ]
+                , small [] [ text (if ActionStatus.requiresContext model.actionStatus then "Required for this Action." else "Optional for a Waiting, Done or Cancelled Action.") ]
                 ]
             ]
                 ++ waitingFields model
