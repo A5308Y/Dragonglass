@@ -10,6 +10,7 @@ import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ActionId, ProjectId)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
+import Gtd.Ranking as Ranking
 import Gtd.Settings as Settings
     exposing
         ( BoardConfiguration
@@ -87,6 +88,14 @@ type Pending
     = IgnoreReply
     | CreateSavedView
     | MoveAction ActionId ActionStatus
+    | RankActions (List ActionId)
+
+
+{-| A priority already shown on the board while the host writes it. `confirmed`
+means the host has answered, so the next snapshot is authoritative either way.
+-}
+type alias PendingRank =
+    { priority : Int, confirmed : Bool }
 
 
 type alias Model =
@@ -101,6 +110,7 @@ type alias Model =
     , dragged : Maybe ActionId
     , priorityDropTarget : Maybe ActionId
     , optimistic : Dict ActionId ActionStatus
+    , optimisticRanks : Dict ActionId PendingRank
     , savedViewSeed : Int
     , requests : Requests Pending
     , fatalError : Maybe String
@@ -187,6 +197,7 @@ initialModel snapshot active configuration =
     , dragged = Nothing
     , priorityDropTarget = Nothing
     , optimistic = Dict.empty
+    , optimisticRanks = Dict.empty
     , savedViewSeed = 1
     , requests = Host.noRequests
     , fatalError = Nothing
@@ -390,14 +401,26 @@ update msg model =
 
                     else
                         let
+                            order =
+                                priorityOrder model actionId targetId
+
+                            -- The same ranks the host will write, shown straight away.
+                            ranks =
+                                order
+                                    |> List.filterMap (\id -> Data.findAction id model.snapshot.actions)
+                                    |> List.map (\action -> ( action.id, (effectiveAction model action).priority ))
+                                    |> Ranking.ranksForOrder
+                                    |> Dict.map (\_ priority -> { priority = priority, confirmed = False })
+
                             -- Reordering by hand is the Manual sort. The ranking starts from the
                             -- order on screen, so switching to it moves only the dropped card.
                             ( ranked, rankCmd ) =
-                                send IgnoreReply
-                                    (Command.SetActionPriorities (priorityOrder model actionId targetId))
+                                send (RankActions (Dict.keys ranks))
+                                    (Command.SetActionPriorities order)
                                     { model
                                         | dragged = Nothing
                                         , priorityDropTarget = Nothing
+                                        , optimisticRanks = Dict.union ranks model.optimisticRanks
                                         , configuration =
                                             withConfiguration model
                                                 (\config -> { config | sort = { field = SortByManual, direction = Ascending } })
@@ -655,6 +678,8 @@ receiveHost value model =
             ( { model
                 | snapshot = snapshot
                 , optimistic = Dict.filter (\actionId status -> not (converged actionId status snapshot)) model.optimistic
+                , optimisticRanks =
+                    Dict.filter (\actionId rank -> not rank.confirmed && not (rankLanded actionId rank snapshot)) model.optimisticRanks
                 , fatalError = Nothing
               }
             , Cmd.none
@@ -677,8 +702,22 @@ receiveHost value model =
                         Err _ ->
                             ( next, Cmd.none )
 
+                ( Ok _, RankActions actionIds ) ->
+                    -- Written. The snapshot that follows is the truth, even if it differs from what was shown.
+                    ( { next
+                        | optimisticRanks =
+                            List.foldl (\actionId ranks -> Dict.update actionId (Maybe.map (\rank -> { rank | confirmed = True })) ranks)
+                                next.optimisticRanks
+                                actionIds
+                      }
+                    , Cmd.none
+                    )
+
                 ( Ok _, _ ) ->
                     ( next, Cmd.none )
+
+                ( Err message, RankActions actionIds ) ->
+                    ( { next | optimisticRanks = List.foldl Dict.remove next.optimisticRanks actionIds, fatalError = Just message }, Cmd.none )
 
                 ( Err message, MoveAction actionId _ ) ->
                     ( { next | optimistic = Dict.remove actionId next.optimistic, fatalError = Just message }, Cmd.none )
@@ -688,6 +727,30 @@ receiveHost value model =
 
         Err error ->
             ( { model | fatalError = Just (Decode.errorToString error) }, Cmd.none )
+
+
+{-| An Action as the board draws it: with the status and priority of moves the
+host has not written yet.
+-}
+effectiveAction : Model -> Action -> Action
+effectiveAction model action =
+    { action
+        | status = Dict.get action.id model.optimistic |> Maybe.withDefault action.status
+        , priority =
+            case Dict.get action.id model.optimisticRanks of
+                Just rank ->
+                    Just rank.priority
+
+                Nothing ->
+                    action.priority
+    }
+
+
+rankLanded : ActionId -> PendingRank -> Snapshot -> Bool
+rankLanded actionId rank snapshot =
+    Data.findAction actionId snapshot.actions
+        |> Maybe.map (\action -> action.priority == Just rank.priority)
+        |> Maybe.withDefault True
 
 
 {-| True once the vault agrees with a move the board already drew.
@@ -1179,7 +1242,7 @@ buildGroups model =
     let
         actions =
             model.snapshot.actions
-                |> List.map (\action -> { action | status = Dict.get action.id model.optimistic |> Maybe.withDefault action.status })
+                |> List.map (effectiveAction model)
                 |> List.filter (matchesAll model)
                 |> sortActions model
 

@@ -81,6 +81,7 @@ button [ class "dg-foo dg-flat-button", onClick ... ] [ ... ]
 - Board order is an integer rank (`order` on Projects, `priority` on Actions).
   `ranksForOrder` in `src/domain/ranking.ts` keeps every rank that still fits and
   gives moved cards a rank between their neighbours, so a drop writes one file.
-- `src/elm/Gtd/Ranking.elm` is a step-for-step copy: the Projects view uses it to
-  show a drop before the host writes it and to recognise the confirming snapshot.
+- `src/elm/Gtd/Ranking.elm` is a step-for-step copy: the Projects view and the
+  Actions board use it to show a drop before the host writes it and to recognise
+  the confirming snapshot.
   Change both together, or dropped cards flicker until the next snapshot.
