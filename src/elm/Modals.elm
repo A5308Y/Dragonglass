@@ -268,7 +268,11 @@ buildForm snapshot images spec =
                     ImportForm IntoSubprojects (importFields snapshot (project "parentProjectId"))
 
                 "new-project" ->
-                    ProjectForm NewProject (newProjectFields snapshot (project "parentProjectId"))
+                    ProjectForm NewProject
+                        (newProjectFields snapshot
+                            (project "parentProjectId")
+                            (Decode.decodeValue (Decode.field "status" ProjectStatus.decoder) spec |> Result.withDefault ProjectStatus.Active)
+                        )
 
                 "edit-project" ->
                     case Data.findProject (stringField "projectId") snapshot.projects of
@@ -367,10 +371,17 @@ defaultDuration snapshot =
     String.fromInt snapshot.settings.defaultDurationMinutes
 
 
-newProjectFields : Snapshot -> Maybe Project -> ProjectFields
-newProjectFields snapshot maybeParent =
+{-| The statuses a Project can start in; it is only completed or cancelled later.
+-}
+newProjectStatuses : List ProjectStatus
+newProjectStatuses =
+    [ ProjectStatus.Active, ProjectStatus.Backlog, ProjectStatus.Someday ]
+
+
+newProjectFields : Snapshot -> Maybe Project -> ProjectStatus -> ProjectFields
+newProjectFields snapshot maybeParent status =
     { title = ""
-    , status = ProjectStatus.Active
+    , status = status
     , activateAt = ""
     , area = ""
     , image = Picker.init "" Nothing
@@ -1061,6 +1072,7 @@ submitProject mode fields model =
                 send CloseWhenDone
                     (Command.CreateProject
                         { title = String.trim fields.title
+                        , status = fields.status
                         , area = String.trim fields.area
                         , image = image
                         , tags = tagList fields.tags
@@ -1494,6 +1506,7 @@ projectView model mode fields =
                     "New Sub-project"
                 )
             , settingRow "Title" "" [ textInput "Title" "text" fields.title "Project title" (TextChanged TitleField) True ]
+            , settingRow "Status" "" [ statusSelect "Status" newProjectStatuses ProjectStatus.key ProjectStatus.label ProjectStatusChanged fields.status ]
             , settingRow "Area" "" [ textInput "Area" "text" fields.area "e.g. Work, Health" (TextChanged AreaField) False ]
             , imageRow
             , tagsRow fields.tags

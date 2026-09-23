@@ -18,7 +18,7 @@ type Command
     | MoveReviewToSomeday ProjectId String (List ProjectId)
     | TrashProject ProjectId
     | SetProjectStatus ProjectId ProjectStatus
-    | NewProjectModal (Maybe ProjectId)
+    | NewProjectModal (Maybe ProjectId) ProjectStatus
     | OpenFile String
     | EditActionModal ActionId
     | SetActionStatus ActionId ActionStatus
@@ -50,8 +50,8 @@ encode command =
             SetProjectStatus projectId status ->
                 Base.SetProjectStatus projectId status
 
-            NewProjectModal parentId ->
-                Base.NewProjectModal parentId
+            NewProjectModal parentId status ->
+                Base.NewProjectModal parentId status
 
             OpenFile path ->
                 Base.OpenFile path

@@ -41,7 +41,7 @@ type Command
     | ShowMenu Float Float (List MenuEntry)
       -- Modals the host owns
     | NewActionModal (Maybe ProjectId)
-    | NewProjectModal (Maybe ProjectId)
+    | NewProjectModal (Maybe ProjectId) ProjectStatus
     | EditActionModal ActionId
     | EditProjectModal ProjectId
     | ImportActionsModal ProjectId
@@ -202,6 +202,7 @@ type alias ActionChanges =
 
 type alias NewProjectInput =
     { title : String
+    , status : ProjectStatus
     , area : String
     , image : String
     , tags : List String
@@ -264,8 +265,8 @@ encode command =
         NewActionModal maybeId ->
             object "create-action" (maybeIdField "projectId" maybeId)
 
-        NewProjectModal maybeId ->
-            object "create-project" (maybeIdField "parentProjectId" maybeId)
+        NewProjectModal maybeId status ->
+            object "create-project" (( "status", ProjectStatus.encode status ) :: maybeIdField "parentProjectId" maybeId)
 
         EditActionModal actionId ->
             object "edit-action" [ ( "actionId", Encode.string actionId ) ]
@@ -374,6 +375,7 @@ encode command =
                 [ ( "input"
                   , Encode.object
                         ([ ( "title", Encode.string input.title )
+                         , ( "status", ProjectStatus.encode input.status )
                          , ( "area", Encode.string input.area )
                          , ( "image", Encode.string input.image )
                          , ( "tags", Encode.list Encode.string input.tags )

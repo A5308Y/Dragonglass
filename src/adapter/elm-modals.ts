@@ -34,7 +34,7 @@ export type ElmModalForm =
   | { kind: "schedule-action"; actionId: string }
   | { kind: "import-actions"; projectId?: string }
   | { kind: "import-subprojects"; parentProjectId?: string }
-  | { kind: "new-project"; parentProjectId?: string }
+  | { kind: "new-project"; parentProjectId?: string; status?: Project["status"] }
   | { kind: "edit-project"; projectId: string }
   | { kind: "batch-tags"; projectIds: string[] }
   | { kind: "batch-parent"; projectIds: string[] }
@@ -151,6 +151,7 @@ export class ElmModal extends Modal {
         const image = this.validatedImage(command.input.image, "");
         const file = await this.services.repository.createProject({
           title: command.input.title,
+          status: command.input.status,
           ...(command.input.area ? { area: command.input.area } : {}),
           ...(image ? { image } : {}),
           ...(command.input.tags.length ? { tags: parseProjectTags(command.input.tags.join(",")) } : {}),

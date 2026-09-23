@@ -712,7 +712,7 @@ viewBoard model =
                 [ button [ onClick (Send IgnoreReply Command.OpenSomedayReview) ]
                     [ text ("Review Someday/Maybe (" ++ String.fromInt (List.length (somedayQueue model)) ++ ")") ]
                 , button [ onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
-                , button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewProjectModal Nothing)) ] [ text "New Project" ]
+                , button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewProjectModal Nothing ProjectStatus.Active)) ] [ text "New Project" ]
                 ]
             ]
         , div [ class "dg-toolbar dg-project-toolbar" ]
@@ -1328,7 +1328,6 @@ viewSubprojects model project =
                         )
                     ]
                 , button [ onClick (Send IgnoreReply (Command.ImportSubprojectsModal project.id)) ] [ text "Import…" ]
-                , button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewProjectModal (Just project.id))) ] [ text "New sub-project" ]
                 ]
             ]
         , if List.isEmpty tags then
@@ -1351,7 +1350,7 @@ viewSubprojects model project =
                        )
                 )
         , div [ class "dg-subproject-columns dg-subproject-columns-primary" ]
-            (List.map (viewSubprojectColumn model primary) [ ProjectStatus.Active, ProjectStatus.Backlog ])
+            (List.map (viewSubprojectColumn model project primary) [ ProjectStatus.Active, ProjectStatus.Backlog ])
         , div [ classList [ ( "dg-subproject-secondary", True ), ( "is-open", model.showSecondary ) ] ]
             [ button [ class "dg-disclosure dg-subproject-secondary-toggle dg-flat-button", onClick ToggleSecondary ]
                 [ span [] [ text (disclosure model.showSecondary ++ " Someday/Maybe and Completed") ]
@@ -1359,7 +1358,7 @@ viewSubprojects model project =
                 ]
             , if model.showSecondary then
                 div [ class "dg-subproject-columns dg-subproject-columns-secondary" ]
-                    (List.map (viewSubprojectColumn model secondary) [ ProjectStatus.Someday, ProjectStatus.Completed ])
+                    (List.map (viewSubprojectColumn model project secondary) [ ProjectStatus.Someday, ProjectStatus.Completed ])
 
               else
                 text ""
@@ -1367,8 +1366,8 @@ viewSubprojects model project =
         ]
 
 
-viewSubprojectColumn : Model -> List Project -> ProjectStatus -> Html Msg
-viewSubprojectColumn model projects status =
+viewSubprojectColumn : Model -> Project -> List Project -> ProjectStatus -> Html Msg
+viewSubprojectColumn model parent projects status =
     let
         items =
             List.filter (\project -> project.status == status) projects
@@ -1380,6 +1379,16 @@ viewSubprojectColumn model projects status =
         , on "drop" (Decode.succeed (DropSubproject status Nothing))
         ]
         [ header [] [ strong [] [ text (ProjectStatus.label status) ], span [] [ text (String.fromInt (List.length items)) ] ]
+        , if List.member status [ ProjectStatus.Active, ProjectStatus.Backlog ] then
+            -- Each column creates sub-projects in its own status, so no move is needed afterwards.
+            button
+                [ class "dg-subproject-add"
+                , onClick (Send IgnoreReply (Command.NewProjectModal (Just parent.id) status))
+                ]
+                (Ui.iconLabel "+ New sub-project" ("New " ++ ProjectStatus.label status ++ " sub-project"))
+
+          else
+            text ""
         , div [ class "dg-subproject-list" ]
             (List.map (viewSubprojectCard model) items
                 ++ (if model.subprojectDropTarget == Just { status = status, beforeId = Nothing } then
@@ -1655,7 +1664,7 @@ projectMenu x y model project =
             ++ [ MenuSeparator
                , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
                , MenuItem "New Action…" (Command.NewActionModal (Just project.id))
-               , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id))
+               , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id) ProjectStatus.Active)
                , MenuItem "Open note" (Command.OpenFile project.file.path)
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
                , MenuSeparator
@@ -1736,7 +1745,7 @@ subprojectMenu x y model project =
                , MenuItem "Open note" (Command.OpenFile project.file.path)
                , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
                , MenuItem "New Action…" (Command.NewActionModal (Just project.id))
-               , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id))
+               , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id) ProjectStatus.Active)
                , MenuSeparator
                , MenuItem "Delete Project…" (Command.TrashProject project.id)
                ]

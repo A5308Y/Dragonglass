@@ -344,6 +344,7 @@ export interface ElmInboxProcessingInput extends Omit<InboxProcessingInput, "sch
 
 export interface ElmNewProjectInput {
   title: string;
+  status: Project["status"];
   area: string;
   image: string;
   tags: string[];
@@ -370,7 +371,7 @@ export interface ElmImportedRow {
 
 type ElmNonMenuCommand =
   | { type: "create-action"; projectId?: string }
-  | { type: "create-project"; parentProjectId?: string }
+  | { type: "create-project"; parentProjectId?: string; status: Project["status"] }
   | { type: "set-project-selection"; projectId?: string }
   | { type: "quick-capture" }
   | { type: "open-inbox" }
@@ -635,7 +636,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "create-action":
       return value.projectId === undefined || typeof value.projectId === "string";
     case "create-project":
-      return value.parentProjectId === undefined || typeof value.parentProjectId === "string";
+      return (value.parentProjectId === undefined || typeof value.parentProjectId === "string")
+        && isOneOf(PROJECT_STATUSES, value.status);
     case "set-project-selection":
       return value.projectId === undefined || typeof value.projectId === "string";
     case "quick-capture":
@@ -895,6 +897,7 @@ function isActionChanges(value: unknown): value is ElmActionChanges {
 function isNewProjectInput(value: unknown): value is ElmNewProjectInput {
   return isRecord(value)
     && typeof value.title === "string"
+    && isOneOf(PROJECT_STATUSES, value.status)
     && typeof value.area === "string"
     && typeof value.image === "string"
     && isStringArray(value.tags)

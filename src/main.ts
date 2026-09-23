@@ -5,7 +5,7 @@ import { MailService, type MailImportResult, type MailSyncStatus } from "./mail/
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import { projectsDueForActivation } from "./domain/project-activation";
 import { describeImport, normalizeMailPort } from "./domain/mail";
-import type { GtdSettings, MailAccountSettings, SavedView } from "./domain/types";
+import type { GtdSettings, MailAccountSettings, ProjectStatus, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
@@ -66,7 +66,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       scheduleAction: (id) => this.scheduleAction(id),
       importActions: (projectId) => this.importActions(projectId),
       importSubprojects: (parentProjectId) => this.importSubprojects(parentProjectId),
-      createProject: (openAfterCreate = true, parentProjectId) => this.createProject(openAfterCreate, parentProjectId),
+      createProject: (openAfterCreate = true, parentProjectId, status) => this.createProject(openAfterCreate, parentProjectId, status),
       editAction: (id, allowProjectConversion) => this.editAction(id, allowProjectConversion),
       editProject: (id) => this.editProject(id),
       showProjectDetail: (id) => void this.openProjectDetail(id),
@@ -377,8 +377,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     new ElmModal(this.services, { kind: "capture" }).open();
   }
 
-  private createProject(openAfterCreate = true, parentProjectId = ""): void {
-    new ElmModal(this.services, { kind: "new-project", ...(parentProjectId ? { parentProjectId } : {}) }, {
+  private createProject(openAfterCreate = true, parentProjectId = "", status?: ProjectStatus): void {
+    new ElmModal(this.services, { kind: "new-project", ...(parentProjectId ? { parentProjectId } : {}), ...(status ? { status } : {}) }, {
       onProjectCreated: async (file) => {
         if (openAfterCreate) await this.openFile(file);
       },

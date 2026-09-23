@@ -119,7 +119,7 @@ export class ElmProjectReviewHost {
       case "set-project-status":
         return this.services.repository.setProjectStatus(command.projectId, command.status);
       case "create-project":
-        this.services.createProject(false, command.parentProjectId);
+        this.services.createProject(false, command.parentProjectId, command.status);
         return;
       case "open-file": {
         const file = this.services.app.vault.getAbstractFileByPath(command.path);

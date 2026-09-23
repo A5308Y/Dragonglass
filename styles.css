@@ -1007,6 +1007,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   background: var(--background-secondary);
   font-size: var(--font-ui-smaller);
 }
+/* Creates a sub-project straight into this column's status. */
+.dg-subproject-add {
+  width: calc(100% - 20px);
+  margin: 10px 10px 0;
+}
 .dg-subproject-list { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
 .dg-subproject-card {
   position: relative;

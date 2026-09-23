@@ -50,6 +50,7 @@ type alias ActionChanges =
 
 type alias NewProjectInput =
     { title : String
+    , status : ProjectStatus
     , area : String
     , image : String
     , tags : List String

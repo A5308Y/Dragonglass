@@ -1,5 +1,5 @@
 import type { App, TFile } from "obsidian";
-import type { GtdSettings } from "../domain/types";
+import type { GtdSettings, ProjectStatus } from "../domain/types";
 import type { GtdRepository } from "../repository/gtd-repository";
 
 export interface GtdServices {
@@ -16,7 +16,7 @@ export interface GtdServices {
   scheduleAction: (id: string) => void;
   importActions: (projectId?: string) => void;
   importSubprojects: (parentProjectId?: string) => void;
-  createProject: (openAfterCreate?: boolean, parentProjectId?: string) => void;
+  createProject: (openAfterCreate?: boolean, parentProjectId?: string, status?: ProjectStatus) => void;
   editAction: (id: string, allowProjectConversion?: boolean) => void;
   editProject: (id: string) => void;
   showProjectDetail: (id: string) => void;

@@ -135,7 +135,7 @@ export class ElmProjectsHost {
         this.services.createAction(command.projectId);
         return;
       case "create-project":
-        this.services.createProject(false, command.parentProjectId);
+        this.services.createProject(false, command.parentProjectId, command.status);
         return;
       case "set-project-selection":
         this.onProjectChange(command.projectId ?? null);

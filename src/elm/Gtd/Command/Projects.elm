@@ -12,7 +12,7 @@ import Json.Encode as Encode
 
 type Command
     = NewActionModal (Maybe ProjectId)
-    | NewProjectModal (Maybe ProjectId)
+    | NewProjectModal (Maybe ProjectId) ProjectStatus
     | SetProjectSelection (Maybe ProjectId)
     | EditActionModal ActionId
     | SetActionStatus ActionId ActionStatus
@@ -58,8 +58,8 @@ toBase command =
         NewActionModal projectId ->
             Base.NewActionModal projectId
 
-        NewProjectModal parentId ->
-            Base.NewProjectModal parentId
+        NewProjectModal parentId status ->
+            Base.NewProjectModal parentId status
 
         SetProjectSelection projectId ->
             Base.SetProjectSelection projectId

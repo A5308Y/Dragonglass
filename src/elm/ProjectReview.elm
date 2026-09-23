@@ -513,7 +513,7 @@ viewTree model root subprojects actions =
             [ span [ class "dg-review-panel-icon" ] [ text "⌘" ]
             , div [] [ h3 [] [ text "Project tree" ], p [] [ text "Reviewed together as one outcome hierarchy." ] ]
             , span [ class "dg-review-count" ] [ text (String.fromInt (List.length subprojects)) ]
-            , button [ class "dg-review-tree-add", onClick (Send IgnoreReply (Command.NewProjectModal (Just root.id))) ] [ text "New sub-project" ]
+            , button [ class "dg-review-tree-add", onClick (Send IgnoreReply (Command.NewProjectModal (Just root.id) ProjectStatus.Active)) ] [ text "New sub-project" ]
             ]
         , if List.isEmpty subprojects then
             div [ class "dg-review-tree-empty" ] [ text "No sub-projects yet." ]
