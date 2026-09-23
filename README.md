@@ -71,7 +71,7 @@ status: scheduled
 project_id: 01K5ABCDEF1234567890123456
 project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 context: computer
-energy: medium
+energy: high
 due: 2026-09-23
 waiting_since:
 follow_up:
@@ -83,7 +83,7 @@ completed:
 
 `project_id` is authoritative. The `project` link is only a human- and Bases-friendly convenience.
 
-`energy` is optional and one of `low`, `medium` or `high`; any other value makes the Action invalid metadata. Action cards and rows show it as ⚡, ⚡⚡ or ⚡⚡⚡. It can be set in the Action editor and while processing an Inbox Item, and the board filters and groups by it, low to high.
+`energy` is optional: `low` or `high` marks an Action that needs unusually little or much energy, and leaving it empty means normal energy. A `medium` left from earlier versions reads as normal; any other value makes the Action invalid metadata. Action cards and rows show 🪫 for low and ⚡ for high. It can be set in the Action editor and while processing an Inbox Item, and the board filters and groups by it: low, normal, high.
 
 Calendar Actions (status `scheduled`) are for what must happen on a particular day or at a particular time. They use `scheduled_start` as an absolute RFC3339 timestamp and `duration_minutes` as a positive whole number. `due` remains a deadline rather than a calendar time. Moving an Action to Calendar asks for these values when they are missing.
 

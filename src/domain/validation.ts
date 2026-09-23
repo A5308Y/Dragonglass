@@ -47,10 +47,14 @@ function optionalNumber(frontmatter: Frontmatter, key: string): number | undefin
   return value;
 }
 
-/** One of the three energy levels, in any casing; anything else is invalid metadata. */
-function energyLevel(value: string): Energy {
+/**
+ * `low` or `high`, in any casing. `medium` was a level once and is now the normal
+ * default, so it reads as no level; anything else is invalid metadata.
+ */
+function energyLevel(value: string): Energy | undefined {
   const level = value.trim().toLocaleLowerCase();
-  if (!isEnergy(level)) throw new Error("Invalid 'energy': use low, medium or high");
+  if (level === "medium") return undefined;
+  if (!isEnergy(level)) throw new Error("Invalid 'energy': use low or high, or leave it empty");
   return level;
 }
 
@@ -107,7 +111,8 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (projectId) action.projectId = projectId;
   if (projectLink) action.projectLink = projectLink;
   if (context) action.context = context;
-  if (energy) action.energy = energyLevel(energy);
+  const energyValue = energy ? energyLevel(energy) : undefined;
+  if (energyValue) action.energy = energyValue;
   if (due) action.due = dateOnly(due, "due");
   if (waitingSince) action.waitingSince = dateOnly(waitingSince, "waiting_since");
   if (followUp) action.followUp = dateOnly(followUp, "follow_up");

@@ -111,7 +111,7 @@ function groupLabel(key: string, groupBy: GroupBy, projectsById: ReadonlyMap<str
   if (!key) {
     if (groupBy === "project") return "No project";
     if (groupBy === "context") return "No context";
-    return "No energy";
+    return "Normal energy";
   }
   if (groupBy === "project") {
     const project = projectsById.get(key);

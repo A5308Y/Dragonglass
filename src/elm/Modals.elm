@@ -1677,7 +1677,7 @@ energyRow current =
         [ statusSelect "Energy"
             (Nothing :: List.map Just Energy.all)
             (Maybe.map Energy.key >> Maybe.withDefault "")
-            (Maybe.map (\energy -> Energy.symbol energy ++ " " ++ Energy.label energy) >> Maybe.withDefault "None")
+            (Maybe.map (\energy -> Energy.symbol energy ++ " " ++ Energy.label energy) >> Maybe.withDefault "Normal")
             EnergyChanged
             current
         ]

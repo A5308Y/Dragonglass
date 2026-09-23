@@ -9,7 +9,8 @@ module Gtd.Energy exposing
     , symbol
     )
 
-{-| How much energy an Action takes: one of three levels, or none at all.
+{-| How much energy an Action takes when it is out of the ordinary. Most Actions
+carry no level, which reads as normal energy.
 -}
 
 import Html exposing (Html, span, text)
@@ -19,13 +20,12 @@ import Json.Decode as Decode exposing (Decoder)
 
 type Energy
     = Low
-    | Medium
     | High
 
 
 all : List Energy
 all =
-    [ Low, Medium, High ]
+    [ Low, High ]
 
 
 key : Energy -> String
@@ -33,9 +33,6 @@ key energy =
     case energy of
         Low ->
             "low"
-
-        Medium ->
-            "medium"
 
         High ->
             "high"
@@ -47,26 +44,20 @@ label energy =
         Low ->
             "Low"
 
-        Medium ->
-            "Medium"
-
         High ->
             "High"
 
 
-{-| One bolt per level, so the level reads from the count and not from colour.
+{-| One emoji per level that reads on its own: an empty battery and a lightning bolt.
 -}
 symbol : Energy -> String
 symbol energy =
     case energy of
         Low ->
-            "⚡"
-
-        Medium ->
-            "⚡⚡"
+            "🪫"
 
         High ->
-            "⚡⚡⚡"
+            "⚡"
 
 
 fromKey : String -> Maybe Energy

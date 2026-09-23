@@ -8,7 +8,7 @@ import { createDefaultViews } from "../src/state/defaults";
 const file = (path: string) => ({ path } as TFile);
 const project: Project = { type: "gtd-project", id: "P1", title: "Heating", file: file("GTD/Projects/Heating.md"), status: "active", created: "2026-09-01" };
 const actions: Action[] = [
-  { type: "gtd-action", id: "A1", title: "Compare offers", file: file("A1.md"), status: "next", projectId: "P1", context: "computer", energy: "medium", due: "2026-09-20", created: "2026-09-18" },
+  { type: "gtd-action", id: "A1", title: "Compare offers", file: file("A1.md"), status: "next", projectId: "P1", context: "computer", energy: "high", due: "2026-09-20", created: "2026-09-18" },
   { type: "gtd-action", id: "A2", title: "Call installer", file: file("A2.md"), status: "waiting", projectId: "P1", context: "phone", due: "2026-09-25", created: "2026-09-17" },
   { type: "gtd-action", id: "A3", title: "Future research", file: file("A3.md"), status: "next", created: "2026-09-16" },
 ];
@@ -116,10 +116,11 @@ describe("query model", () => {
     expect(notUnderRoot.map((action) => action.id)).toEqual(["A-other", "A-none"]);
   });
 
-  it("accepts only the low, medium and high energy levels, in any casing", () => {
+  it("accepts only the low and high energy levels, in any casing, reading medium as normal", () => {
     const withEnergy = (energy: unknown) => parseAction({ id: "A-energy", title: "Tidy desk", status: "next", created: "2026-09-19", energy }, file("Energy.md"));
     expect(withEnergy("low").energy).toBe("low");
     expect(withEnergy(" High ").energy).toBe("high");
+    expect(withEnergy("medium").energy).toBeUndefined();
     expect(parseAction({ id: "A-none", title: "Tidy desk", status: "next", created: "2026-09-19" }, file("None.md")).energy).toBeUndefined();
     expect(() => withEnergy("exhausted")).toThrow("Invalid 'energy'");
   });

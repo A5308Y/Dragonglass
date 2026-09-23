@@ -890,7 +890,7 @@ energySelect : Maybe Energy -> Html Msg
 energySelect current =
     Ui.labelled "Energy"
         (select [ onInput (Energy.fromKey >> EnergyChanged) ]
-            (option [ value "", selected (current == Nothing) ] [ text "None" ]
+            (option [ value "", selected (current == Nothing) ] [ text "Normal" ]
                 :: List.map
                     (\energy ->
                         option [ value (Energy.key energy), selected (current == Just energy) ]

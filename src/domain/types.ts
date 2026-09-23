@@ -24,8 +24,8 @@ export const BOARD_PROJECT_STATUSES = [
   "completed",
 ] as const satisfies readonly (typeof PROJECT_STATUSES)[number][];
 
-/** How much energy an Action takes. Optional on every Action. */
-export const ENERGY_LEVELS = ["low", "medium", "high"] as const;
+/** How much energy an Action takes when it is out of the ordinary; no level means normal. */
+export const ENERGY_LEVELS = ["low", "high"] as const;
 
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
 export type Energy = (typeof ENERGY_LEVELS)[number];

@@ -1269,8 +1269,8 @@ buildGroups model =
                     statusColumnKeys model |> List.map StatusGroup
 
                 GroupByEnergy ->
-                    -- Low to high, then Actions without a level, rather than alphabetically.
-                    (List.map (Just >> EnergyGroup) Energy.all ++ [ EnergyGroup Nothing ])
+                    -- Low, normal (no level), high, rather than alphabetically.
+                    [ EnergyGroup (Just Energy.Low), EnergyGroup Nothing, EnergyGroup (Just Energy.High) ]
                         |> List.filter (\key -> Dict.member (groupKeyString key) grouped)
                         |> applyVisible model.configuration.visibleColumns
 
@@ -1371,7 +1371,7 @@ groupLabel model key =
             capitalized context
 
         EnergyGroup Nothing ->
-            "No energy"
+            "Normal energy"
 
         EnergyGroup (Just energy) ->
             Energy.symbol energy ++ " " ++ Energy.label energy
@@ -1680,7 +1680,7 @@ filterValues model =
             Data.contexts model.snapshot.actions |> List.map (\item -> ( item, item ))
 
         FieldEnergy ->
-            ( "", "No energy" ) :: List.map (\energy -> ( Energy.key energy, Energy.symbol energy ++ " " ++ Energy.label energy )) Energy.all
+            ( "", "Normal energy" ) :: List.map (\energy -> ( Energy.key energy, Energy.symbol energy ++ " " ++ Energy.label energy )) Energy.all
 
         FieldArea ->
             Data.areas model.snapshot.projects |> List.map (\item -> ( item, item ))
@@ -1780,7 +1780,7 @@ describeFilter model filter =
         ByEnergy operator values ->
             described "Energy"
                 operator
-                (List.map (\raw -> Energy.fromKey raw |> Maybe.map Energy.label |> Maybe.withDefault "none") values)
+                (List.map (\raw -> Energy.fromKey raw |> Maybe.map Energy.label |> Maybe.withDefault "normal") values)
 
         ByArea operator values ->
             described "Area" operator values
