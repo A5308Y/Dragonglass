@@ -76,11 +76,12 @@ label status =
             "Cancelled"
 
 
-{-| Waiting records a dependency on someone else, so it needs no execution context.
+{-| Waiting records a dependency on someone else, and a Done Action will not be
+executed again, so neither needs an execution context.
 -}
 requiresContext : ActionStatus -> Bool
 requiresContext status =
-    status /= Waiting
+    status /= Waiting && status /= Done
 
 
 isOpen : ActionStatus -> Bool

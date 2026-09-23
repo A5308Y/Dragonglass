@@ -1290,7 +1290,7 @@ actionView model mode fields =
 
         contextRow =
             settingRow "Context"
-                "Optional for Waiting Actions; required for every other status."
+                "Optional for Waiting and Done Actions; required for every other status."
                 [ Picker.view contextPickerConfig (contextSuggestions model) fields.context ]
 
         conditionalRows =

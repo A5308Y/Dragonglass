@@ -52,7 +52,6 @@ type Command
       -- Actions
     | SetActionStatus ActionId ActionStatus
     | SetActionPriorities (List ActionId)
-    | SetActionProject ActionId (Maybe ProjectId)
     | SetActionContext ActionId String
     | TrashAction ActionId
     | CreateAction NewActionInput
@@ -296,12 +295,6 @@ encode command =
         SetActionPriorities actionIds ->
             object "set-action-priorities"
                 [ ( "actionIds", Encode.list Encode.string actionIds ) ]
-
-        SetActionProject actionId maybeId ->
-            object "update-action"
-                [ ( "actionId", Encode.string actionId )
-                , ( "projectId", Encode.string (Maybe.withDefault "" maybeId) )
-                ]
 
         SetActionContext actionId context ->
             object "update-action"

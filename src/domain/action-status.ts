@@ -1,9 +1,12 @@
 import type { ActionStatus } from "./types";
 import { localDate } from "../utils/date";
 
-/** Waiting records a dependency on someone or something else, so it needs no execution context. */
+/**
+ * Waiting records a dependency on someone or something else, and a Done Action will not
+ * be executed again, so neither needs an execution context.
+ */
 export function actionRequiresContext(status: ActionStatus): boolean {
-  return status !== "waiting";
+  return status !== "waiting" && status !== "done";
 }
 
 /**

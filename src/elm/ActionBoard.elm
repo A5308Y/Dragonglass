@@ -1716,21 +1716,6 @@ actionMenu x y model action =
                 (\status -> MenuItem (tick (status == action.status) ++ ActionStatus.label status) (Command.SetActionStatus action.id status))
                 ActionStatus.all
 
-        projects =
-            model.snapshot.projects
-                |> List.filter (\project -> ProjectStatus.isOpen project.status)
-                |> List.sortBy (Hierarchy.breadcrumb model.snapshot.projects)
-
-        projectEntries =
-            MenuItem "No project" (Command.SetActionProject action.id Nothing)
-                :: List.map
-                    (\project ->
-                        MenuItem
-                            (tick (action.projectId == Just project.id) ++ Hierarchy.breadcrumb model.snapshot.projects project)
-                            (Command.SetActionProject action.id (Just project.id))
-                    )
-                    projects
-
         contexts =
             Data.contexts model.snapshot.actions
 
@@ -1744,7 +1729,6 @@ actionMenu x y model action =
     Command.ShowMenu x
         y
         (statusEntries
-            ++ (MenuSeparator :: projectEntries)
             ++ (if List.isEmpty contexts then
                     []
 
