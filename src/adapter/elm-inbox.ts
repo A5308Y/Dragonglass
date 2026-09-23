@@ -108,7 +108,7 @@ export class ElmInboxHost {
 
 function actionLabel(status: Action["status"] | undefined): string {
   if (status === "waiting") return "Waiting Action";
-  if (status === "scheduled") return "Scheduled Action";
+  if (status === "scheduled") return "Calendar Action";
   return "Next Action";
 }
 
@@ -116,12 +116,12 @@ function actionLabel(status: Action["status"] | undefined): string {
 function scheduleChanges(schedule?: ElmScheduleInput): Pick<Action, "scheduledStart" | "durationMinutes"> | {} {
   if (!schedule) return {};
   if (schedule.kind === "all-day") {
-    if (!parseDateOnly(schedule.date)) throw new Error("Choose a valid scheduled date.");
+    if (!parseDateOnly(schedule.date)) throw new Error("Choose a valid date.");
     return { scheduledStart: schedule.date };
   }
   const start = new Date(schedule.localStart);
   if (Number.isNaN(start.getTime()) || dateTimeLocalValue(start) !== schedule.localStart.slice(0, 16)) {
-    throw new Error("Choose a valid scheduled start time.");
+    throw new Error("Choose a valid date and time.");
   }
   return { scheduledStart: start.toISOString(), durationMinutes: schedule.durationMinutes };
 }

@@ -1034,10 +1034,10 @@ function validateActionSchedule(status: Action["status"], scheduledStart?: strin
     throw new Error("Duration must be a positive whole number of minutes.");
   }
   if (status !== "scheduled") return;
-  if (!scheduledStart) throw new Error("Scheduled Actions require a start date.");
+  if (!scheduledStart) throw new Error("Calendar Actions require a date.");
   // An all-day Action has no time of day, so it has no length to ask for either.
   if (!isAllDaySchedule(scheduledStart) && durationMinutes === undefined) {
-    throw new Error("Scheduled Actions with a time of day require a duration.");
+    throw new Error("Calendar Actions with a time of day require a duration.");
   }
 }
 

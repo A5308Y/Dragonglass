@@ -99,12 +99,12 @@ export class GtdSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h3", { text: "Google Calendar" });
     containerEl.createEl("p", {
-      text: "One-way sync for Scheduled Actions through a user-owned Apps Script bridge. The endpoint and secret are stored as plain text in this plugin's data file.",
+      text: "One-way sync for Calendar Actions through a user-owned Apps Script bridge. The endpoint and secret are stored as plain text in this plugin's data file.",
     });
 
     new Setting(containerEl)
       .setName("Enable Google Calendar sync")
-      .setDesc("Automatically reconcile Scheduled Actions after changes and every five minutes.")
+      .setDesc("Automatically reconcile Calendar Actions after changes and every five minutes.")
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.googleCalendar.enabled).onChange(async (value) => {
         this.plugin.settings.googleCalendar.enabled = value;
         await this.plugin.saveSettings(false);
@@ -172,8 +172,8 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     new Setting(containerEl)
-      .setName("Default scheduled duration")
-      .setDesc("Minutes suggested when an Action is first scheduled.")
+      .setName("Default Calendar Action duration")
+      .setDesc("Minutes suggested when an Action first gets a time of day on the calendar.")
       .addText((text) => {
         text.inputEl.type = "number";
         text.inputEl.min = "1";

@@ -422,7 +422,7 @@ update msg model =
                 Character "w" ->
                     moveAction actionId ActionStatus.Waiting model
 
-                Character "s" ->
+                Character "c" ->
                     moveAction actionId ActionStatus.Scheduled model
 
                 Character "e" ->
@@ -718,16 +718,26 @@ boardView model =
         -- The count describes the cards on screen, not every Action in the vault.
         shown =
             groups |> List.map (.actions >> List.length) |> List.sum
+
+        -- Few enough to choose from at a glance; the pill turns green to reward filtering down.
+        focused =
+            shown < 10
     in
     div [ class "dg-view dg-board-view" ]
         [ header [ class "dg-view-header" ]
             [ div []
                 [ h2 [] [ text "Actions" ]
-                , span
-                    [ class "dg-count"
+                , span [ classList [ ( "dg-action-count", True ), ( "is-focused", focused ) ] ]
+                    [ text
+                        ((if focused then
+                            "✓ "
 
+                          else
+                            ""
+                         )
+                            ++ Ui.plural shown "Action"
+                        )
                     ]
-                    [ text (String.fromInt shown) ]
                 ]
             , div [ class "dg-header-actions" ]
                 [ button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
@@ -744,7 +754,7 @@ boardView model =
             text ""
         , filterChips model
         , div [ class "dg-shortcut-bar" ]
-            [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · S Scheduled · D Done · E or Enter edit" ] ]
+            [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · C Calendar · D Done · E or Enter edit" ] ]
         , div [ classList [ ( "dg-board", True ), ( "is-single-column", List.length groups == 1 ) ], attribute "role" "list" ]
             (if List.isEmpty groups then
                 [ div [ class "dg-empty" ] [ text "No Actions match this view." ] ]

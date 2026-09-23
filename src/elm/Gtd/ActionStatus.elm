@@ -67,7 +67,8 @@ label status =
             "Waiting"
 
         Scheduled ->
-            "Scheduled"
+            -- Stored as `scheduled`; shown by GTD's name for what must happen on a day or at a time.
+            "Calendar"
 
         Done ->
             "Done"

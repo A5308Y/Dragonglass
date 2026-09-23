@@ -115,6 +115,24 @@ body.is-phone .workspace-leaf-content:is(
   font-variant-numeric: tabular-nums;
 }
 
+/* The Actions board count is a pill that turns green once the view is narrow enough to choose from. */
+.dg-action-count {
+  padding: 3px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dg-action-count.is-focused {
+  border-color: var(--color-green);
+  background: color-mix(in srgb, var(--color-green) 18%, transparent);
+  color: var(--color-green);
+}
+
 .dg-inbox-view .dg-count {
   min-width: 26px;
   height: 24px;

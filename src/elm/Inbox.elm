@@ -867,7 +867,7 @@ processingForm model =
                 [ input [ id nextActionId, value model.nextAction, placeholder "What is the next physical Action?", onInput NextActionChanged ] [] ]
             , processingField False
                 "Action status"
-                "Choose Next, Waiting, or Scheduled."
+                "Choose Next, Waiting, or Calendar."
                 [ actionStatusSelect model.actionStatus ]
             , div [ class "dg-processing-field" ]
                 [ div [ class "dg-processing-field-heading" ]
@@ -955,8 +955,8 @@ scheduleFields model =
                 ]
             ]
         , processingField False
-            "Scheduled start"
-            (if model.schedule.allDay then "Choose the scheduled date." else "Local date and time.")
+            (if model.schedule.allDay then "Date" else "Date & time")
+            (if model.schedule.allDay then "Must happen on this day, at any time." else "Must happen at this local date and time.")
             [ input
                 [ type_ (if model.schedule.allDay then "date" else "datetime-local")
                 , value model.schedule.start
@@ -1113,7 +1113,7 @@ actionLabel status =
             "Waiting Action"
 
         ActionStatus.Scheduled ->
-            "Scheduled Action"
+            "Calendar Action"
 
         _ ->
             "Next Action"

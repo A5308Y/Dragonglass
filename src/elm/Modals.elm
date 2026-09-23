@@ -867,7 +867,7 @@ submit model =
                         refuse message model
 
                     Ok Nothing ->
-                        refuse "Choose a scheduled start time." model
+                        refuse "Choose a date and time." model
 
                     Ok (Just chosen) ->
                         send CloseWhenDone (Command.ScheduleAction action.id chosen) model
@@ -984,10 +984,10 @@ scheduleInput status schedule =
     else if String.isEmpty schedule.start then
         Err
             (if schedule.allDay then
-                "Choose a scheduled date."
+                "Choose a date."
 
              else
-                "Choose a scheduled start time."
+                "Choose a date and time."
             )
 
     else if schedule.allDay then
@@ -995,10 +995,10 @@ scheduleInput status schedule =
             Ok (Just (AllDayOn schedule.start))
 
         else
-            Err "Choose a valid scheduled date."
+            Err "Choose a valid date."
 
     else if String.length schedule.start < 16 || not (String.contains "T" schedule.start) then
-        Err "Choose a valid scheduled start time."
+        Err "Choose a valid date and time."
 
     else
         case String.toInt (String.trim schedule.duration) of
@@ -1295,14 +1295,21 @@ actionView : Model -> ActionMode -> ActionFields -> List (Html Msg)
 actionView model mode fields =
     let
         statusRow =
-            settingRow "Status" "" [ statusSelect "Status" ActionStatus.all ActionStatus.key ActionStatus.label ActionStatusChanged fields.status ]
+            settingRow "Status"
+                (if fields.status == ActionStatus.Scheduled then
+                    "Only for what must happen on this day or at this time. If it just can't start yet, use a Someday/Maybe sub-project with an activation date."
+
+                 else
+                    ""
+                )
+                [ statusSelect "Status" ActionStatus.all ActionStatus.key ActionStatus.label ActionStatusChanged fields.status ]
 
         titleRow editing =
             settingRow "Title" "" [ textInput "Title" "text" fields.title "What is the next physical Action?" (TextChanged TitleField) (not editing) ]
 
         contextRow =
             settingRow "Context"
-                "Required for Next and Scheduled Actions; optional otherwise."
+                "Required for Next and Calendar Actions; optional otherwise."
                 [ Picker.view contextPickerConfig (contextSuggestions model) fields.context ]
 
         conditionalRows =
@@ -1360,10 +1367,18 @@ actionView model mode fields =
 
 scheduleRows : ScheduleFields -> List (Html Msg)
 scheduleRows schedule =
-    settingRow "All day" "Reserve the whole day instead of a time of day." [ toggle "All day" schedule.allDay ToggleAllDay ]
-        :: settingRow "Scheduled start"
-            "Local date and time."
-            [ textInput "Scheduled start"
+    let
+        startLabel =
+            if schedule.allDay then
+                "Date"
+
+            else
+                "Date & time"
+    in
+    settingRow "All day" "Must happen on this day, at any time." [ toggle "All day" schedule.allDay ToggleAllDay ]
+        :: settingRow startLabel
+            ""
+            [ textInput startLabel
                 (if schedule.allDay then
                     "date"
 
