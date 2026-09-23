@@ -3,7 +3,7 @@ import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../
 import { addLocalDays, localDate } from "../utils/date";
 import { feedItemAge } from "../domain/feed-triage";
 import { isAllDaySchedule } from "../domain/schedule";
-import { ACTION_STATUSES, BOARD_PROJECT_STATUSES, PROJECT_STATUSES } from "../domain/types";
+import { ACTION_STATUSES, BOARD_PROJECT_STATUSES, ENERGY_LEVELS, PROJECT_STATUSES, type Energy } from "../domain/types";
 import type { ProjectReviewHealth } from "../domain/project-review";
 import type { Action, GtdSettings, GtdSnapshot, InboxItem, InboxProcessingInput, Project, SavedView } from "../domain/types";
 
@@ -331,7 +331,8 @@ export interface ElmNewActionInput {
 
 export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId" | "followUp"> {
   projectId: string;
-  energy: string;
+  /** Empty clears the energy level. */
+  energy: Energy | "";
   due: string;
   /** Empty clears the follow-up day. */
   followUp: string;
@@ -810,6 +811,7 @@ function isInboxInput(value: unknown): value is ElmInboxProcessingInput {
     && isOptionalString(value.nextAction)
     && (value.status === undefined || isOneOf(ACTION_STATUSES, value.status))
     && isOptionalString(value.context)
+    && (value.energy === undefined || isOneOf(ENERGY_LEVELS, value.energy))
     && isOptionalString(value.waitingSince)
     && isOptionalString(value.followUp)
     && isOptionalSchedule(value.schedule)
@@ -889,7 +891,7 @@ function isNewActionInput(value: unknown): value is ElmNewActionInput {
 function isActionChanges(value: unknown): value is ElmActionChanges {
   return isNewActionInput(value)
     && typeof (value as ElmActionChanges).projectId === "string"
-    && typeof (value as ElmActionChanges).energy === "string"
+    && ((value as ElmActionChanges).energy === "" || isOneOf(ENERGY_LEVELS, (value as ElmActionChanges).energy))
     && typeof (value as ElmActionChanges).due === "string"
     && typeof (value as ElmActionChanges).followUp === "string";
 }

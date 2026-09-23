@@ -15,6 +15,7 @@ module Gtd.Command.Modals exposing
 import Gtd.ActionStatus exposing (ActionStatus)
 import Gtd.Command as Base
 import Gtd.Id exposing (ActionId, ProjectId)
+import Gtd.Energy as Energy exposing (Energy)
 import Gtd.ProjectStatus exposing (ProjectStatus)
 import Json.Encode as Encode
 
@@ -40,7 +41,7 @@ type alias ActionChanges =
     , status : ActionStatus
     , projectId : Maybe ProjectId
     , context : String
-    , energy : String
+    , energy : Maybe Energy
     , due : String
     , waitingSince : Maybe String
     , followUp : String

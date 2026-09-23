@@ -16,6 +16,7 @@ import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ProjectId)
 import Gtd.Picker as Picker exposing (Picker)
+import Gtd.Energy as Energy exposing (Energy)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ui as Ui
 import Html exposing (Html, button, div, h2, input, option, p, select, span, text, textarea)
@@ -84,7 +85,7 @@ type alias ActionFields =
     , status : ActionStatus
     , project : Picker Project
     , context : Picker String
-    , energy : String
+    , energy : Maybe Energy
     , due : String
     , waitingSince : String
     , followUp : String
@@ -119,7 +120,6 @@ type alias ImportFields =
 type Field
     = TitleField
     | PromptValueField
-    | EnergyField
     | DueField
     | FollowUpField
     | WaitingField
@@ -155,6 +155,7 @@ type Msg
     = GotHost Decode.Value
     | TextChanged Field String
     | ActionStatusChanged ActionStatus
+    | EnergyChanged (Maybe Energy)
     | ProjectStatusChanged ProjectStatus
     | ToggleAllDay Bool
     | ToggleBlocker ProjectId Bool
@@ -312,7 +313,7 @@ newActionFields snapshot maybeProject =
     , status = snapshot.settings.defaultActionStatus
     , project = projectPickerFor snapshot maybeProject
     , context = Picker.init "" Nothing
-    , energy = ""
+    , energy = Nothing
     , due = ""
     , waitingSince = snapshot.today
     , followUp = ""
@@ -337,7 +338,7 @@ editActionFields snapshot action =
                     Nothing ->
                         Picker.init ("Missing Project: " ++ projectId) Nothing
     , context = Picker.init (Maybe.withDefault "" action.context) action.context
-    , energy = Maybe.withDefault "" action.energy
+    , energy = action.energy
     , due = Maybe.withDefault "" action.due
     , waitingSince = Maybe.withDefault snapshot.today action.waitingSince
     , followUp = Maybe.withDefault "" action.followUp
@@ -462,6 +463,9 @@ update msg model =
 
         TextChanged field typed ->
             ( { model | form = setField field typed model.form, notice = Nothing }, Cmd.none )
+
+        EnergyChanged energy ->
+            ( { model | form = mapActionFields (\fields -> { fields | energy = energy }) model.form }, Cmd.none )
 
         ActionStatusChanged status ->
             ( { model | form = mapActionFields (\fields -> { fields | status = status }) model.form }, Cmd.none )
@@ -622,9 +626,6 @@ setActionField field typed fields =
     case field of
         TitleField ->
             { fields | title = typed }
-
-        EnergyField ->
-            { fields | energy = typed }
 
         DueField ->
             { fields | due = typed }
@@ -940,7 +941,7 @@ submitAction mode fields model =
                                 , status = fields.status
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
                                 , context = Picker.query fields.context
-                                , energy = String.trim fields.energy
+                                , energy = fields.energy
                                 , due = fields.due
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields |> Maybe.withDefault ""
@@ -1348,7 +1349,7 @@ actionView model mode fields =
             , statusRow
             , projectRow model "Project" "Type to fuzzy-search. Clear the field for no Project." fields.project
             , contextRow
-            , settingRow "Energy" "" [ textInput "Energy" "text" fields.energy "medium" (TextChanged EnergyField) False ]
+            , energyRow fields.energy
             , settingRow "Due" "" [ dateInput "Due" fields.due DueField ]
             ]
                 ++ conditionalRows
@@ -1665,6 +1666,21 @@ dateInput name current field =
 toggle : String -> Bool -> (Bool -> Msg) -> Html Msg
 toggle name current toMessage =
     Ui.labelled name (input [ type_ "checkbox", checked current, onCheck toMessage ] [])
+
+
+{-| Energy is optional, so the choice starts with none.
+-}
+energyRow : Maybe Energy -> Html Msg
+energyRow current =
+    settingRow "Energy"
+        "Optional. How much energy the Action takes."
+        [ statusSelect "Energy"
+            (Nothing :: List.map Just Energy.all)
+            (Maybe.map Energy.key >> Maybe.withDefault "")
+            (Maybe.map (\energy -> Energy.symbol energy ++ " " ++ Energy.label energy) >> Maybe.withDefault "None")
+            EnergyChanged
+            current
+        ]
 
 
 statusSelect : String -> List status -> (status -> String) -> (status -> String) -> (status -> Msg) -> status -> Html Msg

@@ -116,6 +116,14 @@ describe("query model", () => {
     expect(notUnderRoot.map((action) => action.id)).toEqual(["A-other", "A-none"]);
   });
 
+  it("accepts only the low, medium and high energy levels, in any casing", () => {
+    const withEnergy = (energy: unknown) => parseAction({ id: "A-energy", title: "Tidy desk", status: "next", created: "2026-09-19", energy }, file("Energy.md"));
+    expect(withEnergy("low").energy).toBe("low");
+    expect(withEnergy(" High ").energy).toBe("high");
+    expect(parseAction({ id: "A-none", title: "Tidy desk", status: "next", created: "2026-09-19" }, file("None.md")).energy).toBeUndefined();
+    expect(() => withEnergy("exhausted")).toThrow("Invalid 'energy'");
+  });
+
   it("reads an integer Action priority from frontmatter", () => {
     expect(parseAction({ id: "A-priority", title: "First", status: "next", created: "2026-09-19", priority: 1_000 }, file("Priority.md")).priority)
       .toBe(1_000);

@@ -160,6 +160,16 @@ describe("Elm adapter protocol", () => {
       changes: { ...input, projectId: "", energy: "", due: "", followUp: "" },
     }))?.command.type).toBe("save-action");
     expect(parseModalCommand(envelope({
+      type: "save-action",
+      actionId: "A1",
+      changes: { ...input, projectId: "", energy: "high", due: "", followUp: "" },
+    }))?.command.type).toBe("save-action");
+    expect(parseModalCommand(envelope({
+      type: "save-action",
+      actionId: "A1",
+      changes: { ...input, projectId: "", energy: "exhausted", due: "", followUp: "" },
+    }))).toBeNull();
+    expect(parseModalCommand(envelope({
       type: "save-project",
       projectId: "P1",
       changes: { title: "Roof", status: "someday", activateAt: "2026-10-01", area: "", image: "", tags: [], reviewed: "", parentProjectId: "" },

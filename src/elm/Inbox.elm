@@ -6,6 +6,7 @@ import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
 import Gtd.Command as Base exposing (ScheduleInput(..))
 import Gtd.Command.Inbox as Command exposing (Command, Disposition(..))
 import Gtd.Data as Data exposing (InboxItem, Project, Snapshot)
+import Gtd.Energy as Energy exposing (Energy)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (InboxItemId)
@@ -62,6 +63,7 @@ type alias Model =
     , actionStatus : ActionStatus
     , waitingSince : String
     , followUp : String
+    , energy : Maybe Energy
     , schedule : ScheduleFields
     , someday : Bool
     , fileOriginal : Bool
@@ -83,6 +85,7 @@ type Msg
     | ActionStatusChanged ActionStatus
     | WaitingSinceChanged String
     | FollowUpChanged String
+    | EnergyChanged (Maybe Energy)
     | SetAllDay Bool
     | ScheduledStartChanged String
     | ScheduledDurationChanged String
@@ -145,6 +148,7 @@ initialModel snapshot =
     , actionStatus = ActionStatus.Next
     , waitingSince = snapshot.today
     , followUp = ""
+    , energy = Nothing
     , schedule = { allDay = False, start = "", duration = String.fromInt snapshot.settings.defaultDurationMinutes }
     , someday = False
     , fileOriginal = False
@@ -213,6 +217,9 @@ update msg model =
 
         FollowUpChanged followUp ->
             ( { model | followUp = followUp }, Cmd.none )
+
+        EnergyChanged energy ->
+            ( { model | energy = energy }, Cmd.none )
 
         SetAllDay allDay ->
             let
@@ -383,6 +390,7 @@ resetCurrent model =
                     , actionStatus = ActionStatus.Next
                     , waitingSince = model.snapshot.today
                     , followUp = ""
+                    , energy = Nothing
                     , schedule = { allDay = False, start = "", duration = String.fromInt model.snapshot.settings.defaultDurationMinutes }
                     , someday = False
                     , fileOriginal = False
@@ -867,11 +875,30 @@ processingForm model =
                 , Picker.view (contextPicker model) (contextSuggestions model) model.context
                 , small [] [ text (if ActionStatus.requiresContext model.actionStatus then "Required for this Action." else "Optional for a Waiting, Done or Cancelled Action.") ]
                 ]
+            , processingField False
+                "Energy"
+                "Optional. How much energy the Action takes."
+                [ energySelect model.energy ]
             ]
                 ++ waitingFields model
                 ++ scheduleFields model
             )
         ]
+
+
+energySelect : Maybe Energy -> Html Msg
+energySelect current =
+    Ui.labelled "Energy"
+        (select [ onInput (Energy.fromKey >> EnergyChanged) ]
+            (option [ value "", selected (current == Nothing) ] [ text "None" ]
+                :: List.map
+                    (\energy ->
+                        option [ value (Energy.key energy), selected (current == Just energy) ]
+                            [ text (Energy.symbol energy ++ " " ++ Energy.label energy) ]
+                    )
+                    Energy.all
+            )
+        )
 
 
 processingField : Bool -> String -> String -> List (Html Msg) -> Html Msg
@@ -1141,6 +1168,7 @@ processingInput model =
     , context = Picker.query model.context
     , waitingSince = model.waitingSince
     , followUp = model.followUp
+    , energy = model.energy
     , schedule = processingSchedule model
     , fileOriginal = model.fileOriginal
     }

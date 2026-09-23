@@ -83,6 +83,8 @@ completed:
 
 `project_id` is authoritative. The `project` link is only a human- and Bases-friendly convenience.
 
+`energy` is optional and one of `low`, `medium` or `high`; any other value makes the Action invalid metadata. Action cards and rows show it as ⚡, ⚡⚡ or ⚡⚡⚡. It can be set in the Action editor and while processing an Inbox Item, and the board filters and groups by it, low to high.
+
 Calendar Actions (status `scheduled`) are for what must happen on a particular day or at a particular time. They use `scheduled_start` as an absolute RFC3339 timestamp and `duration_minutes` as a positive whole number. `due` remains a deadline rather than a calendar time. Moving an Action to Calendar asks for these values when they are missing.
 
 Next and Calendar Actions require a `context`; Waiting, Done and Cancelled Actions may omit it. Waiting Actions always carry a `waiting_since` date. Moving an Action to Waiting stamps today unless the editor supplies another date, re-editing a Waiting Action keeps the date it is already waiting since, and leaving Waiting clears it so no date outlives the wait it recorded. The Action editor shows the field only while the status is Waiting, and both the board card and the Action row read `Waiting since <date>`. Actions that were already Waiting before the field existed are stamped with the date Dragonglass first loaded the vault after this change.

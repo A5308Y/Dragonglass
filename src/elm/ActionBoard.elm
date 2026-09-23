@@ -6,6 +6,7 @@ import Dict exposing (Dict)
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
 import Gtd.Command.ActionBoard as Command exposing (Command, MenuEntry(..))
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
+import Gtd.Energy as Energy exposing (Energy)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ActionId, ProjectId)
@@ -43,7 +44,7 @@ type GroupKey
     = StatusGroup ActionStatus
     | ProjectGroup (Maybe ProjectId)
     | ContextGroup (Maybe String)
-    | EnergyGroup (Maybe String)
+    | EnergyGroup (Maybe Energy)
 
 
 type alias Group =
@@ -1182,7 +1183,7 @@ cardView model action =
                 text ""
         , div [ class "dg-card-meta" ]
             [ Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
-            , Ui.maybeView action.energy (\energy -> span [] [ text energy ])
+            , Ui.maybeView action.energy Energy.badge
             , Ui.maybeView action.due
                 (\due ->
                     -- Overdue is said in words and a symbol too, not by colour alone.
@@ -1267,6 +1268,12 @@ buildGroups model =
                 GroupByStatus ->
                     statusColumnKeys model |> List.map StatusGroup
 
+                GroupByEnergy ->
+                    -- Low to high, then Actions without a level, rather than alphabetically.
+                    (List.map (Just >> EnergyGroup) Energy.all ++ [ EnergyGroup Nothing ])
+                        |> List.filter (\key -> Dict.member (groupKeyString key) grouped)
+                        |> applyVisible model.configuration.visibleColumns
+
                 _ ->
                     Dict.values grouped
                         |> List.map Tuple.first
@@ -1340,7 +1347,7 @@ groupKeyString key =
             Maybe.withDefault "" context
 
         EnergyGroup energy ->
-            Maybe.withDefault "" energy
+            Maybe.map Energy.key energy |> Maybe.withDefault ""
 
 
 groupLabel : Model -> GroupKey -> String
@@ -1367,7 +1374,7 @@ groupLabel model key =
             "No energy"
 
         EnergyGroup (Just energy) ->
-            capitalized energy
+            Energy.symbol energy ++ " " ++ Energy.label energy
 
 
 {-| Prefixes a Project name with a symbol for its status, so Actions of a Project
@@ -1467,7 +1474,7 @@ matchesFilter model action filter =
             applyOperator operator (List.member (Maybe.withDefault "" action.context) values)
 
         ByEnergy operator values ->
-            applyOperator operator (List.member (Maybe.withDefault "" action.energy) values)
+            applyOperator operator (List.member (Maybe.map Energy.key action.energy |> Maybe.withDefault "") values)
 
         ByArea operator values ->
             action.projectId
@@ -1673,7 +1680,7 @@ filterValues model =
             Data.contexts model.snapshot.actions |> List.map (\item -> ( item, item ))
 
         FieldEnergy ->
-            Data.energies model.snapshot.actions |> List.map (\item -> ( item, item ))
+            ( "", "No energy" ) :: List.map (\energy -> ( Energy.key energy, Energy.symbol energy ++ " " ++ Energy.label energy )) Energy.all
 
         FieldArea ->
             Data.areas model.snapshot.projects |> List.map (\item -> ( item, item ))
@@ -1771,7 +1778,9 @@ describeFilter model filter =
             described "Context" operator values
 
         ByEnergy operator values ->
-            described "Energy" operator values
+            described "Energy"
+                operator
+                (List.map (\raw -> Energy.fromKey raw |> Maybe.map Energy.label |> Maybe.withDefault "none") values)
 
         ByArea operator values ->
             described "Area" operator values

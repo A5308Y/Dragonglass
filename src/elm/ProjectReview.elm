@@ -5,6 +5,7 @@ import Dict exposing (Dict)
 import Gtd.ActionStatus as ActionStatus
 import Gtd.Command.ProjectReview as Command exposing (Command)
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
+import Gtd.Energy as Energy
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ProjectId)
@@ -646,6 +647,7 @@ viewActionRow model action =
                             [ text (Hierarchy.breadcrumbFor model.snapshot.projects projectId |> Maybe.withDefault "Missing Project") ]
                     )
                     ++ Ui.maybeList action.context (\context -> span [] [ text ("@" ++ context) ])
+                    ++ Ui.maybeList action.energy Energy.badge
                     ++ Ui.maybeList action.due (\due -> span [] [ text ("Due " ++ due) ])
                 )
             ]

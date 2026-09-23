@@ -1,8 +1,10 @@
 import {
   ACTION_STATUSES,
+  ENERGY_LEVELS,
   PROJECT_STATUSES,
   type Action,
   type ActionStatus,
+  type Energy,
   type InboxItem,
   type Project,
   type ProjectStatus,
@@ -45,6 +47,13 @@ function optionalNumber(frontmatter: Frontmatter, key: string): number | undefin
   return value;
 }
 
+/** One of the three energy levels, in any casing; anything else is invalid metadata. */
+function energyLevel(value: string): Energy {
+  const level = value.trim().toLocaleLowerCase();
+  if (!isEnergy(level)) throw new Error("Invalid 'energy': use low, medium or high");
+  return level;
+}
+
 function dateOnly(value: string, key: string): string {
   if (!parseDateOnly(value)) throw new Error(`Invalid '${key}' date`);
   return value;
@@ -59,6 +68,10 @@ export function normalizeTimestamp(value: string, key: string): string {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
     || Number.isNaN(Date.parse(value))) throw new Error(`Invalid '${key}' timestamp`);
   return new Date(value).toISOString();
+}
+
+export function isEnergy(value: unknown): value is Energy {
+  return typeof value === "string" && (ENERGY_LEVELS as readonly string[]).includes(value);
 }
 
 export function isActionStatus(value: unknown): value is ActionStatus {
@@ -94,7 +107,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (projectId) action.projectId = projectId;
   if (projectLink) action.projectLink = projectLink;
   if (context) action.context = context;
-  if (energy) action.energy = energy;
+  if (energy) action.energy = energyLevel(energy);
   if (due) action.due = dateOnly(due, "due");
   if (waitingSince) action.waitingSince = dateOnly(waitingSince, "waiting_since");
   if (followUp) action.followUp = dateOnly(followUp, "follow_up");

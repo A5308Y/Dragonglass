@@ -5,6 +5,7 @@ module Gtd.Command.Inbox exposing (Command(..), Disposition(..), InboxInput, enc
 
 import Gtd.Command as Base
 import Gtd.ActionStatus exposing (ActionStatus)
+import Gtd.Energy exposing (Energy)
 import Gtd.Id exposing (InboxItemId, ProjectId)
 import Json.Encode as Encode
 
@@ -32,6 +33,7 @@ type alias InboxInput =
     , context : String
     , waitingSince : String
     , followUp : String
+    , energy : Maybe Energy
     , schedule : Maybe Base.ScheduleInput
     , fileOriginal : Bool
     }

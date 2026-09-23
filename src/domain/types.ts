@@ -24,7 +24,11 @@ export const BOARD_PROJECT_STATUSES = [
   "completed",
 ] as const satisfies readonly (typeof PROJECT_STATUSES)[number][];
 
+/** How much energy an Action takes. Optional on every Action. */
+export const ENERGY_LEVELS = ["low", "medium", "high"] as const;
+
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
+export type Energy = (typeof ENERGY_LEVELS)[number];
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
 export interface InboxItem {
@@ -47,7 +51,7 @@ export interface Action {
   projectId?: string;
   projectLink?: string;
   context?: string;
-  energy?: string;
+  energy?: Energy;
   due?: string;
   /** The day a Waiting Action started waiting. Every Waiting Action carries one. */
   waitingSince?: string;
@@ -86,7 +90,7 @@ export interface ActionInput {
   status: ActionStatus;
   projectId?: string;
   context: string;
-  energy?: string;
+  energy?: Energy;
   due?: string;
   waitingSince?: string;
   followUp?: string;
@@ -112,6 +116,7 @@ export interface InboxProcessingInput {
   /** The status for an Action created while clarifying this Inbox Item. */
   status?: ActionStatus;
   context?: string;
+  energy?: Energy;
   waitingSince?: string;
   followUp?: string;
   scheduledStart?: string;
@@ -121,8 +126,11 @@ export interface InboxProcessingInput {
 }
 
 export type ActionChanges = Partial<
-  Pick<Action, "title" | "status" | "projectId" | "context" | "energy" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes">
->;
+  Pick<Action, "title" | "status" | "projectId" | "context" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes">
+> & {
+  /** Empty clears the energy level. */
+  energy?: Energy | "";
+};
 
 export type ProjectChanges = Partial<
   Pick<Project, "title" | "status" | "area" | "reviewed" | "activateAt" | "supportPath" | "image" | "tags" | "order" | "blockedByProjectIds" | "parentProjectId">

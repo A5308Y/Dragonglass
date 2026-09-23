@@ -10,7 +10,6 @@ module Gtd.Data exposing
     , areas
     , contexts
     , empty
-    , energies
     , findAction
     , findProject
     , projectArea
@@ -28,6 +27,7 @@ the board, in the Inbox, and inside a modal.
 -}
 
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
+import Gtd.Energy as Energy exposing (Energy)
 import Gtd.Id exposing (ActionId, InboxItemId, ProjectId)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Settings as Settings exposing (Settings)
@@ -51,7 +51,7 @@ type alias Action =
     , created : String
     , projectId : Maybe ProjectId
     , context : Maybe String
-    , energy : Maybe String
+    , energy : Maybe Energy
     , due : Maybe String
     , waitingSince : Maybe String
     , followUp : Maybe String
@@ -146,11 +146,6 @@ findProject projectId projects =
 contexts : List Action -> List String
 contexts actions =
     actions |> List.filterMap .context |> Set.fromList |> Set.toList |> List.sort
-
-
-energies : List Action -> List String
-energies actions =
-    actions |> List.filterMap .energy |> Set.fromList |> Set.toList |> List.sort
 
 
 {-| A Project's area, trimmed, or nothing when it is blank.
@@ -250,7 +245,7 @@ actionDecoder =
         |> optional "created" Decode.string ""
         |> optional "projectId" (Decode.maybe Decode.string) Nothing
         |> optional "context" (Decode.maybe Decode.string) Nothing
-        |> optional "energy" (Decode.maybe Decode.string) Nothing
+        |> optional "energy" (Decode.maybe Energy.decoder) Nothing
         |> optional "due" (Decode.maybe Decode.string) Nothing
         |> optional "waitingSince" (Decode.maybe Decode.string) Nothing
         |> optional "followUp" (Decode.maybe Decode.string) Nothing

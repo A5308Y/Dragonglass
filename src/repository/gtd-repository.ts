@@ -1052,6 +1052,7 @@ function processingActionInput(title: string, context: string, input: InboxProce
     context,
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
     ...(input.followUp ? { followUp: input.followUp } : {}),
+    ...(input.energy ? { energy: input.energy } : {}),
     ...(input.scheduledStart ? { scheduledStart: input.scheduledStart } : {}),
     ...(input.durationMinutes !== undefined ? { durationMinutes: input.durationMinutes } : {}),
     ...(project ? { projectId: project.id } : {}),

@@ -25,6 +25,7 @@ one place.
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
 import Gtd.Id exposing (ActionId, FeedItemKey, InboxItemId, ProjectId)
 import Gtd.PomodoroOutcome as PomodoroOutcome exposing (PomodoroOutcome)
+import Gtd.Energy as Energy exposing (Energy)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Settings as Settings exposing (SavedView)
 import Json.Encode as Encode
@@ -145,6 +146,7 @@ type alias InboxInput =
     , context : String
     , waitingSince : String
     , followUp : String
+    , energy : Maybe Energy
     , schedule : Maybe ScheduleInput
     , fileOriginal : Bool
     }
@@ -160,6 +162,7 @@ noInboxInput =
     , context = ""
     , waitingSince = ""
     , followUp = ""
+    , energy = Nothing
     , schedule = Nothing
     , fileOriginal = False
     }
@@ -192,7 +195,7 @@ type alias ActionChanges =
     , status : ActionStatus
     , projectId : Maybe ProjectId
     , context : String
-    , energy : String
+    , energy : Maybe Energy
     , due : String
     , waitingSince : Maybe String
     , followUp : String
@@ -329,7 +332,7 @@ encode command =
                          , ( "status", ActionStatus.encode changes.status )
                          , ( "projectId", Encode.string (Maybe.withDefault "" changes.projectId) )
                          , ( "context", Encode.string changes.context )
-                         , ( "energy", Encode.string changes.energy )
+                         , ( "energy", Encode.string (Maybe.map Energy.key changes.energy |> Maybe.withDefault "") )
                          , ( "due", Encode.string changes.due )
                          , ( "followUp", Encode.string changes.followUp )
                          ]
@@ -611,6 +614,7 @@ encodeInboxInput input =
             ++ presentString "desiredOutcome" input.desiredOutcome
             ++ presentString "nextAction" input.nextAction
             ++ presentString "context" input.context
+            ++ maybeStringField "energy" (Maybe.map Energy.key input.energy)
             ++ (if input.status == ActionStatus.Waiting then
                     presentString "waitingSince" input.waitingSince ++ presentString "followUp" input.followUp
 
