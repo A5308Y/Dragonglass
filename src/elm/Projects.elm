@@ -1410,13 +1410,17 @@ viewSubprojectColumn model parent projects status =
 viewSubprojectCard : Model -> Project -> Html Msg
 viewSubprojectCard model project =
     let
+        meta =
+            projectMeta project.id model
+
         blockers =
-            (projectMeta project.id model).blockers
+            meta.blockers
     in
     article
         [ classList
             [ ( "dg-subproject-card", True )
             , ( "is-blocked", not (List.isEmpty blockers) )
+            , ( "has-issue", meta.actionIssue /= Nothing )
             , ( "is-drop-before", model.subprojectDropTarget == Just { status = project.status, beforeId = Just project.id } )
             ]
         , draggable "true"
@@ -1461,6 +1465,7 @@ viewSubprojectCard model project =
                            )
                     )
                 ]
+        , Ui.maybeView meta.actionIssue (\issue -> div [ class "dg-project-health" ] [ text issue ])
         ]
 
 

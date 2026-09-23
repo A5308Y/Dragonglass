@@ -1050,6 +1050,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-subproject-card[draggable="true"] { cursor: grab; }
 .dg-subproject-card[draggable="true"]:active { cursor: grabbing; }
 .dg-subproject-card.is-blocked { border-color: color-mix(in srgb, var(--color-orange) 35%, var(--background-modifier-border)); }
+.dg-subproject-card.has-issue { border-color: color-mix(in srgb, var(--color-yellow) 45%, var(--background-modifier-border)); }
 .dg-subproject-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dg-subproject-card-heading .dg-icon-button { flex: 0 0 28px; }
 .dg-subproject-title {
