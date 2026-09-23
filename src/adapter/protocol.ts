@@ -829,7 +829,7 @@ function isSavedView(value: unknown): value is SavedView {
 function isActionFilter(value: unknown): boolean {
   if (!isRecord(value) || typeof value.kind !== "string") return false;
   if (value.kind === "value") {
-    return ["status", "project", "context", "energy"].includes(String(value.field))
+    return ["status", "project", "context", "energy", "area"].includes(String(value.field))
       && (value.operator === "in" || value.operator === "notIn")
       && isStringArray(value.values);
   }

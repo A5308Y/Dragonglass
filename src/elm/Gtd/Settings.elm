@@ -94,6 +94,7 @@ type Filter
     | ByProject MatchOperator (List (Maybe ProjectId))
     | ByContext MatchOperator (List String)
     | ByEnergy MatchOperator (List String)
+    | ByArea MatchOperator (List String)
     | ByDue DueRange
     | ByAvailability
     | ByWork Bool
@@ -395,6 +396,9 @@ valueFilterDecoder =
                     "energy" ->
                         Decode.succeed (ByEnergy operator strings)
 
+                    "area" ->
+                        Decode.succeed (ByArea operator strings)
+
                     _ ->
                         Decode.fail ("Unknown filter field: " ++ field)
             )
@@ -566,6 +570,9 @@ encodeFilter filter =
 
         ByEnergy operator values ->
             valueFilter "energy" operator values
+
+        ByArea operator values ->
+            valueFilter "area" operator values
 
         ByDue range ->
             let

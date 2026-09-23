@@ -1,6 +1,6 @@
 import { ACTION_STATUSES, type Action, type ActionFilter, type BoardConfiguration, type GtdSnapshot, type GroupBy, type Project, type SortSpec } from "../domain/types";
 import { addLocalDays, localDate } from "../utils/date";
-import { projectBreadcrumb } from "../domain/project-hierarchy";
+import { projectBreadcrumb, projectLineageAreas } from "../domain/project-hierarchy";
 
 export interface ActionGroup {
   key: string;
@@ -15,13 +15,21 @@ function valueFor(action: Action, field: "status" | "project" | "context" | "ene
   return action.energy ?? "";
 }
 
-export function matchesFilter(action: Action, filter: ActionFilter, today = localDate()): boolean {
+/** An area filter matches an Action whose Project, or any ancestor of it, has one of the areas. */
+export function matchesFilter(
+  action: Action,
+  filter: ActionFilter,
+  today = localDate(),
+  projectsById: ReadonlyMap<string, Project> = new Map(),
+): boolean {
   if (filter.kind === "availability") {
     return !action.deferUntil || action.deferUntil <= today;
   }
   if (filter.kind === "work") return Boolean(action.work) === filter.value;
   if (filter.kind === "value") {
-    const matched = filter.values.includes(valueFor(action, filter.field));
+    const matched = filter.field === "area"
+      ? Boolean(action.projectId) && projectLineageAreas(action.projectId!, projectsById).some((area) => filter.values.includes(area))
+      : filter.values.includes(valueFor(action, filter.field));
     return filter.operator === "in" ? matched : !matched;
   }
   const due = action.due;
@@ -47,7 +55,7 @@ export function filterActions(
 ): Action[] {
   const needle = search.trim().toLocaleLowerCase();
   return actions.filter((action) => {
-    if (!filters.every((filter) => matchesFilter(action, filter))) return false;
+    if (!filters.every((filter) => matchesFilter(action, filter, localDate(), projectsById))) return false;
     if (!needle) return true;
     const project = action.projectId ? projectsById.get(action.projectId) : undefined;
     const projectTitle = project ? projectBreadcrumb(project, projectsById) : "";

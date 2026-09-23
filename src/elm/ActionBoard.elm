@@ -56,6 +56,7 @@ type FilterField
     | FieldProject
     | FieldContext
     | FieldEnergy
+    | FieldArea
     | FieldDue
     | FieldAvailable
     | FieldWork
@@ -283,17 +284,17 @@ update msg model =
             let
                 draft =
                     model.draft
+
+                switched =
+                    { model | draft = { draft | field = field } }
             in
-            ( { model
+            -- Start from the option the value select shows first, so adding the
+            -- filter untouched filters on what is on screen.
+            ( { switched
                 | draft =
                     { draft
                         | field = field
-                        , value =
-                            if field == FieldStatus then
-                                ActionStatus.key ActionStatus.Next
-
-                            else
-                                ""
+                        , value = filterValues switched |> List.head |> Maybe.map Tuple.first |> Maybe.withDefault ""
                     }
               }
             , Cmd.none
@@ -745,7 +746,7 @@ boardView model =
         , filterChips model
         , div [ class "dg-shortcut-bar" ]
             [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · S Scheduled · D Done · E or Enter edit" ] ]
-        , div [ class "dg-board", attribute "role" "list" ]
+        , div [ classList [ ( "dg-board", True ), ( "is-single-column", List.length groups == 1 ) ], attribute "role" "list" ]
             (if List.isEmpty groups then
                 [ div [ class "dg-empty" ] [ text "No Actions match this view." ] ]
 
@@ -915,6 +916,7 @@ filterBuilder model =
             , ( FieldProject, "Project" )
             , ( FieldContext, "Context" )
             , ( FieldEnergy, "Energy" )
+            , ( FieldArea, "Area" )
             , ( FieldDue, "Due date" )
             , ( FieldAvailable, "Available now" )
             , ( FieldWork, "Work" )
@@ -1370,6 +1372,13 @@ matchesFilter model action filter =
         ByEnergy operator values ->
             applyOperator operator (List.member (Maybe.withDefault "" action.energy) values)
 
+        ByArea operator values ->
+            action.projectId
+                |> Maybe.map (Hierarchy.lineageAreas model.snapshot.projects)
+                |> Maybe.withDefault []
+                |> List.any (\area -> List.member area values)
+                |> applyOperator operator
+
         ByAvailability ->
             Maybe.map (\date -> date <= model.snapshot.today) action.deferUntil |> Maybe.withDefault True
 
@@ -1558,6 +1567,9 @@ filterValues model =
         FieldEnergy ->
             Data.energies model.snapshot.actions |> List.map (\item -> ( item, item ))
 
+        FieldArea ->
+            Data.areas model.snapshot.projects |> List.map (\item -> ( item, item ))
+
         _ ->
             []
 
@@ -1599,6 +1611,9 @@ draftFilter model =
 
         FieldEnergy ->
             Just (ByEnergy draft.operator [ draft.value ])
+
+        FieldArea ->
+            Just (ByArea draft.operator [ draft.value ])
 
 
 dueRange : FilterDraft -> DueRange
@@ -1664,6 +1679,9 @@ describeFilter model filter =
 
         ByEnergy operator values ->
             described "Energy" operator values
+
+        ByArea operator values ->
+            described "Area" operator values
 
 
 described : String -> MatchOperator -> List String -> String
@@ -1811,6 +1829,9 @@ filterFieldKey field =
 
         FieldEnergy ->
             "energy"
+
+        FieldArea ->
+            "area"
 
         FieldDue ->
             "due"

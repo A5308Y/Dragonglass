@@ -816,6 +816,12 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 /* Action columns scroll their own cards below a fixed header, like Project columns,
    instead of the whole board scrolling cards underneath a sticky header. */
 .dg-board-view .dg-column { max-height: 100%; }
+/* A lone column has the board to itself, so it takes the full width. */
+.dg-board-view .dg-board.is-single-column > .dg-column {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
 .dg-board-view .dg-column .dg-card-list { flex: 1 1 auto; min-height: 46px; overflow-y: auto; }
 .dg-project-card-image {
   width: 100%;

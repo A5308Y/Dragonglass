@@ -7,11 +7,13 @@ module Gtd.Data exposing
     , Schedule(..)
     , Snapshot
     , actionDecoder
+    , areas
     , contexts
     , empty
     , energies
     , findAction
     , findProject
+    , projectArea
     , projectDecoder
     , schedule
     , scheduleText
@@ -150,6 +152,29 @@ contexts actions =
 energies : List Action -> List String
 energies actions =
     actions |> List.filterMap .energy |> Set.fromList |> Set.toList |> List.sort
+
+
+{-| A Project's area, trimmed, or nothing when it is blank.
+-}
+projectArea : Project -> Maybe String
+projectArea project =
+    project.area
+        |> Maybe.map String.trim
+        |> Maybe.andThen
+            (\area ->
+                if String.isEmpty area then
+                    Nothing
+
+                else
+                    Just area
+            )
+
+
+{-| The distinct areas these Projects use, alphabetically, ignoring case.
+-}
+areas : List Project -> List String
+areas projects =
+    projects |> List.filterMap projectArea |> Set.fromList |> Set.toList |> List.sortBy String.toLower
 
 
 {-| The complete schedule an Action carries, or `Nothing` while it is still missing a piece.

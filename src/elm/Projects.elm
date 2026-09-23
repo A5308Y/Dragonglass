@@ -895,42 +895,18 @@ groupByArea : List Project -> List ( Maybe String, List Project )
 groupByArea projects =
     let
         inArea area =
-            List.filter (\project -> areaOf project == area) projects
+            List.filter (\project -> Data.projectArea project == area) projects
 
         withoutArea =
             inArea Nothing
     in
-    List.map (\area -> ( Just area, inArea (Just area) )) (knownAreas projects)
+    List.map (\area -> ( Just area, inArea (Just area) )) (Data.areas projects)
         ++ (if List.isEmpty withoutArea then
                 []
 
             else
                 [ ( Nothing, withoutArea ) ]
            )
-
-
-areaOf : Project -> Maybe String
-areaOf project =
-    project.area
-        |> Maybe.map String.trim
-        |> Maybe.andThen
-            (\area ->
-                if String.isEmpty area then
-                    Nothing
-
-                else
-                    Just area
-            )
-
-
-{-| The distinct areas these Projects use, alphabetically, ignoring case.
--}
-knownAreas : List Project -> List String
-knownAreas projects =
-    projects
-        |> List.filterMap areaOf
-        |> Ui.uniqueSorted
-        |> List.sortBy String.toLower
 
 
 viewAreaGroup : Model -> ( Maybe String, List Project ) -> Html Msg
@@ -1695,7 +1671,7 @@ areaEntries : Model -> Project -> List MenuEntry
 areaEntries model project =
     let
         current =
-            areaOf project
+            Data.projectArea project
 
         entry label area =
             MenuItem
@@ -1709,7 +1685,7 @@ areaEntries model project =
                 )
                 (Command.SetProjectArea project.id (Maybe.withDefault "" area))
     in
-    case knownAreas model.snapshot.projects of
+    case Data.areas model.snapshot.projects of
         [] ->
             []
 

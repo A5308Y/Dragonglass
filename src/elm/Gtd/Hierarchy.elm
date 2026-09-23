@@ -4,6 +4,7 @@ module Gtd.Hierarchy exposing
     , compareByOrder
     , descendantIds
     , isDescendantOf
+    , lineageAreas
     , leafTitle
     , separator
     )
@@ -78,6 +79,34 @@ isDescendantOf rootId projects project =
                                 False
     in
     walk Set.empty project.parentProjectId
+
+
+{-| The areas of a Project and all of its ancestors, nearest first.
+-}
+lineageAreas : List Project -> ProjectId -> List String
+lineageAreas projects projectId =
+    let
+        walk seen maybeId found =
+            case maybeId |> Maybe.andThen (\currentId -> Gtd.Data.findProject currentId projects) of
+                Just current ->
+                    if Set.member current.id seen then
+                        found
+
+                    else
+                        walk (Set.insert current.id seen)
+                            current.parentProjectId
+                            (case Gtd.Data.projectArea current of
+                                Just area ->
+                                    area :: found
+
+                                Nothing ->
+                                    found
+                            )
+
+                Nothing ->
+                    found
+    in
+    walk Set.empty (Just projectId) [] |> List.reverse
 
 
 {-| Every Project beneath one, at any depth.

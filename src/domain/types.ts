@@ -147,7 +147,7 @@ export interface GtdSnapshot {
   issues: readonly IndexIssue[];
 }
 
-export type ValueFilterField = "status" | "project" | "context" | "energy";
+export type ValueFilterField = "status" | "project" | "context" | "energy" | "area";
 export interface ValueFilter {
   kind: "value";
   field: ValueFilterField;

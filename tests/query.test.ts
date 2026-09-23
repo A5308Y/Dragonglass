@@ -87,6 +87,22 @@ describe("query model", () => {
     expect(actions.filter((action) => matchesFilter(action, { kind: "work", value: false })).map((action) => action.id)).toEqual(["A2", "A3"]);
   });
 
+  it("filters Actions by the area of their Project or any ancestor", () => {
+    const root: Project = { ...project, id: "R", title: "Home", area: "Household" };
+    const middle: Project = { ...project, id: "M", title: "Heating", parentProjectId: "R" };
+    const leaf: Project = { ...project, id: "L", title: "Boiler", parentProjectId: "M", area: "Maintenance" };
+    const byId = new Map([root, middle, leaf].map((item) => [item.id, item]));
+    // A3 has no Project, so it is the base for the one left without one.
+    const inProject = (id: string, projectId?: string): Action => ({ ...actions[2]!, id, ...(projectId ? { projectId } : {}) });
+    const candidates = [inProject("A-root", "R"), inProject("A-middle", "M"), inProject("A-leaf", "L"), inProject("A-none")];
+    const household = candidates.filter((action) =>
+      matchesFilter(action, { kind: "value", field: "area", operator: "in", values: ["Household"] }, "2026-09-18", byId));
+    expect(household.map((action) => action.id)).toEqual(["A-root", "A-middle", "A-leaf"]);
+    const notMaintenance = candidates.filter((action) =>
+      matchesFilter(action, { kind: "value", field: "area", operator: "notIn", values: ["Maintenance"] }, "2026-09-18", byId));
+    expect(notMaintenance.map((action) => action.id)).toEqual(["A-root", "A-middle", "A-none"]);
+  });
+
   it("reads the work flag from frontmatter", () => {
     const parsed = parseAction({ id: "A9", title: "Draft budget", status: "next", created: "2026-09-19", work: true }, file("A9.md"));
     expect(parsed.work).toBe(true);
