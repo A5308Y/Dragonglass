@@ -56,6 +56,8 @@ export interface ElmProjectDetailDto {
   diary: ElmDiaryEntryDto[];
   supportFiles: ElmProjectSupportFileDto[];
   supportFolders: Array<{ path: string; label: string }>;
+  /** Files linked from elsewhere in the vault; `path` is empty when the link no longer resolves. */
+  linkedFiles: Array<{ link: string; path: string; label: string }>;
 }
 
 export interface ElmReviewProjectDataDto {
@@ -394,6 +396,8 @@ type ElmNonMenuCommand =
   | { type: "import-actions"; projectId: string }
   | { type: "import-subprojects"; projectId: string }
   | { type: "load-project-detail"; projectId: string }
+  | { type: "link-project-file"; projectId: string }
+  | { type: "unlink-project-file"; projectId: string; link: string }
   | { type: "set-desired-outcome"; projectId: string; body: string }
   | { type: "add-diary-entry"; projectId: string; body: string }
   | { type: "create-support-note"; projectId: string; title: string }
@@ -486,6 +490,7 @@ export const SURFACE_COMMANDS = {
     "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",
     "edit-project", "set-project-status", "set-project-area", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
     "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
+    "link-project-file", "unlink-project-file",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
   ],
@@ -672,7 +677,10 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "import-actions":
     case "import-subprojects":
     case "load-project-detail":
+    case "link-project-file":
       return typeof value.projectId === "string";
+    case "unlink-project-file":
+      return typeof value.projectId === "string" && typeof value.link === "string";
     case "set-project-status":
       return typeof value.projectId === "string"
         && isOneOf(PROJECT_STATUSES, value.status);

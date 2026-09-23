@@ -76,6 +76,8 @@ type Command
     | AddDiaryEntry ProjectId String
     | CreateSupportNote ProjectId String
     | CreateSupportFolder ProjectId String
+    | LinkProjectFile ProjectId
+    | UnlinkProjectFile ProjectId String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
     | SaveProjectPreferences { columns : List ProjectStatus, showImages : Bool, groupByArea : Bool }
@@ -441,6 +443,12 @@ encode command =
         CreateSupportFolder projectId path ->
             object "create-support-folder"
                 [ ( "projectId", Encode.string projectId ), ( "path", Encode.string path ) ]
+
+        LinkProjectFile projectId ->
+            object "link-project-file" [ ( "projectId", Encode.string projectId ) ]
+
+        UnlinkProjectFile projectId link ->
+            object "unlink-project-file" [ ( "projectId", Encode.string projectId ), ( "link", Encode.string link ) ]
 
         ReadSupportNote projectId path ->
             object "read-support-note"

@@ -32,6 +32,31 @@ function optionalString(frontmatter: Frontmatter, key: string): string | undefin
   return trimmed || undefined;
 }
 
+/**
+ * `linked_files` as wikilink strings. Obsidian writes them quoted; a hand-written,
+ * unquoted `- [[Note]]` reaches here as YAML's nested list `[["Note"]]` and is read
+ * back as the link it was meant to be.
+ */
+function linkedFileList(frontmatter: Frontmatter): string[] {
+  const value = frontmatter.linked_files;
+  if (value === null || value === undefined || value === "") return [];
+  const entries = (Array.isArray(value) ? value : [value]).map((entry) => {
+    const link = linkedFileEntry(entry);
+    if (link === undefined) throw new Error("Invalid 'linked_files'");
+    return link;
+  });
+  return [...new Set(entries.filter(Boolean))];
+}
+
+/** One `linked_files` entry as a wikilink string, or `undefined` when it is not one. */
+export function linkedFileEntry(entry: unknown): string | undefined {
+  if (typeof entry === "string") return entry.trim();
+  if (Array.isArray(entry) && entry.length === 1 && Array.isArray(entry[0]) && entry[0].length === 1 && typeof entry[0][0] === "string") {
+    return `[[${entry[0][0].trim()}]]`;
+  }
+  return undefined;
+}
+
 function optionalStringList(frontmatter: Frontmatter, key: string): string[] {
   const value = frontmatter[key];
   if (value === null || value === undefined || value === "") return [];
@@ -166,6 +191,7 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   const tags = normalizeProjectTags(optionalStringList(frontmatter, "tags").flatMap((tag) => tag.split(",")));
   const order = optionalNumber(frontmatter, "order");
   const blockedByProjectIds = optionalStringList(frontmatter, "blocked_by_project_ids");
+  const linkedFiles = linkedFileList(frontmatter);
   const parentProjectId = optionalString(frontmatter, "parent_project_id");
   const parentProjectLink = optionalString(frontmatter, "parent_project");
   if (area) project.area = area;
@@ -182,5 +208,6 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   if (blockedByProjectIds.length) project.blockedByProjectIds = blockedByProjectIds;
   if (parentProjectId) project.parentProjectId = parentProjectId;
   if (parentProjectLink) project.parentProjectLink = parentProjectLink;
+  if (linkedFiles.length) project.linkedFiles = linkedFiles;
   return project;
 }

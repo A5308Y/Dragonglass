@@ -60,12 +60,20 @@ type alias SupportFolder =
     { path : String, label : String }
 
 
+{-| A vault file the Project links to without owning it. `path` is empty when the
+link no longer resolves to a file.
+-}
+type alias LinkedFile =
+    { link : String, path : String, label : String }
+
+
 type alias ProjectDetail =
     { projectId : ProjectId
     , desiredOutcome : String
     , diary : List DiaryEntry
     , supportFiles : List SupportFile
     , supportFolders : List SupportFolder
+    , linkedFiles : List LinkedFile
     }
 
 
@@ -1279,7 +1287,7 @@ viewDetail model project =
                     [ viewDiary model ]
 
                 FilesTab ->
-                    [ viewSupport model ]
+                    [ viewSupport model, viewLinkedFiles model project ]
             )
         ]
 
@@ -1291,7 +1299,7 @@ viewDetailTabs model project openActions =
             Maybe.map (.diary >> List.length) model.detail
 
         fileCount =
-            Maybe.map (.supportFiles >> List.length) model.detail
+            Maybe.map (\detail -> List.length detail.supportFiles + List.length detail.linkedFiles) model.detail
 
         tab target label count =
             button
@@ -1756,6 +1764,49 @@ viewSupport model =
         ]
 
 
+{-| Files elsewhere in the vault that the Project refers to. They are only linked,
+so deleting the Project leaves them where they are.
+-}
+viewLinkedFiles : Model -> Project -> Html Msg
+viewLinkedFiles model project =
+    let
+        linked =
+            Maybe.map .linkedFiles model.detail |> Maybe.withDefault []
+    in
+    section [ class "dg-detail-section dg-linked-files-panel" ]
+        [ div [ class "dg-detail-section-heading" ]
+            [ h3 [ class "dg-detail-eyebrow" ] [ text "Linked files" ]
+            , div [ class "dg-detail-section-actions" ]
+                [ span [ class "dg-detail-count" ] [ text (String.fromInt (List.length linked)) ]
+                , button [ onClick (Send IgnoreReply (Command.LinkProjectFile project.id)) ] [ text "Link file…" ]
+                ]
+            ]
+        , if List.isEmpty linked then
+            span [ class "dg-support-empty" ] [ text "No linked files. Linked files stay where they are, even if this Project is deleted." ]
+
+          else
+            div [ class "dg-linked-files" ]
+                (List.map
+                    (\file ->
+                        div [ class "dg-linked-file" ]
+                            [ if String.isEmpty file.path then
+                                span [ class "dg-missing" ] [ text ("⚠ Missing: " ++ file.label) ]
+
+                              else
+                                button [ class "dg-linked-file-open dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile file.path)) ]
+                                    [ span [ class "dg-linked-file-label" ] [ text file.label ] ]
+                            , button
+                                [ class "dg-linked-file-unlink dg-flat-button"
+                                , onClick (Send IgnoreReply (Command.UnlinkProjectFile project.id file.link))
+                                ]
+                                (Ui.iconLabel "Unlink" ("Unlink " ++ file.label))
+                            ]
+                    )
+                    linked
+                )
+        ]
+
+
 viewSupportFile : Model -> SupportFile -> Html Msg
 viewSupportFile model file =
     let
@@ -2132,12 +2183,21 @@ supportFolderDecoder =
 
 projectDetailDecoder : Decoder ProjectDetail
 projectDetailDecoder =
-    Decode.map5 ProjectDetail
+    Decode.map6 ProjectDetail
         (Decode.field "projectId" Decode.string)
         (Decode.field "desiredOutcome" Decode.string)
         (Decode.field "diary" (Decode.list diaryDecoder))
         (Decode.field "supportFiles" (Decode.list supportFileDecoder))
         (Decode.field "supportFolders" (Decode.list supportFolderDecoder))
+        (Decode.field "linkedFiles"
+            (Decode.list
+                (Decode.map3 LinkedFile
+                    (Decode.field "link" Decode.string)
+                    (Decode.field "path" Decode.string)
+                    (Decode.field "label" Decode.string)
+                )
+            )
+        )
 
 
 hostEventDecoder : Decoder HostEvent

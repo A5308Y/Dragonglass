@@ -37,6 +37,15 @@ describe("Project statuses", () => {
     expect(project.image).toBe("Images/project.jpg");
   });
 
+  it("reads linked files as the wikilinks written in linked_files", () => {
+    const base = { type: "gtd-project", id: "01KLINKEDPROJECT", title: "Move flat", status: "active", created: "2026-09-19" };
+    expect(parseProject({ ...base, linked_files: ["[[Contracts/Lease.pdf]]", "[[Notes/Landlord]]"] }, file).linkedFiles)
+      .toEqual(["[[Contracts/Lease.pdf]]", "[[Notes/Landlord]]"]);
+    expect(parseProject(base, file).linkedFiles).toBeUndefined();
+    // Unquoted `- [[Notes/Landlord]]` is YAML for a list inside a list.
+    expect(parseProject({ ...base, linked_files: [[["Notes/Landlord"]]] }, file).linkedFiles).toEqual(["[[Notes/Landlord]]"]);
+  });
+
   it("reads Project board metadata from frontmatter", () => {
     const project = parseProject({
       type: "gtd-project",

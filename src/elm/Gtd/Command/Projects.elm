@@ -33,6 +33,8 @@ type Command
     | AddDiaryEntry ProjectId String
     | CreateSupportNote ProjectId String
     | CreateSupportFolder ProjectId String
+    | LinkProjectFile ProjectId
+    | UnlinkProjectFile ProjectId String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
     | SaveProjectPreferences { columns : List ProjectStatus, showImages : Bool, groupByArea : Bool }
@@ -120,6 +122,12 @@ toBase command =
 
         CreateSupportFolder projectId path ->
             Base.CreateSupportFolder projectId path
+
+        LinkProjectFile projectId ->
+            Base.LinkProjectFile projectId
+
+        UnlinkProjectFile projectId link ->
+            Base.UnlinkProjectFile projectId link
 
         ReadSupportNote projectId path ->
             Base.ReadSupportNote projectId path

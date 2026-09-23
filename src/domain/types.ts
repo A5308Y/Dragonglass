@@ -83,6 +83,12 @@ export interface Project {
   blockedByProjectIds?: string[];
   parentProjectId?: string;
   parentProjectLink?: string;
+  /**
+   * Wikilinks to vault files the Project refers to without owning them, as written in
+   * `linked_files`. Obsidian keeps them current when the files move, and deleting the
+   * Project leaves the files alone.
+   */
+  linkedFiles?: string[];
 }
 
 export interface ActionInput {

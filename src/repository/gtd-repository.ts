@@ -21,7 +21,7 @@ import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileC
 import { ranksForOrder } from "../domain/ranking";
 import { actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
-import { normalizeScheduledStart } from "../domain/validation";
+import { linkedFileEntry, normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
 import { localDate, parseDateOnly } from "../utils/date";
 import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
@@ -652,14 +652,46 @@ export class GtdRepository {
     return this.app.vault.getFiles().filter((file) => isProjectSupportMaterialPath(file.path, supportPath));
   }
 
+  /** Support folders that hold at least one file at any depth; empty ones are left out. */
   supportFolders(project: Project): string[] {
     if (!project.supportPath) return [];
     const supportPath = normalizeVaultPath(project.supportPath);
+    const files = this.supportFiles(project).map((file) => file.path);
     return this.app.vault.getAllLoadedFiles()
       .filter((entry): entry is TFolder => entry instanceof TFolder
-        && isProjectSupportMaterialPath(entry.path, supportPath))
+        && isProjectSupportMaterialPath(entry.path, supportPath)
+        && files.some((path) => path.startsWith(`${entry.path}/`)))
       .map((folder) => folder.path)
       .sort((left, right) => left.localeCompare(right));
+  }
+
+  /** The Project's linked files, each with the vault file it resolves to, if it still exists. */
+  linkedFiles(project: Project): Array<{ link: string; file: TFile | null }> {
+    return (project.linkedFiles ?? []).map((link) => ({
+      link,
+      file: this.app.metadataCache.getFirstLinkpathDest(linkpath(link), project.file.path),
+    }));
+  }
+
+  /** Links a vault file to a Project without moving it; linking it twice does nothing. */
+  async linkProjectFile(projectId: string, file: TFile): Promise<void> {
+    const project = this.requireProject(projectId);
+    if (this.linkedFiles(project).some((linked) => linked.file?.path === file.path)) return;
+    const link = `[[${this.app.metadataCache.fileToLinktext(file, project.file.path, true)}]]`;
+    await this.enqueue(project.file.path, () => this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
+      const current = Array.isArray(frontmatter.linked_files) ? frontmatter.linked_files : [];
+      frontmatter.linked_files = [...current, link];
+    }));
+  }
+
+  /** Removes one link from a Project. The file itself is not touched. */
+  async unlinkProjectFile(projectId: string, link: string): Promise<void> {
+    const project = this.requireProject(projectId);
+    await this.enqueue(project.file.path, () => this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
+      const remaining = (Array.isArray(frontmatter.linked_files) ? frontmatter.linked_files : [])
+        .filter((entry: unknown) => linkedFileEntry(entry) !== link);
+      frontmatter.linked_files = remaining.length ? remaining : null;
+    }));
   }
 
   /**
@@ -988,6 +1020,11 @@ function projectNotesFromAction(content: string, title: string): string {
 function wikiLink(project: Project): string {
   const path = project.file.path.replace(/\.md$/i, "");
   return `[[${path}|${project.title}]]`;
+}
+
+/** The target of a `[[path|alias]]` or `[[path#heading]]` wikilink, or the text itself. */
+function linkpath(link: string): string {
+  return link.replace(/^\[\[/, "").replace(/\]\]$/, "").split("|")[0]!.split("#")[0]!.trim();
 }
 
 function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {

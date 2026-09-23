@@ -28,7 +28,10 @@ export async function confirmDeleteProject(services: GtdServices, projectId: str
     : "no configured support folder";
   const confirmed = await confirmDialog(services.app, {
     title: `Delete “${project.title}”?`,
-    message: `This moves the Project note, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, and ${supportDescription} to Obsidian's trash.`,
+    message: `This moves the Project note, ${linkedActions} directly linked Action${linkedActions === 1 ? "" : "s"}, and ${supportDescription} to Obsidian's trash.`
+      + (project.linkedFiles?.length
+        ? ` Its ${project.linkedFiles.length} linked file${project.linkedFiles.length === 1 ? "" : "s"} stay${project.linkedFiles.length === 1 ? "s" : ""} where ${project.linkedFiles.length === 1 ? "it is" : "they are"}.`
+        : ""),
     confirmText: "Delete Project",
     warning: true,
   });
