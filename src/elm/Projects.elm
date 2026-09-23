@@ -72,7 +72,6 @@ become one long scroll.
 -}
 type DetailTab
     = OverviewTab
-    | SubprojectsTab
     | DiaryTab
     | FilesTab
 
@@ -1032,10 +1031,8 @@ viewDetail model project =
                         div [ class "dg-project-main-image" ] [ img [ src imageUrl, alt ("Main image for " ++ project.title) ] [] ]
                     , viewOutcome model project
                     , viewActionsSection model project openActions completedActions
+                    , viewSubprojects model project
                     ]
-
-                SubprojectsTab ->
-                    [ viewSubprojects model project ]
 
                 DiaryTab ->
                     [ viewDiary model ]
@@ -1049,9 +1046,6 @@ viewDetail model project =
 viewDetailTabs : Model -> Project -> List Action -> Html Msg
 viewDetailTabs model project openActions =
     let
-        childCount =
-            List.filter (\child -> child.parentProjectId == Just project.id) model.snapshot.projects |> List.length
-
         diaryCount =
             Maybe.map (.diary >> List.length) model.detail
 
@@ -1071,7 +1065,6 @@ viewDetailTabs model project openActions =
     in
     div [ class "dg-detail-tabs", attribute "role" "tablist" ]
         [ tab OverviewTab "Overview" (Just (List.length openActions))
-        , tab SubprojectsTab "Sub-projects" (Just childCount)
         , tab DiaryTab "Diary" diaryCount
         , tab FilesTab "Files" fileCount
         ]
