@@ -58,6 +58,8 @@ export interface ElmProjectDetailDto {
   supportFolders: Array<{ path: string; label: string }>;
   /** Files linked from elsewhere in the vault; `path` is empty when the link no longer resolves. */
   linkedFiles: Array<{ link: string; path: string; label: string }>;
+  /** Web links; entries that are not http(s) links are left out. */
+  externalLinks: Array<{ entry: string; url: string; title: string }>;
 }
 
 export interface ElmReviewProjectDataDto {
@@ -398,6 +400,8 @@ type ElmNonMenuCommand =
   | { type: "load-project-detail"; projectId: string }
   | { type: "link-project-file"; projectId: string }
   | { type: "unlink-project-file"; projectId: string; link: string }
+  | { type: "add-project-link"; projectId: string; url: string; title: string }
+  | { type: "remove-project-link"; projectId: string; entry: string }
   | { type: "set-desired-outcome"; projectId: string; body: string }
   | { type: "add-diary-entry"; projectId: string; body: string }
   | { type: "create-support-note"; projectId: string; title: string }
@@ -490,7 +494,7 @@ export const SURFACE_COMMANDS = {
     "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",
     "edit-project", "set-project-status", "set-project-area", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
     "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
-    "link-project-file", "unlink-project-file",
+    "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link", "open-link",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
   ],
@@ -681,6 +685,10 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.projectId === "string";
     case "unlink-project-file":
       return typeof value.projectId === "string" && typeof value.link === "string";
+    case "add-project-link":
+      return typeof value.projectId === "string" && typeof value.url === "string" && typeof value.title === "string";
+    case "remove-project-link":
+      return typeof value.projectId === "string" && typeof value.entry === "string";
     case "set-project-status":
       return typeof value.projectId === "string"
         && isOneOf(PROJECT_STATUSES, value.status);

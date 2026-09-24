@@ -144,6 +144,12 @@ describe("Elm adapter protocol", () => {
     expect(parseProjectsCommand(envelope({ type: "unlink-project-file", projectId: "P2", link: "[[Contracts/Lease.pdf]]" }))?.command.type)
       .toBe("unlink-project-file");
     expect(parseProjectsCommand(envelope({ type: "unlink-project-file", projectId: "P2" }))).toBeNull();
+    expect(parseProjectsCommand(envelope({ type: "add-project-link", projectId: "P2", url: "https://example.com", title: "" }))?.command.type)
+      .toBe("add-project-link");
+    expect(parseProjectsCommand(envelope({ type: "add-project-link", projectId: "P2", url: "https://example.com" }))).toBeNull();
+    expect(parseProjectsCommand(envelope({ type: "remove-project-link", projectId: "P2", entry: "https://example.com/" }))?.command.type)
+      .toBe("remove-project-link");
+    expect(parseProjectsCommand(envelope({ type: "open-link", url: "https://example.com" }))?.command.type).toBe("open-link");
     expect(parseProjectsCommand(envelope({ type: "move-subproject", projectId: "P2", status: "next" }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "trash-projects", projectIds: ["P1", 2] }))).toBeNull();
     expect(parseProjectsCommand(envelope({ type: "save-project-preferences", columns: [], showImages: true, groupByArea: false }))).toBeNull();

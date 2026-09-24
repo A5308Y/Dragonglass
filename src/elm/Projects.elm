@@ -67,6 +67,13 @@ type alias LinkedFile =
     { link : String, path : String, label : String }
 
 
+{-| A web link the Project refers to. `entry` is how it is written in the Project
+note, which identifies it for removal.
+-}
+type alias ExternalLink =
+    { entry : String, url : String, title : String }
+
+
 type alias ProjectDetail =
     { projectId : ProjectId
     , desiredOutcome : String
@@ -74,16 +81,16 @@ type alias ProjectDetail =
     , supportFiles : List SupportFile
     , supportFolders : List SupportFolder
     , linkedFiles : List LinkedFile
+    , externalLinks : List ExternalLink
     }
 
 
 {-| The parts of Project detail, one shown at a time so a large Project does not
-become one long scroll.
+become one long scroll: the work itself, and everything that supports it.
 -}
 type DetailTab
     = OverviewTab
-    | DiaryTab
-    | FilesTab
+    | SupportTab
 
 
 type alias SubprojectDropTarget =
@@ -134,6 +141,9 @@ type alias Model =
     , outcomeEditing : Bool
     , outcomeDraft : String
     , diaryDraft : String
+    , showAllDiary : Bool
+    , linkUrl : String
+    , linkTitle : String
     , supportNoteTitle : String
     , supportFolderPath : String
     , openSupport : Set String
@@ -174,6 +184,10 @@ type Msg
     | OutcomeChanged String
     | SaveOutcome
     | DiaryChanged String
+    | ToggleAllDiary
+    | LinkUrlChanged String
+    | LinkTitleChanged String
+    | AddExternalLink
     | AddDiaryEntry
     | SupportNoteTitleChanged String
     | CreateSupportNote
@@ -249,6 +263,9 @@ init flags =
                     , outcomeEditing = False
                     , outcomeDraft = ""
                     , diaryDraft = ""
+                    , showAllDiary = False
+                    , linkUrl = ""
+                    , linkTitle = ""
                     , supportNoteTitle = ""
                     , supportFolderPath = ""
                     , openSupport = Set.empty
@@ -390,6 +407,27 @@ update msg model =
 
         DiaryChanged body ->
             ( { model | diaryDraft = body }, Cmd.none )
+
+        ToggleAllDiary ->
+            ( { model | showAllDiary = not model.showAllDiary }, Cmd.none )
+
+        LinkUrlChanged url ->
+            ( { model | linkUrl = url }, Cmd.none )
+
+        LinkTitleChanged title ->
+            ( { model | linkTitle = title }, Cmd.none )
+
+        AddExternalLink ->
+            if String.isEmpty (String.trim model.linkUrl) then
+                ( model, Cmd.none )
+
+            else
+                withSelected model
+                    (\projectId ->
+                        send IgnoreReply
+                            (Command.AddProjectLink projectId (String.trim model.linkUrl) (String.trim model.linkTitle))
+                            { model | linkUrl = "", linkTitle = "" }
+                    )
 
         AddDiaryEntry ->
             withSelected model
@@ -674,6 +712,9 @@ selectProject projectId model =
                 , showCompleted = False
                 , showSecondary = False
                 , detailTab = OverviewTab
+                , showAllDiary = False
+                , linkUrl = ""
+                , linkTitle = ""
                 , tagFilters = Set.empty
                 , outcomeEditing = False
                 , editingSupport = Nothing
@@ -1283,11 +1324,12 @@ viewDetail model project =
                     , viewSubprojects model project
                     ]
 
-                DiaryTab ->
-                    [ viewDiary model ]
-
-                FilesTab ->
-                    [ viewSupport model, viewLinkedFiles model project ]
+                SupportTab ->
+                    [ viewDiary model
+                    , viewSupport model project
+                    , viewLinkedFiles model project
+                    , viewExternalLinks model project
+                    ]
             )
         ]
 
@@ -1295,11 +1337,15 @@ viewDetail model project =
 viewDetailTabs : Model -> Project -> List Action -> Html Msg
 viewDetailTabs model project openActions =
     let
-        diaryCount =
-            Maybe.map (.diary >> List.length) model.detail
-
-        fileCount =
-            Maybe.map (\detail -> List.length detail.supportFiles + List.length detail.linkedFiles) model.detail
+        supportCount =
+            Maybe.map
+                (\detail ->
+                    List.length detail.diary
+                        + List.length detail.supportFiles
+                        + List.length detail.linkedFiles
+                        + List.length detail.externalLinks
+                )
+                model.detail
 
         tab target label count =
             button
@@ -1314,8 +1360,7 @@ viewDetailTabs model project openActions =
     in
     div [ class "dg-detail-tabs", attribute "role" "tablist" ]
         [ tab OverviewTab "Overview" (Just (List.length openActions))
-        , tab DiaryTab "Diary" diaryCount
-        , tab FilesTab "Files" fileCount
+        , tab SupportTab "Support material" supportCount
         ]
 
 
@@ -1699,13 +1744,40 @@ viewDiary model =
                 [ span [ class "dg-muted" ] [ text "No entries yet." ] ]
 
              else
-                List.map (\entry -> div [] [ span [] [ text entry.timestamp ], p [] [ text entry.body ] ]) entries
+                List.map (\entry -> div [] [ span [] [ text entry.timestamp ], p [] [ text entry.body ] ])
+                    (if model.showAllDiary then
+                        entries
+
+                     else
+                        List.take diaryPreview entries
+                    )
             )
+        , if List.length entries > diaryPreview then
+            button [ class "dg-disclosure dg-diary-more dg-flat-button", onClick ToggleAllDiary ]
+                [ text
+                    (if model.showAllDiary then
+                        "Show latest " ++ String.fromInt diaryPreview
+
+                     else
+                        "Show all " ++ String.fromInt (List.length entries) ++ " entries"
+                    )
+                ]
+
+          else
+            text ""
         ]
 
 
-viewSupport : Model -> Html Msg
-viewSupport model =
+{-| Entries the diary shows before it is expanded, so a long one does not push
+the files far down.
+-}
+diaryPreview : Int
+diaryPreview =
+    5
+
+
+viewSupport : Model -> Project -> Html Msg
+viewSupport model project =
     let
         files =
             Maybe.map .supportFiles model.detail |> Maybe.withDefault []
@@ -1721,7 +1793,10 @@ viewSupport model =
     in
     section [ class "dg-detail-section dg-support-panel" ]
         [ div [ class "dg-detail-section-heading" ]
-            [ h3 [ class "dg-detail-eyebrow" ] [ text "Project Support Material" ]
+            [ div []
+                [ h3 [ class "dg-detail-eyebrow" ] [ text "Support folder" ]
+                , Ui.maybeView project.supportPath (\path -> div [ class "dg-support-path" ] [ text path ])
+                ]
             , span [ class "dg-detail-count" ]
                 [ text (String.fromInt (List.length files) ++ " files · " ++ String.fromInt (List.length folders) ++ " folders") ]
             ]
@@ -1805,6 +1880,83 @@ viewLinkedFiles model project =
                     linked
                 )
         ]
+
+
+{-| Web pages the Project refers to. Only http and https links are kept.
+-}
+viewExternalLinks : Model -> Project -> Html Msg
+viewExternalLinks model project =
+    let
+        links =
+            Maybe.map .externalLinks model.detail |> Maybe.withDefault []
+    in
+    section [ class "dg-detail-section dg-external-links-panel" ]
+        [ div [ class "dg-detail-section-heading" ]
+            [ h3 [ class "dg-detail-eyebrow" ] [ text "External links" ]
+            , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length links)) ]
+            ]
+        , div [ class "dg-external-link-add" ]
+            [ Ui.labelled "Web address"
+                (input
+                    [ type_ "url"
+                    , value model.linkUrl
+                    , placeholder "https://…"
+                    , onInput LinkUrlChanged
+                    , Ui.onEnter { enter = AddExternalLink, ignore = NoOp }
+                    ]
+                    []
+                )
+            , Ui.labelled "Link title"
+                (input
+                    [ value model.linkTitle
+                    , placeholder "Title (optional)"
+                    , onInput LinkTitleChanged
+                    , Ui.onEnter { enter = AddExternalLink, ignore = NoOp }
+                    ]
+                    []
+                )
+            , button [ disabled (String.isEmpty (String.trim model.linkUrl)), onClick AddExternalLink ] [ text "Add link" ]
+            ]
+        , if List.isEmpty links then
+            span [ class "dg-support-empty" ] [ text "No external links." ]
+
+          else
+            div [ class "dg-linked-files" ]
+                (List.map
+                    (\link ->
+                        div [ class "dg-linked-file" ]
+                            [ button [ class "dg-linked-file-open dg-flat-button", onClick (Send IgnoreReply (Command.OpenLink link.url)) ]
+                                [ span [ class "dg-linked-file-label" ] [ text link.title ]
+                                , if link.title /= link.url then
+                                    span [ class "dg-external-link-host" ] [ text (host link.url) ]
+
+                                  else
+                                    text ""
+                                ]
+                            , button
+                                [ class "dg-linked-file-unlink dg-flat-button"
+                                , onClick (Send IgnoreReply (Command.RemoveProjectLink project.id link.entry))
+                                ]
+                                (Ui.iconLabel "Remove" ("Remove link " ++ link.title))
+                            ]
+                    )
+                    links
+                )
+        ]
+
+
+{-| The host part of a web address, shown next to a titled link.
+-}
+host : String -> String
+host url =
+    url
+        |> String.split "://"
+        |> List.drop 1
+        |> List.head
+        |> Maybe.withDefault url
+        |> String.split "/"
+        |> List.head
+        |> Maybe.withDefault url
 
 
 viewSupportFile : Model -> SupportFile -> Html Msg
@@ -2183,7 +2335,7 @@ supportFolderDecoder =
 
 projectDetailDecoder : Decoder ProjectDetail
 projectDetailDecoder =
-    Decode.map6 ProjectDetail
+    Decode.map7 ProjectDetail
         (Decode.field "projectId" Decode.string)
         (Decode.field "desiredOutcome" Decode.string)
         (Decode.field "diary" (Decode.list diaryDecoder))
@@ -2195,6 +2347,15 @@ projectDetailDecoder =
                     (Decode.field "link" Decode.string)
                     (Decode.field "path" Decode.string)
                     (Decode.field "label" Decode.string)
+                )
+            )
+        )
+        (Decode.field "externalLinks"
+            (Decode.list
+                (Decode.map3 ExternalLink
+                    (Decode.field "entry" Decode.string)
+                    (Decode.field "url" Decode.string)
+                    (Decode.field "title" Decode.string)
                 )
             )
         )
@@ -2251,6 +2412,9 @@ emptyModel message =
     , outcomeEditing = False
     , outcomeDraft = ""
     , diaryDraft = ""
+    , showAllDiary = False
+    , linkUrl = ""
+    , linkTitle = ""
     , supportNoteTitle = ""
     , supportFolderPath = ""
     , openSupport = Set.empty

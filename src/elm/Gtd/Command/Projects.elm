@@ -35,6 +35,9 @@ type Command
     | CreateSupportFolder ProjectId String
     | LinkProjectFile ProjectId
     | UnlinkProjectFile ProjectId String
+    | AddProjectLink ProjectId String String
+    | RemoveProjectLink ProjectId String
+    | OpenLink String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
     | SaveProjectPreferences { columns : List ProjectStatus, showImages : Bool, groupByArea : Bool }
@@ -128,6 +131,15 @@ toBase command =
 
         UnlinkProjectFile projectId link ->
             Base.UnlinkProjectFile projectId link
+
+        AddProjectLink projectId url title ->
+            Base.AddProjectLink projectId url title
+
+        RemoveProjectLink projectId entry ->
+            Base.RemoveProjectLink projectId entry
+
+        OpenLink url ->
+            Base.OpenLink url
 
         ReadSupportNote projectId path ->
             Base.ReadSupportNote projectId path

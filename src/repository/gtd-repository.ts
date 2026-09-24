@@ -19,6 +19,7 @@ import type {
 } from "../domain/types";
 import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { ranksForOrder } from "../domain/ranking";
+import { formatExternalLink, parseExternalLink } from "../domain/external-links";
 import { actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { linkedFileEntry, normalizeScheduledStart } from "../domain/validation";
@@ -683,6 +684,28 @@ export class GtdRepository {
     await this.enqueue(project.file.path, () => this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
       const current = Array.isArray(frontmatter.linked_files) ? frontmatter.linked_files : [];
       frontmatter.linked_files = [...current, link];
+    }));
+  }
+
+  /** Adds a web link to a Project; the same URL twice is kept once. */
+  async addProjectLink(projectId: string, url: string, title = ""): Promise<void> {
+    const project = this.requireProject(projectId);
+    const entry = formatExternalLink(url, title);
+    const target = parseExternalLink(entry)!.url;
+    if ((project.externalLinks ?? []).some((existing) => parseExternalLink(existing)?.url === target)) return;
+    await this.enqueue(project.file.path, () => this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
+      const current = Array.isArray(frontmatter.external_links) ? frontmatter.external_links : [];
+      frontmatter.external_links = [...current, entry];
+    }));
+  }
+
+  /** Removes one web link from a Project, identified by the entry as written. */
+  async removeProjectLink(projectId: string, entry: string): Promise<void> {
+    const project = this.requireProject(projectId);
+    await this.enqueue(project.file.path, () => this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
+      const remaining = (Array.isArray(frontmatter.external_links) ? frontmatter.external_links : [])
+        .filter((existing: unknown) => typeof existing !== "string" || existing.trim() !== entry);
+      frontmatter.external_links = remaining.length ? remaining : null;
     }));
   }
 

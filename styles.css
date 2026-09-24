@@ -661,9 +661,11 @@ body.is-phone .workspace-leaf-content:is(
 .dg-muted { color: var(--text-muted); }
 .dg-support-create { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .dg-support-note-create,
-.dg-support-folder-create { display: flex; align-items: center; gap: 8px; }
+.dg-support-folder-create,
+.dg-external-link-add { display: flex; align-items: center; gap: 8px; }
 .dg-support-note-create input,
-.dg-support-folder-create input {
+.dg-support-folder-create input,
+.dg-external-link-add input {
   min-width: 0;
   min-height: 36px;
   flex: 1;
@@ -674,7 +676,11 @@ body.is-phone .workspace-leaf-content:is(
   background: var(--background-primary);
 }
 .dg-support-note-create button,
-.dg-support-folder-create button { min-height: 36px; }
+.dg-support-folder-create button,
+.dg-external-link-add button { min-height: 36px; }
+.dg-external-link-add { margin-bottom: 12px; }
+.dg-support-path { margin-top: 2px; color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.dg-external-link-host { flex: 0 0 auto; margin-left: 8px; color: var(--text-faint); font-size: var(--font-ui-smaller); }
 .dg-support-folders { margin-top: 14px; }
 .dg-support-folders > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-support-folders > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 5px 10px; margin-top: 5px; }
@@ -1637,7 +1643,9 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   border-top: 1px solid var(--background-modifier-border);
   background: transparent;
 }
-.dg-diary-list { max-height: 240px; margin-top: 12px; overflow-y: auto; }
+/* The diary shows its latest entries and expands on request, instead of scrolling in place. */
+.dg-diary-list { margin-top: 12px; }
+.dg-diary-more { margin-top: 6px; color: var(--text-accent); font-size: var(--font-ui-smaller); }
 .dg-diary-list > div { padding: 9px 2px; border-top: 1px solid var(--background-modifier-border); }
 .dg-diary-list > div:first-child { border-top: 0; }
 .dg-diary-add { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; }

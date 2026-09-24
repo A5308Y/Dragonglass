@@ -78,6 +78,8 @@ type Command
     | CreateSupportFolder ProjectId String
     | LinkProjectFile ProjectId
     | UnlinkProjectFile ProjectId String
+    | AddProjectLink ProjectId String String
+    | RemoveProjectLink ProjectId String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
     | SaveProjectPreferences { columns : List ProjectStatus, showImages : Bool, groupByArea : Bool }
@@ -449,6 +451,13 @@ encode command =
 
         UnlinkProjectFile projectId link ->
             object "unlink-project-file" [ ( "projectId", Encode.string projectId ), ( "link", Encode.string link ) ]
+
+        AddProjectLink projectId url title ->
+            object "add-project-link"
+                [ ( "projectId", Encode.string projectId ), ( "url", Encode.string url ), ( "title", Encode.string title ) ]
+
+        RemoveProjectLink projectId entry ->
+            object "remove-project-link" [ ( "projectId", Encode.string projectId ), ( "entry", Encode.string entry ) ]
 
         ReadSupportNote projectId path ->
             object "read-support-note"

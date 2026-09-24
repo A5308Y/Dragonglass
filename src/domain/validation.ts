@@ -192,6 +192,7 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   const order = optionalNumber(frontmatter, "order");
   const blockedByProjectIds = optionalStringList(frontmatter, "blocked_by_project_ids");
   const linkedFiles = linkedFileList(frontmatter);
+  const externalLinks = optionalStringList(frontmatter, "external_links");
   const parentProjectId = optionalString(frontmatter, "parent_project_id");
   const parentProjectLink = optionalString(frontmatter, "parent_project");
   if (area) project.area = area;
@@ -209,5 +210,6 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   if (parentProjectId) project.parentProjectId = parentProjectId;
   if (parentProjectLink) project.parentProjectLink = parentProjectLink;
   if (linkedFiles.length) project.linkedFiles = linkedFiles;
+  if (externalLinks.length) project.externalLinks = externalLinks;
   return project;
 }

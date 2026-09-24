@@ -89,6 +89,8 @@ export interface Project {
    * Project leaves the files alone.
    */
   linkedFiles?: string[];
+  /** Web links as written in `external_links`: `[Title](https://…)` or a bare URL. */
+  externalLinks?: string[];
 }
 
 export interface ActionInput {
