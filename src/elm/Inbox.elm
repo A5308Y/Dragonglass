@@ -1081,7 +1081,7 @@ projectPicker model =
     Picker.config
         { placeholder = "Search or name a Project…"
         , label = Hierarchy.breadcrumb model.snapshot.projects
-        , hint = .area
+        , hint = Hierarchy.area model.snapshot.projects
         , tag = ProjectPicker
         }
 
@@ -1108,7 +1108,7 @@ projectSuggestions model =
                     Ui.matches model.project.query
                         [ project.title
                         , Hierarchy.breadcrumb model.snapshot.projects project
-                        , Maybe.withDefault "" project.area
+                        , Maybe.withDefault "" (Hierarchy.area model.snapshot.projects project)
                         ]
                 )
             |> List.sortBy (Hierarchy.breadcrumb model.snapshot.projects)

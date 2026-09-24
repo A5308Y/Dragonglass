@@ -4,7 +4,8 @@ module Gtd.Hierarchy exposing
     , compareByOrder
     , descendantIds
     , isDescendantOf
-    , lineageAreas
+    , area
+    , root
     , leafTitle
     , separator
     )
@@ -81,32 +82,31 @@ isDescendantOf rootId projects project =
     walk Set.empty project.parentProjectId
 
 
-{-| The areas of a Project and all of its ancestors, nearest first.
+{-| A Project's top-level ancestor, or the Project itself when it has no parent.
 -}
-lineageAreas : List Project -> ProjectId -> List String
-lineageAreas projects projectId =
+root : List Project -> Project -> Project
+root projects project =
     let
-        walk seen maybeId found =
-            case maybeId |> Maybe.andThen (\currentId -> Gtd.Data.findProject currentId projects) of
-                Just current ->
-                    if Set.member current.id seen then
-                        found
+        walk seen current =
+            if Set.member current.id seen then
+                current
 
-                    else
-                        walk (Set.insert current.id seen)
-                            current.parentProjectId
-                            (case Gtd.Data.projectArea current of
-                                Just area ->
-                                    area :: found
+            else
+                case current.parentProjectId |> Maybe.andThen (\parentId -> Gtd.Data.findProject parentId projects) of
+                    Just parent ->
+                        walk (Set.insert current.id seen) parent
 
-                                Nothing ->
-                                    found
-                            )
-
-                Nothing ->
-                    found
+                    Nothing ->
+                        current
     in
-    walk Set.empty (Just projectId) [] |> List.reverse
+    walk Set.empty project
+
+
+{-| A Project's area: its top-level ancestor's, since only top-level Projects carry one.
+-}
+area : List Project -> Project -> Maybe String
+area projects project =
+    Gtd.Data.projectArea (root projects project)
 
 
 {-| Every Project beneath one, at any depth.

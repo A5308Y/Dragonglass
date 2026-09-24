@@ -85,7 +85,7 @@ describe("query model", () => {
     expect(groups.map((group) => group.label)).toEqual(["Heating", "No project"]);
   });
 
-  it("filters Actions by the area of their Project or any ancestor", () => {
+  it("filters Actions by the area of their top-level Project, ignoring any on a sub-project", () => {
     const root: Project = { ...project, id: "R", title: "Home", area: "Household" };
     const middle: Project = { ...project, id: "M", title: "Heating", parentProjectId: "R" };
     const leaf: Project = { ...project, id: "L", title: "Boiler", parentProjectId: "M", area: "Maintenance" };
@@ -96,9 +96,9 @@ describe("query model", () => {
     const household = candidates.filter((action) =>
       matchesFilter(action, { kind: "value", field: "area", operator: "in", values: ["Household"] }, "2026-09-18", byId));
     expect(household.map((action) => action.id)).toEqual(["A-root", "A-middle", "A-leaf"]);
-    const notMaintenance = candidates.filter((action) =>
-      matchesFilter(action, { kind: "value", field: "area", operator: "notIn", values: ["Maintenance"] }, "2026-09-18", byId));
-    expect(notMaintenance.map((action) => action.id)).toEqual(["A-root", "A-middle", "A-none"]);
+    const maintenance = candidates.filter((action) =>
+      matchesFilter(action, { kind: "value", field: "area", operator: "in", values: ["Maintenance"] }, "2026-09-18", byId));
+    expect(maintenance).toEqual([]);
   });
 
   it("matches the Actions of a filtered Project's sub-projects at any depth", () => {

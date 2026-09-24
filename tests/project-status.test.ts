@@ -37,6 +37,12 @@ describe("Project statuses", () => {
     expect(project.image).toBe("Images/project.jpg");
   });
 
+  it("keeps an area only on top-level Projects", () => {
+    const base = { type: "gtd-project", id: "01KAREAPROJECT", title: "Boiler", status: "active", created: "2026-09-19", area: "Home" };
+    expect(parseProject(base, file).area).toBe("Home");
+    expect(parseProject({ ...base, parent_project_id: "01KPARENT" }, file).area).toBeUndefined();
+  });
+
   it("reads linked files as the wikilinks written in linked_files", () => {
     const base = { type: "gtd-project", id: "01KLINKEDPROJECT", title: "Move flat", status: "active", created: "2026-09-19" };
     expect(parseProject({ ...base, linked_files: ["[[Contracts/Lease.pdf]]", "[[Notes/Landlord]]"] }, file).linkedFiles)

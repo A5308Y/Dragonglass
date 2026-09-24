@@ -1120,7 +1120,7 @@ viewProjectColumn model status =
                 [ div [ class "dg-empty-row" ] [ text ("No " ++ String.toLower (ProjectStatus.label status) ++ " Projects.") ] ]
 
              else if model.groupByArea then
-                List.map (viewAreaGroup model) (groupByArea projects)
+                List.map (viewAreaGroup model) (groupByArea model.snapshot.projects projects)
 
              else
                 List.map (viewProjectCard model) projects
@@ -1129,18 +1129,25 @@ viewProjectColumn model status =
 
 
 {-| Projects split by area, keeping each column's rank inside an area. Areas sort
-alphabetically, ignoring case, with Projects that have none last.
+alphabetically, ignoring case, with Projects that have none last. A sub-project
+sits under its top-level Project's area.
 -}
-groupByArea : List Project -> List ( Maybe String, List Project )
-groupByArea projects =
+groupByArea : List Project -> List Project -> List ( Maybe String, List Project )
+groupByArea allProjects projects =
     let
+        areaOf =
+            Hierarchy.area allProjects
+
         inArea area =
-            List.filter (\project -> Data.projectArea project == area) projects
+            List.filter (\project -> areaOf project == area) projects
 
         withoutArea =
             inArea Nothing
+
+        areas =
+            projects |> List.filterMap areaOf |> Ui.uniqueSorted |> List.sortBy String.toLower
     in
-    List.map (\area -> ( Just area, inArea (Just area) )) (Data.areas projects)
+    List.map (\area -> ( Just area, inArea (Just area) )) areas
         ++ (if List.isEmpty withoutArea then
                 []
 
@@ -1231,7 +1238,7 @@ viewProjectCard model project =
             text ""
 
           else
-            Ui.maybeView project.area (\area -> div [ class "dg-project-area" ] [ text area ])
+            Ui.maybeView (Hierarchy.area model.snapshot.projects project) (\area -> div [ class "dg-project-area" ] [ text area ])
         , div [ class "dg-project-tags" ] (List.map viewTag project.tags)
         , div [ class "dg-project-metrics" ]
             [ span [] [ strong [] [ text (String.fromInt openCount) ], text " open" ]
@@ -2094,11 +2101,15 @@ areaEntries model project =
                 )
                 (Command.SetProjectArea project.id (Maybe.withDefault "" area))
     in
-    case Data.areas model.snapshot.projects of
-        [] ->
+    case ( project.parentProjectId, Data.areas model.snapshot.projects ) of
+        -- Sub-projects share their top-level Project's area.
+        ( Just _, _ ) ->
             []
 
-        areas ->
+        ( Nothing, [] ) ->
+            []
+
+        ( Nothing, areas ) ->
             MenuSeparator
                 :: List.map (\area -> entry ("Area: " ++ area) (Just area)) areas
                 ++ [ entry "No area" Nothing ]
@@ -2182,7 +2193,7 @@ visibleProjects model =
                 meta =
                     projectMeta project.id model
             in
-            Ui.matches model.search [ project.title, meta.breadcrumb, Maybe.withDefault "" project.area ]
+            Ui.matches model.search [ project.title, meta.breadcrumb, Maybe.withDefault "" (Hierarchy.area model.snapshot.projects project) ]
                 && (not model.issuesOnly || meta.actionIssue /= Nothing)
                 && (model.showSubprojects || project.parentProjectId == Nothing)
                 && List.member project.status model.visibleColumns

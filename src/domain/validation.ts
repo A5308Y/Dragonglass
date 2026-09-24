@@ -195,7 +195,8 @@ export function parseProject(frontmatter: Frontmatter, file: TFile): Project {
   const externalLinks = optionalStringList(frontmatter, "external_links");
   const parentProjectId = optionalString(frontmatter, "parent_project_id");
   const parentProjectLink = optionalString(frontmatter, "parent_project");
-  if (area) project.area = area;
+  // Areas belong to top-level Projects; a sub-project's own value is ignored and cleared on its next save.
+  if (area && !parentProjectId) project.area = area;
   if (reviewed) project.reviewed = dateOnly(reviewed, "reviewed");
   if (activateAt) project.activateAt = dateOnly(activateAt, "activate_at");
   if (completed) {

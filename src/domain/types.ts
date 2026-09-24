@@ -71,6 +71,7 @@ export interface Project {
   file: TFile;
   status: ProjectStatus;
   created: string;
+  /** Only top-level Projects carry one; sub-projects share their top-level ancestor's (see `projectArea`). */
   area?: string;
   reviewed?: string;
   /** Local date on which a Someday/Maybe Project should become Active. */

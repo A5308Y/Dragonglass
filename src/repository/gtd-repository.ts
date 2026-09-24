@@ -329,7 +329,7 @@ export class GtdRepository {
       id,
       title,
       status,
-      area: input.area || null,
+      area: parent ? null : input.area || null,
       created,
       reviewed: null,
       activate_at: input.activateAt || null,
@@ -347,7 +347,7 @@ export class GtdRepository {
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
     if (input.activateAt) project.activateAt = input.activateAt;
     if (completed) project.completed = completed;
-    if (input.area?.trim()) project.area = input.area.trim();
+    if (!parent && input.area?.trim()) project.area = input.area.trim();
     if (input.image?.trim()) project.image = input.image.trim();
     if (tags.length) project.tags = tags;
     if (order !== undefined) project.order = order;
@@ -472,7 +472,12 @@ export class GtdRepository {
           frontmatter.status = changes.status;
           if (changes.status !== project.status) frontmatter.completed = changes.status === "completed" ? new Date().toISOString() : null;
         }
-        if (changes.area !== undefined) frontmatter.area = changes.area || null;
+        // Only top-level Projects carry an area, so a sub-project's stored one is cleared here.
+        const topLevel = changes.parentProjectId !== undefined ? !parent : !project.parentProjectId;
+        if (!topLevel) {
+          if (frontmatter.area != null) frontmatter.area = null;
+        }
+        else if (changes.area !== undefined) frontmatter.area = changes.area || null;
         if (changes.reviewed !== undefined) frontmatter.reviewed = changes.reviewed || null;
         if (changes.activateAt !== undefined) frontmatter.activate_at = changes.activateAt || null;
         if (changes.image !== undefined) frontmatter.image = changes.image.trim() || null;

@@ -372,6 +372,46 @@ defaultDuration snapshot =
     String.fromInt snapshot.settings.defaultDurationMinutes
 
 
+{-| Only a top-level Project takes an area; a sub-project shows the one it shares
+with its top-level Project instead of a field.
+-}
+areaRow : Model -> ProjectFields -> Html Msg
+areaRow model fields =
+    case Picker.selection fields.parent of
+        Just parent ->
+            let
+                top =
+                    Hierarchy.root model.snapshot.projects parent
+            in
+            settingRow "Area"
+                "Sub-projects share the area of their top-level Project."
+                [ span [ class "dg-inherited-area" ]
+                    [ text
+                        (case Data.projectArea top of
+                            Just area ->
+                                area ++ " (from " ++ top.title ++ ")"
+
+                            Nothing ->
+                                "None (" ++ top.title ++ " has no area)"
+                        )
+                    ]
+                ]
+
+        Nothing ->
+            settingRow "Area" "" [ textInput "Area" "text" fields.area "e.g. Work, Health" (TextChanged AreaField) False ]
+
+
+{-| The area to store: a sub-project stores none of its own.
+-}
+ownArea : ProjectFields -> String
+ownArea fields =
+    if Picker.selection fields.parent == Nothing then
+        String.trim fields.area
+
+    else
+        ""
+
+
 {-| The statuses a Project can start in; it is only completed or cancelled later.
 -}
 newProjectStatuses : List ProjectStatus
@@ -797,7 +837,7 @@ projectSuggestions model =
                 Ui.matches typed
                     [ project.title
                     , Hierarchy.breadcrumb model.snapshot.projects project
-                    , Maybe.withDefault "" project.area
+                    , Maybe.withDefault "" (Hierarchy.area model.snapshot.projects project)
                     , project.file.path
                     ]
             )
@@ -1074,7 +1114,7 @@ submitProject mode fields model =
                     (Command.CreateProject
                         { title = String.trim fields.title
                         , status = fields.status
-                        , area = String.trim fields.area
+                        , area = ownArea fields
                         , image = image
                         , tags = tagList fields.tags
                         , parentProjectId = Maybe.map .id (Picker.selection fields.parent)
@@ -1093,7 +1133,7 @@ submitProject mode fields model =
 
                             else
                                 ""
-                        , area = String.trim fields.area
+                        , area = ownArea fields
                         , image = image
                         , tags = tagList fields.tags
                         , reviewed = fields.reviewed
@@ -1508,7 +1548,7 @@ projectView model mode fields =
                 )
             , settingRow "Title" "" [ textInput "Title" "text" fields.title "Project title" (TextChanged TitleField) True ]
             , settingRow "Status" "" [ statusSelect "Status" newProjectStatuses ProjectStatus.key ProjectStatus.label ProjectStatusChanged fields.status ]
-            , settingRow "Area" "" [ textInput "Area" "text" fields.area "e.g. Work, Health" (TextChanged AreaField) False ]
+            , areaRow model fields
             , imageRow
             , tagsRow fields.tags
             , parentProjectRow model "Parent Project" "Optional. Type to fuzzy-search the full Project hierarchy." fields.parent
@@ -1530,7 +1570,7 @@ projectView model mode fields =
                     else
                         []
                    )
-                ++ [ settingRow "Area" "" [ textInput "Area" "text" fields.area "e.g. Work, Health" (TextChanged AreaField) False ]
+                ++ [ areaRow model fields
                    , imageRow
                    , tagsRow fields.tags
                    , parentProjectRow model "Parent Project" "Optional. Descendants are excluded to prevent hierarchy cycles." fields.parent

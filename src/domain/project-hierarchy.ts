@@ -26,9 +26,9 @@ export function projectLineage(projectId: string, projectsById: ReadonlyMap<stri
   return lineage;
 }
 
-/** The areas of a Project and all of its ancestors, nearest first. */
-export function projectLineageAreas(projectId: string, projectsById: ReadonlyMap<string, Project>): string[] {
-  return projectLineage(projectId, projectsById).flatMap((project) => project.area?.trim() || []);
+/** A Project's area: its top-level ancestor's, since only top-level Projects carry one. */
+export function projectArea(projectId: string, projectsById: ReadonlyMap<string, Project>): string | undefined {
+  return projectLineage(projectId, projectsById).at(-1)?.area?.trim() || undefined;
 }
 
 export function projectBreadcrumbs(projects: readonly Project[]): Map<string, string> {

@@ -168,6 +168,7 @@ export class ElmProjectsHost {
       case "set-project-status":
         return setProjectStatus(this.services, command.projectId, command.status);
       case "set-project-area":
+        if (this.project(command.projectId).parentProjectId) throw new Error("Only top-level Projects have an area.");
         return this.services.repository.updateProject(command.projectId, { area: command.area.trim() });
       case "move-subproject":
         return moveProject(this.services, command.projectId, command.status, command.beforeId);

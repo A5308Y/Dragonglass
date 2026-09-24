@@ -215,7 +215,7 @@ viewItem model project =
               else
                 text ""
             , div [ class "dg-someday-item-meta" ]
-                (Ui.maybeList project.area (\area -> span [] [ text area ])
+                (Ui.maybeList (Hierarchy.area model.snapshot.projects project) (\area -> span [] [ text area ])
                     ++ List.map (\tag -> span [] [ text ("#" ++ tag) ]) project.tags
                     ++ [ span [] [ text (Maybe.map ((++) "Reviewed ") project.reviewed |> Maybe.withDefault "Never reviewed") ]
                        , span [] [ text (Ui.plural openCount "open Action") ]

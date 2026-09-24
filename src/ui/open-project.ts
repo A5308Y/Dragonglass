@@ -1,14 +1,17 @@
 import { FuzzySuggestModal, type App, type FuzzyMatch } from "obsidian";
-import { projectBreadcrumbs } from "../domain/project-hierarchy";
+import { projectArea, projectBreadcrumbs } from "../domain/project-hierarchy";
 import type { Project } from "../domain/types";
 
 export class OpenProjectModal extends FuzzySuggestModal<Project> {
   private readonly breadcrumbs: ReadonlyMap<string, string>;
+  private readonly areas: ReadonlyMap<string, string | undefined>;
   private readonly projects: Project[];
 
   constructor(app: App, projects: readonly Project[], private readonly choose: (project: Project) => void) {
     super(app);
     this.breadcrumbs = projectBreadcrumbs(projects);
+    const byId = new Map(projects.map((project) => [project.id, project]));
+    this.areas = new Map(projects.map((project) => [project.id, projectArea(project.id, byId)]));
     this.projects = [...projects].sort((left, right) => this.label(left).localeCompare(this.label(right)));
     this.limit = 50;
     this.setPlaceholder("Search Projects…");
@@ -19,7 +22,7 @@ export class OpenProjectModal extends FuzzySuggestModal<Project> {
   }
 
   getItemText(project: Project): string {
-    return [this.label(project), project.area, project.status, project.file.path].filter(Boolean).join(" ");
+    return [this.label(project), this.areas.get(project.id), project.status, project.file.path].filter(Boolean).join(" ");
   }
 
   renderSuggestion(match: FuzzyMatch<Project>, el: HTMLElement): void {
@@ -28,7 +31,7 @@ export class OpenProjectModal extends FuzzySuggestModal<Project> {
     el.createDiv({ cls: "dg-project-suggestion-title", text: this.label(project) });
     el.createDiv({
       cls: "dg-project-suggestion-meta",
-      text: [projectStatusLabel(project.status), project.area, project.file.path].filter(Boolean).join(" · "),
+      text: [projectStatusLabel(project.status), this.areas.get(project.id), project.file.path].filter(Boolean).join(" · "),
     });
   }
 

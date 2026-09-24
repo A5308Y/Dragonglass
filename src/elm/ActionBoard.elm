@@ -1477,10 +1477,12 @@ matchesFilter model action filter =
             applyOperator operator (List.member (Maybe.map Energy.key action.energy |> Maybe.withDefault "") values)
 
         ByArea operator values ->
+            -- Sub-projects share their top-level Project's area.
             action.projectId
-                |> Maybe.map (Hierarchy.lineageAreas model.snapshot.projects)
-                |> Maybe.withDefault []
-                |> List.any (\area -> List.member area values)
+                |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects)
+                |> Maybe.andThen (Hierarchy.area model.snapshot.projects)
+                |> Maybe.map (\area -> List.member area values)
+                |> Maybe.withDefault False
                 |> applyOperator operator
 
         ByDue range ->

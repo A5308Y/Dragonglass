@@ -1,6 +1,6 @@
 import { ACTION_STATUSES, type Action, type ActionFilter, type BoardConfiguration, type GtdSnapshot, type GroupBy, type Project, type SortSpec } from "../domain/types";
 import { addLocalDays, localDate } from "../utils/date";
-import { projectBreadcrumb, projectLineage, projectLineageAreas } from "../domain/project-hierarchy";
+import { projectArea, projectBreadcrumb, projectLineage } from "../domain/project-hierarchy";
 
 export interface ActionGroup {
   key: string;
@@ -17,8 +17,8 @@ function valueFor(action: Action, field: "status" | "project" | "context" | "ene
 
 /**
  * Project and area filters look up the Project tree: a Project filter matches the
- * Actions of the Project's sub-projects at any depth, and an area filter matches an
- * Action whose Project, or any ancestor of it, has one of the areas.
+ * Actions of the Project's sub-projects at any depth, and an area filter matches the
+ * area of the Action's top-level Project, which every sub-project shares.
  */
 export function matchesFilter(
   action: Action,
@@ -28,7 +28,7 @@ export function matchesFilter(
 ): boolean {
   if (filter.kind === "value") {
     const matched = filter.field === "area"
-      ? Boolean(action.projectId) && projectLineageAreas(action.projectId!, projectsById).some((area) => filter.values.includes(area))
+      ? Boolean(action.projectId) && filter.values.includes(projectArea(action.projectId!, projectsById) ?? "")
       : filter.values.includes(valueFor(action, filter.field))
         || (filter.field === "project" && Boolean(action.projectId)
           && projectLineage(action.projectId!, projectsById).some((project) => filter.values.includes(project.id)));

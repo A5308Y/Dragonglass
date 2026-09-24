@@ -420,7 +420,7 @@ projectSuggestions model =
         |> List.filter
             (\project ->
                 Ui.matches (Picker.query model.project)
-                    [ project.title, Hierarchy.breadcrumb model.snapshot.projects project, Maybe.withDefault "" project.area ]
+                    [ project.title, Hierarchy.breadcrumb model.snapshot.projects project, Maybe.withDefault "" (Hierarchy.area model.snapshot.projects project) ]
             )
         |> List.sortBy
             (\project ->
@@ -505,7 +505,7 @@ setupView model =
                 (Picker.config
                     { placeholder = "Search Projects…"
                     , label = Hierarchy.breadcrumb model.snapshot.projects
-                    , hint = .area
+                    , hint = Hierarchy.area model.snapshot.projects
                     , tag = ProjectPicker
                     }
                 )
