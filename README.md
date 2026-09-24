@@ -121,6 +121,10 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 
 Assign any command to an Obsidian hotkey. A plugin's default hotkey is only a suggestion: when it collides with a command that already owns that chord, Obsidian flags the conflict in Settings → Hotkeys and the binding does nothing. Check there after install if a default appears not to fire. Quick Capture asks only for a title and immediately creates an Inbox Item. New Action provides a lightweight Title, fuzzy Project, fuzzy Context, and Status form. It is also available from the Actions header, Projects header, each Project card menu, and Project detail; Project-specific entry points preselect that Project.
 
+## Ribbon dots
+
+A ribbon icon carries a dot while its view has something to do: the Inbox while it holds Items, the Action Board for overdue Actions, Waiting Actions due for follow-up and Calendar Actions dated today or earlier, Projects while an active Project has an issue, the Project Review while an active top-level Project has gone a week (`REVIEW_INTERVAL_DAYS`) without a review, and RSS Feeds while there are unread Items. The dots follow every change to the vault or the feeds and are rechecked hourly for a new day.
+
 ## Board behavior
 
 The default board groups by status. It supports Project (including its sub-projects at any depth), status, context, energy, area (the area of the Action's top-level Project), and due-date filters; Project/context/energy grouping; manual/created/due/title/Project sorting; title and Project search; and named saved views.

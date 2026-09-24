@@ -4,6 +4,9 @@ import { FeedService, type FeedFetchResult, type FeedSyncStatus } from "./feeds/
 import { MailService, type MailImportResult, type MailSyncStatus } from "./mail/mail-service";
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import { projectsDueForActivation } from "./domain/project-activation";
+import { attention } from "./domain/attention";
+import { unreadItems } from "./domain/feed";
+import { RibbonAttention } from "./ui/ribbon-attention";
 import { describeImport, normalizeMailPort } from "./domain/mail";
 import type { GtdSettings, MailAccountSettings, ProjectStatus, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
@@ -26,6 +29,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private repository!: GtdRepository;
   private calendarSync!: GoogleCalendarSync;
   private feeds!: FeedService;
+  private ribbonAttention!: RibbonAttention;
   private mail!: MailService;
   private pomodoro!: PomodoroService;
   private services!: GtdServices;
@@ -83,13 +87,16 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.registerView(SOMEDAY_VIEW_TYPE, (leaf) => new GtdSomedayReviewView(leaf, this.services));
     this.registerView(POMODORO_VIEW_TYPE, (leaf) => new GtdPomodoroView(leaf, this.services, this.pomodoro));
     this.register(this.pomodoro.start(this.addStatusBarItem()));
-    this.addRibbonIcon("list-checks", "Open GTD Action Board", () => void this.activateView(BOARD_VIEW_TYPE));
-    this.addRibbonIcon("inbox", "Open GTD Inbox", () => void this.activateView(INBOX_VIEW_TYPE));
-    this.addRibbonIcon("folder-kanban", "Open GTD Projects", () => void this.activateView(PROJECTS_VIEW_TYPE));
-    this.addRibbonIcon("clipboard-check", "Start GTD Project Review", () => void this.activateView(REVIEW_VIEW_TYPE));
+    const board = this.addRibbonIcon("list-checks", "Open GTD Action Board", () => void this.activateView(BOARD_VIEW_TYPE));
+    const inbox = this.addRibbonIcon("inbox", "Open GTD Inbox", () => void this.activateView(INBOX_VIEW_TYPE));
+    const projects = this.addRibbonIcon("folder-kanban", "Open GTD Projects", () => void this.activateView(PROJECTS_VIEW_TYPE));
+    const review = this.addRibbonIcon("clipboard-check", "Start GTD Project Review", () => void this.activateView(REVIEW_VIEW_TYPE));
     this.addRibbonIcon("lightbulb", "Open GTD Brainstorm", () => void this.activateView(BRAINSTORM_VIEW_TYPE));
     this.addRibbonIcon("timer", "Open GTD Pomodoro", () => void this.openPomodoro());
-    this.addRibbonIcon("rss", "Open RSS Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
+    const feeds = this.addRibbonIcon("rss", "Open RSS Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
+    this.ribbonAttention = new RibbonAttention({ board, inbox, projects, review, feeds }, () =>
+      attention(this.index.getSnapshot(), unreadItems(this.feeds.getStore()).length));
+    this.register(() => this.ribbonAttention.stop());
     this.addSettingTab(new GtdSettingTab(this.app, this));
     this.registerCommands();
 
@@ -336,6 +343,11 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.register(this.calendarSync.start());
     this.register(this.feeds.start());
     this.register(this.mail.start());
+    // Dots on the ribbon icons for views with something to do; the hourly pass catches a new day.
+    this.register(this.index.subscribe(() => this.ribbonAttention.schedule()));
+    this.register(this.feeds.subscribe(() => this.ribbonAttention.schedule()));
+    this.registerInterval(window.setInterval(() => this.ribbonAttention.schedule(), 60 * 60_000));
+    this.ribbonAttention.update();
     this.registerInterval(window.setInterval(() => this.calendarSync.schedule(0), 5 * 60_000));
     this.registerInterval(window.setInterval(() => void this.activateScheduledProjects(), 60_000));
     if (migratedProjects) new Notice(`Migrated ${migratedProjects} waiting Project${migratedProjects === 1 ? "" : "s"} to Active.`);
