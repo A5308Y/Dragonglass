@@ -273,6 +273,43 @@ sendAndAdvance projectId command model =
     ( moved, Cmd.batch [ sendCmd, loadCmd ] )
 
 
+{-| Once every tree is reviewed and saved, the Someday/Maybe Review takes this view's
+place. It waits for the last save, so a failure can still bring its tree back here.
+-}
+continueWhenDone : Model -> ( Model, Cmd Msg )
+continueWhenDone model =
+    let
+        saving =
+            Host.pending model.requests
+                |> List.any
+                    (\pending ->
+                        case pending of
+                            Reviewed _ ->
+                                True
+
+                            DeleteAndAdvance _ ->
+                                True
+
+                            _ ->
+                                False
+                    )
+    in
+    if model.total > 0 && currentProject model == Nothing && not saving then
+        send IgnoreReply Command.OpenSomedayReview model
+
+    else
+        ( model, Cmd.none )
+
+
+andThen : (Model -> ( Model, Cmd Msg )) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+andThen next ( model, cmd ) =
+    let
+        ( nextModel, nextCmd ) =
+            next model
+    in
+    ( nextModel, Cmd.batch [ cmd, nextCmd ] )
+
+
 advance : ProjectId -> Model -> ( Model, Cmd Msg )
 advance projectId model =
     loadCurrent
@@ -402,12 +439,12 @@ finish : Pending -> Decode.Value -> Model -> ( Model, Cmd Msg )
 finish pending resultValue model =
     case pending of
         Reviewed _ ->
-            ( model, Cmd.none )
+            continueWhenDone model
 
         DeleteAndAdvance projectId ->
             case Decode.decodeValue Decode.bool resultValue of
                 Ok True ->
-                    advance projectId model
+                    advance projectId model |> andThen continueWhenDone
 
                 _ ->
                     ( model, Cmd.none )
@@ -454,6 +491,8 @@ view model =
                                 "No Projects need review today."
                             )
                         ]
+                    , button [ class "mod-cta", onClick (Send IgnoreReply Command.OpenSomedayReview) ]
+                        [ text "Continue to Someday/Maybe Review" ]
                     ]
                 ]
 

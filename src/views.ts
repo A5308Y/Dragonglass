@@ -56,7 +56,10 @@ export class GtdProjectReviewView extends ItemView {
   refresh(): void {
     if (this.host) return this.host.refresh();
     this.contentEl.empty();
-    this.host = new ElmProjectReviewHost(this.contentEl, this.services);
+    this.host = new ElmProjectReviewHost(this.contentEl, this.services, () => {
+      // Same tab: the Someday/Maybe Review is the next step of the same review.
+      void this.leaf.setViewState({ type: SOMEDAY_VIEW_TYPE, active: true });
+    });
   }
 }
 

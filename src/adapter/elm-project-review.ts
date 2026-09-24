@@ -32,7 +32,8 @@ export class ElmProjectReviewHost {
    */
   private queueFromVault: boolean;
 
-  constructor(node: HTMLElement, private readonly services: GtdServices) {
+  /** `continueToSomeday` puts the Someday/Maybe Review in this view's place once the review is done. */
+  constructor(node: HTMLElement, private readonly services: GtdServices, private readonly continueToSomeday: () => void) {
     const module = Elm.ProjectReview;
     if (!module) throw new Error("The Elm ProjectReview module was not compiled.");
     this.queue = projectReviewQueue(services.repository.index.getSnapshot(), localDate());
@@ -129,6 +130,9 @@ export class ElmProjectReviewHost {
         return confirmDeleteProject(this.services, command.projectId);
       case "set-project-status":
         return this.services.repository.setProjectStatus(command.projectId, command.status);
+      case "open-someday-review":
+        this.continueToSomeday();
+        return;
       case "create-project":
         this.services.createProject(false, command.parentProjectId, command.status);
         return;

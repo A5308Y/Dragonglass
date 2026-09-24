@@ -23,6 +23,7 @@ type Command
     | EditActionModal ActionId
     | SetActionStatus ActionId ActionStatus
     | TrashAction ActionId
+    | OpenSomedayReview
 
 
 encode : Command -> Encode.Value
@@ -64,4 +65,7 @@ encode command =
 
             TrashAction actionId ->
                 Base.TrashAction actionId
+
+            OpenSomedayReview ->
+                Base.OpenSomedayReview
         )
