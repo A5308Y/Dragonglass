@@ -480,6 +480,7 @@ export class GtdSettingTab extends PluginSettingTab {
           mailboxes: ["INBOX"],
           criterion: "ALL",
           archiveMailbox: "",
+          appleMailLink: false,
           enabled: true,
         });
         await this.plugin.saveSettings(false);
@@ -597,6 +598,14 @@ export class GtdSettingTab extends PluginSettingTab {
         .setDesc("A mailbox such as Archive, so importing drains your mail inbox and leaves you one queue instead of two. Leave empty to leave the server untouched. Messages are never deleted.")
         .addText((text) => text.setPlaceholder("(leave the server alone)").setValue(account.archiveMailbox).onChange(async (value) => {
           account.archiveMailbox = value.trim();
+          await save();
+        }));
+
+      new Setting(sectionEl)
+        .setName("Link to the message in Apple Mail")
+        .setDesc("Adds an \u201cOpen in Apple Mail\u201d link to each imported note. It opens the message in Mail on this Mac, found by its Message-ID, so it still works after archiving. The account must be set up in Apple Mail.")
+        .addToggle((toggle) => toggle.setValue(account.appleMailLink === true).onChange(async (value) => {
+          account.appleMailLink = value;
           await save();
         }));
 

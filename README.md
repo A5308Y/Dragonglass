@@ -167,6 +167,8 @@ Set **Move imported mail to** — `Archive`, say — and importing drains your m
 
 Reading is read-only regardless: mailboxes are opened with `EXAMINE` and bodies fetched with `BODY.PEEK`, so importing never marks your mail as read. Only the part of a message that carries text is fetched, not its attachments, and a note records the sender, the date, the mailbox, and the `Message-ID` — which is the way back to the original once it has been archived, and is searchable on Gmail as `rfc822msgid:`.
 
+Each account can also add an **Open in Apple Mail** link to its notes (setting "Link to the message in Apple Mail"). It is a `message:` link built from the `Message-ID`, so it opens that exact message in Mail on the Mac even after the import has archived it; the account must be set up in Apple Mail. The ID is URL-encoded, so a sender cannot use it to smuggle anything into the note.
+
 Use a provider-issued **app password**, never your account password. It is revocable, it is scoped to mail, and it is stored as plain text in the plugin's data file — which is also why account credentials are kept out of the vault file the watermarks live in, since that one syncs between devices. Only implicit TLS on port 993 is offered, certificate validation cannot be switched off, and cleartext IMAP on 143 is corrected rather than used.
 
 Everything a sender wrote is treated as hostile. Bodies are flattened to text and never rendered as markup, remote images are never loaded, and wikilinks, embeds, and tags are escaped on the way into a note so that a subject line cannot add itself to your Project graph.

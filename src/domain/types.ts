@@ -276,6 +276,8 @@ export interface MailAccountSettings {
   criterion: string;
   /** Where an imported message is moved, or `""` to leave the server untouched. */
   archiveMailbox: string;
+  /** Adds a link to each imported note that opens the message in Apple Mail. */
+  appleMailLink?: boolean;
   enabled: boolean;
 }
 

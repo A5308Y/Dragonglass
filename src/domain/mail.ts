@@ -42,6 +42,8 @@ export interface MailAccount {
    * shows it, which is safe but leaves you two queues to drain.
    */
   archiveMailbox: string;
+  /** Whether imported notes link back to the message in Apple Mail; see `appleMailLink`. */
+  appleMailLink?: boolean;
   enabled: boolean;
 }
 

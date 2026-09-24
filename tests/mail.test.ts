@@ -23,7 +23,7 @@ import {
   type MailboxState,
   type MailCandidate,
 } from "../src/domain/mail";
-import { formatSender, mailItemNote, mailItemTitle, type MailMessage } from "../src/domain/mail-note";
+import { appleMailLink, formatSender, mailItemNote, mailItemTitle, type MailMessage } from "../src/domain/mail-note";
 
 const stateWith = (changes: Partial<MailboxState> = {}): MailboxState => ({ ...emptyMailboxState(), ...changes });
 const candidate = (uid: number, messageId = `id-${uid}@example.com`): MailCandidate => ({ uid, messageId });
@@ -286,6 +286,15 @@ describe("What an imported message becomes", () => {
       + "\n"
       + "> Attached is the quote you asked for.",
     );
+  });
+
+  it("links to the message in Apple Mail when asked, encoding what the sender wrote", () => {
+    expect(appleMailLink("abc123@example.com")).toBe("message://%3Cabc123%40example.com%3E");
+    // Parentheses would end the Markdown link early.
+    expect(appleMailLink("a(b)c@example.com")).toBe("message://%3Ca%28b%29c%40example.com%3E");
+    expect(appleMailLink("")).toBeUndefined();
+    expect(mailItemNote(message(), "Work", appleMailLink("abc123@example.com")))
+      .toContain("Message-ID: abc123@example.com\nOriginal: [Open in Apple Mail](message://%3Cabc123%40example.com%3E)\n");
   });
 
   it("omits what a message does not carry", () => {

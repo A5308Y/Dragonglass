@@ -17,7 +17,7 @@ import {
   type MailCandidate,
   type MailStoreData,
 } from "../domain/mail";
-import { mailItemNote, mailItemTitle } from "../domain/mail-note";
+import { appleMailLink, mailItemNote, mailItemTitle } from "../domain/mail-note";
 import type { GtdRepository } from "../repository/gtd-repository";
 import { ImapConnection, type ImapSocketFactory, type MessageSummary } from "./imap-client";
 import { mailTransportAvailable, MOBILE_EXPLANATION, openTlsSocket } from "./node-socket";
@@ -316,7 +316,8 @@ export class MailService {
       body,
       hasAttachment: summary.hasAttachment,
     };
-    await this.repository.createIdentifiedInboxItem(mailItemTitle(message), mailItemNote(message, account.label));
+    const mailLink = account.appleMailLink ? appleMailLink(message.messageId) : undefined;
+    await this.repository.createIdentifiedInboxItem(mailItemTitle(message), mailItemNote(message, account.label, mailLink));
   }
 
   private async openSession(account: MailAccount, password: string): Promise<ImapConnection> {

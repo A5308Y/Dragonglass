@@ -24,6 +24,20 @@ export interface MailMessage {
   hasAttachment: boolean;
 }
 
+/**
+ * A `message:` link that opens the message in Apple Mail on the Mac, or `undefined`
+ * without a `Message-ID`. Mail finds the message by that ID, so the link still works
+ * after the message has been archived.
+ *
+ * The ID comes from the sender, so it is encoded, parentheses included, and cannot
+ * end the Markdown link it is written into.
+ */
+export function appleMailLink(messageId: string): string | undefined {
+  if (!messageId) return undefined;
+  const encoded = encodeURIComponent(messageId).replace(/[()]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `message://%3C${encoded}%3E`;
+}
+
 /** The Inbox Item title an imported message takes. */
 export function mailItemTitle(message: Pick<MailMessage, "subject">): string {
   return message.subject.trim() || "(No subject)";
@@ -40,7 +54,7 @@ export function mailItemTitle(message: Pick<MailMessage, "subject">): string {
  * Everything a sender wrote is escaped. Mail is an adversarial channel: left alone,
  * a subject line could add itself to your Project graph.
  */
-export function mailItemNote(message: MailMessage, accountLabel: string): string {
+export function mailItemNote(message: MailMessage, accountLabel: string, mailLink?: string): string {
   const lines: string[] = [];
   const sender = formatSender(message.from);
   if (sender) lines.push(`From: ${escapeVaultText(sender)}`);
@@ -49,6 +63,7 @@ export function mailItemNote(message: MailMessage, accountLabel: string): string
   const location = [accountLabel.trim(), message.mailbox.trim()].filter(Boolean).join(" · ");
   if (location) lines.push(`Mailbox: ${escapeVaultText(location)}`);
   if (message.messageId) lines.push(`Message-ID: ${escapeVaultText(message.messageId)}`);
+  if (mailLink) lines.push(`Original: [Open in Apple Mail](${mailLink})`);
   if (message.hasAttachment) lines.push("Attachments: yes");
 
   const body = escapeVaultText(summaryOf(message.body));

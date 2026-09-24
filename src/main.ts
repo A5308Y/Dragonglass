@@ -524,6 +524,7 @@ function migrateMailAccount(account: MailAccountSettings): MailAccountSettings {
       : [],
     criterion: typeof account?.criterion === "string" && account.criterion.trim() ? account.criterion.trim() : "ALL",
     archiveMailbox: typeof account?.archiveMailbox === "string" ? account.archiveMailbox.trim() : "",
+    appleMailLink: account?.appleMailLink === true,
     enabled: account?.enabled !== false,
   };
 }
