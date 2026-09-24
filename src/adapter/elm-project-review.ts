@@ -104,14 +104,12 @@ export class ElmProjectReviewHost {
         return this.services.repository.addProjectDiaryEntry(command.projectId, command.body);
       case "complete-project-review":
         await this.services.repository.setDesiredOutcome(command.projectId, command.desiredOutcome);
-        for (const id of command.activeProjectIds) await this.services.repository.markProjectReviewed(id);
+        await this.services.repository.markProjectsReviewed(command.activeProjectIds);
         return;
       case "move-review-to-someday":
         await this.services.repository.setDesiredOutcome(command.projectId, command.desiredOutcome);
         await this.services.repository.updateProject(command.projectId, { status: "someday", reviewed: localDate() });
-        for (const id of command.activeProjectIds) {
-          if (id !== command.projectId) await this.services.repository.markProjectReviewed(id);
-        }
+        await this.services.repository.markProjectsReviewed(command.activeProjectIds.filter((id) => id !== command.projectId));
         new Notice(`Moved “${this.project(command.projectId).title}” to Someday/Maybe.`);
         return;
       case "trash-project":

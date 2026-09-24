@@ -46,7 +46,7 @@ type alias ReviewData =
 -}
 type Pending
     = IgnoreReply
-    | Advance ProjectId
+    | Reviewed ProjectId
     | DeleteAndAdvance ProjectId
     | AppendDiary
     | ClearCapture
@@ -192,9 +192,7 @@ update msg model =
             case currentProject model of
                 Just project ->
                     if List.isEmpty (blockingProjects model) then
-                        send (Advance project.id)
-                            (Command.CompleteProjectReview project.id model.desiredOutcome (activeProjectIds model))
-                            { model | saving = True }
+                        sendAndAdvance project.id (Command.CompleteProjectReview project.id model.desiredOutcome (activeProjectIds model)) model
 
                     else
                         ( { model | error = Just "Add a Next Action or move this Project to Someday/Maybe before continuing." }, Cmd.none )
@@ -205,9 +203,7 @@ update msg model =
         MoveToSomeday ->
             case currentProject model of
                 Just project ->
-                    send (Advance project.id)
-                        (Command.MoveReviewToSomeday project.id model.desiredOutcome (activeProjectIds model))
-                        { model | saving = True }
+                    sendAndAdvance project.id (Command.MoveReviewToSomeday project.id model.desiredOutcome (activeProjectIds model)) model
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -244,8 +240,8 @@ hasSavingRequest requests =
         |> List.any
             (\pending ->
                 case pending of
-                    Advance _ ->
-                        True
+                    Reviewed _ ->
+                        False
 
                     DeleteAndAdvance _ ->
                         True
@@ -259,6 +255,22 @@ hasSavingRequest requests =
                     IgnoreReply ->
                         False
             )
+
+
+{-| Sends a review decision and moves on to the next tree at once, without waiting
+for the writes: they touch every Project in the tree, and that can take a while.
+A failure brings the tree back to the front of the queue.
+-}
+sendAndAdvance : ProjectId -> Command -> Model -> ( Model, Cmd Msg )
+sendAndAdvance projectId command model =
+    let
+        ( sent, sendCmd ) =
+            send (Reviewed projectId) command model
+
+        ( moved, loadCmd ) =
+            advance projectId sent
+    in
+    ( moved, Cmd.batch [ sendCmd, loadCmd ] )
 
 
 advance : ProjectId -> Model -> ( Model, Cmd Msg )
@@ -362,11 +374,15 @@ receiveHost value model =
                 next =
                     { model | requests = requests, saving = hasSavingRequest requests }
             in
-            case outcome.result of
-                Err message ->
+            case ( outcome.result, pending ) of
+                ( Err message, Just (Reviewed projectId) ) ->
+                    -- The tree was already left behind; bring it back so nothing is lost.
+                    loadCurrent { next | queue = projectId :: List.filter ((/=) projectId) next.queue, error = Just message }
+
+                ( Err message, _ ) ->
                     ( { next | error = Just message }, Cmd.none )
 
-                Ok resultValue ->
+                ( Ok resultValue, _ ) ->
                     finish (Maybe.withDefault IgnoreReply pending)
                         resultValue
                         { next | error = Nothing }
@@ -375,8 +391,8 @@ receiveHost value model =
 finish : Pending -> Decode.Value -> Model -> ( Model, Cmd Msg )
 finish pending resultValue model =
     case pending of
-        Advance projectId ->
-            advance projectId model
+        Reviewed _ ->
+            ( model, Cmd.none )
 
         DeleteAndAdvance projectId ->
             case Decode.decodeValue Decode.bool resultValue of

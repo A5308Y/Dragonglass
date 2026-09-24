@@ -43,16 +43,34 @@ export function activeProjectsWithoutNextAction(projects: readonly Project[], ac
  * without Actions is fine as long as its own active descendants have them.
  * Returns the Projects to fix, empty when nothing blocks.
  */
-export function projectsBlockingReview(root: Project, members: readonly Project[], actions: readonly Action[]): Project[] {
-  const hasActiveDescendant = (project: Project) => {
-    const descendants = projectDescendantIds(project.id, members);
-    return members.some((member) => descendants.has(member.id) && member.status === "active");
-  };
-  return activeProjectsWithoutNextAction(members, actions).filter((project) => !hasActiveDescendant(project));
+export function projectsBlockingReview(_root: Project, members: readonly Project[], actions: readonly Action[]): Project[] {
+  return projectsNeedingAction(members, actions);
+}
+
+/**
+ * Active Projects that need an Action of their own: none is open, and no active
+ * sub-project at any depth carries the work instead. The one rule behind every
+ * missing-Action marker, the Project issues and the review gate alike.
+ */
+export function projectsNeedingAction(projects: readonly Project[], actions: readonly Action[]): Project[] {
+  const byId = new Map(projects.map((project) => [project.id, project]));
+  // Walking up from each active Project marks every ancestor it carries, in one pass.
+  const carried = new Set<string>();
+  for (const project of projects) {
+    if (project.status !== "active") continue;
+    const seen = new Set([project.id]);
+    let parentId = project.parentProjectId;
+    while (parentId && !seen.has(parentId) && byId.has(parentId)) {
+      seen.add(parentId);
+      carried.add(parentId);
+      parentId = byId.get(parentId)!.parentProjectId;
+    }
+  }
+  return activeProjectsWithoutNextAction(projects, actions).filter((project) => !carried.has(project.id));
 }
 
 export interface ProjectReviewHealth {
-  /** Active Projects with no Next, Scheduled or Waiting Action. */
+  /** Active Projects that need an Action of their own; see `projectsNeedingAction`. */
   needsAction: string[];
   /** For each review root, the Projects that stop its tree being marked reviewed. */
   blockers: Array<{ projectId: string; blockerIds: string[] }>;
@@ -69,7 +87,7 @@ export function projectReviewHealth(
 ): ProjectReviewHealth {
   const byId = new Map(projects.map((project) => [project.id, project]));
   return {
-    needsAction: activeProjectsWithoutNextAction(projects, actions).map((project) => project.id),
+    needsAction: projectsNeedingAction(projects, actions).map((project) => project.id),
     blockers: rootIds.flatMap((rootId) => {
       const root = byId.get(rootId);
       if (!root) return [];
@@ -90,8 +108,8 @@ export function projectReviewQueue(snapshot: GtdSnapshot, today: string): string
     .sort((left, right) => {
       const leftMembers = projectReviewMembers(left, snapshot.projects);
       const rightMembers = projectReviewMembers(right, snapshot.projects);
-      const leftNeedsNext = activeProjectsWithoutNextAction(leftMembers, snapshot.actions).length > 0;
-      const rightNeedsNext = activeProjectsWithoutNextAction(rightMembers, snapshot.actions).length > 0;
+      const leftNeedsNext = projectsNeedingAction(leftMembers, snapshot.actions).length > 0;
+      const rightNeedsNext = projectsNeedingAction(rightMembers, snapshot.actions).length > 0;
       if (leftNeedsNext !== rightNeedsNext) return leftNeedsNext ? -1 : 1;
       return left.title.localeCompare(right.title);
     })

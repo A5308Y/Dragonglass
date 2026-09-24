@@ -511,6 +511,9 @@ export class GtdRepository {
 
   async setDesiredOutcome(projectId: string, desiredOutcome: string): Promise<void> {
     const project = this.requireProject(projectId);
+    // Unchanged text is not written again: every write refreshes every open view.
+    const current = await this.app.vault.read(project.file);
+    if (setMarkdownSection(current, "Desired outcome", desiredOutcome) === current) return;
     await this.enqueue(project.file.path, () => this.app.vault.process(
       project.file,
       (content) => setMarkdownSection(content, "Desired outcome", desiredOutcome),
@@ -538,8 +541,16 @@ export class GtdRepository {
     return { timestamp, text: clean };
   }
 
+  /** Marks Projects reviewed today, writing only those not already marked, in parallel. */
+  async markProjectsReviewed(projectIds: readonly string[]): Promise<void> {
+    const today = localDate();
+    await Promise.all(projectIds
+      .filter((id) => this.requireProject(id).reviewed !== today)
+      .map((id) => this.updateProject(id, { reviewed: today })));
+  }
+
   async markProjectReviewed(projectId: string): Promise<void> {
-    await this.updateProject(projectId, { reviewed: localDate() });
+    await this.markProjectsReviewed([projectId]);
   }
 
   async saveBrainstorm(actionId: string, ideas: string, desiredOutcome?: string): Promise<TFile> {

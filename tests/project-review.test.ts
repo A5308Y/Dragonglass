@@ -107,6 +107,14 @@ describe("Project Review health sent to the review view", () => {
     });
   });
 
+  it("does not mark a sub-project whose own active sub-project carries the work", () => {
+    const projects = snapshot().projects.map((project) => (project.id === "P3" ? { ...project, status: "active" as const } : project));
+    const grandchildAction: Action = { type: "gtd-action", id: "A3", title: "Order parts", status: "next", projectId: "P3", created: "2026-09-01", file: file("A3.md") };
+    const health = projectReviewHealth(projects, [...actions, grandchildAction], ["P1"]);
+    expect(health.needsAction).not.toContain("P2");
+    expect(health.blockers).toEqual([{ projectId: "P1", blockerIds: [] }]);
+  });
+
   it("clears a blocker once its Project has a Waiting Action", () => {
     const waiting: Action = { type: "gtd-action", id: "A2", title: "Waiting", status: "waiting", projectId: "P2", created: "2026-09-01", file: file("A2.md") };
     const health = projectReviewHealth(snapshot().projects, [...actions, waiting], ["P1"]);
