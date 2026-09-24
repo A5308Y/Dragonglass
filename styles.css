@@ -761,7 +761,29 @@ body.is-phone .workspace-leaf-content:is(
 .dg-linked-files-panel { margin-top: 12px; }
 .dg-linked-files { display: flex; flex-direction: column; gap: 4px; }
 .dg-linked-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
-.dg-linked-file-open { min-width: 0; padding: 3px 0; overflow: hidden; color: var(--text-accent); }
+/* Linked files and external links read as links: an icon, the accent colour and an
+   underline that strengthens on hover, so they do not look like plain text. */
+.dg-linked-file-open {
+  min-width: 0;
+  gap: 6px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  overflow: hidden;
+  color: var(--text-accent);
+  cursor: pointer;
+  border-radius: var(--radius-s);
+}
+.dg-linked-file-open:hover {
+  color: var(--text-accent-hover);
+  background: var(--background-modifier-hover) !important;
+}
+.dg-linked-file-open .dg-linked-file-label {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--text-accent) 45%, transparent);
+  text-underline-offset: 3px;
+}
+.dg-linked-file-open:hover .dg-linked-file-label { text-decoration-color: currentColor; }
+.dg-link-icon { flex: 0 0 auto; font-size: var(--font-ui-smaller); text-decoration: none; }
 /* Buttons are inline-flex in Obsidian, where text-overflow has no effect, so the label truncates. */
 .dg-linked-file-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dg-linked-file-unlink { flex: 0 0 auto; padding: 3px 6px; color: var(--text-muted); font-size: var(--font-ui-smaller); }

@@ -1876,7 +1876,9 @@ viewLinkedFiles model project =
 
                               else
                                 button [ class "dg-linked-file-open dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile file.path)) ]
-                                    [ span [ class "dg-linked-file-label" ] [ text file.label ] ]
+                                    [ span [ class "dg-link-icon", attribute "aria-hidden" "true" ] [ text "📄" ]
+                                    , span [ class "dg-linked-file-label" ] [ text file.label ]
+                                    ]
                             , button
                                 [ class "dg-linked-file-unlink dg-flat-button"
                                 , onClick (Send IgnoreReply (Command.UnlinkProjectFile project.id file.link))
@@ -1933,7 +1935,9 @@ viewExternalLinks model project =
                     (\link ->
                         div [ class "dg-linked-file" ]
                             [ button [ class "dg-linked-file-open dg-flat-button", onClick (Send IgnoreReply (Command.OpenLink link.url)) ]
-                                [ span [ class "dg-linked-file-label" ] [ text link.title ]
+                                [ span [ class "dg-link-icon", attribute "aria-hidden" "true" ] [ text "🌐" ]
+                                , span [ class "dg-linked-file-label" ] [ text link.title ]
+                                , span [ class "dg-link-icon", attribute "aria-hidden" "true" ] [ text "↗" ]
                                 , if link.title /= link.url then
                                     span [ class "dg-external-link-host" ] [ text (host link.url) ]
 
