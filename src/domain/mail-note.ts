@@ -29,12 +29,18 @@ export interface MailMessage {
  * without a `Message-ID`. Mail finds the message by that ID, so the link still works
  * after the message has been archived.
  *
- * The ID comes from the sender, so it is encoded, parentheses included, and cannot
- * end the Markdown link it is written into.
+ * Mail decodes only the `%3C`/`%3E` around the ID and matches the rest as written,
+ * so `@`, `.`, `+`, `=` and the like must stay as they are: `abc%40example.com`
+ * finds nothing (Mail reports MCMailErrorDomain error 1030). Only what would break
+ * the URL or the Markdown link is encoded: the ID comes from the sender, and a `)`,
+ * space or `]` must not be able to end the link it is written into.
  */
 export function appleMailLink(messageId: string): string | undefined {
   if (!messageId) return undefined;
-  const encoded = encodeURIComponent(messageId).replace(/[()]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  const encoded = messageId.replace(
+    /[^A-Za-z0-9@._\-+=$!&'*\/:;,~]/g,
+    (character) => encodeURIComponent(character).replace(/[()'!*]/g, (reserved) => `%${reserved.charCodeAt(0).toString(16).toUpperCase()}`),
+  );
   return `message://%3C${encoded}%3E`;
 }
 

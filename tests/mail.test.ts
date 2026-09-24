@@ -289,12 +289,15 @@ describe("What an imported message becomes", () => {
   });
 
   it("links to the message in Apple Mail when asked, encoding what the sender wrote", () => {
-    expect(appleMailLink("abc123@example.com")).toBe("message://%3Cabc123%40example.com%3E");
-    // Parentheses would end the Markdown link early.
-    expect(appleMailLink("a(b)c@example.com")).toBe("message://%3Ca%28b%29c%40example.com%3E");
+    // Mail matches the ID as written, so the usual characters of a Message-ID stay as they are.
+    expect(appleMailLink("abc123@example.com")).toBe("message://%3Cabc123@example.com%3E");
+    expect(appleMailLink("CA+x=y_z.1-2@mail.gmail.com")).toBe("message://%3CCA+x=y_z.1-2@mail.gmail.com%3E");
+    // Parentheses, brackets and spaces would end the Markdown link early.
+    expect(appleMailLink("a(b)c@example.com")).toBe("message://%3Ca%28b%29c@example.com%3E");
+    expect(appleMailLink("a b]c@example.com")).toBe("message://%3Ca%20b%5Dc@example.com%3E");
     expect(appleMailLink("")).toBeUndefined();
     expect(mailItemNote(message(), "Work", appleMailLink("abc123@example.com")))
-      .toContain("Message-ID: abc123@example.com\nOriginal: [Open in Apple Mail](message://%3Cabc123%40example.com%3E)\n");
+      .toContain("Message-ID: abc123@example.com\nOriginal: [Open in Apple Mail](message://%3Cabc123@example.com%3E)\n");
   });
 
   it("omits what a message does not carry", () => {
