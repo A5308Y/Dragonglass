@@ -1970,9 +1970,15 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-feed-section {
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
-  overflow: hidden;
+  /* `clip`, not `hidden`: hidden would make the section its own scroll box, and the
+     sticky header below would then stick to nothing. */
+  overflow: clip;
 }
+/* Each feed's header stays at the top while its items scroll by, until the next feed pushes it away. */
 .dg-feed-section-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
