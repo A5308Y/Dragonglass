@@ -23,7 +23,7 @@ the second.
 
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, button, div, input, small, span, text)
-import Html.Attributes exposing (attribute, class, classList, placeholder, type_, value)
+import Html.Attributes exposing (attribute, class, classList, placeholder, tabindex, type_, value)
 import Html.Events exposing (custom, onBlur, onFocus, onInput, onMouseEnter)
 import Json.Decode as Decode
 
@@ -218,6 +218,10 @@ suggestionView : Config value msg -> Int -> Int -> value -> Html msg
 suggestionView settings activeIndex index candidate =
     button
         [ type_ "button"
+        -- Out of the tab order: suggestions are chosen with the arrows and Enter, so Tab
+        -- leaves the field for the next one instead of landing on a suggestion that
+        -- vanishes as soon as the field loses focus.
+        , tabindex -1
         , attribute "role" "option"
         , attribute "aria-selected" (Ui.boolAttribute (index == activeIndex))
         , classList [ ( "dg-flat-button", True ), ( "is-active", index == activeIndex ) ]
