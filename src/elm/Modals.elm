@@ -1745,7 +1745,8 @@ statusSelect name all toKey toLabel toMessage current =
 
 noticeView : Model -> Html Msg
 noticeView model =
-    Ui.maybeView model.notice (\message -> div [ class "dg-panel dg-error" ] [ text message ])
+    -- An alert, so a screen reader announces a refused save as soon as it appears.
+    Ui.maybeView model.notice (\message -> div [ class "dg-panel dg-error", attribute "role" "alert" ] [ text message ])
 
 
 actions : Model -> List (Html Msg) -> Html Msg -> Html Msg

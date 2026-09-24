@@ -210,6 +210,20 @@ body.is-phone .workspace-leaf-content:is(
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-secondary-alt);
 }
+/* Errors and refused saves: red, and marked with a symbol so they are not told apart by colour alone. */
+.dg-panel.dg-error,
+.dg-error {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  border: 1px solid color-mix(in srgb, var(--color-red) 55%, transparent);
+  border-left-width: 4px;
+  border-radius: var(--radius-s);
+  color: var(--text-error);
+  background: color-mix(in srgb, var(--color-red) 12%, var(--background-primary));
+  font-weight: var(--font-semibold);
+}
+.dg-error::before { content: "⚠"; flex: 0 0 auto; }
+.dg-modal .dg-error { margin: 12px 0 0; padding: 10px 12px; }
 
 .dg-batch-bar { gap: 6px; }
 .dg-batch-count { color: var(--text-muted); font-size: var(--font-ui-small); white-space: nowrap; }
