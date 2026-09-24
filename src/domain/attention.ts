@@ -33,7 +33,12 @@ export function attention(snapshot: GtdSnapshot, unreadFeedItems: number, today 
   };
 }
 
-function actionNeedsAttention(action: Action, today: string): boolean {
+/**
+ * An Action that needs attention today: overdue, a Waiting Action due for follow-up,
+ * or a Calendar Action dated today or earlier. `needsAttention` in `ActionBoard.elm`
+ * marks cards and counts columns by the same rule; change both together.
+ */
+export function actionNeedsAttention(action: Action, today = localDate()): boolean {
   if (action.status === "done" || action.status === "cancelled") return false;
   if (action.due && action.due < today) return true;
   if (action.status === "waiting" && action.followUp && action.followUp <= today) return true;

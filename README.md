@@ -123,7 +123,7 @@ Assign any command to an Obsidian hotkey. A plugin's default hotkey is only a su
 
 ## Ribbon dots
 
-A ribbon icon carries a dot while its view has something to do: the Inbox while it holds Items, the Action Board for overdue Actions, Waiting Actions due for follow-up and Calendar Actions dated today or earlier, Projects while an active Project has an issue, the Project Review while an active top-level Project has gone a week (`REVIEW_INTERVAL_DAYS`) without a review, and RSS Feeds while there are unread Items. The dots follow every change to the vault or the feeds and are rechecked hourly for a new day.
+A ribbon icon carries a dot while its view has something to do: the Inbox while it holds Items, the Action Board for overdue Actions, Waiting Actions due for follow-up and Calendar Actions dated today or earlier, Projects while an active Project has an issue, the Project Review while an active top-level Project has gone a week (`REVIEW_INTERVAL_DAYS`) without a review, and RSS Feeds while there are unread Items. The dots follow every change to the vault or the feeds and are rechecked hourly for a new day. On the Action Board the same dot marks where the ribbon dot points: each card that needs attention, a count in each column header, and a header summary such as "3 need attention · 1 not in this view" when filters or hidden columns leave some out.
 
 ## Board behavior
 

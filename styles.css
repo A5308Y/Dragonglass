@@ -2358,6 +2358,30 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 .dg-labelled { display: contents; }
 
+/* The same dot marks, on the Action Board, what the ribbon dot is about: the cards
+   that need attention, how many each column holds, and a summary in the header. */
+.dg-attention-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+}
+.dg-card.needs-attention { border-color: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-modifier-border)); }
+.dg-column-counts { display: inline-flex; align-items: center; gap: 10px; }
+.dg-column-attention,
+.dg-attention-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+}
+.dg-attention-summary { margin-left: 10px; }
+
 /* A dot on a ribbon icon whose view has something to do (see `src/domain/attention.ts`). */
 .dg-ribbon-attention { position: relative; }
 .dg-ribbon-attention::after {

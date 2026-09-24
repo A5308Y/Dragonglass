@@ -754,6 +754,41 @@ rankLanded actionId rank snapshot =
         |> Maybe.withDefault True
 
 
+{-| An Action that needs attention today: overdue, a Waiting Action due for
+follow-up, or a Calendar Action dated today or earlier. This is the rule behind the
+Action Board's ribbon dot (`actionNeedsAttention` in `src/domain/attention.ts`);
+change both together, or the dot points at cards the board does not mark.
+-}
+needsAttention : String -> Action -> Bool
+needsAttention today action =
+    let
+        open =
+            action.status /= ActionStatus.Done && action.status /= ActionStatus.Cancelled
+
+        overdue =
+            Maybe.map (\due -> due < today) action.due |> Maybe.withDefault False
+
+        followUpDue =
+            action.status == ActionStatus.Waiting && (Maybe.map (\date -> date <= today) action.followUp |> Maybe.withDefault False)
+
+        -- The local day: a timed start carries it in `scheduledLocal`, since its UTC
+        -- timestamp may fall on another date; an all-day start is the date itself.
+        calendarDay =
+            (case action.scheduledLocal of
+                Just local ->
+                    Just local
+
+                Nothing ->
+                    action.scheduledStart
+            )
+                |> Maybe.map (String.left 10)
+
+        calendarDue =
+            action.status == ActionStatus.Scheduled && (Maybe.map (\date -> date <= today) calendarDay |> Maybe.withDefault False)
+    in
+    open && (overdue || followUpDue || calendarDue)
+
+
 {-| True once the vault agrees with a move the board already drew.
 -}
 converged : ActionId -> ActionStatus -> Snapshot -> Bool
@@ -793,6 +828,13 @@ boardView model =
         -- Few enough to choose from at a glance; the pill turns green to reward filtering down.
         focused =
             shown < 10
+
+        -- What the ribbon dot counts, against what the current view shows of it.
+        needing =
+            model.snapshot.actions |> List.map (effectiveAction model) |> List.filter (needsAttention model.snapshot.today) |> List.length
+
+        needingShown =
+            groups |> List.concatMap .actions |> List.filter (needsAttention model.snapshot.today) |> List.length
     in
     div [ class "dg-view dg-board-view" ]
         [ header [ class "dg-view-header" ]
@@ -809,6 +851,30 @@ boardView model =
                             ++ Ui.plural shown "Action"
                         )
                     ]
+                , if needing > 0 then
+                    span [ class "dg-attention-summary" ]
+                        [ span [ class "dg-attention-dot", attribute "aria-hidden" "true" ] []
+                        , text
+                            (String.fromInt needing
+                                ++ " need"
+                                ++ (if needing == 1 then
+                                        "s"
+
+                                    else
+                                        ""
+                                   )
+                                ++ " attention"
+                                ++ (if needingShown < needing then
+                                        " · " ++ String.fromInt (needing - needingShown) ++ " not in this view"
+
+                                    else
+                                        ""
+                                   )
+                            )
+                        ]
+
+                  else
+                    text ""
                 ]
             , div [ class "dg-header-actions" ]
                 [ button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
@@ -1117,7 +1183,19 @@ groupView model group =
         (class "dg-column" :: attribute "data-column" (groupKeyString group.key) :: dropAttributes)
         [ header [ class "dg-column-header" ]
             [ span [] [ text (groupLabel model group.key) ]
-            , span [] [ text (String.fromInt (List.length group.actions)) ]
+            , span [ class "dg-column-counts" ]
+                [ case List.length (List.filter (needsAttention model.snapshot.today) group.actions) of
+                    0 ->
+                        text ""
+
+                    count ->
+                        span [ class "dg-column-attention" ]
+                            [ span [ class "dg-attention-dot", attribute "aria-hidden" "true" ] []
+                            , text (String.fromInt count)
+                            , Ui.srOnly " need attention,"
+                            ]
+                , span [] [ text (String.fromInt (List.length group.actions)) ]
+                ]
             ]
         , div [ class "dg-card-list" ] (List.map (cardView model) group.actions)
         ]
@@ -1148,6 +1226,7 @@ cardView model action =
             [ ( "dg-card", True )
             , ( "is-drop-before", model.priorityDropTarget == Just action.id )
             , ( "is-follow-up-due", followUpDue )
+            , ( "needs-attention", needsAttention model.snapshot.today action )
             ]
         , attribute "role" "listitem"
         , attribute "data-card" action.id
@@ -1161,7 +1240,12 @@ cardView model action =
         , onCardKey action.id
         ]
         [ div [ class "dg-card-title-row" ]
-            [ span [ class "dg-card-title dg-action-card-title" ] [ text action.title ]
+            [ if needsAttention model.snapshot.today action then
+                span [ class "dg-attention-dot" ] [ Ui.srOnly "Needs attention:" ]
+
+              else
+                text ""
+            , span [ class "dg-card-title dg-action-card-title" ] [ text action.title ]
             , button
                 [ class "dg-icon-button dg-flat-button"
                 , Ui.onPointer (\x y -> Send IgnoreReply (actionMenu x y model action))
