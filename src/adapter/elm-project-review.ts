@@ -24,12 +24,19 @@ export class ElmProjectReviewHost {
   private readonly unsubscribePort: () => void;
   private closed = false;
   /** The review roots this session walks through, fixed when the review opens. */
-  private readonly queue: string[];
+  private queue: string[];
+  /**
+   * Whether the queue was taken from a read vault. A review left open is restored
+   * when Obsidian starts, before the index has read anything, and an empty queue
+   * would otherwise stand as "complete" for the whole session.
+   */
+  private queueFromVault: boolean;
 
   constructor(node: HTMLElement, private readonly services: GtdServices) {
     const module = Elm.ProjectReview;
     if (!module) throw new Error("The Elm ProjectReview module was not compiled.");
     this.queue = projectReviewQueue(services.repository.index.getSnapshot(), localDate());
+    this.queueFromVault = services.repository.index.getSnapshot().revision > 0;
     this.app = module.init({
       node,
       flags: {
@@ -50,6 +57,12 @@ export class ElmProjectReviewHost {
   }
 
   refresh(): void {
+    const indexed = this.services.repository.index.getSnapshot();
+    if (!this.queueFromVault && indexed.revision > 0) {
+      this.queueFromVault = true;
+      this.queue = projectReviewQueue(indexed, localDate());
+      this.send({ type: "review-queue", queue: this.queue });
+    }
     this.send({ type: "snapshot", snapshot: this.snapshot() });
     this.send({ type: "review-health", health: this.health() });
     this.send({

@@ -337,6 +337,7 @@ type HostEvent
     | ReviewDataEvent ReviewData
     | SupportCountsEvent (List SupportCount)
     | HealthEvent Health
+    | QueueEvent (List ProjectId)
     | Replied Host.Outcome
 
 
@@ -358,6 +359,15 @@ receiveHost value model =
 
         Ok (HealthEvent health) ->
             ( { model | health = health }, Cmd.none )
+
+        Ok (QueueEvent queue) ->
+            -- The review opened before the vault was read; this is the queue it should have had.
+            loadCurrent
+                { model
+                    | queue = queue
+                    , total = List.length queue
+                    , projectSeconds = budget (List.length queue)
+                }
 
         Ok (ReviewDataEvent data) ->
             if List.head model.queue == Just data.projectId then
@@ -989,6 +999,9 @@ hostEventDecoder =
 
                     "review-health" ->
                         Decode.map HealthEvent (Decode.field "health" healthDecoder)
+
+                    "review-queue" ->
+                        Decode.map QueueEvent (Decode.field "queue" (Decode.list Decode.string))
 
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder

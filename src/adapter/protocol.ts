@@ -962,6 +962,7 @@ export type ElmProjectReviewEvent =
   | { type: "support-counts"; counts: Array<{ projectId: string; count: number }> }
   | { type: "review-project-data"; data: ElmReviewProjectDataDto }
   | { type: "review-health"; health: ProjectReviewHealth }
+  | { type: "review-queue"; queue: string[] }
   | ElmCommandResultEvent;
 export type ElmBrainstormEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
