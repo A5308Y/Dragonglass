@@ -115,7 +115,7 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 - **GTD: Open RSS Feeds**
 - **GTD: Fetch RSS Feeds**
 - **GTD: Import Email**
-- **GTD: Quick Capture Inbox Item**
+- **GTD: Quick Capture Inbox Item** (Cmd/Ctrl+Shift+C by default)
 - **GTD: New Action**
 - **GTD: New Project**
 

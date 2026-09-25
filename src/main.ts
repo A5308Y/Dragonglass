@@ -284,7 +284,12 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "open-feeds", name: "Open RSS Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
     this.addCommand({ id: "fetch-feeds", name: "Fetch RSS Feeds", callback: () => void this.fetchFeedsWithNotice() });
     this.addCommand({ id: "import-email", name: "Import Email", callback: () => void this.importMailWithNotice() });
-    this.addCommand({ id: "quick-capture-inbox-item", name: "Quick Capture Inbox Item", callback: () => this.quickCapture() });
+    this.addCommand({
+      id: "quick-capture-inbox-item",
+      name: "Quick Capture Inbox Item",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "c" }],
+      callback: () => this.quickCapture(),
+    });
     this.addCommand({ id: "new-action", name: "New Action", callback: () => this.createAction() });
     this.addCommand({ id: "import-actions", name: "Import Actions", callback: () => this.importActions() });
     this.addCommand({ id: "import-subprojects", name: "Import Sub-projects", callback: () => this.importSubprojects() });
