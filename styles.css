@@ -1870,8 +1870,9 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   white-space: nowrap;
 }
 
-/* Every enabled button gets a visible hover cue, including flat and active
-   buttons. Surface buttons also use their theme's hover colour below. */
+/* Buttons with a surface lighten on hover, in every scope Dragonglass renders
+   buttons in. Flat buttons keep their own cues (text colour, underline, card
+   border) and opt out through `.dg-flat-button` near the top of this file. */
 :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-cta {
   color: var(--text-on-accent);
   font-weight: var(--font-semibold);
@@ -1880,27 +1881,20 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button:not(:disabled) {
     cursor: pointer;
   }
-  /* A faint 1px ring, so it doesn't compete with the 2px focus ring. */
-  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button:not(:disabled):not(:focus-visible):hover {
-    outline: 1px solid color-mix(in srgb, var(--text-accent) 40%, transparent);
-    outline-offset: 1px;
-  }
-  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-cta:not(:disabled):not(:focus-visible):hover {
-    outline-color: color-mix(in srgb, var(--text-normal) 30%, transparent);
-  }
-  .dg-view button:not(:disabled):not(.is-active):hover,
-  .dg-modal button:not(:disabled):not(.is-active):hover {
+  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button:not(:disabled):not(.dg-flat-button):not(.is-active):not(.mod-cta):not(.mod-warning):hover {
     background: var(--interactive-hover);
     border-color: var(--background-modifier-border-hover);
   }
-  .dg-view button.mod-cta:not(:disabled):hover,
-  .dg-modal button.mod-cta:not(:disabled):hover {
+  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-cta:not(:disabled):hover {
     background: var(--interactive-accent-hover);
     color: var(--text-on-accent);
   }
-  .dg-view button.mod-warning:not(:disabled):hover,
-  .dg-modal button.mod-warning:not(:disabled):hover {
+  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-warning:not(:disabled):hover {
     background: var(--background-modifier-error-hover);
+  }
+  /* Active toggles are accent-filled, some with `!important`. */
+  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.is-active:not(:disabled):not(.dg-flat-button):hover {
+    background: var(--interactive-accent-hover) !important;
   }
 }
 
