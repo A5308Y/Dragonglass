@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatExternalLink, parseExternalLink } from "../src/domain/external-links";
+import { externalLinksInNote, formatExternalLink, parseExternalLink } from "../src/domain/external-links";
 
 describe("external links", () => {
   it("reads Markdown links and bare URLs", () => {
@@ -19,5 +19,27 @@ describe("external links", () => {
     expect(formatExternalLink("https://example.com/a", " Docs [v2] ")).toBe("[Docs v2](https://example.com/a)");
     expect(formatExternalLink("https://example.com/a")).toBe("https://example.com/a");
     expect(() => formatExternalLink("ftp://example.com")).toThrow("http");
+  });
+
+  it("collects the web links written in a note", () => {
+    const note = [
+      "---",
+      "source: https://example.com/frontmatter",
+      "---",
+      "See [the lease](https://example.com/lease) and <https://example.com/auto>.",
+      "Also https://example.com/bare, and https://example.com/lease again.",
+      "Original: [Open in Apple Mail](message://%3Cabc@example.com%3E)",
+      "![Diagram](https://example.com/diagram.png) `https://example.com/code`",
+      "```",
+      "https://example.com/fenced",
+      "```",
+      "[https://example.com/same](https://example.com/same)",
+    ].join("\n");
+    expect(externalLinksInNote(note)).toEqual([
+      "[the lease](https://example.com/lease)",
+      "https://example.com/auto",
+      "https://example.com/bare",
+      "https://example.com/same",
+    ]);
   });
 });

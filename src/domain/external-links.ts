@@ -39,3 +39,33 @@ function webUrl(value: string): string | undefined {
     return undefined;
   }
 }
+
+// A Markdown link or image, an autolink `<https://…>`, or a bare web address, in
+// that order, so a URL inside a Markdown link is not also read as a bare one.
+const NOTE_LINK = /(!?)\[([^\]]*)\]\(<?(\S+?)>?(?:\s+"[^"]*")?\)|<(https?:\/\/[^>\s]+)>|(https?:\/\/[^\s<>[\]()]+)/g;
+
+/**
+ * The web links written in a note, as `external_links` entries, in the order they
+ * first appear and once per address. Frontmatter, code and images are left out;
+ * so is anything that is not http or https, such as `message:` links to Apple Mail.
+ */
+export function externalLinksInNote(markdown: string): string[] {
+  const text = markdown
+    .replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "")
+    .replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[^\n]*$/gm, "")
+    .replace(/`[^`\n]*`/g, "");
+  const seen = new Set<string>();
+  const entries: string[] = [];
+  for (const match of text.matchAll(NOTE_LINK)) {
+    const [, image, label, markdownUrl, autolink, bare] = match;
+    if (image) continue;
+    // Sentence punctuation after a bare address belongs to the sentence.
+    const raw = markdownUrl ?? autolink ?? bare!.replace(/[.,;:!?'"*_]+$/, "");
+    const link = parseExternalLink(raw);
+    if (!link || seen.has(link.url)) continue;
+    seen.add(link.url);
+    const title = label?.trim() ?? "";
+    entries.push(formatExternalLink(link.url, title === raw ? "" : title));
+  }
+  return entries;
+}

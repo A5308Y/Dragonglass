@@ -19,7 +19,7 @@ import type {
 } from "../domain/types";
 import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { ranksForOrder } from "../domain/ranking";
-import { formatExternalLink, parseExternalLink } from "../domain/external-links";
+import { externalLinksInNote, formatExternalLink, parseExternalLink } from "../domain/external-links";
 import { mailProcessingBody } from "../domain/mail-note";
 import { actionKeepsContext, actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
@@ -247,7 +247,7 @@ export class GtdRepository {
     const title = requiredProcessingValue(input.nextAction, "An Action is required.");
     const status = input.status ?? "next";
     const context = actionRequiresContext(status) ? requiredProcessingValue(input.context, "A context is required.") : input.context?.trim() ?? "";
-    const project = await this.prepareProcessingProject(input, "active");
+    const project = await this.prepareProcessingProject(item, input, "active");
     await this.convertInboxItemToAction(item, processingActionInput(title, context, input, project), project);
   }
 
@@ -256,7 +256,7 @@ export class GtdRepository {
     const title = input.nextAction?.trim() ?? "";
     const context = input.context?.trim() ?? "";
     if (title && actionRequiresContext(input.status ?? "next") && !context) throw new Error("A context is required when creating an Action.");
-    const project = await this.prepareProcessingProject(input, "active");
+    const project = await this.prepareProcessingProject(item, input, "active");
 
     if (title) await this.createActionFile(title, processingActionInput(title, context, input, project), item.created, project);
     if (project) await this.fileInboxItemToProject(item, project);
@@ -281,7 +281,7 @@ export class GtdRepository {
     const title = input.nextAction?.trim() ?? "";
     const context = input.context?.trim() ?? "";
     if (title && actionRequiresContext(input.status ?? "next") && !context) throw new Error("A context is required when creating an Action.");
-    const project = await this.prepareProcessingProject(input, status, title || item.title, true);
+    const project = await this.prepareProcessingProject(item, input, status, title || item.title, true);
     if (!project) throw new Error(`Could not create the ${status === "someday" ? "Someday/Maybe" : "Backlog"} Project.`);
 
     if (title) await this.createActionFile(title, processingActionInput(title, context, input, project), item.created, project);
@@ -315,7 +315,9 @@ export class GtdRepository {
     return created;
   }
 
-  private async createProjectRecord(input: ProjectInput & { desiredOutcome?: string; notes?: string; order?: number }): Promise<Project> {
+  private async createProjectRecord(
+    input: ProjectInput & { desiredOutcome?: string; notes?: string; order?: number; externalLinks?: string[] },
+  ): Promise<Project> {
     const id = createUlid();
     const title = input.title.trim();
     if (!title) throw new Error("A Project title is required.");
@@ -356,6 +358,7 @@ export class GtdRepository {
       blocked_by_project_ids: null,
       parent_project_id: parent?.id ?? null,
       parent_project: parent ? wikiLink(parent) : null,
+      external_links: input.externalLinks?.length ? input.externalLinks : null,
     };
     const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n${input.notes?.trim() ?? ""}\n\n## Support material\n\n\`${supportPath}/\`\n`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
@@ -366,6 +369,7 @@ export class GtdRepository {
     if (input.image?.trim()) project.image = input.image.trim();
     if (tags.length) project.tags = tags;
     if (order !== undefined) project.order = order;
+    if (input.externalLinks?.length) project.externalLinks = input.externalLinks;
     if (parent) {
       project.parentProjectId = parent.id;
       project.parentProjectLink = wikiLink(parent);
@@ -639,6 +643,7 @@ export class GtdRepository {
   }
 
   private async prepareProcessingProject(
+    item: InboxItem,
     input: InboxProcessingInput,
     newProjectStatus: Project["status"],
     fallbackTitle = "",
@@ -671,11 +676,14 @@ export class GtdRepository {
     if (!title) return undefined;
     // An unmatched name may still be a path into the hierarchy, naming the parent to create under.
     const path = parseProjectPath(title, snapshot.projects);
+    // A new Project keeps the web links its Item's note refers to.
+    const externalLinks = item.file.extension === "md" ? externalLinksInNote(await this.app.vault.cachedRead(item.file)) : [];
     return this.createProjectRecord({
       title: path.title,
       status: newProjectStatus,
       ...(path.parentId ? { parentProjectId: path.parentId } : {}),
       ...(desiredOutcome ? { desiredOutcome } : {}),
+      ...(externalLinks.length ? { externalLinks } : {}),
     });
   }
 
