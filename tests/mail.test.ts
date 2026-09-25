@@ -23,7 +23,7 @@ import {
   type MailboxState,
   type MailCandidate,
 } from "../src/domain/mail";
-import { appleMailLink, formatSender, mailItemNote, mailItemTitle, type MailMessage } from "../src/domain/mail-note";
+import { appleMailLink, formatSender, mailItemNote, mailItemTitle, mailProcessingBody, type MailMessage } from "../src/domain/mail-note";
 
 const stateWith = (changes: Partial<MailboxState> = {}): MailboxState => ({ ...emptyMailboxState(), ...changes });
 const candidate = (uid: number, messageId = `id-${uid}@example.com`): MailCandidate => ({ uid, messageId });
@@ -281,7 +281,6 @@ describe("What an imported message becomes", () => {
       "From: Ada Lovelace <ada@example.com>\n"
       + "Date: 2026-09-14\n"
       + "Mailbox: Work · INBOX\n"
-      + "Message-ID: abc123@example.com\n"
       + "Attachments: yes\n"
       + "\n"
       + "> Attached is the quote you asked for.",
@@ -297,7 +296,7 @@ describe("What an imported message becomes", () => {
     expect(appleMailLink("a b]c@example.com")).toBe("message://%3Ca%20b%5Dc@example.com%3E");
     expect(appleMailLink("")).toBeUndefined();
     expect(mailItemNote(message(), "Work", appleMailLink("abc123@example.com")))
-      .toContain("Message-ID: abc123@example.com\nOriginal: [Open in Apple Mail](message://%3Cabc123@example.com%3E)\n");
+      .toContain("Original: [Open in Apple Mail](message://%3Cabc123@example.com%3E)\n");
   });
 
   it("omits what a message does not carry", () => {
@@ -325,6 +324,18 @@ describe("What an imported message becomes", () => {
   it("flattens markup a sender used in the body", () => {
     expect(mailItemNote(message({ body: "<p>Quote <b>attached</b></p>" }), "Work"))
       .toContain("> Quote attached");
+  });
+
+  it("keeps the complete message and its line breaks in the Inbox note", () => {
+    const longBody = `${"A".repeat(700)}\r\nSecond line`;
+    const note = mailItemNote(message({ body: longBody }), "Work");
+    expect(note).toContain(`> ${"A".repeat(700)}\n> Second line`);
+    expect(note).not.toContain("Message-ID:");
+  });
+
+  it("hides a legacy Message-ID only in the processor metadata", () => {
+    const oldNote = "From: Ada\nMessage-ID: abc123@example.com\nOriginal: Open in Mail\n\n> Message-ID: part of the email";
+    expect(mailProcessingBody(oldNote)).toBe("From: Ada\nOriginal: Open in Mail\n\n> Message-ID: part of the email");
   });
 });
 

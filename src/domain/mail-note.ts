@@ -6,7 +6,7 @@
  */
 
 import { addressLabel, parseAddress } from "./mime";
-import { escapeVaultText, summaryOf } from "./text";
+import { escapeVaultText, htmlToText } from "./text";
 
 export interface MailMessage {
   /** The `Message-ID`, or `""` when the sender omitted one. */
@@ -53,9 +53,8 @@ export function mailItemTitle(message: Pick<MailMessage, "subject">): string {
  * The note body an imported message becomes.
  *
  * The sender comes first, because who it is from decides what to do with it more
- * often than what it says does. The `Message-ID` is recorded because it is the only
- * durable way back to the original once the message has been archived — on Gmail it
- * is even searchable as `rfc822msgid:`.
+ * often than what it says does. The `Message-ID` stays in frontmatter so the
+ * processor can open the original message without displaying its raw identifier.
  *
  * Everything a sender wrote is escaped. Mail is an adversarial channel: left alone,
  * a subject line could add itself to your Project graph.
@@ -68,13 +67,23 @@ export function mailItemNote(message: MailMessage, accountLabel: string, mailLin
 
   const location = [accountLabel.trim(), message.mailbox.trim()].filter(Boolean).join(" · ");
   if (location) lines.push(`Mailbox: ${escapeVaultText(location)}`);
-  if (message.messageId) lines.push(`Message-ID: ${escapeVaultText(message.messageId)}`);
   if (mailLink) lines.push(`Original: [Open in Apple Mail](${mailLink})`);
   if (message.hasAttachment) lines.push("Attachments: yes");
 
-  const body = escapeVaultText(summaryOf(message.body));
+  const plainBody = /<\/?[a-z][a-z0-9]*(?:\s[^<>]*)?\/?>/i.test(message.body)
+    ? htmlToText(message.body)
+    : message.body;
+  const body = escapeVaultText(plainBody.replace(/\r\n?/g, "\n").trim());
   if (body) lines.push("", ...body.split("\n").map((line) => `> ${line}`));
   return lines.join("\n");
+}
+
+/** Hide the identifier in the processor for notes imported before it was removed. */
+export function mailProcessingBody(body: string): string {
+  const headerEnd = body.search(/\r?\n\r?\n/);
+  const metadata = headerEnd < 0 ? body : body.slice(0, headerEnd);
+  const rest = headerEnd < 0 ? "" : body.slice(headerEnd);
+  return (metadata.replace(/^Message-ID:[^\r\n]*(?:\r?\n|$)/m, "") + rest).trim();
 }
 
 /**

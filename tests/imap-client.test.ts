@@ -272,11 +272,15 @@ describe("Fetching text", () => {
     expect(await connection.fetchText(9, html)).toBe("Quote attached");
   });
 
-  it("skips an oversized part without a round trip", async () => {
-    const server = serverWith();
+  it("fetches the complete text part even when its reported size exceeds the old preview limit", async () => {
+    const body = "Complete body";
+    const server = serverWith([[
+      /^UID FETCH/,
+      (tag) => `* 1 FETCH (UID 42 BODY[1.1] {${body.length}}\r\n${body})\r\n${ok(tag)}`,
+    ]]);
     const connection = await connect(server);
-    expect(await connection.fetchText(42, { ...part, size: 9_000_000 })).toBe("");
-    expect(server.commands).toEqual([]);
+    expect(await connection.fetchText(42, { ...part, encoding: "7bit", size: 300_000 })).toBe(body);
+    expect(server.commands).toContain("UID FETCH 42 (BODY.PEEK[1.1])");
   });
 
   it("returns nothing when the message has no text at all", async () => {

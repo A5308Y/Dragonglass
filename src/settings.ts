@@ -28,6 +28,7 @@ export class GtdSettingTab extends PluginSettingTab {
     this.unsubscribeMailStatus = undefined;
     const { containerEl } = this;
     containerEl.empty();
+    containerEl.addClass("dg-settings");
     containerEl.createEl("h2", { text: "Dragonglass GTD" });
     containerEl.createEl("p", { text: "Directories are creation destinations. Existing GTD files are discovered by their type property anywhere in the vault." });
 

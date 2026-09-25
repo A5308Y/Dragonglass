@@ -20,6 +20,7 @@ import type {
 import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { ranksForOrder } from "../domain/ranking";
 import { formatExternalLink, parseExternalLink } from "../domain/external-links";
+import { mailProcessingBody } from "../domain/mail-note";
 import { actionKeepsContext, actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { linkedFileEntry, normalizeScheduledStart } from "../domain/validation";
@@ -542,7 +543,8 @@ export class GtdRepository {
 
   async readInboxBody(item: InboxItem): Promise<string> {
     if (item.file.extension !== "md") return `${item.file.name}\n\nOpen the file to inspect it before processing.`;
-    return noteBody(await this.app.vault.cachedRead(item.file), item.title);
+    const body = noteBody(await this.app.vault.cachedRead(item.file), item.title);
+    return item.messageId ? mailProcessingBody(body) : body;
   }
 
   async readProjectDiary(project: Project): Promise<DiaryEntry[]> {

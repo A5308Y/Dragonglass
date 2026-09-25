@@ -32,6 +32,7 @@ class ConfirmModal extends Modal {
   }
 
   onOpen(): void {
+    this.contentEl.addClass("dg-button-scope");
     this.titleEl.setText(this.options.title);
     for (const paragraph of this.options.message.split("\n\n")) this.contentEl.createEl("p", { text: paragraph });
     new Setting(this.contentEl)

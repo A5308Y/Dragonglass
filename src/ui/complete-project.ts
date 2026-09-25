@@ -48,6 +48,7 @@ class CompleteProjectModal extends Modal {
 
   onOpen(): void {
     const { contentEl, plan } = this;
+    contentEl.addClass("dg-button-scope");
     this.titleEl.setText(`Complete “${this.project.title}”?`);
 
     if (plan.unfinished.length) {

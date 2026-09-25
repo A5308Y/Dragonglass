@@ -49,9 +49,6 @@ const COMMAND_TIMEOUT_MS = 30_000;
 /** The headers worth pulling for a triage decision, and nothing more. */
 const SUMMARY_HEADERS = "MESSAGE-ID SUBJECT FROM DATE LIST-ID LIST-UNSUBSCRIBE PRECEDENCE";
 
-/** A part larger than this is not worth pulling to quote a few lines of it. */
-const MAX_PART_BYTES = 256_000;
-
 /**
  * The transport a session runs over.
  *
@@ -217,12 +214,11 @@ export class ImapConnection {
   /**
    * The readable text of one message, as plain text.
    *
-   * Only the part that carries the text is fetched: pulling the message whole would
-   * drag every attachment across the wire to quote three lines of it. A part too
-   * large to be worth that is skipped rather than truncated mid-encoding.
+   * Only the part that carries the text is fetched, so attachments stay on the
+   * server while the complete readable body is included in the Inbox Item.
    */
   async fetchText(uid: number, part: MessageSummary["textPart"]): Promise<string> {
-    if (!part || part.size > MAX_PART_BYTES) return "";
+    if (!part) return "";
     const { responses } = await this.run(`UID FETCH ${uid} (BODY.PEEK[${part.path}])`);
     for (const response of responses) {
       const fetched = parseFetchResponse(response);
