@@ -1877,12 +1877,17 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   color: var(--text-on-accent);
   font-weight: var(--font-semibold);
 }
+/* Themes often give gray and red buttons a hover colour equal to their normal
+   one, so the hover is mixed here. Gray buttons are white in light themes and
+   can't get lighter, so they darken slightly there instead. */
+:is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) { --dg-hover-tint: white; }
+.theme-light :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) { --dg-hover-tint: black; }
 @media (hover: hover) {
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button:not(:disabled) {
     cursor: pointer;
   }
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button:not(:disabled):not(.dg-flat-button):not(.is-active):not(.mod-cta):not(.mod-warning):hover {
-    background: var(--interactive-hover);
+    background: color-mix(in srgb, var(--interactive-normal) 85%, var(--dg-hover-tint));
     border-color: var(--background-modifier-border-hover);
   }
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-cta:not(:disabled):hover {
@@ -1890,7 +1895,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
     color: var(--text-on-accent);
   }
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-warning:not(:disabled):hover {
-    background: var(--background-modifier-error-hover);
+    background: color-mix(in srgb, var(--background-modifier-error) 85%, white);
   }
   /* Active toggles are accent-filled, some with `!important`. */
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.is-active:not(:disabled):not(.dg-flat-button):hover {
