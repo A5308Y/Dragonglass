@@ -274,7 +274,8 @@ sendAndAdvance projectId command model =
 
 
 {-| Once every tree is reviewed and saved, the Someday/Maybe Review takes this view's
-place. It waits for the last save, so a failure can still bring its tree back here.
+place. It waits for the last save, so a failure can still bring its tree back here,
+and for the Actions without a Project, which are reviewed here last.
 -}
 continueWhenDone : Model -> ( Model, Cmd Msg )
 continueWhenDone model =
@@ -294,7 +295,7 @@ continueWhenDone model =
                                 False
                     )
     in
-    if model.total > 0 && currentProject model == Nothing && not saving then
+    if model.total > 0 && currentProject model == Nothing && not saving && List.isEmpty (looseActions model) then
         send IgnoreReply Command.OpenSomedayReview model
 
     else
@@ -475,8 +476,11 @@ finish pending resultValue model =
 
 view : Model -> Html Msg
 view model =
-    case currentProject model of
-        Nothing ->
+    case ( currentProject model, looseActions model ) of
+        ( Nothing, (_ :: _) as loose ) ->
+            viewLooseActions model loose
+
+        ( Nothing, [] ) ->
             div [ class "dg-view dg-review-view" ]
                 [ header [ class "dg-view-header" ] [ div [] [ h2 [] [ text "Project Review" ] ] ]
                 , div [ class "dg-workflow-complete" ]
@@ -496,8 +500,44 @@ view model =
                     ]
                 ]
 
-        Just project ->
+        ( Just project, _ ) ->
             viewProject model project
+
+
+{-| The last step: open Actions that belong to no Project, or to one that no longer
+exists. No Project tree shows them, so without this step they would go unreviewed.
+-}
+viewLooseActions : Model -> List Action -> Html Msg
+viewLooseActions model actions =
+    div [ class "dg-view dg-review-view" ]
+        [ header [ class "dg-view-header dg-review-header" ]
+            [ div [ class "dg-review-title" ] [ span [ class "dg-review-eyebrow" ] [ text "Guided workflow" ], h2 [] [ text "Project Review" ] ]
+            , div [ class "dg-review-timers" ]
+                [ div [] [ span [] [ text "Session" ], strong [] [ text (Ui.timer model.sessionSeconds) ] ] ]
+            ]
+        , div [ class "dg-progress-track" ] [ span [ style "width" "100%" ] [] ]
+        , Ui.maybeView model.error (\message -> div [ class "dg-panel dg-error" ] [ text message ])
+        , div [ class "dg-review-content" ]
+            [ section [ class "dg-review-panel dg-review-actions-panel" ]
+                [ div [ class "dg-review-panel-heading dg-review-panel-heading-row" ]
+                    [ span [ class "dg-review-panel-icon" ] [ text "→" ]
+                    , div []
+                        [ h3 [] [ text "Actions without a Project" ]
+                        , p [] [ text "Give each one a Project with Edit, mark it done, or delete it. An Action that stands on its own can stay." ]
+                        ]
+                    , span [ class "dg-review-count" ] [ text (String.fromInt (List.length actions)) ]
+                    ]
+                , div [ class "dg-action-rows" ] (List.map (viewActionRow model) actions)
+                ]
+            , div [ class "dg-workflow-footer" ]
+                [ div [] [ strong [] [ text "Ready to move on?" ] ]
+                , div [ class "dg-review-footer-actions" ]
+                    [ button [ class "mod-cta", onClick (Send IgnoreReply Command.OpenSomedayReview) ]
+                        [ text "Continue to Someday/Maybe Review →" ]
+                    ]
+                ]
+            ]
+        ]
 
 
 viewProject : Model -> Project -> Html Msg
@@ -890,6 +930,24 @@ capture model =
 
         ( actionTitle, Just project, context ) ->
             Just { title = actionTitle, projectId = project.id, context = context }
+
+
+{-| Open Actions without a Project, including those whose Project is gone.
+-}
+looseActions : Model -> List Action
+looseActions model =
+    List.filter
+        (\action ->
+            ActionStatus.isOpen action.status
+                && (case action.projectId of
+                        Nothing ->
+                            True
+
+                        Just projectId ->
+                            Data.findProject projectId model.snapshot.projects == Nothing
+                   )
+        )
+        model.snapshot.actions
 
 
 currentProject : Model -> Maybe Project
