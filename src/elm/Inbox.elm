@@ -984,16 +984,23 @@ processingForm model =
                 "Action status"
                 "Choose Next, Waiting, or Calendar."
                 [ actionStatusSelect model.actionStatus ]
-            , div [ class "dg-processing-field" ]
-                [ div [ class "dg-processing-field-heading" ] [ span [] [ text "Context" ] ]
-                , Picker.view (contextPicker model) (contextSuggestions model) model.context
-                , small [] [ text (if ActionStatus.requiresContext model.actionStatus then "Required for this Action." else "Optional for a Waiting, Done or Cancelled Action.") ]
-                ]
-            , processingField False
-                "Energy"
-                "Optional. How much energy the Action takes."
-                [ energySelect model.energy ]
             ]
+                ++ (-- A Waiting Action is someone else's to move, so it has no context or energy.
+                    if model.actionStatus == ActionStatus.Waiting then
+                        []
+
+                    else
+                        [ div [ class "dg-processing-field" ]
+                            [ div [ class "dg-processing-field-heading" ] [ span [] [ text "Context" ] ]
+                            , Picker.view (contextPicker model) (contextSuggestions model) model.context
+                            , small [] [ text "Required for this Action." ]
+                            ]
+                        , processingField False
+                            "Energy"
+                            "Optional. How much energy the Action takes."
+                            [ energySelect model.energy ]
+                        ]
+                   )
                 ++ waitingFields model
                 ++ scheduleFields model
             )
@@ -1003,7 +1010,7 @@ processingForm model =
 energySelect : Maybe Energy -> Html Msg
 energySelect current =
     Ui.labelled "Energy"
-        (select [ onInput (Energy.fromKey >> EnergyChanged) ]
+        (select [ tabindex 0, onInput (Energy.fromKey >> EnergyChanged) ]
             (option [ value "", selected (current == Nothing) ] [ text "Normal" ]
                 :: List.map
                     (\energy ->
@@ -1023,8 +1030,10 @@ processingField wide name hint children =
 
 actionStatusSelect : ActionStatus -> Html Msg
 actionStatusSelect current =
+    -- An explicit tab stop: macOS keyboard navigation can leave pop-up menus out of Tab.
     select
-        [ value (ActionStatus.key current)
+        [ tabindex 0
+        , value (ActionStatus.key current)
         , onInput
             (\raw ->
                 [ ActionStatus.Next, ActionStatus.Waiting, ActionStatus.Scheduled ]
@@ -1293,10 +1302,20 @@ processingInput model =
     , desiredOutcome = String.trim model.desiredOutcome
     , nextAction = String.trim model.nextAction
     , status = model.actionStatus
-    , context = Picker.query model.context
+    , context =
+        if model.actionStatus == ActionStatus.Waiting then
+            ""
+
+        else
+            Picker.query model.context
     , waitingSince = model.waitingSince
     , followUp = model.followUp
-    , energy = model.energy
+    , energy =
+        if model.actionStatus == ActionStatus.Waiting then
+            Nothing
+
+        else
+            model.energy
     , schedule = processingSchedule model
     , fileOriginal = model.fileOriginal
     }

@@ -20,7 +20,7 @@ import Gtd.Energy as Energy exposing (Energy)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ui as Ui
 import Html exposing (Html, button, div, h2, input, option, p, select, span, text, textarea)
-import Html.Attributes exposing (attribute, checked, class, disabled, placeholder, rows, selected, step, type_, value)
+import Html.Attributes exposing (attribute, checked, class, disabled, placeholder, rows, selected, step, tabindex, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -249,7 +249,19 @@ buildForm snapshot images spec =
                 "edit-action" ->
                     case Data.findAction (stringField "actionId") snapshot.actions of
                         Just action ->
-                            ActionForm (EditAction action (boolField "allowProjectConversion")) (editActionFields snapshot action)
+                            let
+                                fields =
+                                    editActionFields snapshot action
+                            in
+                            -- A move that needs more first (a context, say) opens with its status chosen.
+                            ActionForm (EditAction action (boolField "allowProjectConversion"))
+                                (case Decode.decodeValue (Decode.field "status" ActionStatus.decoder) spec of
+                                    Ok status ->
+                                        { fields | status = status }
+
+                                    Err _ ->
+                                        fields
+                                )
 
                         Nothing ->
                             MissingForm "This Action is missing or has a duplicate ID."
@@ -966,7 +978,7 @@ submitAction mode fields model =
                                 { title = String.trim fields.title
                                 , status = fields.status
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
-                                , context = Picker.query fields.context
+                                , context = contextFor fields
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields
                                 , schedule = schedule
@@ -980,8 +992,8 @@ submitAction mode fields model =
                                 { title = String.trim fields.title
                                 , status = fields.status
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
-                                , context = Picker.query fields.context
-                                , energy = fields.energy
+                                , context = contextFor fields
+                                , energy = energyFor fields
                                 , due = fields.due
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields |> Maybe.withDefault ""
@@ -989,6 +1001,27 @@ submitAction mode fields model =
                                 }
                             )
                             model
+
+
+{-| A Waiting Action keeps no context and no energy level, whatever the hidden
+fields still hold from before its status changed.
+-}
+contextFor : ActionFields -> String
+contextFor fields =
+    if fields.status == ActionStatus.Waiting then
+        ""
+
+    else
+        Picker.query fields.context
+
+
+energyFor : ActionFields -> Maybe Energy
+energyFor fields =
+    if fields.status == ActionStatus.Waiting then
+        Nothing
+
+    else
+        fields.energy
 
 
 {-| Only a Waiting Action carries a waiting date, so no date outlives its wait.
@@ -1351,10 +1384,26 @@ actionView model mode fields =
         titleRow editing =
             settingRow "Title" "" [ textInput "Title" "text" fields.title "What is the next physical Action?" (TextChanged TitleField) (not editing) ]
 
-        contextRow =
-            settingRow "Context"
-                "Required for Next and Calendar Actions; optional otherwise."
-                [ Picker.view contextPickerConfig (contextSuggestions model) fields.context ]
+        -- A Waiting Action is someone else's to move, so it has no context or energy.
+        keepsContext =
+            fields.status /= ActionStatus.Waiting
+
+        contextRows =
+            if keepsContext then
+                [ settingRow "Context"
+                    "Required for Next and Calendar Actions; optional for Done and Cancelled ones."
+                    [ Picker.view contextPickerConfig (contextSuggestions model) fields.context ]
+                ]
+
+            else
+                []
+
+        energyRows =
+            if keepsContext then
+                [ energyRow fields.energy ]
+
+            else
+                []
 
         conditionalRows =
             (if fields.status == ActionStatus.Waiting then
@@ -1377,9 +1426,11 @@ actionView model mode fields =
             [ heading "New Action"
             , titleRow False
             , projectRow model "Project" "Type to fuzzy-search. Clear the field for no Project." fields.project
-            , contextRow
+
+            -- Status first: it decides whether Context is asked for at all.
             , statusRow
             ]
+                ++ contextRows
                 ++ conditionalRows
                 ++ [ noticeView model, actions model [] (submitButton model "Create Action") ]
 
@@ -1388,10 +1439,10 @@ actionView model mode fields =
             , titleRow True
             , statusRow
             , projectRow model "Project" "Type to fuzzy-search. Clear the field for no Project." fields.project
-            , contextRow
-            , energyRow fields.energy
-            , settingRow "Due" "" [ dateInput "Due" fields.due DueField ]
             ]
+                ++ contextRows
+                ++ energyRows
+                ++ [ settingRow "Due" "" [ dateInput "Due" fields.due DueField ] ]
                 ++ conditionalRows
                 ++ [ noticeView model
                    , actions model
@@ -1726,8 +1777,10 @@ energyRow current =
 statusSelect : String -> List status -> (status -> String) -> (status -> String) -> (status -> Msg) -> status -> Html Msg
 statusSelect name all toKey toLabel toMessage current =
     Ui.labelled name
+        -- An explicit tab stop: macOS keyboard navigation can leave pop-up menus out of Tab.
         (select
-            [ value (toKey current)
+            [ tabindex 0
+            , value (toKey current)
             , onInput
                 (\raw ->
                     List.filter (\candidate -> toKey candidate == raw) all

@@ -1,5 +1,5 @@
 import type { App, TFile } from "obsidian";
-import type { GtdSettings, ProjectStatus } from "../domain/types";
+import type { ActionStatus, GtdSettings, ProjectStatus } from "../domain/types";
 import type { GtdRepository } from "../repository/gtd-repository";
 
 export interface GtdServices {
@@ -17,7 +17,8 @@ export interface GtdServices {
   importActions: (projectId?: string) => void;
   importSubprojects: (parentProjectId?: string) => void;
   createProject: (openAfterCreate?: boolean, parentProjectId?: string, status?: ProjectStatus) => void;
-  editAction: (id: string, allowProjectConversion?: boolean) => void;
+  /** `status` opens the editor with that status already chosen, for a move that needs more first. */
+  editAction: (id: string, allowProjectConversion?: boolean, status?: ActionStatus) => void;
   editProject: (id: string) => void;
   showProjectDetail: (id: string) => void;
   openSomedayReview: () => void;

@@ -30,7 +30,7 @@ export type ElmModalForm =
   | { kind: "prompt"; title: string; placeholder: string }
   | { kind: "capture" }
   | { kind: "new-action"; projectId?: string }
-  | { kind: "edit-action"; actionId: string; allowProjectConversion: boolean }
+  | { kind: "edit-action"; actionId: string; allowProjectConversion: boolean; status?: Action["status"] }
   | { kind: "schedule-action"; actionId: string }
   | { kind: "import-actions"; projectId?: string }
   | { kind: "import-subprojects"; parentProjectId?: string }

@@ -20,7 +20,7 @@ import type {
 import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { ranksForOrder } from "../domain/ranking";
 import { formatExternalLink, parseExternalLink } from "../domain/external-links";
-import { actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
+import { actionKeepsContext, actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
 import { linkedFileEntry, normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
@@ -127,8 +127,8 @@ export class GtdRepository {
         frontmatter.status = input.status;
         frontmatter.project_id = input.projectId ?? null;
         frontmatter.project = project ? wikiLink(project) : null;
-        frontmatter.context = context || null;
-        frontmatter.energy = input.energy || null;
+        frontmatter.context = actionKeepsContext(input.status) ? context || null : null;
+        frontmatter.energy = actionKeepsContext(input.status) ? input.energy || null : null;
         frontmatter.due = input.due || null;
         frontmatter.waiting_since = waitingSinceFor(input.status, undefined, input.waitingSince);
         frontmatter.follow_up = followUpFor(input.status, undefined, input.followUp);
@@ -401,8 +401,14 @@ export class GtdRepository {
           frontmatter.project_id = changes.projectId || null;
           frontmatter.project = project ? wikiLink(project) : null;
         }
-        if (changes.context !== undefined) frontmatter.context = changes.context.trim() || null;
-        if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
+        // A Waiting Action keeps neither a context nor an energy level.
+        if (!actionKeepsContext(resolvedStatus)) {
+          if (frontmatter.context != null) frontmatter.context = null;
+          if (frontmatter.energy != null) frontmatter.energy = null;
+        } else {
+          if (changes.context !== undefined) frontmatter.context = changes.context.trim() || null;
+          if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
+        }
         if (changes.due !== undefined) frontmatter.due = changes.due || null;
         if (changes.scheduledStart !== undefined) frontmatter.scheduled_start = changes.scheduledStart || null;
         if (changes.durationMinutes !== undefined) frontmatter.duration_minutes = changes.durationMinutes;
@@ -616,8 +622,8 @@ export class GtdRepository {
       status,
       project_id: project?.id ?? null,
       project: project ? wikiLink(project) : null,
-      context: context || null,
-      energy: input.energy || null,
+      context: actionKeepsContext(status) ? context || null : null,
+      energy: actionKeepsContext(status) ? input.energy || null : null,
       due: input.due || null,
       waiting_since: waitingSinceFor(status, undefined, input.waitingSince),
       follow_up: followUpFor(status, undefined, input.followUp),

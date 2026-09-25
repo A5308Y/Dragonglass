@@ -9,6 +9,7 @@ import {
   type Project,
   type ProjectStatus,
 } from "./types";
+import { actionKeepsContext } from "./action-status";
 import type { TFile } from "obsidian";
 import { normalizeProjectTags } from "./project-board";
 import { isAllDaySchedule } from "./schedule";
@@ -135,9 +136,11 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const completed = optionalString(frontmatter, "completed");
   if (projectId) action.projectId = projectId;
   if (projectLink) action.projectLink = projectLink;
-  if (context) action.context = context;
+  // A Waiting Action carries neither; values left in its file are ignored and cleared on its next save.
+  const keepsContext = actionKeepsContext(action.status);
+  if (context && keepsContext) action.context = context;
   const energyValue = energy ? energyLevel(energy) : undefined;
-  if (energyValue) action.energy = energyValue;
+  if (energyValue && keepsContext) action.energy = energyValue;
   if (due) action.due = dateOnly(due, "due");
   if (waitingSince) action.waitingSince = dateOnly(waitingSince, "waiting_since");
   if (followUp) action.followUp = dateOnly(followUp, "follow_up");

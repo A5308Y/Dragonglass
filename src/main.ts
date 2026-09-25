@@ -9,7 +9,7 @@ import { weeklyReviewFinished } from "./domain/weekly-review";
 import { unreadItems } from "./domain/feed";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { describeImport, normalizeMailPort } from "./domain/mail";
-import type { GtdSettings, MailAccountSettings, ProjectStatus, SavedView } from "./domain/types";
+import type { ActionStatus, GtdSettings, MailAccountSettings, ProjectStatus, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
@@ -72,7 +72,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       importActions: (projectId) => this.importActions(projectId),
       importSubprojects: (parentProjectId) => this.importSubprojects(parentProjectId),
       createProject: (openAfterCreate = true, parentProjectId, status) => this.createProject(openAfterCreate, parentProjectId, status),
-      editAction: (id, allowProjectConversion) => this.editAction(id, allowProjectConversion),
+      editAction: (id, allowProjectConversion, status) => this.editAction(id, allowProjectConversion, status),
       editProject: (id) => this.editProject(id),
       showProjectDetail: (id) => void this.openProjectDetail(id),
       openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
@@ -426,9 +426,9 @@ export default class DragonglassGtdPlugin extends Plugin {
     new ElmModal(this.services, { kind: "schedule-action", actionId: id }).open();
   }
 
-  private editAction(id: string, allowProjectConversion = false): void {
+  private editAction(id: string, allowProjectConversion = false, status?: ActionStatus): void {
     if (!this.index.getSnapshot().actionsById.has(id)) return void new Notice("This Action is missing or has a duplicate ID.");
-    new ElmModal(this.services, { kind: "edit-action", actionId: id, allowProjectConversion }).open();
+    new ElmModal(this.services, { kind: "edit-action", actionId: id, allowProjectConversion, ...(status ? { status } : {}) }).open();
   }
 
   private editProject(id: string): void {

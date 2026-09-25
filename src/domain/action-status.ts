@@ -17,6 +17,15 @@ export function actionRequiresContext(status: ActionStatus): boolean {
  * none, so a date never outlives the wait it recorded.
  */
 /**
+ * Whether an Action with this status keeps a context and an energy level. A Waiting
+ * Action is someone else's to move, so where and with how much energy you would do
+ * it does not apply; its values are cleared when it starts waiting.
+ */
+export function actionKeepsContext(status: ActionStatus): boolean {
+  return status !== "waiting";
+}
+
+/**
  * Resolves the `follow_up` date an Action should carry for a status.
  *
  * Only a Waiting Action has one, and only when asked for: an explicitly supplied value

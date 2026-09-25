@@ -511,8 +511,10 @@ send pending command model =
 
 
 {-| Moves a card straight away and lets the host correct it if the write fails.
-A move to Scheduled that still needs a time opens the scheduler instead, so no
-card is shown in a column its file has not reached.
+A move that still needs something opens an editor instead, so no card is shown in
+a column its file has not reached: the Action editor for a status that needs a
+context the card lacks (a Waiting Action has none), the scheduler for a Calendar
+Action without a time.
 -}
 moveAction : ActionId -> ActionStatus -> Model -> ( Model, Cmd Msg )
 moveAction actionId status model =
@@ -526,7 +528,10 @@ moveAction actionId status model =
 
             else
                 send
-                    (if status == ActionStatus.Scheduled && Data.schedule action == Nothing then
+                    (if ActionStatus.requiresContext status && String.isEmpty (String.trim (Maybe.withDefault "" action.context)) then
+                        IgnoreReply
+
+                     else if status == ActionStatus.Scheduled && Data.schedule action == Nothing then
                         IgnoreReply
 
                      else

@@ -4,6 +4,7 @@ import { trashWithUndo } from "../ui/undo";
 // @ts-expect-error The generated module does not exist in a clean checkout.
 import { Elm } from "../../.generated/elm-runtime.js";
 import { actionSchedule } from "../domain/schedule";
+import { actionRequiresContext } from "../domain/action-status";
 import type { GtdServices } from "../ui/services";
 import { ElmModal } from "./elm-modals";
 import { localDate } from "../utils/date";
@@ -91,6 +92,11 @@ export class ElmActionBoardHost {
       case "set-action-status": {
         const action = this.services.repository.index.getSnapshot().actionsById.get(command.actionId);
         if (!action) throw new Error("This Action is missing or has a duplicate ID.");
+        // Next and Calendar Actions need a context, which a Waiting Action gave up: ask for it.
+        if (actionRequiresContext(command.status) && !action.context?.trim()) {
+          this.services.editAction(command.actionId, false, command.status);
+          return;
+        }
         if (command.status === "scheduled" && !actionSchedule(action.scheduledStart, action.durationMinutes)) {
           this.services.scheduleAction(command.actionId);
           return;
