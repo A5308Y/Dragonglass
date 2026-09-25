@@ -983,7 +983,7 @@ processingForm model =
             , processingField False
                 "Action status"
                 "Choose Next, Waiting, or Calendar."
-                [ actionStatusSelect model.actionStatus ]
+                [ Ui.labelled "Action status" (actionStatusSelect model.actionStatus) ]
             ]
                 ++ (-- A Waiting Action is someone else's to move, so it has no context or energy.
                     if model.actionStatus == ActionStatus.Waiting then
@@ -1068,7 +1068,7 @@ waitingFields model =
         [ processingField False
             "Waiting since"
             "The day this Action started waiting."
-            [ input [ type_ "date", value model.waitingSince, onInput WaitingSinceChanged ] [] ]
+            [ Ui.labelled "Waiting since" (input [ type_ "date", value model.waitingSince, onInput WaitingSinceChanged ] []) ]
         , processingField False
             "Follow up"
             "Optional. From this day the Action is marked for chasing up."
@@ -1096,12 +1096,14 @@ scheduleFields model =
         , processingField False
             (if model.schedule.allDay then "Date" else "Date & time")
             (if model.schedule.allDay then "Must happen on this day, at any time." else "Must happen at this local date and time.")
-            [ input
-                [ type_ (if model.schedule.allDay then "date" else "datetime-local")
-                , value model.schedule.start
-                , onInput ScheduledStartChanged
-                ]
-                []
+            [ Ui.labelled (if model.schedule.allDay then "Date" else "Date & time")
+                (input
+                    [ type_ (if model.schedule.allDay then "date" else "datetime-local")
+                    , value model.schedule.start
+                    , onInput ScheduledStartChanged
+                    ]
+                    []
+                )
             ]
         ]
             ++ (if model.schedule.allDay then
@@ -1111,7 +1113,7 @@ scheduleFields model =
                     [ processingField False
                         "Duration"
                         "Minutes reserved on the calendar."
-                        [ input [ type_ "number", Html.Attributes.min "1", value model.schedule.duration, onInput ScheduledDurationChanged ] [] ]
+                        [ Ui.labelled "Duration" (input [ type_ "number", Html.Attributes.min "1", value model.schedule.duration, onInput ScheduledDurationChanged ] []) ]
                     ]
                )
 
