@@ -309,6 +309,21 @@ body.is-phone .workspace-leaf-content:is(
   border-bottom: 1px solid var(--background-modifier-border);
   font-size: var(--font-ui-small);
 }
+/* The metadata warning opens into the files it is about, each with its problem. */
+.dg-issues > summary { cursor: pointer; }
+.dg-issues-list { margin: 6px 0 2px; padding-left: 18px; }
+.dg-issues-list li { margin: 4px 0; }
+.dg-issue-file {
+  padding: 0;
+  color: var(--text-accent);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  height: auto;
+}
+.dg-issue-message { display: block; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 
 .dg-board {
   flex: 1;

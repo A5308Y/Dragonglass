@@ -753,7 +753,7 @@ view model =
                 , button [ class "mod-cta", onClick (Send IgnoreReply Command.QuickCapture) ] [ text "Capture" ]
                 ]
             ]
-        , Ui.issuesView model.snapshot.issues
+        , Ui.issuesView (\path -> Send IgnoreReply (Command.OpenFile path)) model.snapshot.issues
         , Ui.maybeView model.error (\message -> div [ class "dg-panel dg-error" ] [ text message ])
         , if model.processing then
             processorView model

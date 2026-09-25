@@ -222,17 +222,41 @@ timer seconds =
         ++ String.padLeft 2 '0' (String.fromInt (modBy 60 absolute))
 
 
-issuesView : List Issue -> Html msg
-issuesView issues =
+{-| Files whose GTD metadata could not be read, and why. Collapsed to a count; opened,
+each file is listed with its problem and opens on a tap, so it can be fixed there.
+-}
+issuesView : (String -> msg) -> List Issue -> Html msg
+issuesView openFile issues =
     if List.isEmpty issues then
         text ""
 
     else
-        div
-            [ class "dg-warning"
+        Html.node "details"
+            [ class "dg-warning dg-issues" ]
+            [ Html.node "summary"
+                []
+                [ text
+                    (String.fromInt (List.length issues)
+                        ++ (if List.length issues == 1 then
+                                " GTD file has a metadata problem."
 
+                            else
+                                " GTD files have metadata problems."
+                           )
+                        ++ " Show which"
+                    )
+                ]
+            , Html.ul [ class "dg-issues-list" ]
+                (List.map
+                    (\issue ->
+                        Html.li []
+                            [ Html.button [ class "dg-issue-file dg-flat-button", Html.Events.onClick (openFile issue.path) ] [ text issue.path ]
+                            , span [ class "dg-issue-message" ] [ text issue.message ]
+                            ]
+                    )
+                    (List.sortBy .path issues)
+                )
             ]
-            [ text (String.fromInt (List.length issues) ++ " GTD files have metadata problems.") ]
 
 
 {-| Text only screen readers see. Obsidian turns every `aria-label` into a hover

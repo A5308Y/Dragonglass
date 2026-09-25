@@ -882,7 +882,7 @@ boardView model =
                 , button [ onClick (Send IgnoreReply Command.OpenInbox) ] [ text "Open Inbox" ]
                 ]
             ]
-        , Ui.issuesView model.snapshot.issues
+        , Ui.issuesView (\path -> Send IgnoreReply (Command.OpenFile path)) model.snapshot.issues
         , toolbar model
         , if model.filterOpen then
             filterPanel model

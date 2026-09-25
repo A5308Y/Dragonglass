@@ -489,7 +489,7 @@ export const SURFACE_COMMANDS = {
   actionBoard: [
     "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
     "set-action-priorities", "trash-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt",
-    "show-menu",
+    "show-menu", "open-file",
   ],
   projects: [
     "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",

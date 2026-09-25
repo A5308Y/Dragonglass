@@ -14,6 +14,7 @@ type Command
     = NewActionModal (Maybe ProjectId)
     | QuickCapture
     | OpenInbox
+    | OpenFile String
     | ShowProject ProjectId
     | EditActionModal ActionId
     | SetActionStatus ActionId ActionStatus
@@ -45,6 +46,9 @@ toBase command =
 
         QuickCapture ->
             Base.QuickCapture
+
+        OpenFile path ->
+            Base.OpenFile path
 
         OpenInbox ->
             Base.OpenInbox
