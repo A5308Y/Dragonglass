@@ -950,7 +950,7 @@ itemCard model item =
                     )
                 ]
         , label [ class "dg-processing-toggle dg-inbox-file-toggle" ]
-            [ span [] [ text "File with Project" ]
+            [ span [] [ text "Keep as reference" ]
             , input [ type_ "checkbox", checked model.fileOriginal, onCheck SetFileOriginal ] []
             , small [] [ text (fileOriginalHint model item) ]
             ]
@@ -1345,14 +1345,31 @@ selectedProject model =
 
 fileOriginalHint : Model -> InboxItem -> String
 fileOriginalHint model item =
+    let
+        -- Reference filed with a Project is its support material; without one it is General Reference.
+        destination =
+            case String.trim (Picker.query model.project) of
+                "" ->
+                    "Files it in General Reference"
+
+                name ->
+                    "Files it with " ++ name ++ "'s support material"
+
+        capture =
+            if item.file.extension == "md" then
+                "note"
+
+            else
+                "file"
+    in
     if model.someday || model.backlog then
-        "Keeps this capture as Project support material. Otherwise it goes to Obsidian's trash once the Project exists."
+        destination ++ ". Otherwise the " ++ capture ++ " goes to Obsidian's trash once the Project exists."
 
     else if item.file.extension == "md" then
-        "Keeps this note as reference and creates a separate Action. Otherwise the note itself becomes the Action."
+        destination ++ " and creates a separate Action. Otherwise the note itself becomes the Action."
 
     else
-        "Keeps this file as support material, or in General Reference with no Project. Otherwise it goes to Obsidian's trash once processed."
+        destination ++ ". Otherwise the file goes to Obsidian's trash once processed."
 
 
 
