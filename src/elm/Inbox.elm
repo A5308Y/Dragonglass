@@ -1348,11 +1348,15 @@ fileOriginalHint model item =
     let
         -- Reference filed with a Project is its support material; without one it is General Reference.
         destination =
-            case String.trim (Picker.query model.project) of
-                "" ->
+            case ( String.trim (Picker.query model.project), model.someday || model.backlog ) of
+                ( "", True ) ->
+                    -- Parking without a Project names a new one after this Item.
+                    "Files it with the new Project's support material"
+
+                ( "", False ) ->
                     "Files it in General Reference"
 
-                name ->
+                ( name, _ ) ->
                     "Files it with " ++ name ++ "'s support material"
 
         capture =
