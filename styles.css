@@ -479,6 +479,18 @@ body.is-phone .workspace-leaf-content:is(
 .dg-card-title:hover,
 .dg-project-title:hover { color: var(--text-accent); }
 .dg-card-title.dg-action-card-title:hover { color: var(--text-normal); }
+/* The done checkbox leads the title row, sized to the title's line so the row keeps its height. */
+.dg-card-title-row input.dg-card-done {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0 -2px 0 0;
+  cursor: pointer;
+}
+.dg-card.is-done .dg-action-card-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
 
 .dg-project-link {
   display: block;
@@ -2176,6 +2188,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-toolbar .dg-shortcut-hint { margin-left: auto; }
 .dg-shortcut-bar { padding: 4px var(--dg-bar-inset, 12px) 0; }
 @media (hover: none), (max-width: 600px) {
+  /* A fingertip needs a bigger done checkbox than a mouse pointer. */
+  .dg-card-title-row input.dg-card-done { width: 20px; height: 20px; }
   .dg-shortcut-hint, .dg-shortcut-bar { display: none; }
 }
 

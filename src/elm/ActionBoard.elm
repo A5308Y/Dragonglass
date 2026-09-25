@@ -147,6 +147,7 @@ type Msg
     | DropOn ActionStatus
     | DropBefore ActionId
     | CardKey ActionId Key
+    | ToggleDone ActionId Bool
     | Focused (Result Browser.Dom.Error ())
     | Send Pending Command
     | NoOp
@@ -464,6 +465,17 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        -- Ticked, the card is done; unticked again, it reopens as a Next Action.
+        ToggleDone actionId done ->
+            moveAction actionId
+                (if done then
+                    ActionStatus.Done
+
+                 else
+                    ActionStatus.Next
+                )
+                model
 
         CardKey actionId key ->
             case key of
@@ -1339,6 +1351,7 @@ cardView model action =
             , ( "is-drop-before", model.priorityDropTarget == Just action.id )
             , ( "is-follow-up-due", followUpDue )
             , ( "needs-attention", needsAttention model.snapshot.today action )
+            , ( "is-done", action.status == ActionStatus.Done )
             ]
         , attribute "role" "listitem"
         , attribute "data-card" action.id
@@ -1352,7 +1365,24 @@ cardView model action =
         , onCardKey action.id
         ]
         [ div [ class "dg-card-title-row" ]
-            [ if needsAttention model.snapshot.today action then
+            [ Ui.labelled
+                ((if action.status == ActionStatus.Done then
+                    "Reopen "
+
+                  else
+                    "Mark done: "
+                 )
+                    ++ action.title
+                )
+                (input
+                    [ type_ "checkbox"
+                    , class "dg-card-done"
+                    , checked (action.status == ActionStatus.Done)
+                    , onCheck (ToggleDone action.id)
+                    ]
+                    []
+                )
+            , if needsAttention model.snapshot.today action then
                 span [ class "dg-attention-dot" ] [ Ui.srOnly "Needs attention:" ]
 
               else
