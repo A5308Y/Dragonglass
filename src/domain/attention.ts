@@ -1,10 +1,8 @@
 import { projectActionIssue } from "./project-board";
 import { isAllDaySchedule } from "./schedule";
 import type { Action, GtdSnapshot } from "./types";
-import { addLocalDays, localDate } from "../utils/date";
-
-/** How long a top-level Project may go unreviewed before the Project Review asks for it. */
-export const REVIEW_INTERVAL_DAYS = 7;
+import { localDate } from "../utils/date";
+import { weeklyReviewDue, type WeeklyReviewSettings } from "./weekly-review";
 
 /** Which views have something waiting to be done, for the dots on their ribbon icons. */
 export interface Attention {
@@ -14,21 +12,24 @@ export interface Attention {
   board: boolean;
   /** Active Projects with an issue, such as no open Action. */
   projects: boolean;
-  /** Active top-level Projects not reviewed in the last week. */
+  /** This week's review is due and not finished yet (see `weeklyReviewDue`). */
   review: boolean;
   /** Unread feed Items. */
   feeds: boolean;
 }
 
-export function attention(snapshot: GtdSnapshot, unreadFeedItems: number, today = localDate()): Attention {
-  const lastReviewDue = addLocalDays(today, -REVIEW_INTERVAL_DAYS);
+export function attention(
+  snapshot: GtdSnapshot,
+  unreadFeedItems: number,
+  review: WeeklyReviewSettings,
+  today = localDate(),
+): Attention {
   return {
     inbox: snapshot.inboxItems.length > 0,
     board: snapshot.actions.some((action) => actionNeedsAttention(action, today)),
     projects: snapshot.projects.some((project) =>
       project.status === "active" && projectActionIssue(project, snapshot.projects, snapshot.actions) !== null),
-    review: snapshot.projects.some((project) =>
-      project.status === "active" && !project.parentProjectId && (!project.reviewed || project.reviewed <= lastReviewDue)),
+    review: weeklyReviewDue(snapshot, review, today),
     feeds: unreadFeedItems > 0,
   };
 }

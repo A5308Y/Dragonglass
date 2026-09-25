@@ -488,7 +488,7 @@ view model =
                                 "All " ++ String.fromInt model.total ++ " Project trees were reviewed."
 
                              else
-                                "No Projects need review today."
+                                "No Project trees are left to review this week."
                             )
                         ]
                     , button [ class "mod-cta", onClick (Send IgnoreReply Command.OpenSomedayReview) ]

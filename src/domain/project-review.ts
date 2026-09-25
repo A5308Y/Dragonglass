@@ -97,8 +97,13 @@ export function projectReviewHealth(
   };
 }
 
-export function projectReviewQueue(snapshot: GtdSnapshot, today: string): string[] {
-  const candidates = snapshot.projects.filter((project) => project.status === "active" && project.reviewed !== today);
+/**
+ * The active Project trees still to review: those with an active Project not reviewed
+ * on or after `since`, the first day of the review week (see `reviewWeekStart`).
+ */
+export function projectReviewQueue(snapshot: GtdSnapshot, since: string): string[] {
+  const candidates = snapshot.projects.filter((project) =>
+    project.status === "active" && (!project.reviewed || project.reviewed < since));
   const roots = new Map<string, Project>();
   for (const candidate of candidates) {
     const root = topmostActiveAncestor(candidate, snapshot.projectsById);

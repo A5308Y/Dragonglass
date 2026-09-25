@@ -1,3 +1,4 @@
+import { DEFAULT_WEEKLY_REVIEW_DAY } from "../domain/weekly-review";
 import { BOARD_PROJECT_STATUSES } from "../domain/types";
 import type { GtdSettings, SavedView } from "../domain/types";
 
@@ -59,6 +60,8 @@ export function defaultSettings(): GtdSettings {
     projectBoardColumns: [...BOARD_PROJECT_STATUSES],
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
+    weeklyReviewDay: DEFAULT_WEEKLY_REVIEW_DAY,
+    lastWeeklyReview: "",
     googleCalendar: {
       enabled: false,
       endpointUrl: "",

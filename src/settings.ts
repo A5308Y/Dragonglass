@@ -93,6 +93,21 @@ export class GtdSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings();
       }));
 
+    new Setting(containerEl)
+      .setName("Weekly Review day")
+      .setDesc("The Project Review falls due on this day and stays due until every Project tree is reviewed, so it can be finished on a later day. "
+        + (this.plugin.settings.lastWeeklyReview
+          ? `Last finished on ${this.plugin.settings.lastWeeklyReview}.`
+          : "Not finished yet."))
+      .addDropdown((dropdown) => {
+        ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+          .forEach((day, index) => dropdown.addOption(String(index), day));
+        dropdown.setValue(String(this.plugin.settings.weeklyReviewDay)).onChange(async (value) => {
+          this.plugin.settings.weeklyReviewDay = Number(value);
+          await this.plugin.saveSettings();
+        });
+      });
+
     this.displayPomodoro(containerEl);
     this.displayFeeds(containerEl);
     this.displayMail(containerEl);

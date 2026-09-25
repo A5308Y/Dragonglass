@@ -5,6 +5,7 @@ import type { Action, GtdSnapshot, InboxItem, Project } from "../src/domain/type
 
 const file = (path: string) => ({ path }) as TFile;
 const today = "2026-09-24";
+const weekly = { weeklyReviewDay: 5, lastWeeklyReview: "" };
 const project = (changes: Partial<Project> = {}): Project =>
   ({ type: "gtd-project", id: "P1", title: "Roof", status: "active", created: "2026-09-01", file: file("Roof.md"), reviewed: today, ...changes });
 const action = (changes: Partial<Action> = {}): Action =>
@@ -22,20 +23,20 @@ const snapshot = (projects: Project[], actions: Action[], inboxItems: InboxItem[
 
 describe("attention dots", () => {
   it("stays quiet when nothing waits", () => {
-    expect(attention(snapshot([project()], [action()]), 0, today))
+    expect(attention(snapshot([project()], [action()]), 0, weekly, today))
       .toEqual({ inbox: false, board: false, projects: false, review: false, feeds: false });
   });
 
   it("marks the Inbox, the feeds, and a Project with an issue", () => {
     const item = { type: "gtd-inbox-item", id: "I1", title: "Note", created: today, file: file("I1.md") } as InboxItem;
-    const result = attention(snapshot([project()], [], [item]), 3, today);
+    const result = attention(snapshot([project()], [], [item]), 3, weekly, today);
     expect(result.inbox).toBe(true);
     expect(result.feeds).toBe(true);
     expect(result.projects).toBe(true);
   });
 
   it("marks the board for overdue work, due follow-ups and today's Calendar Actions", () => {
-    const board = (changes: Partial<Action>) => attention(snapshot([project()], [action(changes)]), 0, today).board;
+    const board = (changes: Partial<Action>) => attention(snapshot([project()], [action(changes)]), 0, weekly, today).board;
     expect(board({ due: "2026-09-23" })).toBe(true);
     expect(board({ due: today })).toBe(false);
     expect(board({ status: "waiting", followUp: today })).toBe(true);
@@ -45,12 +46,18 @@ describe("attention dots", () => {
     expect(board({ status: "done", due: "2026-09-01" })).toBe(false);
   });
 
-  it("asks for a review once a top-level Project has gone a week without one", () => {
-    const review = (changes: Partial<Project>) => attention(snapshot([project(changes)], [action()]), 0, today).review;
+  it("asks for the Weekly Review while a tree is unreviewed since the review day", () => {
+    // Today is a Thursday, so this review week began on Friday 2026-09-18.
+    const review = (changes: Partial<Project>) => attention(snapshot([project(changes)], [action()]), 0, weekly, today).review;
     expect(review({ reviewed: "2026-09-18" })).toBe(false);
     expect(review({ reviewed: "2026-09-17" })).toBe(true);
     const { reviewed: _reviewed, ...neverReviewed } = project();
-    expect(attention(snapshot([neverReviewed], [action()]), 0, today).review).toBe(true);
+    expect(attention(snapshot([neverReviewed], [action()]), 0, weekly, today).review).toBe(true);
     expect(review({ reviewed: "2026-09-01", status: "someday" })).toBe(false);
+  });
+
+  it("stays quiet for the rest of the week once the review is finished", () => {
+    const { reviewed: _reviewed, ...addedLater } = project();
+    expect(attention(snapshot([addedLater], [action()]), 0, { ...weekly, lastWeeklyReview: "2026-09-19" }, today).review).toBe(false);
   });
 });

@@ -229,6 +229,10 @@ export interface GtdSettings {
   feeds: FeedSettings;
   mail: MailSettings;
   pomodoro: PomodoroSettings;
+  /** The weekday the Weekly Review falls due, as `Date.getDay()` counts: 0 is Sunday. */
+  weeklyReviewDay: number;
+  /** The day the last Weekly Review was finished, or `""` before the first one. */
+  lastWeeklyReview: string;
   schemaVersion: number;
 }
 

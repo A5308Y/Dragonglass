@@ -5,6 +5,7 @@ import { MailService, type MailImportResult, type MailSyncStatus } from "./mail/
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import { projectsDueForActivation } from "./domain/project-activation";
 import { attention } from "./domain/attention";
+import { weeklyReviewFinished } from "./domain/weekly-review";
 import { unreadItems } from "./domain/feed";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { describeImport, normalizeMailPort } from "./domain/mail";
@@ -95,7 +96,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addRibbonIcon("timer", "Open GTD Pomodoro", () => void this.openPomodoro());
     const feeds = this.addRibbonIcon("rss", "Open RSS Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
     this.ribbonAttention = new RibbonAttention({ board, inbox, projects, review, feeds }, () =>
-      attention(this.index.getSnapshot(), unreadItems(this.feeds.getStore()).length));
+      attention(this.index.getSnapshot(), unreadItems(this.feeds.getStore()).length, this.settings));
     this.register(() => this.ribbonAttention.stop());
     this.addSettingTab(new GtdSettingTab(this.app, this));
     this.registerCommands();
@@ -128,6 +129,10 @@ export default class DragonglassGtdPlugin extends Plugin {
         : defaults.defaultProjectImage,
       savedViews: Array.isArray(saved?.savedViews) ? migrateSavedViews(saved.savedViews) : defaults.savedViews,
       defaultActionStatus: isActionStatus(saved?.defaultActionStatus) ? saved.defaultActionStatus : defaults.defaultActionStatus,
+      weeklyReviewDay: Number.isInteger(saved?.weeklyReviewDay) && saved!.weeklyReviewDay! >= 0 && saved!.weeklyReviewDay! <= 6
+        ? saved!.weeklyReviewDay!
+        : defaults.weeklyReviewDay,
+      lastWeeklyReview: typeof saved?.lastWeeklyReview === "string" ? saved.lastWeeklyReview : defaults.lastWeeklyReview,
       projectBoardColumns: Array.isArray(saved?.projectBoardColumns)
         ? saved.projectBoardColumns.filter((status) => isProjectStatus(status) && status !== "cancelled")
         : defaults.projectBoardColumns,
@@ -344,9 +349,16 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.register(this.feeds.start());
     this.register(this.mail.start());
     // Dots on the ribbon icons for views with something to do; the hourly pass catches a new day.
-    this.register(this.index.subscribe(() => this.ribbonAttention.schedule()));
+    this.register(this.index.subscribe(() => {
+      this.ribbonAttention.schedule();
+      void this.recordFinishedWeeklyReview();
+    }));
     this.register(this.feeds.subscribe(() => this.ribbonAttention.schedule()));
-    this.registerInterval(window.setInterval(() => this.ribbonAttention.schedule(), 60 * 60_000));
+    this.registerInterval(window.setInterval(() => {
+      this.ribbonAttention.schedule();
+      void this.recordFinishedWeeklyReview();
+    }, 60 * 60_000));
+    await this.recordFinishedWeeklyReview();
     this.ribbonAttention.update();
     this.registerInterval(window.setInterval(() => this.calendarSync.schedule(0), 5 * 60_000));
     this.registerInterval(window.setInterval(() => void this.activateScheduledProjects(), 60_000));
@@ -460,6 +472,19 @@ export default class DragonglassGtdPlugin extends Plugin {
 
   private async openFile(file: TFile): Promise<void> {
     await this.app.workspace.getLeaf(false).openFile(file);
+  }
+
+  /**
+   * Records the week's review as finished once no Project tree is left in it, so a
+   * Project added later in the week waits for the next review instead of reopening it.
+   * Only a read vault counts: before the first index pass everything looks reviewed.
+   */
+  private async recordFinishedWeeklyReview(): Promise<void> {
+    const snapshot = this.index.getSnapshot();
+    if (snapshot.revision === 0 || !weeklyReviewFinished(snapshot, this.settings)) return;
+    this.settings.lastWeeklyReview = localDate();
+    await this.saveSettings(false);
+    this.ribbonAttention.schedule();
   }
 
   private async activateView(type: string): Promise<WorkspaceLeaf> {
