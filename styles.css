@@ -1130,6 +1130,14 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-subproject-card.has-issue { border-color: color-mix(in srgb, var(--color-yellow) 45%, var(--background-modifier-border)); }
 .dg-subproject-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dg-subproject-card-heading .dg-icon-button { flex: 0 0 28px; }
+/* The done checkbox leads the heading, like the one on Action cards. */
+.dg-subproject-card-heading input.dg-subproject-done {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0 -2px 0 0;
+  cursor: pointer;
+}
 .dg-subproject-title {
   flex: 1 1 auto;
   display: flex;
@@ -2208,7 +2216,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-shortcut-bar { padding: 4px var(--dg-bar-inset, 12px) 0; }
 @media (hover: none), (max-width: 600px) {
   /* A fingertip needs a bigger done checkbox than a mouse pointer. */
-  .dg-card-title-row input.dg-card-done { width: 20px; height: 20px; }
+  .dg-card-title-row input.dg-card-done,
+  .dg-subproject-card-heading input.dg-subproject-done { width: 20px; height: 20px; }
   .dg-shortcut-hint, .dg-shortcut-bar { display: none; }
 }
 

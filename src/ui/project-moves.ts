@@ -13,7 +13,7 @@ export async function setProjectStatus(services: GtdServices, projectId: string,
   if (status === "completed" && !await confirmCompleteProject(services, projectId)) return;
   const before = services.repository.index.getSnapshot().projectsById.get(projectId);
   await services.repository.setProjectStatus(projectId, status);
-  if (status === "cancelled" && before && before.status !== "cancelled") offerUncancel(services, before);
+  if (status === "cancelled" && before && before.status !== "cancelled") offerRestore(services, before, "Cancelled");
 }
 
 /**
@@ -34,11 +34,13 @@ export async function moveProject(
   const siblings = snapshot.projects.filter((project) => project.parentProjectId === moving.parentProjectId);
   const placements = projectPlacementsAfterMove(siblings, projectId, status, beforeId);
   await Promise.all([...placements].map(([id, placement]) => services.repository.updateProject(id, placement)));
-  if (status === "cancelled" && moving.status !== "cancelled") offerUncancel(services, moving);
+  if (status === "cancelled" && moving.status !== "cancelled") offerRestore(services, moving, "Cancelled");
+  // Completed Projects fold away, so a mis-ticked checkbox can be taken back.
+  if (status === "completed" && moving.status !== "completed") offerRestore(services, moving, "Completed");
 }
 
-function offerUncancel(services: GtdServices, before: Project): void {
-  showUndoNotice(`Cancelled “${before.title}”.`, () => services.repository.updateProject(before.id, {
+function offerRestore(services: GtdServices, before: Project, verb: string): void {
+  showUndoNotice(`${verb} “${before.title}”.`, () => services.repository.updateProject(before.id, {
     status: before.status,
     activateAt: before.activateAt ?? "",
     ...(before.order === undefined ? {} : { order: before.order }),

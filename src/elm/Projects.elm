@@ -208,6 +208,7 @@ type Msg
     | DragEnded
     | DropProject ProjectStatus
     | DropSubproject ProjectStatus (Maybe ProjectId)
+    | ToggleSubprojectDone ProjectId Bool
     | Send Pending Command
     | NoOp
 
@@ -588,6 +589,18 @@ update msg model =
 
                 Nothing ->
                     ( { model | subprojectDropTarget = Nothing }, Cmd.none )
+
+        -- Ticked, the sub-project is completed; unticked again, it reopens as Active.
+        ToggleSubprojectDone projectId done ->
+            moveProject projectId
+                (if done then
+                    ProjectStatus.Completed
+
+                 else
+                    ProjectStatus.Active
+                )
+                Nothing
+                model
 
         Send pending command ->
             send pending command model
@@ -1874,7 +1887,24 @@ viewSubprojectCard model project =
             (Decode.succeed { message = DropSubproject project.status (Just project.id), stopPropagation = True, preventDefault = True })
         ]
         [ div [ class "dg-subproject-card-heading" ]
-            [ button [ class "dg-subproject-title dg-flat-button", onClick (SelectProject project.id) ] [ text project.title ]
+            [ Ui.labelled
+                ((if project.status == ProjectStatus.Completed then
+                    "Reopen "
+
+                  else
+                    "Mark completed: "
+                 )
+                    ++ project.title
+                )
+                (input
+                    [ type_ "checkbox"
+                    , class "dg-subproject-done"
+                    , checked (project.status == ProjectStatus.Completed)
+                    , onCheck (ToggleSubprojectDone project.id)
+                    ]
+                    []
+                )
+            , button [ class "dg-subproject-title dg-flat-button", onClick (SelectProject project.id) ] [ text project.title ]
             , button
                 [ class "dg-icon-button dg-flat-button"
                 , Ui.onPointer (\x y -> Send IgnoreReply (subprojectMenu x y model project))
