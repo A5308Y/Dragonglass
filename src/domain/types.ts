@@ -201,6 +201,8 @@ export interface SavedView {
   name: string;
   filters: ActionFilter[];
   groupBy: GroupBy;
+  /** What splits each column into sections, if anything; never the same as `groupBy`. */
+  sectionBy?: GroupBy | null;
   sort: SortSpec;
   visibleColumns: string[] | null;
 }
@@ -208,9 +210,15 @@ export interface SavedView {
 export interface BoardConfiguration {
   filters: ActionFilter[];
   groupBy: GroupBy;
+  sectionBy?: GroupBy | null;
   sort: SortSpec;
   visibleColumns: string[] | null;
 }
+
+/** What the Projects board's columns are: its statuses, or the areas of its Projects. */
+export type ProjectBoardColumnsBy = "status" | "area";
+/** What splits each Projects board column into sections. */
+export type ProjectBoardSections = "none" | "area" | "status";
 
 export interface GtdSettings {
   inboxDirectory: string;
@@ -219,7 +227,8 @@ export interface GtdSettings {
   actionsDirectory: string;
   defaultProjectImage: string;
   showProjectBoardImages: boolean;
-  groupProjectBoardByArea: boolean;
+  projectBoardColumnsBy: ProjectBoardColumnsBy;
+  projectBoardSections: ProjectBoardSections;
   defaultActionStatus: ActionStatus;
   showDoneColumn: boolean;
   projectBoardColumns: ProjectStatus[];

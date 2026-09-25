@@ -126,6 +126,7 @@ type Msg
     | ToggleViewMenu
     | SelectSavedView String
     | SetGroupBy GroupBy
+    | SetSections (Maybe GroupBy)
     | SetSortField SortField
     | ReverseSort
     | SaveView
@@ -253,7 +254,29 @@ update msg model =
                 { model | activeViewId = nextId, configuration = configuration }
 
         SetGroupBy groupBy ->
-            ( { model | configuration = withConfiguration model (\config -> { config | groupBy = groupBy, visibleColumns = AllColumns }) }, Cmd.none )
+            ( { model
+                | configuration =
+                    withConfiguration model
+                        (\config ->
+                            { config
+                                | groupBy = groupBy
+                                , visibleColumns = AllColumns
+
+                                -- A column is never split by the field it already is.
+                                , sections =
+                                    if config.sections == Just groupBy then
+                                        Nothing
+
+                                    else
+                                        config.sections
+                            }
+                        )
+              }
+            , Cmd.none
+            )
+
+        SetSections sections ->
+            ( { model | configuration = withConfiguration model (\config -> { config | sections = sections }) }, Cmd.none )
 
         SetSortField field ->
             ( { model
@@ -946,13 +969,25 @@ toolbar model =
                         "Filter (" ++ String.fromInt count ++ ")"
                 )
             ]
-        , Ui.labelled "Group by"
+        , Ui.labelled "Columns"
             (choices []
                 groupByKey
                 SetGroupBy
                 model.configuration.groupBy
-                (List.map (\groupBy -> ( groupBy, "Group: " ++ Settings.groupByLabel groupBy ))
+                (List.map (\groupBy -> ( groupBy, "Columns: " ++ Settings.groupByLabel groupBy ))
                     [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+                )
+            )
+        , Ui.labelled "Sections"
+            (choices []
+                (Maybe.map groupByKey >> Maybe.withDefault "none")
+                SetSections
+                model.configuration.sections
+                (( Nothing, "Sections: None" )
+                    :: ([ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+                            |> List.filter ((/=) model.configuration.groupBy)
+                            |> List.map (\field -> ( Just field, "Sections: " ++ Settings.groupByLabel field ))
+                       )
                 )
             )
         , Ui.labelled "Sort by"
@@ -1202,8 +1237,80 @@ groupView model group =
                 , span [] [ text (String.fromInt (List.length group.actions)) ]
                 ]
             ]
-        , div [ class "dg-card-list" ] (List.map (cardView model) group.actions)
+        , div [ class "dg-card-list" ]
+            (case model.configuration.sections of
+                Nothing ->
+                    List.map (cardView model) group.actions
+
+                Just field ->
+                    List.map (sectionView model) (sectionsOf model field group.actions)
+            )
         ]
+
+
+{-| One section of a column: a heading with its count, then its cards in the
+column's order.
+-}
+sectionView : Model -> ( GroupKey, List Action ) -> Html Msg
+sectionView model ( key, actions ) =
+    section [ class "dg-board-section" ]
+        (Html.h3 [ class "dg-board-section-heading" ]
+            [ span [] [ text (groupLabel model key) ]
+            , span [ class "dg-board-section-count" ] [ text (String.fromInt (List.length actions)) ]
+            ]
+            :: List.map (cardView model) actions
+        )
+
+
+{-| A column's Actions split by another field, keeping the column's order inside
+each section. Statuses and energy follow their natural order; projects and
+contexts are alphabetical, with the empty section last.
+-}
+sectionsOf : Model -> GroupBy -> List Action -> List ( GroupKey, List Action )
+sectionsOf model field actions =
+    let
+        keys =
+            actions
+                |> List.map (groupKeyOf field)
+                |> List.foldl
+                    (\key found ->
+                        if List.member key found then
+                            found
+
+                        else
+                            found ++ [ key ]
+                    )
+                    []
+                |> List.sortBy (sectionRank model)
+    in
+    List.map (\key -> ( key, List.filter (\action -> groupKeyOf field action == key) actions )) keys
+
+
+sectionRank : Model -> GroupKey -> ( Int, String )
+sectionRank model key =
+    let
+        indexIn list value =
+            list |> List.indexedMap Tuple.pair |> List.filter (\( _, candidate ) -> candidate == value) |> List.head |> Maybe.map Tuple.first |> Maybe.withDefault 99
+
+        alphabetical isEmpty =
+            if isEmpty then
+                ( 1, "" )
+
+            else
+                ( 0, String.toLower (groupLabel model key) )
+    in
+    case key of
+        StatusGroup status ->
+            ( indexIn ActionStatus.all status, "" )
+
+        EnergyGroup energy ->
+            ( indexIn [ Just Energy.Low, Nothing, Just Energy.High ] energy, "" )
+
+        ProjectGroup projectId ->
+            alphabetical (projectId == Nothing)
+
+        ContextGroup context ->
+            alphabetical (context == Nothing)
 
 
 cardView : Model -> Action -> Html Msg

@@ -7,6 +7,7 @@ import Gtd.ActionStatus exposing (ActionStatus)
 import Gtd.Command as Base
 import Gtd.Id exposing (ActionId, ProjectId)
 import Gtd.ProjectStatus exposing (ProjectStatus)
+import Gtd.Settings as Settings
 import Json.Encode as Encode
 
 
@@ -40,7 +41,12 @@ type Command
     | OpenLink String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
-    | SaveProjectPreferences { columns : List ProjectStatus, showImages : Bool, groupByArea : Bool }
+    | SaveProjectPreferences
+        { columns : List ProjectStatus
+        , showImages : Bool
+        , columnsBy : Settings.ProjectColumnsBy
+        , sections : Settings.ProjectSections
+        }
     | OpenSomedayReview
     | OpenPomodoro ProjectId
     | OpenFile String

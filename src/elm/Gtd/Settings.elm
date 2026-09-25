@@ -4,6 +4,8 @@ module Gtd.Settings exposing
     , Filter(..)
     , GroupBy(..)
     , MatchOperator(..)
+    , ProjectColumnsBy(..)
+    , ProjectSections(..)
     , SavedView
     , Settings
     , SortDirection(..)
@@ -15,7 +17,10 @@ module Gtd.Settings exposing
     , empty
     , encodeSavedView
     , findSavedView
+    , groupByKey
     , groupByLabel
+    , projectColumnsByKey
+    , projectSectionsKey
     , reverse
     , sortFieldLabel
     , statusColumns
@@ -110,12 +115,31 @@ type VisibleColumns
     | OnlyColumns (List String)
 
 
+{-| How a board lays out its Actions: `groupBy` picks what the columns are, and
+`sections`, when set, splits each column by another field.
+-}
 type alias BoardConfiguration =
     { filters : List Filter
     , groupBy : GroupBy
+    , sections : Maybe GroupBy
     , sort : SortSpec
     , visibleColumns : VisibleColumns
     }
+
+
+{-| What the Projects board's columns are.
+-}
+type ProjectColumnsBy
+    = ColumnsByStatus
+    | ColumnsByArea
+
+
+{-| What splits each Projects board column, if anything.
+-}
+type ProjectSections
+    = NoSections
+    | SectionsByArea
+    | SectionsByStatus
 
 
 type alias SavedView =
@@ -131,7 +155,8 @@ type alias SavedView =
 
 type alias Settings =
     { showProjectBoardImages : Bool
-    , groupProjectBoardByArea : Bool
+    , projectBoardColumnsBy : ProjectColumnsBy
+    , projectBoardSections : ProjectSections
     , defaultActionStatus : ActionStatus
     , showDoneColumn : Bool
     , projectBoardColumns : List ProjectStatus
@@ -144,7 +169,8 @@ type alias Settings =
 empty : Settings
 empty =
     { showProjectBoardImages = True
-    , groupProjectBoardByArea = False
+    , projectBoardColumnsBy = ColumnsByStatus
+    , projectBoardSections = NoSections
     , defaultActionStatus = ActionStatus.Next
     , showDoneColumn = True
     , projectBoardColumns = ProjectStatus.board
@@ -162,6 +188,7 @@ defaultConfiguration : Settings -> BoardConfiguration
 defaultConfiguration settings =
     { filters = []
     , groupBy = GroupByStatus
+    , sections = Nothing
     , sort = { field = SortByCreated, direction = Descending }
     , visibleColumns = OnlyColumns (List.map ActionStatus.key (statusColumns settings))
     }
@@ -238,7 +265,8 @@ decoder : Decoder Settings
 decoder =
     Decode.succeed Settings
         |> required "showProjectBoardImages" Decode.bool
-        |> required "groupProjectBoardByArea" Decode.bool
+        |> required "projectBoardColumnsBy" (Decode.map projectColumnsByFromKey Decode.string)
+        |> required "projectBoardSections" (Decode.map projectSectionsFromKey Decode.string)
         |> required "defaultActionStatus" ActionStatus.decoder
         |> required "showDoneColumn" Decode.bool
         |> required "projectBoardColumns" (knownList ProjectStatus.decoder)
@@ -257,9 +285,10 @@ savedViewDecoder =
 
 configurationDecoder : Decoder BoardConfiguration
 configurationDecoder =
-    Decode.map4 BoardConfiguration
+    Decode.map5 BoardConfiguration
         (Decode.field "filters" (knownList filterDecoder))
         (Decode.field "groupBy" groupByDecoder)
+        (optionalField "sectionBy" (Decode.nullable groupByDecoder) Nothing)
         (Decode.field "sort" sortDecoder)
         (optionalField "visibleColumns" visibleColumnsDecoder AllColumns)
 
@@ -496,6 +525,7 @@ encodeConfigurationFields : BoardConfiguration -> List ( String, Encode.Value )
 encodeConfigurationFields configuration =
     [ ( "filters", Encode.list encodeFilter configuration.filters )
     , ( "groupBy", Encode.string (groupByKey configuration.groupBy) )
+    , ( "sectionBy", Maybe.map (groupByKey >> Encode.string) configuration.sections |> Maybe.withDefault Encode.null )
     , ( "sort"
       , Encode.object
             [ ( "field", Encode.string (sortFieldKey configuration.sort.field) )
@@ -511,6 +541,51 @@ encodeConfigurationFields configuration =
                 Encode.list Encode.string columns
       )
     ]
+
+
+projectColumnsByKey : ProjectColumnsBy -> String
+projectColumnsByKey columnsBy =
+    case columnsBy of
+        ColumnsByStatus ->
+            "status"
+
+        ColumnsByArea ->
+            "area"
+
+
+projectColumnsByFromKey : String -> ProjectColumnsBy
+projectColumnsByFromKey raw =
+    if raw == "area" then
+        ColumnsByArea
+
+    else
+        ColumnsByStatus
+
+
+projectSectionsKey : ProjectSections -> String
+projectSectionsKey sections =
+    case sections of
+        NoSections ->
+            "none"
+
+        SectionsByArea ->
+            "area"
+
+        SectionsByStatus ->
+            "status"
+
+
+projectSectionsFromKey : String -> ProjectSections
+projectSectionsFromKey raw =
+    case raw of
+        "area" ->
+            SectionsByArea
+
+        "status" ->
+            SectionsByStatus
+
+        _ ->
+            NoSections
 
 
 groupByKey : GroupBy -> String

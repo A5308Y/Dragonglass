@@ -5,7 +5,17 @@ import { feedItemAge } from "../domain/feed-triage";
 import { isAllDaySchedule } from "../domain/schedule";
 import { ACTION_STATUSES, BOARD_PROJECT_STATUSES, ENERGY_LEVELS, PROJECT_STATUSES, type Energy } from "../domain/types";
 import type { ProjectReviewHealth } from "../domain/project-review";
-import type { Action, GtdSettings, GtdSnapshot, InboxItem, InboxProcessingInput, Project, SavedView } from "../domain/types";
+import type {
+  Action,
+  GtdSettings,
+  GtdSnapshot,
+  InboxItem,
+  InboxProcessingInput,
+  Project,
+  ProjectBoardColumnsBy,
+  ProjectBoardSections,
+  SavedView,
+} from "../domain/types";
 
 export const ELM_PROTOCOL_VERSION = 2;
 
@@ -221,7 +231,8 @@ export interface ElmSnapshotDto {
 
 export interface ElmSettingsDto {
   showProjectBoardImages: boolean;
-  groupProjectBoardByArea: boolean;
+  projectBoardColumnsBy: ProjectBoardColumnsBy;
+  projectBoardSections: ProjectBoardSections;
   defaultActionStatus: Action["status"];
   showDoneColumn: boolean;
   projectBoardColumns: Project["status"][];
@@ -290,7 +301,8 @@ export function elmSnapshot(
     issues: snapshot.issues.map((issue) => ({ ...issue })),
     settings: {
       showProjectBoardImages: settings.showProjectBoardImages,
-      groupProjectBoardByArea: settings.groupProjectBoardByArea,
+      projectBoardColumnsBy: settings.projectBoardColumnsBy,
+      projectBoardSections: settings.projectBoardSections,
       defaultActionStatus: settings.defaultActionStatus,
       showDoneColumn: settings.showDoneColumn,
       projectBoardColumns: [...settings.projectBoardColumns],
@@ -408,7 +420,13 @@ type ElmNonMenuCommand =
   | { type: "create-support-folder"; projectId: string; path: string }
   | { type: "read-support-note"; projectId: string; path: string }
   | { type: "update-support-note"; projectId: string; path: string; body: string }
-  | { type: "save-project-preferences"; columns: Project["status"][]; showImages: boolean; groupByArea: boolean }
+  | {
+    type: "save-project-preferences";
+    columns: Project["status"][];
+    showImages: boolean;
+    columnsBy: ProjectBoardColumnsBy;
+    sections: ProjectBoardSections;
+  }
   | { type: "review-someday-project"; projectId: string; activateAt: string }
   | { type: "open-someday-review" }
   | { type: "open-pomodoro"; projectId: string }
@@ -722,7 +740,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
         && value.columns.length > 0
         && value.columns.every((status) => isOneOf(BOARD_PROJECT_STATUSES, status))
         && typeof value.showImages === "boolean"
-        && typeof value.groupByArea === "boolean";
+        && (value.columnsBy === "status" || value.columnsBy === "area")
+        && ["none", "area", "status"].includes(String(value.sections));
     case "load-review-project":
     case "load-brainstorm-outcome":
       return typeof value.projectId === "string";
@@ -844,6 +863,8 @@ function isSavedView(value: unknown): value is SavedView {
     && Array.isArray(value.filters)
     && value.filters.every(isActionFilter)
     && ["status", "project", "context", "energy"].includes(String(value.groupBy))
+    && (value.sectionBy === undefined || value.sectionBy === null
+      || ["status", "project", "context", "energy"].includes(String(value.sectionBy)))
     && isSortSpec(value.sort)
     && (value.visibleColumns === null || isStringArray(value.visibleColumns));
 }

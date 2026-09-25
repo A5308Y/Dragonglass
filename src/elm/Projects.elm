@@ -11,9 +11,10 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ProjectId)
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ranking as Ranking
+import Gtd.Settings exposing (ProjectColumnsBy(..), ProjectSections(..))
 import Gtd.Ui as Ui
-import Html exposing (Html, article, button, div, h2, h3, header, img, input, label, main_, node, p, section, small, span, strong, text, textarea)
-import Html.Attributes exposing (alt, attribute, checked, class, classList, disabled, draggable, placeholder, rows, src, title, type_, value)
+import Html exposing (Html, article, button, div, h2, h3, header, img, input, label, main_, node, option, p, section, select, small, span, strong, text, textarea)
+import Html.Attributes exposing (alt, attribute, checked, class, classList, disabled, draggable, placeholder, rows, selected, src, tabindex, title, type_, value)
 import Html.Events exposing (on, onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -128,7 +129,8 @@ type alias Model =
     , issuesOnly : Bool
     , showSubprojects : Bool
     , showImages : Bool
-    , groupByArea : Bool
+    , columnsBy : ProjectColumnsBy
+    , sections : ProjectSections
     , visibleColumns : List ProjectStatus
     , columnsOpen : Bool
     , selecting : Bool
@@ -170,7 +172,9 @@ type Msg
     | ClearSelection
     | ToggleSubprojects Bool
     | ToggleImages Bool
-    | ToggleGroupByArea Bool
+    | SetColumnsBy ProjectColumnsBy
+    | SetSections ProjectSections
+    | DropOnArea (Maybe String)
     | SelectProject ProjectId
     | BackToBoard
     | ToggleCompleted
@@ -245,7 +249,8 @@ init flags =
                     , issuesOnly = False
                     , showSubprojects = False
                     , showImages = decoded.snapshot.settings.showProjectBoardImages
-                    , groupByArea = decoded.snapshot.settings.groupProjectBoardByArea
+                    , columnsBy = decoded.snapshot.settings.projectBoardColumnsBy
+                    , sections = decoded.snapshot.settings.projectBoardSections
                     , visibleColumns =
                         if List.isEmpty columns then
                             ProjectStatus.board
@@ -343,8 +348,45 @@ update msg model =
         ToggleImages visible ->
             savePreferences { model | showImages = visible }
 
-        ToggleGroupByArea grouped ->
-            savePreferences { model | groupByArea = grouped }
+        SetColumnsBy columnsBy ->
+            -- A column is never split by the field it already is.
+            savePreferences
+                { model
+                    | columnsBy = columnsBy
+                    , sections =
+                        case ( columnsBy, model.sections ) of
+                            ( ColumnsByArea, SectionsByArea ) ->
+                                SectionsByStatus
+
+                            ( ColumnsByStatus, SectionsByStatus ) ->
+                                SectionsByArea
+
+                            ( _, sections ) ->
+                                sections
+                }
+
+        SetSections sections ->
+            savePreferences { model | sections = sections }
+
+        DropOnArea area ->
+            case model.draggedProject |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects) of
+                Just project ->
+                    let
+                        dropped =
+                            { model | draggedProject = Nothing, subprojectDropTarget = Nothing }
+                    in
+                    if project.parentProjectId /= Nothing then
+                        -- Sub-projects share their top-level Project's area.
+                        ( { dropped | error = Just "A sub-project shares its top-level Project's area. Move that Project instead." }, Cmd.none )
+
+                    else if Data.projectArea project == area then
+                        ( dropped, Cmd.none )
+
+                    else
+                        send IgnoreReply (Command.SetProjectArea project.id (Maybe.withDefault "" area)) dropped
+
+                Nothing ->
+                    ( { model | subprojectDropTarget = Nothing }, Cmd.none )
 
         SelectProject projectId ->
             selectProject projectId model
@@ -747,7 +789,7 @@ savePreferences : Model -> ( Model, Cmd Msg )
 savePreferences model =
     send IgnoreReply
         (Command.SaveProjectPreferences
-            { columns = model.visibleColumns, showImages = model.showImages, groupByArea = model.groupByArea }
+            { columns = model.visibleColumns, showImages = model.showImages, columnsBy = model.columnsBy, sections = model.sections }
         )
         model
 
@@ -959,7 +1001,51 @@ viewBoard model =
             [ input [ type_ "search", placeholder "Search Projects", value model.search, onInput SearchChanged ] []
             , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.issuesOnly, onCheck ToggleIssues ] [], span [] [ text "Issues only" ] ]
-            , button [ classList [ ( "is-active", model.columnsOpen ) ], onClick ToggleColumns ] [ text "Columns" ]
+            , Ui.labelled "Columns"
+                (select [ tabindex 0, onInput (\raw -> SetColumnsBy (if raw == "area" then ColumnsByArea else ColumnsByStatus)) ]
+                    [ option [ value "status", selected (model.columnsBy == ColumnsByStatus) ] [ text "Columns: Status" ]
+                    , option [ value "area", selected (model.columnsBy == ColumnsByArea) ] [ text "Columns: Area" ]
+                    ]
+                )
+            , Ui.labelled "Sections"
+                (select
+                    [ tabindex 0
+                    , onInput
+                        (\raw ->
+                            SetSections
+                                (case raw of
+                                    "area" ->
+                                        SectionsByArea
+
+                                    "status" ->
+                                        SectionsByStatus
+
+                                    _ ->
+                                        NoSections
+                                )
+                        )
+                    ]
+                    (option [ value "none", selected (model.sections == NoSections) ] [ text "Sections: None" ]
+                        :: (case model.columnsBy of
+                                ColumnsByStatus ->
+                                    [ option [ value "area", selected (model.sections == SectionsByArea) ] [ text "Sections: Area" ] ]
+
+                                ColumnsByArea ->
+                                    [ option [ value "status", selected (model.sections == SectionsByStatus) ] [ text "Sections: Status" ] ]
+                           )
+                    )
+                )
+            , -- With area columns the statuses become a filter, so the picker says so.
+              button [ classList [ ( "is-active", model.columnsOpen ) ], onClick ToggleColumns ]
+                [ text
+                    (case model.columnsBy of
+                        ColumnsByStatus ->
+                            "Show columns"
+
+                        ColumnsByArea ->
+                            "Show statuses"
+                    )
+                ]
             , button
                 [ classList [ ( "is-active", model.selecting ) ]
                 , attribute "aria-pressed" (Ui.boolAttribute model.selecting)
@@ -968,8 +1054,6 @@ viewBoard model =
                 [ text "Select" ]
             , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.showImages, onCheck ToggleImages ] [], span [] [ text "Images" ] ]
-            , label [ class "dg-toolbar-toggle" ]
-                [ input [ type_ "checkbox", checked model.groupByArea, onCheck ToggleGroupByArea ] [], span [] [ text "Group by area" ] ]
             , label [ class "dg-toolbar-toggle" ]
                 [ input [ type_ "checkbox", checked model.showSubprojects, onCheck ToggleSubprojects ] [], span [] [ text "Sub-projects" ] ]
             ]
@@ -984,18 +1068,108 @@ viewBoard model =
           else
             text ""
         , div [ class "dg-board dg-project-board", attribute "role" "list" ]
-            (ProjectStatus.board
-                |> List.filter (\status -> List.member status model.visibleColumns)
-                |> List.map
-                    (\status ->
-                        if isSecondaryColumn status && not (List.member status model.expandedColumns) then
-                            viewCollapsedColumn model status
+            (case model.columnsBy of
+                ColumnsByStatus ->
+                    ProjectStatus.board
+                        |> List.filter (\status -> List.member status model.visibleColumns)
+                        |> List.map
+                            (\status ->
+                                if isSecondaryColumn status && not (List.member status model.expandedColumns) then
+                                    viewCollapsedColumn model status
 
-                        else
-                            viewProjectColumn model status
-                    )
+                                else
+                                    viewProjectColumn model status
+                            )
+
+                ColumnsByArea ->
+                    viewAreaColumns model
             )
         ]
+
+
+{-| One column per area, holding the Projects of the statuses shown. Dropping a
+top-level Project on another column moves it to that area; sub-projects share
+their top-level Project's area and stay put.
+-}
+viewAreaColumns : Model -> List (Html Msg)
+viewAreaColumns model =
+    let
+        projects =
+            visibleProjects model
+                |> List.filter (\project -> List.member project.status model.visibleColumns)
+                |> List.sortWith (\left right -> compare (statusRank left.status) (statusRank right.status) |> thenCompare (Hierarchy.compareByOrder left right))
+
+        columns =
+            byArea model.snapshot.projects projects
+    in
+    if List.isEmpty columns then
+        [ div [ class "dg-empty" ] [ text "No Projects in the statuses shown." ] ]
+
+    else
+        List.map (viewAreaColumn model) columns
+
+
+viewAreaColumn : Model -> ( Maybe String, List Project ) -> Html Msg
+viewAreaColumn model ( area, projects ) =
+    let
+        issues =
+            projects |> List.filter (\project -> (projectMeta project.id model).actionIssue /= Nothing) |> List.length
+    in
+    section
+        [ class "dg-column dg-project-column"
+        , attribute "data-column" (Maybe.withDefault "" area)
+        , dragOver
+        , on "drop" (Decode.succeed (DropOnArea area))
+        ]
+        [ header [ class "dg-column-header" ]
+            [ span [] [ text (Maybe.withDefault "No area" area) ]
+            , span [ class "dg-project-column-counts" ]
+                (text (Ui.plural (List.length projects) "Project")
+                    :: (if issues > 0 then
+                            [ span [ class "dg-project-column-health" ] [ text (Ui.plural issues "issue") ] ]
+
+                        else
+                            []
+                       )
+                )
+            ]
+        , div [ class "dg-card-list" ]
+            (case model.sections of
+                SectionsByStatus ->
+                    ProjectStatus.board
+                        |> List.filterMap
+                            (\status ->
+                                case List.filter (\project -> project.status == status) projects of
+                                    [] ->
+                                        Nothing
+
+                                    inStatus ->
+                                        Just (viewCardSection model (ProjectStatus.label status) inStatus)
+                            )
+
+                _ ->
+                    List.map (viewProjectCard model) projects
+            )
+        ]
+
+
+statusRank : ProjectStatus -> Int
+statusRank status =
+    ProjectStatus.board
+        |> List.indexedMap Tuple.pair
+        |> List.filter (\( _, candidate ) -> candidate == status)
+        |> List.head
+        |> Maybe.map Tuple.first
+        |> Maybe.withDefault 99
+
+
+thenCompare : Order -> Order -> Order
+thenCompare next first =
+    if first == EQ then
+        next
+
+    else
+        first
 
 
 viewColumnPicker : Model -> Html Msg
@@ -1119,8 +1293,9 @@ viewProjectColumn model status =
             (if List.isEmpty projects then
                 [ div [ class "dg-empty-row" ] [ text ("No " ++ String.toLower (ProjectStatus.label status) ++ " Projects.") ] ]
 
-             else if model.groupByArea then
-                List.map (viewAreaGroup model) (groupByArea model.snapshot.projects projects)
+             else if model.sections == SectionsByArea then
+                List.map (\( area, inArea ) -> viewCardSection model (Maybe.withDefault "No area" area) inArea)
+                    (byArea model.snapshot.projects projects)
 
              else
                 List.map (viewProjectCard model) projects
@@ -1132,8 +1307,8 @@ viewProjectColumn model status =
 alphabetically, ignoring case, with Projects that have none last. A sub-project
 sits under its top-level Project's area.
 -}
-groupByArea : List Project -> List Project -> List ( Maybe String, List Project )
-groupByArea allProjects projects =
+byArea : List Project -> List Project -> List ( Maybe String, List Project )
+byArea allProjects projects =
     let
         areaOf =
             Hierarchy.area allProjects
@@ -1156,12 +1331,14 @@ groupByArea allProjects projects =
            )
 
 
-viewAreaGroup : Model -> ( Maybe String, List Project ) -> Html Msg
-viewAreaGroup model ( area, projects ) =
-    section [ class "dg-project-area-group" ]
-        (h3 [ class "dg-project-area-heading" ]
-            [ span [] [ text (Maybe.withDefault "No area" area) ]
-            , span [ class "dg-project-area-count" ] [ text (String.fromInt (List.length projects)) ]
+{-| One section of a column: a heading with its count, then its cards in order.
+-}
+viewCardSection : Model -> String -> List Project -> Html Msg
+viewCardSection model heading projects =
+    section [ class "dg-board-section" ]
+        (h3 [ class "dg-board-section-heading" ]
+            [ span [] [ text heading ]
+            , span [ class "dg-board-section-count" ] [ text (String.fromInt (List.length projects)) ]
             ]
             :: List.map (viewProjectCard model) projects
         )
@@ -1198,7 +1375,14 @@ viewProjectCard model project =
                 NoOp
             )
          ]
-            ++ rankDropAttributes model project
+            ++ (case model.columnsBy of
+                    ColumnsByStatus ->
+                        rankDropAttributes model project
+
+                    -- In area columns a drop changes the area, not the order.
+                    ColumnsByArea ->
+                        []
+               )
         )
         [ if model.showImages && not (String.isEmpty meta.imageUrl) then
             div [ class "dg-project-card-image" ] [ img [ src meta.imageUrl, alt "" ] [] ]
@@ -1234,7 +1418,8 @@ viewProjectCard model project =
 
           else
             text ""
-        , if model.groupByArea then
+        , -- The area already heads the column or section the card sits in.
+          if model.columnsBy == ColumnsByArea || model.sections == SectionsByArea then
             text ""
 
           else
@@ -2414,7 +2599,8 @@ emptyModel message =
     , issuesOnly = False
     , showSubprojects = False
     , showImages = False
-    , groupByArea = False
+    , columnsBy = ColumnsByStatus
+    , sections = NoSections
     , visibleColumns = ProjectStatus.board
     , columnsOpen = False
     , selecting = False

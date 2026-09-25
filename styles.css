@@ -950,13 +950,13 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }
-.dg-project-area-group {
+.dg-board-section {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.dg-project-area-group + .dg-project-area-group { margin-top: 8px; }
-.dg-project-area-heading {
+.dg-board-section + .dg-board-section { margin-top: 8px; }
+.dg-board-section-heading {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -969,7 +969,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   letter-spacing: .08em;
   text-transform: uppercase;
 }
-.dg-project-area-count { font-variant-numeric: tabular-nums; letter-spacing: normal; }
+.dg-board-section-count { font-variant-numeric: tabular-nums; letter-spacing: normal; }
 .dg-project-tags {
   display: flex;
   flex-wrap: wrap;

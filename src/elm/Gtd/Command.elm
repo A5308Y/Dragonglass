@@ -82,7 +82,12 @@ type Command
     | RemoveProjectLink ProjectId String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
-    | SaveProjectPreferences { columns : List ProjectStatus, showImages : Bool, groupByArea : Bool }
+    | SaveProjectPreferences
+        { columns : List ProjectStatus
+        , showImages : Bool
+        , columnsBy : Settings.ProjectColumnsBy
+        , sections : Settings.ProjectSections
+        }
     | ReviewSomedayProject ProjectId String
     | OpenSomedayReview
       -- Pomodoro
@@ -476,7 +481,8 @@ encode command =
             object "save-project-preferences"
                 [ ( "columns", Encode.list ProjectStatus.encode preferences.columns )
                 , ( "showImages", Encode.bool preferences.showImages )
-                , ( "groupByArea", Encode.bool preferences.groupByArea )
+                , ( "columnsBy", Encode.string (Settings.projectColumnsByKey preferences.columnsBy) )
+                , ( "sections", Encode.string (Settings.projectSectionsKey preferences.sections) )
                 ]
 
         ReviewSomedayProject projectId activateAt ->

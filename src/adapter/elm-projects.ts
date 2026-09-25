@@ -253,7 +253,8 @@ export class ElmProjectsHost {
           ...this.services.getSettings(),
           projectBoardColumns: command.columns,
           showProjectBoardImages: command.showImages,
-          groupProjectBoardByArea: command.groupByArea,
+          projectBoardColumnsBy: command.columnsBy,
+          projectBoardSections: command.sections,
         }, false);
         return;
       case "open-file": {

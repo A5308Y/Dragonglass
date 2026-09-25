@@ -11,6 +11,7 @@ describe("Default settings", () => {
   });
 
   it("does not group the Project board by area initially", () => {
-    expect(defaultSettings().groupProjectBoardByArea).toBe(false);
+    expect(defaultSettings().projectBoardColumnsBy).toBe("status");
+    expect(defaultSettings().projectBoardSections).toBe("none");
   });
 });

@@ -129,6 +129,11 @@ export default class DragonglassGtdPlugin extends Plugin {
         : defaults.defaultProjectImage,
       savedViews: Array.isArray(saved?.savedViews) ? migrateSavedViews(saved.savedViews) : defaults.savedViews,
       defaultActionStatus: isActionStatus(saved?.defaultActionStatus) ? saved.defaultActionStatus : defaults.defaultActionStatus,
+      projectBoardColumnsBy: saved?.projectBoardColumnsBy === "area" ? "area" : "status",
+      // "Group by area" was the first form of area sections.
+      projectBoardSections: saved?.projectBoardSections === "area" || saved?.projectBoardSections === "status"
+        ? saved.projectBoardSections
+        : (saved as { groupProjectBoardByArea?: unknown } | null)?.groupProjectBoardByArea === true ? "area" : "none",
       weeklyReviewDay: Number.isInteger(saved?.weeklyReviewDay) && saved!.weeklyReviewDay! >= 0 && saved!.weeklyReviewDay! <= 6
         ? saved!.weeklyReviewDay!
         : defaults.weeklyReviewDay,
