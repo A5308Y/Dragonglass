@@ -317,7 +317,7 @@ export class MailService {
       hasAttachment: summary.hasAttachment,
     };
     const mailLink = account.appleMailLink ? appleMailLink(message.messageId) : undefined;
-    await this.repository.createIdentifiedInboxItem(mailItemTitle(message), mailItemNote(message, account.label, mailLink));
+    await this.repository.createIdentifiedInboxItem(mailItemTitle(message), mailItemNote(message, account.label, mailLink), message.messageId);
   }
 
   private async openSession(account: MailAccount, password: string): Promise<ImapConnection> {

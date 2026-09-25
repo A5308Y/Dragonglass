@@ -86,6 +86,7 @@ type alias InboxItem =
     , file : File
     , resourceUrl : String
     , legacyAction : Bool
+    , messageId : Maybe String
     }
 
 
@@ -275,13 +276,14 @@ projectDecoder =
 
 inboxItemDecoder : Decoder InboxItem
 inboxItemDecoder =
-    Decode.map6 InboxItem
+    Decode.map7 InboxItem
         (Decode.field "id" Decode.string)
         (Decode.field "title" Decode.string)
         (Decode.field "created" Decode.string)
         (Decode.field "file" fileDecoder)
         (optionalField "resourceUrl" Decode.string "")
         (optionalField "legacyAction" Decode.bool False)
+        (optionalField "messageId" (Decode.map Just Decode.string) Nothing)
 
 
 issueDecoder : Decoder Issue

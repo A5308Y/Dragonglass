@@ -15,6 +15,7 @@ type Command
     | OpenFile String
     | ReadInboxBody InboxItemId
     | TrashInboxItem InboxItemId
+    | OpenMail InboxItemId
     | ProcessInbox InboxItemId Disposition InboxInput
 
 
@@ -22,6 +23,7 @@ type Disposition
     = CreateNextAction
     | FileAsReference
     | ParkAsSomeday
+    | ParkAsBacklog
 
 
 type alias InboxInput =
@@ -55,6 +57,9 @@ encode command =
             TrashInboxItem itemId ->
                 Base.TrashInboxItem itemId
 
+            OpenMail itemId ->
+                Base.OpenMail itemId
+
             ProcessInbox itemId disposition input ->
                 Base.ProcessInbox itemId (dispositionToBase disposition) input
         )
@@ -71,3 +76,6 @@ dispositionToBase disposition =
 
         ParkAsSomeday ->
             Base.ParkAsSomeday
+
+        ParkAsBacklog ->
+            Base.ParkAsBacklog

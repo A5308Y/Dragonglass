@@ -39,6 +39,8 @@ export interface InboxItem {
   created: string;
   legacyAction?: boolean;
   raw?: boolean;
+  /** The `Message-ID` of the email this Item was imported from, which links back to it. */
+  messageId?: string;
 }
 
 export interface Action {

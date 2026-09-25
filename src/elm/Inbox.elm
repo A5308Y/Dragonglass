@@ -69,6 +69,7 @@ type alias Model =
     , energy : Maybe Energy
     , schedule : ScheduleFields
     , someday : Bool
+    , backlog : Bool
     , fileOriginal : Bool
     , requests : Requests Pending
     , error : Maybe String
@@ -93,6 +94,7 @@ type Msg
     | ScheduledStartChanged String
     | ScheduledDurationChanged String
     | SetSomeday Bool
+    | SetBacklog Bool
     | SetFileOriginal Bool
     | DeleteItem InboxItemId
     | ProcessItem
@@ -156,6 +158,7 @@ initialModel snapshot =
     , energy = Nothing
     , schedule = { allDay = False, start = "", duration = String.fromInt snapshot.settings.defaultDurationMinutes }
     , someday = False
+    , backlog = False
     , fileOriginal = False
     , requests = Host.noRequests
     , error = Nothing
@@ -264,8 +267,13 @@ update msg model =
             ( { model | schedule = { schedule | duration = duration } }, Cmd.none )
 
 
+        -- Someday/Maybe and Backlog both park the Project instead of activating it, so
+        -- at most one of them is on.
         SetSomeday someday ->
-            ( { model | someday = someday }, Cmd.none )
+            ( { model | someday = someday, backlog = model.backlog && not someday }, Cmd.none )
+
+        SetBacklog backlog ->
+            ( { model | backlog = backlog, someday = model.someday && not backlog }, Cmd.none )
 
         SetFileOriginal fileOriginal ->
             ( { model | fileOriginal = fileOriginal }, Cmd.none )
@@ -401,6 +409,7 @@ resetCurrent model =
                     , energy = Nothing
                     , schedule = { allDay = False, start = "", duration = String.fromInt model.snapshot.settings.defaultDurationMinutes }
                     , someday = False
+                    , backlog = False
                     , fileOriginal = False
                     , error = Nothing
                 }
@@ -798,10 +807,24 @@ inboxRow busy item =
             , span [ class "dg-inbox-meta" ] [ text (itemMeta item) ]
             ]
         , div [ class "dg-inbox-row-actions" ]
-            [ button [ class "mod-cta", Html.Attributes.disabled (Set.member item.id busy), onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
-            , button [ class "mod-warning", Html.Attributes.disabled (Set.member item.id busy), onClick (DeleteItem item.id) ] [ text "Delete" ]
-            ]
+            (mailButton item
+                ++ [ button [ class "mod-cta", Html.Attributes.disabled (Set.member item.id busy), onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
+                   , button [ class "mod-warning", Html.Attributes.disabled (Set.member item.id busy), onClick (DeleteItem item.id) ] [ text "Delete" ]
+                   ]
+            )
         ]
+
+
+{-| For an Item imported from email, a way back to the message in Apple Mail.
+-}
+mailButton : InboxItem -> List (Html Msg)
+mailButton item =
+    case item.messageId of
+        Just _ ->
+            [ button [ class "dg-mail-open", onClick (Send IgnoreReply (Command.OpenMail item.id)) ] [ text "✉ Open in Mail" ] ]
+
+        Nothing ->
+            []
 
 
 itemMeta : InboxItem -> String
@@ -899,15 +922,19 @@ itemCard model item =
     section [ class "dg-processor-card" ]
         [ div [ class "dg-processor-heading" ]
             [ div [] [ h3 [] [ text item.title ], span [] [ text (itemMeta item) ] ]
-            , button [ onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ]
-                [ text
-                    (if item.file.extension == "md" then
-                        "Open note"
+            , div [ class "dg-processor-heading-actions" ]
+                (mailButton item
+                    ++ [ button [ onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ]
+                            [ text
+                                (if item.file.extension == "md" then
+                                    "Open note"
 
-                     else
-                        "Open file"
-                    )
-                ]
+                                 else
+                                    "Open file"
+                                )
+                            ]
+                       ]
+                )
             ]
         , if isAudio item.file.extension then
             audio [ class "dg-inbox-audio", controls True, preload "metadata", src item.resourceUrl ] []
@@ -938,8 +965,12 @@ processingForm model =
                 "Project"
                 "Optional. Select an existing Project, or type a new name or “Parent > New sub-project”."
                 [ Picker.view (projectPicker model) (projectSuggestions model) model.project
-                , label [ class "dg-processing-inline-toggle" ]
-                    [ input [ type_ "checkbox", checked model.someday, onCheck SetSomeday ] [], span [] [ text "Someday/Maybe" ] ]
+                , div [ class "dg-processing-toggles" ]
+                    [ label [ class "dg-processing-inline-toggle" ]
+                        [ input [ type_ "checkbox", checked model.backlog, onCheck SetBacklog ] [], span [] [ text "Backlog" ] ]
+                    , label [ class "dg-processing-inline-toggle" ]
+                        [ input [ type_ "checkbox", checked model.someday, onCheck SetSomeday ] [], span [] [ text "Someday/Maybe" ] ]
+                    ]
                 ]
             , processingField True
                 "Project Vision"
@@ -1163,7 +1194,21 @@ disposition model =
         optionalReady =
             String.isEmpty action || actionIsReady model
     in
-    if model.someday then
+    if model.backlog then
+        { operation = ParkAsBacklog
+        , label =
+            (case project of
+                Just found ->
+                    "Move " ++ found.title ++ " to Backlog"
+
+                Nothing ->
+                    "Create Backlog Project"
+            )
+                ++ actionSuffix
+        , ready = optionalReady
+        }
+
+    else if model.someday then
         { operation = ParkAsSomeday
         , label =
             (case project of
@@ -1300,7 +1345,7 @@ selectedProject model =
 
 fileOriginalHint : Model -> InboxItem -> String
 fileOriginalHint model item =
-    if model.someday then
+    if model.someday || model.backlog then
         "Keeps this capture as Project support material. Otherwise it goes to Obsidian's trash once the Project exists."
 
     else if item.file.extension == "md" then

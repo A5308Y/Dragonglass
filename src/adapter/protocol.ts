@@ -430,7 +430,8 @@ type ElmNonMenuCommand =
   | { type: "open-file"; path: string }
   | { type: "read-inbox-body"; itemId: string }
   | { type: "trash-inbox-item"; itemId: string }
-  | { type: "process-inbox"; itemId: string; operation: "next-action" | "file" | "someday"; input: ElmInboxProcessingInput }
+  | { type: "process-inbox"; itemId: string; operation: "next-action" | "file" | "someday" | "backlog"; input: ElmInboxProcessingInput }
+  | { type: "open-mail"; itemId: string }
   | { type: "save-new-action"; input: ElmNewActionInput }
   | { type: "save-action"; actionId: string; changes: ElmActionChanges }
   | { type: "schedule-action"; actionId: string; schedule: ElmScheduleInput }
@@ -498,7 +499,7 @@ export const SURFACE_COMMANDS = {
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
   ],
-  inbox: ["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox"],
+  inbox: ["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail"],
   feeds: ["refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard", "open-link", "open-inbox"],
   projectReview: [
     "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
@@ -761,10 +762,11 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.path === "string";
     case "read-inbox-body":
     case "trash-inbox-item":
+    case "open-mail":
       return typeof value.itemId === "string";
     case "process-inbox":
       return typeof value.itemId === "string"
-        && ["next-action", "file", "someday"].includes(String(value.operation))
+        && ["next-action", "file", "someday", "backlog"].includes(String(value.operation))
         && isInboxInput(value.input);
     case "save-new-action":
       return isNewActionInput(value.input);

@@ -166,6 +166,8 @@ export function parseInboxItem(frontmatter: Frontmatter, file: TFile, legacyActi
     file,
   };
   if (legacyAction) item.legacyAction = true;
+  const messageId = optionalString(frontmatter, "message_id");
+  if (messageId) item.messageId = messageId;
   return item;
 }
 

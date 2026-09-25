@@ -1335,6 +1335,9 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-processing-inline-toggle > input { order: 0; }
 /* Sitting under a field's input rather than beside its label, it should not span the whole row. */
 .dg-processing-field > .dg-processing-inline-toggle { align-self: flex-start; }
+/* Backlog and Someday/Maybe sit together: both park the Project, and at most one is on. */
+.dg-processing-field > .dg-processing-toggles { display: flex; flex-wrap: wrap; gap: 6px 16px; align-self: flex-start; }
+.dg-processor-heading-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .dg-processing-field > small,
 .dg-inbox-file-toggle > small {
   color: var(--text-faint);

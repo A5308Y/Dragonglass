@@ -114,6 +114,7 @@ type Command
       -- Inbox
     | ReadInboxBody InboxItemId
     | TrashInboxItem InboxItemId
+    | OpenMail InboxItemId
     | ProcessInbox InboxItemId Disposition InboxInput
     | CaptureInboxItem String
       -- Pasted lists
@@ -133,12 +134,13 @@ type MenuEntry
     | MenuSeparator
 
 
-{-| The four dispositions the Inbox processor can reach.
+{-| The dispositions the Inbox processor can reach.
 -}
 type Disposition
     = CreateNextAction
     | FileAsReference
     | ParkAsSomeday
+    | ParkAsBacklog
 
 
 type alias InboxInput =
@@ -572,6 +574,9 @@ encode command =
         TrashInboxItem itemId ->
             object "trash-inbox-item" [ ( "itemId", Encode.string itemId ) ]
 
+        OpenMail itemId ->
+            object "open-mail" [ ( "itemId", Encode.string itemId ) ]
+
         ProcessInbox itemId disposition input ->
             object "process-inbox"
                 [ ( "itemId", Encode.string itemId )
@@ -653,6 +658,9 @@ dispositionKey disposition =
 
         ParkAsSomeday ->
             "someday"
+
+        ParkAsBacklog ->
+            "backlog"
 
 
 importKindKey : ImportKind -> String

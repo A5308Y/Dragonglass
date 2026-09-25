@@ -52,8 +52,9 @@ export class GtdRepository {
    * wants to address the Item immediately does not have to wait for the metadata
    * cache to catch up with the file it just wrote.
    */
-  async createIdentifiedInboxItem(title: string, details = ""): Promise<InboxItem> {
-    return this.createInboxRecord(title, details);
+  /** An Inbox Item from an outside source; `messageId` marks one imported from email. */
+  async createIdentifiedInboxItem(title: string, details = "", messageId = ""): Promise<InboxItem> {
+    return this.createInboxRecord(title, details, messageId);
   }
 
   async createClarifiedAction(input: ActionInput): Promise<void> {
@@ -82,7 +83,7 @@ export class GtdRepository {
     return created;
   }
 
-  private async createInboxRecord(title: string, details = ""): Promise<InboxItem> {
+  private async createInboxRecord(title: string, details = "", messageId = ""): Promise<InboxItem> {
     const id = createUlid();
     const cleanTitle = title.trim();
     if (!cleanTitle) throw new Error("An Inbox Item title is required.");
@@ -93,10 +94,11 @@ export class GtdRepository {
       id,
       title: cleanTitle,
       created: localDate(),
+      ...(messageId ? { message_id: messageId } : {}),
     };
     const body = `# ${cleanTitle}\n\n${details.trim()}${details.trim() ? "\n" : ""}`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
-    return { type: "gtd-inbox-item", id, title: cleanTitle, created: String(frontmatter.created), file };
+    return { type: "gtd-inbox-item", id, title: cleanTitle, created: String(frontmatter.created), file, ...(messageId ? { messageId } : {}) };
   }
 
   private async convertInboxItemToAction(item: InboxItem, input: ActionInput, resolvedProject?: Project): Promise<void> {
@@ -261,13 +263,25 @@ export class GtdRepository {
   }
 
   async processInboxAsSomedayProject(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
+    return this.processInboxAsParkedProject(itemOrId, input, "someday");
+  }
+
+  /**
+   * Parks the Item as a Project that is not Active yet: Someday/Maybe for what is not
+   * committed to, Backlog for what is committed to but not started. An existing Project
+   * moves to that status; without one, the Item's own title names the new Project.
+   */
+  async processInboxAsParkedProject(
+    itemOrId: InboxItem | string,
+    input: InboxProcessingInput,
+    status: "someday" | "backlog",
+  ): Promise<void> {
     const item = this.resolveInboxItem(itemOrId);
     const title = input.nextAction?.trim() ?? "";
     const context = input.context?.trim() ?? "";
     if (title && actionRequiresContext(input.status ?? "next") && !context) throw new Error("A context is required when creating an Action.");
-    // Someday/Maybe is for what is not actionable yet, so the Item's own title names the Project.
-    const project = await this.prepareProcessingProject(input, "someday", title || item.title, true);
-    if (!project) throw new Error("Could not create the Someday/Maybe Project.");
+    const project = await this.prepareProcessingProject(input, status, title || item.title, true);
+    if (!project) throw new Error(`Could not create the ${status === "someday" ? "Someday/Maybe" : "Backlog"} Project.`);
 
     if (title) await this.createActionFile(title, processingActionInput(title, context, input, project), item.created, project);
     if (input.fileOriginal) await this.fileInboxItemToProject(item, project);

@@ -258,6 +258,14 @@ describe("Elm adapter protocol", () => {
       operation: "next-action",
       input: { fileOriginal: "false" },
     }))).toBeNull();
+    expect(parseInboxCommand(envelope({
+      type: "process-inbox",
+      itemId: "I1",
+      operation: "backlog",
+      input: { projectTitle: "Garden", fileOriginal: false },
+    }))?.command.type).toBe("process-inbox");
+    expect(parseInboxCommand(envelope({ type: "open-mail", itemId: "I1" }))?.command.type).toBe("open-mail");
+    expect(parseInboxCommand(envelope({ type: "open-mail" }))).toBeNull();
 
     expect(parseActionBoardCommand(envelope({ type: "set-action-priorities", actionIds: ["A2", "A1"] }))?.command.type)
       .toBe("set-action-priorities");
