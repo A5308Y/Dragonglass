@@ -31,4 +31,6 @@ export interface GtdServices {
   delegateProject: (projectId: string) => Promise<void>;
   /** Opens the Delegate dialog filled in from an earlier run, to start it again. */
   rerunAgentRun: (runId: string) => Promise<void>;
+  /** Asks, then deletes an ended agent run, and its results if wanted. */
+  deleteAgentRun: (runId: string) => Promise<void>;
 }

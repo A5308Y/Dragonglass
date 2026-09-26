@@ -25,6 +25,7 @@ import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE
 import { PomodoroService } from "./pomodoro/pomodoro-service";
 import { AgentService } from "./agent/agent-service";
 import { delegateProject } from "./ui/delegate";
+import { confirmDeleteAgentRun } from "./ui/delete-agent-run";
 import type { PomodoroSession } from "./domain/pomodoro";
 
 export default class DragonglassGtdPlugin extends Plugin {
@@ -87,6 +88,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
       openPomodoro: (projectId) => void this.openPomodoro(projectId),
       delegateProject: (projectId) => delegateProject(this.app, this.agent, projectId, this.settings.agent),
+      deleteAgentRun: (runId) => confirmDeleteAgentRun(this.app, this.agent, runId),
       rerunAgentRun: async (runId) => {
         const previous = await this.agent.rerunDefaults(runId);
         await delegateProject(this.app, this.agent, previous.projectId, this.settings.agent, previous);

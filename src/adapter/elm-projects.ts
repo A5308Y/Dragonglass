@@ -305,6 +305,8 @@ export class ElmProjectsHost {
         return this.services.agent.stop(command.runId);
       case "rerun-agent-run":
         return this.services.rerunAgentRun(command.runId);
+      case "delete-agent-run":
+        return this.services.deleteAgentRun(command.runId);
     }
     return assertNever(command);
   }

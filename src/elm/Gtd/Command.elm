@@ -95,6 +95,7 @@ type Command
     | AnswerAgentQuestion String String String
     | StopAgentRun String
     | RerunAgentRun String
+    | DeleteAgentRun String
       -- Pomodoro
     | OpenPomodoro ProjectId
     | StartPomodoro { projectId : ProjectId, intention : String, focusActionIds : List ActionId, minutes : Int }
@@ -512,6 +513,9 @@ encode command =
 
         RerunAgentRun runId ->
             object "rerun-agent-run" [ ( "runId", Encode.string runId ) ]
+
+        DeleteAgentRun runId ->
+            object "delete-agent-run" [ ( "runId", Encode.string runId ) ]
 
         OpenPomodoro projectId ->
             object "open-pomodoro" [ ( "projectId", Encode.string projectId ) ]

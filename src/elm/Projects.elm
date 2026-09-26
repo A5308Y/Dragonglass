@@ -1714,6 +1714,12 @@ viewAgentRun model run =
 
                   else
                     text ""
+                , -- Ended runs only; the host asks first, since the run folder has no trash.
+                  if model.agent.available && not active then
+                    button [ class "mod-warning", onClick (Send IgnoreReply (Command.DeleteAgentRun run.id)) ] [ text "Delete…" ]
+
+                  else
+                    text ""
                 ]
             ]
         , div [] (List.map (viewAgentQuestion model run) run.questions)

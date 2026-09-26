@@ -71,6 +71,20 @@ const MAX_VAULT_BYTES = 4 * 1024 * 1024 * 1024;
 const POLL_ACTIVE_MS = 3_000;
 const POLL_IDLE_MS = 60_000;
 const STALE_START_MS = 30 * 60_000;
+/**
+ * Deleted runs, one JSON line each, in the runs folder: their cost still counts, and their
+ * Waiting Actions stay out of later runs' material.
+ */
+const DELETED_RUNS_FILE = "deleted-runs.jsonl";
+
+interface DeletedRun {
+  runId: string;
+  projectId: string;
+  costUsd: number | null;
+  actionId?: string;
+  deletedAt: string;
+}
+
 /** How often leftover Docker networks and proxies of ended runs are looked for. */
 const CLEANUP_INTERVAL_MS = 10 * 60_000;
 /** How much of a run's activity log is shown, and how much of the file is read to find it. */
@@ -129,6 +143,7 @@ interface HostNotes {
 
 export class AgentService {
   private runs: AgentRunRecord[] = [];
+  private deleted: DeletedRun[] = [];
   private running = new Set<string>();
   private readonly listeners = new Set<() => void>();
   private readonly announced = new Set<string>();
@@ -181,7 +196,7 @@ export class AgentService {
   }
 
   costs(): Map<string, { own: number; tree: number }> {
-    return agentCosts(this.runs, this.repository.index.getSnapshot().projects);
+    return agentCosts([...this.runs, ...this.deleted], this.repository.index.getSnapshot().projects);
   }
 
   runsDirectory(): string {
@@ -196,7 +211,7 @@ export class AgentService {
     const snapshot = this.repository.index.getSnapshot();
     // The Waiting Actions that stood for earlier runs are bookkeeping, not material: an agent
     // reading "Agent: …" Actions, done or not, could take them for its task list.
-    const agentActionIds = new Set(this.runs.flatMap((run) => (run.actionId ? [run.actionId] : [])));
+    const agentActionIds = new Set([...this.runs, ...this.deleted].flatMap((run) => (run.actionId ? [run.actionId] : [])));
     const agentActionPaths = new Set([...agentActionIds].flatMap((id) => {
       const action = snapshot.actionsById.get(id);
       return action ? [action.file.path] : [];
@@ -341,6 +356,35 @@ export class AgentService {
   }
 
   /** Stops a run; the agent records that it was stopped, and what it made so far is imported. */
+  /**
+   * Deletes an ended run's folder: its copy of the material, conversation and logs. With
+   * `withResults`, its results in the Project Material go to the vault's trash too. What
+   * it cost stays counted.
+   */
+  async deleteRun(runId: string, withResults: boolean): Promise<void> {
+    const node = requireNode();
+    const run = this.views().find((candidate) => candidate.id === runId);
+    if (!run || !/^[\w.-]+$/.test(runId)) throw new Error("This run no longer exists.");
+    if (["queued", "starting", "running", "waiting"].includes(run.status)) throw new Error("Stop the run before deleting it.");
+    const entry: DeletedRun = {
+      runId,
+      projectId: run.projectId,
+      costUsd: run.costUsd,
+      ...(run.actionId ? { actionId: run.actionId } : {}),
+      deletedAt: new Date().toISOString(),
+    };
+    await node.fs.appendFile(node.path.join(this.runsDirectory(), DELETED_RUNS_FILE), `${JSON.stringify(entry)}\n`);
+    if (withResults && run.importedTo) {
+      const folder = this.app.vault.getAbstractFileByPath(run.importedTo);
+      if (folder) await this.app.fileManager.trashFile(folder);
+    }
+    const composeFile = await this.composeFile().catch(() => "");
+    if (composeFile) await this.dockerQuietly(["compose", "-f", composeFile, "-p", composeProject(runId), "down", "--remove-orphans"]);
+    await node.fs.rm(node.path.join(this.runsDirectory(), runId), { recursive: true, force: true });
+    this.activityCache.delete(runId);
+    await this.scan();
+  }
+
   async stop(runId: string): Promise<void> {
     if (!/^[\w.-]+$/.test(runId)) throw new Error("Unknown run.");
     if (this.runs.find((run) => run.id === runId)?.queued) {
@@ -381,6 +425,7 @@ export class AgentService {
       names = [];
     }
     const runs = (await Promise.all(names.map((name) => this.readRun(name)))).filter((run): run is AgentRunRecord => run !== null);
+    this.deleted = await this.readDeletedRuns();
     runs.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
     // Only runs that may still be going need Docker asked about them. A start this session
@@ -473,6 +518,32 @@ export class AgentService {
       ...(host?.actionId ? { actionId: host.actionId } : {}),
       ...(host?.actionTitle ? { actionTitle: host.actionTitle } : {}),
     };
+  }
+
+  private async readDeletedRuns(): Promise<DeletedRun[]> {
+    const node = requireNode();
+    let text: string;
+    try {
+      text = await node.fs.readFile(node.path.join(this.runsDirectory(), DELETED_RUNS_FILE), "utf8");
+    } catch {
+      return [];
+    }
+    return text.split("\n").flatMap((line): DeletedRun[] => {
+      try {
+        const value = JSON.parse(line) as Partial<DeletedRun>;
+        return typeof value.runId === "string" && typeof value.projectId === "string"
+          ? [{
+            runId: value.runId,
+            projectId: value.projectId,
+            costUsd: typeof value.costUsd === "number" ? value.costUsd : null,
+            ...(typeof value.actionId === "string" ? { actionId: value.actionId } : {}),
+            deletedAt: String(value.deletedAt ?? ""),
+          }]
+          : [];
+      } catch {
+        return [];
+      }
+    });
   }
 
   /** The newest entries of a run's activity log, newest first. */

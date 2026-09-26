@@ -298,7 +298,10 @@ export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus):
  * Projects with a run anywhere in their tree appear. Runs without a known cost count
  * as nothing, which is why the numbers are estimates.
  */
-export function agentCosts(runs: readonly AgentRunRecord[], projects: readonly Project[]): Map<string, { own: number; tree: number }> {
+export function agentCosts(
+  runs: ReadonlyArray<Pick<AgentRunRecord, "projectId" | "costUsd">>,
+  projects: readonly Project[],
+): Map<string, { own: number; tree: number }> {
   const own = new Map<string, number>();
   for (const run of runs) {
     if (typeof run.costUsd === "number") own.set(run.projectId, (own.get(run.projectId) ?? 0) + run.costUsd);
