@@ -4,12 +4,13 @@ import { FeedService, type FeedFetchResult, type FeedSyncStatus } from "./feeds/
 import { MailService, type MailImportResult, type MailSyncStatus } from "./mail/mail-service";
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import { projectsDueForActivation } from "./domain/project-activation";
+import { ancestorsToActivate } from "./domain/project-tree";
 import { attention } from "./domain/attention";
 import { weeklyReviewFinished } from "./domain/weekly-review";
 import { unreadItems } from "./domain/feed";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { describeImport, normalizeMailPort } from "./domain/mail";
-import type { ActionStatus, GtdSettings, MailAccountSettings, ProjectStatus, SavedView } from "./domain/types";
+import type { ActionStatus, GtdSettings, MailAccountSettings, Project, ProjectStatus, SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
@@ -40,6 +41,9 @@ export default class DragonglassGtdPlugin extends Plugin {
     await this.loadSettings();
     this.index = new GtdIndex(this.app.vault, this.app.metadataCache, () => this.settings.inboxDirectory);
     this.repository = new GtdRepository(this.app, this.index, () => this.settings);
+    this.repository.onParentsActivated = (title, parents) => {
+      new Notice(`Created “${title}” as Active, so ${quotedTitles(parents)} above it ${parents.length === 1 ? "is" : "are"} Active now too.`);
+    };
     this.calendarSync = new GoogleCalendarSync(this.app, this.index, () => this.settings.googleCalendar);
     this.feeds = new FeedService(this.app, () => this.settings.feeds);
     this.mail = new MailService(
@@ -381,7 +385,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (correctedSupportPaths) new Notice(`Nested support material for ${correctedSupportPaths} Project${correctedSupportPaths === 1 ? "" : "s"}.`);
     if (failedSupportPaths) new Notice(`Could not correct support material for ${failedSupportPaths} Project${failedSupportPaths === 1 ? "" : "s"}.`);
     const count = this.index.getSnapshot().issues.length;
-    if (count) new Notice(`Dragonglass GTD found ${count} file${count === 1 ? "" : "s"} with invalid or duplicate metadata.`);
+    if (count) new Notice(`Dragonglass GTD found ${count} file${count === 1 ? "" : "s"} with problems.`);
   }
 
   private async activateScheduledProjects(): Promise<void> {
@@ -391,9 +395,17 @@ export default class DragonglassGtdPlugin extends Plugin {
       let failed = 0;
       for (const project of projectsDueForActivation(this.index.getSnapshot().projects)) {
         try {
+          // The date was chosen deliberately, so the Projects above follow it, even a
+          // finished one; the notice says which, since nobody was asked.
+          const parents = ancestorsToActivate(project.parentProjectId, this.index.getSnapshot().projectsById);
           // Keep activate_at as the calendar record of the automatic transition.
-          await this.repository.updateProject(project.id, { status: "active" });
+          await this.repository.updateProject(project.id, { status: "active" }, { reopenAncestors: true });
           activated += 1;
+          if (parents.length) {
+            const reopened = parents.filter((parent) => parent.status === "completed" || parent.status === "cancelled");
+            new Notice(`Activated “${project.title}” on schedule, and above it ${quotedTitles(parents)}`
+              + (reopened.length ? `, reopening ${quotedTitles(reopened)}.` : "."), 15_000);
+          }
         } catch {
           failed += 1;
         }
@@ -602,4 +614,8 @@ function migrateSavedViews(views: SavedView[]): SavedView[] {
       }),
       visibleColumns: view.visibleColumns?.filter((column) => column !== "inbox" && column !== "someday") ?? null,
     }));
+}
+
+function quotedTitles(projects: readonly Project[]): string {
+  return projects.map((project) => `“${project.title}”`).join(", ");
 }

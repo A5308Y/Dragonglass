@@ -36,6 +36,12 @@ import { GtdIndex } from "./gtd-index";
 const PROJECT_SUPPORT_ROOT = "Project Support Material";
 
 export class GtdRepository {
+  /**
+   * Told when creating an Active sub-project activated the Projects above it, which
+   * no view asked about; the plugin reports it. Status changes report their own.
+   */
+  onParentsActivated: ((title: string, parents: readonly Project[]) => void) | undefined;
+
   private queues = new Map<string, Promise<unknown>>();
 
   constructor(
@@ -367,6 +373,7 @@ export class GtdRepository {
     const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n${input.notes?.trim() ?? ""}\n\n## Support material\n\n\`${supportPath}/\`\n`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
     for (const ancestor of activating) await this.activateProjectFile(ancestor);
+    if (activating.length) this.onParentsActivated?.(title, activating);
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
     if (input.activateAt) project.activateAt = input.activateAt;
     if (completed) project.completed = completed;

@@ -94,6 +94,9 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   `src/ui/project-moves.ts`, which ask before reopening a finished parent
   (`reopenAncestors`) and offer one Undo for the cascade. Undo writes with
   `restoring`, which skips the rules to put the earlier state back exactly.
+- Writes that nobody was asked about report instead: creating an Active
+  sub-project calls `repository.onParentsActivated` (a notice from `main.ts`), and
+  scheduled activation reopens finished parents and names them in its notice.
 - Active Projects below an inactive one ("stranded") count as parked for the
   missing-Action rule and show up as index issues until fixed by hand.
 
