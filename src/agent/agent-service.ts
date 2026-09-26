@@ -362,8 +362,10 @@ export class AgentService {
     const runs = (await Promise.all(names.map((name) => this.readRun(name)))).filter((run): run is AgentRunRecord => run !== null);
     runs.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
-    // Only runs that may still be going need Docker asked about them.
-    const candidates = runs.filter((run) => !run.startError && run.importedTo === undefined && !run.starting);
+    // Only runs that may still be going need Docker asked about them. A start this session
+    // didn't launch was cut off by Obsidian closing, and may have come up nonetheless.
+    const orphanedStart = (run: AgentRunRecord) => Boolean(run.starting) && !this.launching.has(run.id);
+    const candidates = runs.filter((run) => !run.startError && run.importedTo === undefined && (!run.starting || orphanedStart(run)));
     if (candidates.length) {
       try {
         this.running = new Set((await this.docker(["ps", "--format", "{{.Names}}"])).split("\n").map((line) => line.trim()).filter(Boolean));
@@ -372,6 +374,16 @@ export class AgentService {
         this.runs = runs;
         this.notify();
         return;
+      }
+    }
+    for (const run of runs.filter(orphanedStart)) {
+      if (this.running.has(containerName(run.id))) {
+        delete run.starting;
+        await this.writeHostNotes(run.id, { starting: false });
+      } else if (!(Date.now() - Date.parse(run.createdAt) < STALE_START_MS)) {
+        delete run.starting;
+        run.startError = "it was still starting when Obsidian closed";
+        await this.writeHostNotes(run.id, { starting: false, startError: run.startError });
       }
     }
     this.runs = runs;
@@ -401,9 +413,6 @@ export class AgentService {
     const host = (await readJson(node, node.path.join(runDir, "host.json"))) as HostNotes | null;
     const questions = await readJsonFolder(node, node.path.join(runDir, "exchange", "questions"));
     const answered = new Set(await listJsonIds(node, node.path.join(runDir, "exchange", "answers")));
-    // A start that never finished, because Obsidian closed during it, would otherwise stay "starting".
-    const createdAt = typeof meta.createdAt === "string" ? Date.parse(meta.createdAt) : NaN;
-    const staleStart = Boolean(host?.starting) && !this.launching.has(name) && !(Date.now() - createdAt < STALE_START_MS);
     return {
       id: name,
       projectId: meta.projectId,
@@ -420,8 +429,8 @@ export class AgentService {
       openQuestions: questions
         .filter((question) => typeof question.id === "string" && typeof question.question === "string" && !answered.has(question.id))
         .map((question) => ({ id: String(question.id), question: String(question.question), askedAt: String(question.askedAt ?? "") })),
-      ...(host?.starting && !staleStart ? { starting: true } : {}),
-      ...(host?.startError ? { startError: host.startError } : staleStart ? { startError: "it was still starting when Obsidian closed" } : {}),
+      ...(host?.starting ? { starting: true } : {}),
+      ...(host?.startError ? { startError: host.startError } : {}),
       ...(host?.importedTo !== undefined ? { importedTo: host.importedTo } : {}),
       activity: await this.readActivity(name, node.path.join(runDir, "exchange", "activity.jsonl")),
       ...(host?.actionId ? { actionId: host.actionId } : {}),
