@@ -59,6 +59,17 @@ try {
   process.exit(2);
 }
 const runMeta = await readJson(path.join(INPUT, "run.json")) ?? {};
+// A failure before the loop starts, such as the model server being unreachable, still leaves a result.
+for (const event of ["uncaughtException", "unhandledRejection"]) {
+  process.on(event, async (error) => {
+    console.error(`Run stopped: ${error?.message || error}`);
+    await fs.writeFile(path.join(EXCHANGE, "result.json"), `${JSON.stringify({
+      project: runMeta.projectTitle ?? "", ...(runMeta.projectId ? { projectId: runMeta.projectId } : {}),
+      runtime: "local", subtype: "error_during_execution", error: String(error?.message || error), costUsd: 0,
+    }, null, 2)}\n`).catch(() => {});
+    process.exit(1);
+  });
+}
 const project = typeof runMeta.projectTitle === "string" && runMeta.projectTitle.trim()
   ? runMeta.projectTitle.trim()
   : briefProject(brief);

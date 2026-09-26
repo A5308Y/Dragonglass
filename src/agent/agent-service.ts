@@ -140,6 +140,8 @@ export interface DelegationPlan {
 }
 
 interface HostNotes {
+  /** The last error line of the container's output, saved when a run ends without a result. */
+  runnerError?: string;
   actionId?: string;
   actionTitle?: string;
   queued?: boolean;
@@ -517,6 +519,8 @@ export class AgentService {
       offline: meta.offline === true,
       wholeVault: meta.wholeVault === true,
       ...(typeof result?.subtype === "string" ? { resultSubtype: result.subtype } : {}),
+      ...(typeof result?.error === "string" && result.error ? { resultError: result.error } : {}),
+      ...(host?.runnerError ? { runnerError: host.runnerError } : {}),
       costUsd: typeof result?.costUsd === "number" ? result.costUsd : null,
       openQuestions: questions
         .filter((question) => typeof question.id === "string" && typeof question.question === "string" && !answered.has(question.id))
@@ -610,7 +614,8 @@ export class AgentService {
       const budgetUsd = typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd;
       const runEnv = env ?? await this.runEnv(runtime, meta.wholeVault === true, budgetUsd);
       await this.docker(
-        ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--rm", "--build", "--name", containerName(runId),
+        // Not --rm: the container is kept after it exits until its output has been saved (see finish).
+        ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--build", "--name", containerName(runId),
           runtime === "claude" ? "agent" : localHarnessService(localHarness(meta.harness))],
         { RUN_DIR: runDir, ...runEnv },
       );
@@ -631,6 +636,11 @@ export class AgentService {
   private async finish(run: AgentRunRecord): Promise<void> {
     this.finishing.add(run.id);
     try {
+      const runnerError = await this.saveRunnerLog(run);
+      if (runnerError && !run.resultSubtype) {
+        run.runnerError = runnerError;
+        await this.writeHostNotes(run.id, { runnerError });
+      }
       const composeFile = await this.composeFile().catch(() => "");
       if (composeFile) await this.dockerQuietly(["compose", "-f", composeFile, "-p", composeProject(run.id), "down", "--remove-orphans"]);
       const imported = await this.importOutbox(run);
@@ -652,6 +662,27 @@ export class AgentService {
       this.finishing.delete(run.id);
       await this.scan();
     }
+  }
+
+  /**
+   * Saves the ended container's console output to logs/runner.log, removes the container, and
+   * returns the output's last error line: the only trace of a runner that crashed before it
+   * could write a result.
+   */
+  private async saveRunnerLog(run: AgentRunRecord): Promise<string> {
+    const node = requireNode();
+    const container = containerName(run.id);
+    let output = "";
+    try {
+      output = await this.execWithErrors(await this.dockerPath(), ["logs", container]);
+    } catch {
+      // No container left, for runs started before their output was kept.
+    }
+    if (output) await node.fs.writeFile(node.path.join(this.runsDirectory(), run.id, "logs", "runner.log"), output);
+    await this.dockerQuietly(["rm", "-f", container]);
+    const lines = output.split("\n").map((line) => line.trim()).filter(Boolean);
+    return [...lines].reverse().find((line) => /error|exception|refused|denied|not found|cannot|can't/i.test(line))
+      ?? lines.at(-1) ?? "";
   }
 
   /**
@@ -817,8 +848,10 @@ export class AgentService {
   private async cleanUpDocker(runs: readonly AgentRunRecord[]): Promise<void> {
     try {
       const composeFile = await this.composeFile();
+      // A run that has ended but isn't finished yet still needs its container, for its output.
       const active = new Set(runs
-        .filter((run) => run.starting || this.launching.has(run.id) || this.running.has(containerName(run.id)))
+        .filter((run) => run.starting || this.launching.has(run.id) || this.running.has(containerName(run.id))
+          || (run.importedTo === undefined && !run.startError && !run.queued))
         .map((run) => composeProject(run.id)));
       // Docker's name filters match anywhere in the name, so the prefix is checked here. Compose
       // names a project's networks "<project>_<network>" and its containers "<project>-<service>-<n>";
@@ -887,6 +920,17 @@ export class AgentService {
     } catch {
       // Cleaning up after a run that already ended; nothing to report.
     }
+  }
+
+  /** Like exec, but returns what the program wrote to both its output and its error output. */
+  private execWithErrors(file: string, args: string[]): Promise<string> {
+    const node = requireNode();
+    return new Promise((resolve, reject) => {
+      node.child.execFile(file, args, { maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error && !stdout && !stderr) reject(error);
+        else resolve(`${String(stdout)}${stderr ? `\n${String(stderr)}` : ""}`.trim());
+      });
+    });
   }
 
   private exec(file: string, args: string[], env: Record<string, string> = {}): Promise<string> {

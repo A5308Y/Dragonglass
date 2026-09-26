@@ -290,6 +290,10 @@ describe("Run status and costs", () => {
     expect(agentRunStatusText(run({ startError: "Docker is not running" }), "failed")).toBe("Could not start: Docker is not running");
     expect(agentRunStatusText(run({ resultSubtype: "error_max_time" }), "failed")).toBe("Stopped at its time limit");
     expect(agentRunStatusText(run({ resultSubtype: "error_repeating" }), "failed")).toBe("Stopped: it kept repeating the same step");
+    expect(agentRunStatusText(run({ resultSubtype: "error_during_execution", resultError: "PermissionError: 'workspace'" }), "failed"))
+      .toBe("Failed: PermissionError: 'workspace'");
+    expect(agentRunStatusText(run({ runnerError: "ModuleNotFoundError: No module named 'numpy'" }), "interrupted"))
+      .toBe("Ended without a result: ModuleNotFoundError: No module named 'numpy'");
   });
 
   it("adds up costs per Project and per tree", () => {

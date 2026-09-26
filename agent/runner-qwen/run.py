@@ -22,8 +22,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Qwen-Agent reads its limit on model calls per run when it is imported.
+# Qwen-Agent reads its settings when it is imported: its limit on model calls per run, and its
+# working folder, which defaults to "workspace" in the current folder, read-only in the container.
 os.environ["QWEN_AGENT_MAX_LLM_CALL_PER_RUN"] = os.environ.get("AGENT_MAX_TURNS", "60")
+os.environ.setdefault("QWEN_AGENT_DEFAULT_WORKSPACE", "/tmp/qwen-agent")
 
 from qwen_agent.agents import FnCallAgent  # noqa: E402
 from qwen_agent.tools.base import BaseTool  # noqa: E402
@@ -151,6 +153,16 @@ def on_signal(signum, frame):  # noqa: ARG001 - signal handler signature
 
 signal.signal(signal.SIGTERM, on_signal)
 signal.signal(signal.SIGINT, on_signal)
+
+
+def on_crash(kind, value, traceback):
+    """A failure outside the run itself, such as setting the agent up, still leaves a result saying why."""
+    if not finished:
+        write_result("error_during_execution", error=f"{kind.__name__}: {value}")
+    sys.__excepthook__(kind, value, traceback)
+
+
+sys.excepthook = on_crash
 
 # TOOLS
 
@@ -360,6 +372,7 @@ def record(message) -> None:
 print(f"Qwen-Agent on “{PROJECT}” with {MODEL_ID}{', offline' if OFFLINE else ''}.", flush=True)
 deadline = time.time() + MAX_MINUTES * 60
 subtype = "error_during_execution"
+run_error = ""
 logged = 0
 responses = []
 stream = agent.run(messages=[{"role": "user", "content": BRIEF.strip()}])
@@ -383,6 +396,7 @@ try:
 except Exception as error:  # noqa: BLE001 - any failure ends the run with a result
     append_line(EXCHANGE / "transcript.jsonl", {"type": "error", "error": repr(error)})
     print(f"Run stopped: {error}", file=sys.stderr, flush=True)
+    run_error = f"{type(error).__name__}: {error}"
 
 answer = ""
 for message in reversed(responses or []):
@@ -397,7 +411,7 @@ if answer and not report.exists():
 if answer and subtype == "success":
     note("text", f"Final answer: {answer}")
 
-write_result(subtype, **({"result": answer} if answer else {}))
+write_result(subtype, **({"result": answer} if answer else {}), **({"error": run_error} if run_error else {}))
 finished = True
 print(f"\n{'✅' if subtype == 'success' else '⚠️'} {subtype} after {model_calls} model calls (limit {MAX_CALLS})", flush=True)
 print(f"Outbox: {', '.join(sorted(p.name for p in OUTBOX.iterdir())) or '(empty)'}", flush=True)

@@ -151,6 +151,16 @@ def on_signal(signum, frame):  # noqa: ARG001 - signal handler signature
 signal.signal(signal.SIGTERM, on_signal)
 signal.signal(signal.SIGINT, on_signal)
 
+
+def on_crash(kind, value, traceback):
+    """A failure outside the run itself, such as setting the agent up, still leaves a result saying why."""
+    if not finished:
+        write_result("error_during_execution", error=f"{kind.__name__}: {value}")
+    sys.__excepthook__(kind, value, traceback)
+
+
+sys.excepthook = on_crash
+
 # TOOLS
 
 
@@ -367,6 +377,7 @@ timer.start()
 
 print(f"smolagents on “{PROJECT}” with {MODEL_ID}{', offline' if OFFLINE else ''}.", flush=True)
 subtype = "error_during_execution"
+run_error = ""
 answer = ""
 try:
     result = agent.run(BRIEF.strip(), return_full_result=True)
@@ -376,6 +387,7 @@ try:
 except Exception as error:  # noqa: BLE001 - any failure ends the run with a result
     append_line(EXCHANGE / "transcript.jsonl", {"type": "error", "error": repr(error)})
     print(f"Run stopped: {error}", file=sys.stderr, flush=True)
+    run_error = f"{type(error).__name__}: {error}"
 if timed_out.is_set():
     subtype = "error_max_time"
 timer.cancel()
@@ -387,7 +399,7 @@ if answer and not report.exists():
 if answer:
     note("text", f"Final answer: {answer}")
 
-write_result(subtype, **({"result": answer} if answer else {}))
+write_result(subtype, **({"result": answer} if answer else {}), **({"error": run_error} if run_error else {}))
 finished = True
 print(f"\n{'✅' if subtype == 'success' else '⚠️'} {subtype} after {steps_taken} steps", flush=True)
 print(f"Outbox: {', '.join(sorted(p.name for p in OUTBOX.iterdir())) or '(empty)'}", flush=True)

@@ -277,6 +277,10 @@ export interface AgentRunRecord {
   wholeVault: boolean;
   /** The runner's result subtype, once it wrote one: `success`, `interrupted`, `error_…`. */
   resultSubtype?: string;
+  /** What the runner said went wrong, when it failed. */
+  resultError?: string;
+  /** The last error line of the container's output, for a run that ended without a result. */
+  runnerError?: string;
   costUsd: number | null;
   openQuestions: Array<{ id: string; question: string; askedAt: string }>;
   /** A local run waiting for the local model, which serves one run at a time. */
@@ -349,7 +353,7 @@ export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus):
     case "stopped":
       return "Stopped";
     case "interrupted":
-      return "Ended without a result";
+      return run.runnerError ? `Ended without a result: ${run.runnerError}` : "Ended without a result";
     case "failed":
       if (run.startError) return `Could not start: ${run.startError}`;
       if (run.resultSubtype === "error_max_budget_usd") return "Stopped at its budget";
@@ -357,7 +361,7 @@ export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus):
       if (run.resultSubtype === "error_max_time") return "Stopped at its time limit";
       if (run.resultSubtype === "error_no_tool_calls") return "Stopped: the model kept answering without using its tools";
       if (run.resultSubtype === "error_repeating") return "Stopped: it kept repeating the same step";
-      return "Failed";
+      return run.resultError ? `Failed: ${run.resultError}` : "Failed";
   }
 }
 
