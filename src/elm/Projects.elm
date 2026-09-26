@@ -2236,7 +2236,12 @@ viewSupportBody model file editing =
 
     else if editing then
         div []
-            [ textarea [ value model.supportDraft, onInput SupportDraftChanged ] []
+            [ textarea
+                [ value model.supportDraft
+                , onInput SupportDraftChanged
+                , Ui.onModEnter { save = SaveSupportNote file.path, ignore = NoOp }
+                ]
+                []
             , div [ class "dg-support-note-edit-actions" ]
                 [ button [ onClick CancelSupportEdit ] [ text "Cancel" ]
                 , button [ class "mod-cta", onClick (SaveSupportNote file.path) ] [ text "Save note" ]
