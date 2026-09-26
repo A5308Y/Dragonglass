@@ -33,6 +33,9 @@ const OFFLINE = process.env.AGENT_OFFLINE === "1";
 // server still says a request is too long, the limit shrinks and the request is retried.
 let contextChars = Number(process.env.LOCAL_CONTEXT_CHARS || 100_000);
 const MODEL_TIMEOUT_MS = 15 * 60_000;
+// One reply may not run on forever: a model going in circles in its thinking would hold the
+// server (and its memory) for many minutes. A cut reply is followed by a note to the model.
+const MAX_REPLY_TOKENS = Number(process.env.LOCAL_MAX_REPLY_TOKENS || 8192);
 
 await fs.mkdir(QUESTIONS, { recursive: true });
 await fs.mkdir(ANSWERS, { recursive: true });
@@ -265,6 +268,14 @@ try {
     const content = withoutThinking(message.content ?? "");
     const calls = message.tool_calls ?? [];
     messages.push({ role: "assistant", content, ...(calls.length ? { tool_calls: calls } : {}) });
+    if (reply.finish_reason === "length" && !calls.length) {
+      await note("text", `(The reply hit the ${MAX_REPLY_TOKENS}-token limit and was cut off.)`);
+      messages.push({
+        role: "user",
+        content: `Your last reply was cut off at ${MAX_REPLY_TOKENS} tokens. Think less at a time: take the next concrete step with a tool call.`,
+      });
+      continue;
+    }
     await record({ type: "assistant", content, toolCalls: calls });
     if (content.trim()) {
       console.log(`🤖 ${content.trim()}`);
@@ -345,7 +356,7 @@ async function chat() {
       response = await fetch(`${BASE_URL}/chat/completions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model, messages, tools: toolDefinitions, tool_choice: "auto" }),
+        body: JSON.stringify({ model, messages, tools: toolDefinitions, tool_choice: "auto", max_tokens: MAX_REPLY_TOKENS }),
         signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
       });
       break;

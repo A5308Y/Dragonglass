@@ -281,6 +281,8 @@ export interface AgentSettings {
   localMaxTurns: number;
   /** The context length the local model is loaded with, in tokens; the run stays well below it. */
   localContextTokens: number;
+  /** The longest single reply a local model may write, in tokens, thinking included. */
+  localMaxReplyTokens: number;
 }
 
 export interface PomodoroSettings {

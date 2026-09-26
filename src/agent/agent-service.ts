@@ -241,6 +241,7 @@ export class AgentService {
         AGENT_OFFLINE: plan.wholeVault ? "1" : "0",
         AGENT_MAX_MINUTES: String(settings.localMaxMinutes),
         AGENT_MAX_TURNS: String(settings.localMaxTurns),
+        LOCAL_MAX_REPLY_TOKENS: String(settings.localMaxReplyTokens),
         // About three characters a token, less the room the tools, the reply and the model's thinking need.
         LOCAL_CONTEXT_CHARS: String(Math.max(8_000, Math.floor((settings.localContextTokens - 4_000) * 3))),
       }

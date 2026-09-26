@@ -417,6 +417,21 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     new Setting(sectionEl)
+      .setName("Longest reply")
+      .setDesc("Tokens one reply may take, thinking included. Stops a model that goes in circles from holding the server for minutes.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "512";
+        text.inputEl.step = "512";
+        text.setValue(String(agent.localMaxReplyTokens)).onChange(async (value) => {
+          const tokens = Number(value);
+          if (!Number.isInteger(tokens) || tokens < 512) return;
+          agent.localMaxReplyTokens = tokens;
+          await save();
+        });
+      });
+
+    new Setting(sectionEl)
       .setName("Context length")
       .setDesc("Tokens, as set for the model in LM Studio. Agent runs need 32768 or more; the run keeps its conversation below this.")
       .addText((text) => {

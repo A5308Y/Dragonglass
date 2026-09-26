@@ -206,6 +206,9 @@ export default class DragonglassGtdPlugin extends Plugin {
         localMaxTurns: Number.isInteger(saved?.agent?.localMaxTurns) && saved!.agent!.localMaxTurns > 0
           ? saved!.agent!.localMaxTurns
           : defaults.agent.localMaxTurns,
+        localMaxReplyTokens: Number.isInteger(saved?.agent?.localMaxReplyTokens) && saved!.agent!.localMaxReplyTokens >= 512
+          ? saved!.agent!.localMaxReplyTokens
+          : defaults.agent.localMaxReplyTokens,
         localContextTokens: Number.isInteger(saved?.agent?.localContextTokens) && saved!.agent!.localContextTokens >= 4096
           ? saved!.agent!.localContextTokens
           : defaults.agent.localContextTokens,

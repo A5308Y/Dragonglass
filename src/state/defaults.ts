@@ -89,6 +89,7 @@ export function defaultSettings(): GtdSettings {
       localMaxMinutes: 120,
       localMaxTurns: 300,
       localContextTokens: 32768,
+      localMaxReplyTokens: 8192,
     },
     feeds: {
       enabled: false,

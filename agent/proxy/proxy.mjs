@@ -77,6 +77,16 @@ async function resolvePublic(host, port) {
   return { address: addresses[0].address };
 }
 
+/**
+ * Cancels the forwarded request when the agent's side goes away (a stopped run, a client
+ * timeout), so a model server doesn't keep generating, and holding memory, for nobody.
+ */
+function cancelWhenClientLeaves(res, upstream) {
+  res.on("close", () => {
+    if (!res.writableFinished) upstream.destroy();
+  });
+}
+
 function withoutHopHeaders(headers) {
   const copy = { ...headers };
   for (const name of ["proxy-connection", "proxy-authorization", "connection", "keep-alive", "transfer-encoding", "upgrade"]) {
@@ -115,6 +125,7 @@ function forwardToClaude(req, res) {
     res.end();
     log({ kind: "api", method: req.method, path: req.url, error: error.message });
   });
+  cancelWhenClientLeaves(res, upstream);
   req.pipe(upstream);
 }
 
@@ -144,6 +155,7 @@ function forwardToLocalModel(req, res) {
     res.end(`The local model server did not answer: ${error.message}\n`);
     log({ kind: "local", method: req.method, path, error: error.message });
   });
+  cancelWhenClientLeaves(res, upstream);
   req.pipe(upstream);
 }
 
