@@ -127,6 +127,8 @@ function normalizeUrl(value) {
   }
 }
 let blockedInARow = 0;
+let steppedBack = false;
+let askedForHelp = false;
 
 const tools = {
   list_files: {
@@ -360,9 +362,34 @@ try {
       messages.push({ role: "tool", tool_call_id: call.id, content: output });
       await record({ type: "tool", name: call.function?.name, output: trim(output, 4_000) });
     }
-    if (blockedInARow >= 5) {
+    // A stuck model is walked out of it in steps: think again, then ask the person, then stop.
+    if (blockedInARow >= 6) {
       subtype = "error_repeating";
       break;
+    }
+    if (blockedInARow >= 4 && !askedForHelp) {
+      askedForHelp = true;
+      await note("text", "(Stuck: told to ask the person for help.)");
+      messages.push({
+        role: "user",
+        content: "You are stuck: your last attempts were all repeats. Use ask_human now: say what you are trying to "
+          + "find out, what you tried, and what would help you continue.",
+      });
+    } else if (blockedInARow >= 2 && !steppedBack) {
+      steppedBack = true;
+      await note("text", "(Stuck: told to step back and choose a different approach.)");
+      messages.push({
+        role: "user",
+        content: "Step back: you keep repeating an approach that gives no new result. In your next reply, list briefly what "
+          + "you tried and why it didn't work, name two different approaches (another source, another question, or the "
+          + "material you already have), choose one, and take its first step with a tool call. If only the person can "
+          + "help, use ask_human.",
+      });
+    }
+    // Once the model moves on, the next time it gets stuck is walked through the same steps.
+    if (blockedInARow === 0) {
+      steppedBack = false;
+      askedForHelp = false;
     }
   }
   if (finished) subtype = "success";
@@ -383,7 +410,13 @@ process.exit(subtype === "success" ? 0 : 1);
 async function runTool(call) {
   const name = call.function?.name;
   const tool = tools[name];
-  if (!tool) return `There is no tool called ${name}. Available: ${Object.keys(tools).join(", ")}.`;
+  if (!tool) {
+    // Asking again for a tool that isn't there is as stuck as repeating one that is.
+    blockedInARow += 1;
+    await note("text", `(Asked for a tool that doesn't exist: ${name}.)`);
+    const hint = name === "fetch_url" && OFFLINE ? " This run is offline, so there is no way to fetch web pages." : "";
+    return `There is no tool called ${name}.${hint} Available: ${Object.keys(tools).join(", ")}.`;
+  }
   let args;
   try {
     args = JSON.parse(call.function.arguments || "{}");
@@ -402,11 +435,20 @@ async function runTool(call) {
     const repeated = counted.find(({ count, limit }) => count >= limit);
     if (repeated) {
       blockedInARow += 1;
-      const what = repeated.key.startsWith("url ") ? `the URL ${repeated.key.slice(4)}` : `this ${name} call`;
+      const isUrl = repeated.key.startsWith("url ");
+      const what = isUrl ? `the URL ${repeated.key.slice(4)}` : `this ${name} call`;
       await note("text", `(Blocked a repeat: ${what}, requested ${repeated.count} times.)`);
-      return `You have already requested ${what} ${repeated.count - 1} times, and the result hasn't changed. `
-        + "Don't request it again, with this or another tool. Use your working notes, note what you still need with "
-        + "remember, or move on to the next step.";
+      // The dead end goes into the working notes, which are never shortened, so it stays in sight.
+      const deadEnd = `Already tried ${isUrl ? repeated.key.slice(4) : trim(repeated.key, 160)}: no new result. Don't repeat it.`;
+      if (!workingNotes.includes(deadEnd)) workingNotes.push(deadEnd);
+      const alternatives = isUrl
+        ? "Try a different source, a different page or search, or work with what you already have. A request that "
+          + `returns nothing is most likely refused or blocked${OFFLINE ? " (this run is offline, so every web request is)" : ""}.`
+        : name === "run_shell"
+          ? "Change the approach, not just the command: what else would get you the answer?"
+          : "You already have this result; your working notes hold what you noted from it.";
+      return `You have already requested ${what} ${repeated.count - 1} times, and the result hasn't changed, so it was not `
+        + `done again. ${alternatives} If you need something only the person can give, use ask_human.`;
     }
   }
   blockedInARow = 0;
