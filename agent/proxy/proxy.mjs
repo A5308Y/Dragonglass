@@ -154,7 +154,10 @@ server.on("connect", async (req, client, head) => {
   const port = Number(match[2]);
   const { address, refused } = await resolvePublic(host, port);
   if (refused) {
-    client.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+    // The reason goes in the status line and the body, so the agent can tell a policy
+    // refusal from a service that is down.
+    const reason = `Refused by the Dragonglass proxy: ${refused}`;
+    client.end(`HTTP/1.1 403 ${reason}\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(reason) + 1}\r\n\r\n${reason}\n`);
     log({ kind: "connect", host, port, refused });
     return;
   }

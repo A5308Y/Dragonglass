@@ -20,8 +20,12 @@ const EXCHANGE = path.join(WORKSPACE, "exchange");
 const QUESTIONS = path.join(EXCHANGE, "questions");
 const ANSWERS = path.join(EXCHANGE, "answers");
 
-const MODEL = process.env.AGENT_MODEL || "claude-opus-5";
+const MODEL = process.env.AGENT_MODEL || "claude-opus-5-5";
+// Opus 5.5 defaults to medium effort; agentic work is set explicitly.
+const EFFORT = process.env.AGENT_EFFORT || "high";
 const MAX_TURNS = Number(process.env.AGENT_MAX_TURNS || 80);
+// A hard ceiling per run: the SDK stops the run once its estimated spend passes it.
+const MAX_BUDGET_USD = Number(process.env.AGENT_MAX_BUDGET_USD || 5);
 const ANSWER_TIMEOUT_MS = Number(process.env.AGENT_ANSWER_TIMEOUT_MINUTES || 240) * 60_000;
 
 await fs.mkdir(QUESTIONS, { recursive: true });
@@ -40,6 +44,26 @@ try {
 } catch {
   console.error("No brief: put the task in input/brief.md.");
   process.exit(2);
+}
+
+// Which sub-project the run's cost belongs to: input/run.json when Dragonglass writes
+// one, else the first line under "## Project" in the brief.
+const project = await runProject();
+const startedAt = new Date().toISOString();
+const resultFile = path.join(EXCHANGE, "result.json");
+
+async function writeResult(fields) {
+  const result = { project, model: MODEL, effort: EFFORT, maxBudgetUsd: MAX_BUDGET_USD, startedAt, finishedAt: new Date().toISOString(), ...fields };
+  await fs.writeFile(resultFile, `${JSON.stringify(result, null, 2)}\n`);
+}
+
+// Stopped by hand (Ctrl-C, docker stop): the spend so far is unknown to the runner.
+let finished = false;
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, async () => {
+    if (!finished) await writeResult({ subtype: "interrupted", costUsd: null });
+    process.exit(130);
+  });
 }
 
 /**
@@ -107,8 +131,10 @@ const q = query({
   prompt: `${brief.trim()}\n${rules}`,
   options: {
     model: MODEL,
+    effort: EFFORT,
     cwd: WORKSPACE,
     maxTurns: MAX_TURNS,
+    maxBudgetUsd: MAX_BUDGET_USD,
     // A fixed tool surface: the listed tools run, anything else is denied, nobody is asked.
     permissionMode: "dontAsk",
     allowedTools: [
@@ -144,14 +170,22 @@ try {
         if (block.type === "tool_use") console.log(`🔧 ${block.name} ${summarizeInput(block.input)}`);
       }
     } else if (message.type === "result") {
-      const result = {
+      finished = true;
+      // Estimated by the SDK from token counts and list prices, not a billing statement.
+      const unpriced = Object.entries(message.modelUsage ?? {})
+        .filter(([, usage]) => usage.costBasis === "unknown")
+        .map(([model]) => model);
+      await writeResult({
         subtype: message.subtype,
         turns: message.num_turns,
         costUsd: message.total_cost_usd,
+        ...(unpriced.length ? { costWarning: `No list price known for ${unpriced.join(", ")}; the cost is a guess.` } : {}),
+        modelUsage: message.modelUsage,
         result: message.result,
-      };
-      await fs.writeFile(path.join(EXCHANGE, "result.json"), `${JSON.stringify(result, null, 2)}\n`);
-      console.log(`\n✅ ${message.subtype} after ${message.num_turns} turns, $${Number(message.total_cost_usd ?? 0).toFixed(2)}`);
+      });
+      console.log(`\n${message.subtype === "success" ? "✅" : "⚠️"} ${message.subtype} after ${message.num_turns} turns, `
+        + `$${Number(message.total_cost_usd ?? 0).toFixed(2)} of a $${MAX_BUDGET_USD} budget for “${project}”`);
+      if (unpriced.length) console.log(`⚠️ No list price known for ${unpriced.join(", ")}; the cost is a guess.`);
       if (message.subtype === "success") exitCode = 0;
     }
   }
@@ -163,6 +197,18 @@ try {
 }
 console.log(`Outbox: ${(await fs.readdir(OUTBOX)).join(", ") || "(empty)"}`);
 process.exit(exitCode);
+
+async function runProject() {
+  try {
+    const meta = JSON.parse(await fs.readFile(path.join(INPUT, "run.json"), "utf8"));
+    if (typeof meta.projectTitle === "string" && meta.projectTitle.trim()) return meta.projectTitle.trim();
+  } catch {
+    // No run.json: a run started by hand.
+  }
+  const section = /^##\s+Project\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/m.exec(brief)?.[1] ?? "";
+  const line = section.replace(/<!--[\s\S]*?-->/g, "").split("\n").map((text) => text.trim()).find(Boolean);
+  return line || "(no project named in the brief)";
+}
 
 function summarizeInput(input) {
   const text = JSON.stringify(input ?? {});

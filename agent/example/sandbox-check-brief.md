@@ -1,5 +1,9 @@
 # Brief: check your sandbox
 
+## Project
+
+Sandbox check
+
 This run tests the environment you are in, not a real Project. Try each step below,
 note exactly what happened (command, output, error), and don't work around failures:
 a refusal is often the expected result.

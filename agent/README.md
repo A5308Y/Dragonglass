@@ -43,13 +43,17 @@ echo "A file to read." > runs/check/input/sample.md
 RUN_DIR=./runs/check docker compose run --rm --build agent
 ```
 
-When it asks its question, answer from a second terminal:
+When it asks its question, answer from a second terminal. This is a shell command, not
+something in Obsidian yet, and it has to run in the `agent` folder:
 
 ```sh
-cd agent
+cd path/to/dragonglass/agent
 node scripts/answer.mjs runs/check                  # shows open questions
 node scripts/answer.mjs runs/check <question id> "Green"
 ```
+
+The agent keeps waiting until it gets an answer (4 hours by default), so you can answer
+any time while the run is going.
 
 Afterwards read `runs/check/outbox/REPORT.md`, check `runs/check/logs/requests.jsonl`,
 and stop the proxy with `docker compose down`.
@@ -69,9 +73,25 @@ Settings, all optional, as environment variables:
 
 | Variable | Default | |
 |---|---|---|
-| `AGENT_MODEL` | `claude-opus-5` | Model for the run |
+| `AGENT_MODEL` | `claude-opus-5-5` | Model for the run |
+| `AGENT_EFFORT` | `high` | `low`, `medium`, `high`, `xhigh` or `max`; Opus 5.5 would otherwise use `medium` |
+| `AGENT_MAX_BUDGET_USD` | `5` | Stops the run once its estimated spend passes this |
 | `AGENT_MAX_TURNS` | `80` | Stops the run after this many tool round trips |
 | `AGENT_ANSWER_TIMEOUT_MINUTES` | `240` | How long `ask_human` waits before the agent carries on |
+
+## Costs
+
+Runs use your API key, billed per token; your Claude subscription doesn't cover them.
+Each run writes its estimated cost to `exchange/result.json`, together with the
+sub-project it was for (the first line under `## Project` in the brief). To see what
+delegating has cost per sub-project:
+
+```sh
+node scripts/costs.mjs
+```
+
+The numbers are the SDK's estimates from token counts and list prices; the Claude
+Console's usage page is the actual bill. A run you stop by hand shows "cost unknown".
 
 ## What Step 0 should tell us
 

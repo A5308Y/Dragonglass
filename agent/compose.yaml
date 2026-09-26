@@ -41,7 +41,9 @@ services:
       no_proxy: proxy
       # Node's own fetch only honours the proxy variables when asked to.
       NODE_USE_ENV_PROXY: "1"
-      AGENT_MODEL: ${AGENT_MODEL:-claude-opus-5}
+      AGENT_MODEL: ${AGENT_MODEL:-claude-opus-5-5}
+      AGENT_EFFORT: ${AGENT_EFFORT:-high}
+      AGENT_MAX_BUDGET_USD: ${AGENT_MAX_BUDGET_USD:-5}
       AGENT_MAX_TURNS: ${AGENT_MAX_TURNS:-80}
       AGENT_ANSWER_TIMEOUT_MINUTES: ${AGENT_ANSWER_TIMEOUT_MINUTES:-240}
       DISABLE_TELEMETRY: "1"
