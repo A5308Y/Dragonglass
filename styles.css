@@ -920,6 +920,7 @@ dg-markdown.dg-inbox-preview > :first-child { margin-top: 0; }
 button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-action-row-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; margin-top: 5px; }
 .dg-action-row-meta > span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-action-row-meta > .dg-action-schedule { color: var(--text-normal); }
 .dg-action-row-meta .dg-action-project-label {
   max-width: min(360px, 55vw);
   overflow: hidden;

@@ -1645,7 +1645,7 @@ viewActionsSection model project openActions completedActions =
                     , button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewActionModal (Just project.id))) ] [ text "New Action" ]
                     ]
                 ]
-            , viewActionRows openActions
+            , viewActionRows model.snapshot.today openActions
             ]
         , if List.isEmpty completedActions then
             text ""
@@ -1657,7 +1657,7 @@ viewActionsSection model project openActions completedActions =
                     , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length completedActions)) ]
                     ]
                 , if model.showCompleted then
-                    viewActionRows completedActions
+                    viewActionRows model.snapshot.today completedActions
 
                   else
                     text ""
@@ -1674,17 +1674,17 @@ disclosure open =
         "▸"
 
 
-viewActionRows : List Action -> Html Msg
-viewActionRows actions =
+viewActionRows : String -> List Action -> Html Msg
+viewActionRows today actions =
     if List.isEmpty actions then
         div [ class "dg-detail-empty" ] [ text "No Actions." ]
 
     else
-        div [ class "dg-action-rows" ] (List.map viewActionRow actions)
+        div [ class "dg-action-rows" ] (List.map (viewActionRow today) actions)
 
 
-viewActionRow : Action -> Html Msg
-viewActionRow action =
+viewActionRow : String -> Action -> Html Msg
+viewActionRow today action =
     let
         done =
             action.status == ActionStatus.Done
@@ -1718,6 +1718,7 @@ viewActionRow action =
                         [ text (ActionStatus.label action.status) ]
                     ]
                  )
+                    ++ Ui.maybeList (Data.scheduleText today action) (\schedule -> span [ class "dg-action-schedule" ] [ text ("🗓 " ++ schedule) ])
                     ++ Ui.maybeList action.context (\context -> span [] [ text ("@" ++ context) ])
                     ++ Ui.maybeList action.energy Energy.badge
                     ++ Ui.maybeList action.due (\due -> span [] [ text ("Due " ++ due) ])

@@ -751,6 +751,7 @@ viewActionRow model action =
                         span [ class "dg-action-project-label" ]
                             [ text (Hierarchy.breadcrumbFor model.snapshot.projects projectId |> Maybe.withDefault "Missing Project") ]
                     )
+                    ++ Ui.maybeList (Data.scheduleText model.snapshot.today action) (\schedule -> span [ class "dg-action-schedule" ] [ text ("🗓 " ++ schedule) ])
                     ++ Ui.maybeList action.context (\context -> span [] [ text ("@" ++ context) ])
                     ++ Ui.maybeList action.energy Energy.badge
                     ++ Ui.maybeList action.due (\due -> span [] [ text ("Due " ++ due) ])
