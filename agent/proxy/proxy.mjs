@@ -191,6 +191,8 @@ const server = http.createServer((req, res) => {
 });
 
 server.on("connect", async (req, client, head) => {
+  // Before anything else: a client that drops the connection must not take the proxy down.
+  client.on("error", () => client.destroy());
   const match = /^(\[[^\]]+\]|[^:]+):(\d+)$/.exec(req.url || "");
   if (!match) {
     client.end("HTTP/1.1 400 Bad Request\r\n\r\n");
@@ -224,5 +226,13 @@ server.on("connect", async (req, client, head) => {
   });
   client.on("error", close);
 });
+
+// A malformed request or a dropped connection is that client's problem, not the proxy's.
+server.on("clientError", (error, socket) => {
+  if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+  else socket.destroy();
+});
+// Anything else unexpected is logged, and the proxy keeps serving the run.
+process.on("uncaughtException", (error) => log({ kind: "proxy-error", error: String(error?.stack || error) }));
 
 server.listen(PORT, () => console.log(`Dragonglass agent proxy listening on ${PORT}${OFFLINE ? ", offline" : ""}, logging to ${LOG}`));

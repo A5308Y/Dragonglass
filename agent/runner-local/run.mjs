@@ -304,12 +304,25 @@ async function runTool(call) {
 }
 
 async function chat() {
-  const response = await fetch(`${BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model, messages, tools: toolDefinitions, tool_choice: "auto" }),
-    signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
-  });
+  let response;
+  // A dropped connection gets three more tries, a few seconds apart, before the run gives up.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      response = await fetch(`${BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, messages, tools: toolDefinitions, tool_choice: "auto" }),
+        signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
+      });
+      break;
+    } catch (error) {
+      const reason = error?.cause?.message || error?.message || String(error);
+      await record({ type: "model-retry", attempt, reason });
+      if (attempt >= 4 || error?.name === "TimeoutError") throw new Error(`The model could not be reached: ${reason}`);
+      console.log(`↻ The model could not be reached (${reason}); trying again.`);
+      await sleep(attempt * 3_000);
+    }
+  }
   const text = await response.text();
   if (!response.ok) throw new Error(`The model server answered ${response.status}: ${trim(text, 500)}`);
   const body = JSON.parse(text);
