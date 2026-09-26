@@ -41,6 +41,7 @@ decisionSeconds =
 type Pending
     = IgnoreReply
     | LoadBody InboxItemId
+    | LoadPreview InboxItemId
     | Working InboxItemId
 
 
@@ -59,6 +60,9 @@ type alias Model =
     , sessionTotal : Int
     , seconds : Int
     , body : Maybe { itemId : InboxItemId, text : String }
+    , selected : Maybe InboxItemId
+    , preview : Maybe { itemId : InboxItemId, text : String }
+    , previewRequested : Maybe InboxItemId
     , project : Picker Project
     , context : Picker String
     , desiredOutcome : String
@@ -99,6 +103,7 @@ type Msg
     | DeleteItem InboxItemId
     | ProcessItem
     | RowKey InboxItemId Key
+    | SelectRow InboxItemId
     | ProcessorChord Chord
     | Focused
     | Send Pending Command
@@ -107,8 +112,8 @@ type Msg
 main : Program Decode.Value Model Msg
 main =
     Browser.element
-        { init = init
-        , update = update
+        { init = init >> withPreview
+        , update = \msg model -> update msg model |> withPreview
         , subscriptions = subscriptions
         , view = view
         }
@@ -148,6 +153,9 @@ initialModel snapshot =
     , sessionTotal = 0
     , seconds = decisionSeconds
     , body = Nothing
+    , selected = Nothing
+    , preview = Nothing
+    , previewRequested = Nothing
     , project = Picker.init "" Nothing
     , context = Picker.init "" Nothing
     , desiredOutcome = ""
@@ -288,7 +296,10 @@ update msg model =
                 ( next, cmd )
 
             else
-                ( next, Cmd.batch [ cmd, focusRow (neighbourRow itemId model) ] )
+                ( { next | selected = neighbourRow itemId model }, Cmd.batch [ cmd, focusRow (neighbourRow itemId model) ] )
+
+        SelectRow itemId ->
+            ( { model | selected = Just itemId }, Cmd.none )
 
         RowKey itemId key ->
             case key of
@@ -487,6 +498,40 @@ focus domId =
 focusRow : Maybe InboxItemId -> Cmd Msg
 focusRow =
     Maybe.map (rowId >> focus) >> Maybe.withDefault Cmd.none
+
+
+{-| The Item the list's reading pane shows: the selected row, or the first one
+until a row is selected or after the selected one has gone.
+-}
+selectedItem : Model -> Maybe InboxItem
+selectedItem model =
+    let
+        items =
+            listedItems model
+    in
+    case List.filter (\item -> Just item.id == model.selected) items of
+        item :: _ ->
+            Just item
+
+        [] ->
+            List.head items
+
+
+{-| Loads the reading pane's text whenever the shown Item changes.
+-}
+withPreview : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+withPreview ( model, cmd ) =
+    case ( model.processing, selectedItem model ) of
+        ( False, Just item ) ->
+            if model.previewRequested == Just item.id then
+                ( model, cmd )
+
+            else
+                send (LoadPreview item.id) (Command.ReadInboxBody item.id) { model | previewRequested = Just item.id }
+                    |> Tuple.mapSecond (\loadCmd -> Cmd.batch [ cmd, loadCmd ])
+
+        _ ->
+            ( model, cmd )
 
 
 {-| The rows the list shows, in order: the search narrows them.
@@ -712,6 +757,13 @@ receiveHost value model =
                     else
                         ( next, Cmd.none )
 
+                ( Ok resultValue, LoadPreview itemId ) ->
+                    if next.previewRequested == Just itemId then
+                        ( { next | preview = Just { itemId = itemId, text = decodedString resultValue } }, Cmd.none )
+
+                    else
+                        ( next, Cmd.none )
+
                 ( Ok _, _ ) ->
                     ( { next | error = Nothing }, Cmd.none )
 
@@ -769,10 +821,10 @@ listView model =
         items =
             listedItems model
     in
-    div []
+    div [ class "dg-inbox-mail" ]
         [ div [ class "dg-toolbar dg-inbox-toolbar" ]
             [ input [ type_ "search", placeholder "Search Inbox", value model.search, onInput SearchChanged ] []
-            , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · Enter process · O open · X delete" ]
+            , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · ⌫ delete · Enter process · O open" ]
             ]
         , div [ class "dg-inbox-list", attribute "role" "list" ]
             (if List.isEmpty items then
@@ -788,30 +840,84 @@ listView model =
                 ]
 
              else
-                List.map (inboxRow (busyItems model)) items
+                List.map (inboxRow (selectedItem model |> Maybe.map .id)) items
             )
+        , Ui.maybeView (selectedItem model) (readingPane model)
         ]
 
 
-inboxRow : Set InboxItemId -> InboxItem -> Html Msg
-inboxRow busy item =
+{-| One line per Item, as in a mail client: a click or the arrow keys select it
+for the reading pane, a double click opens it.
+-}
+inboxRow : Maybe InboxItemId -> InboxItem -> Html Msg
+inboxRow selectedId item =
     article
-        [ class "dg-inbox-row"
+        [ classList [ ( "dg-inbox-row", True ), ( "is-selected", selectedId == Just item.id ) ]
         , attribute "role" "listitem"
+        , attribute "aria-current" (Ui.boolAttribute (selectedId == Just item.id))
         , id (rowId item.id)
         , tabindex 0
         , onRowKey item.id
+        , Html.Events.on "focusin" (Decode.succeed (SelectRow item.id))
+        , Html.Events.on "dblclick" (Decode.succeed (Send IgnoreReply (Command.OpenFile item.file.path)))
         ]
-        [ div [ class "dg-inbox-item-main" ]
-            [ button [ class "dg-project-title dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ] [ text item.title ]
-            , span [ class "dg-inbox-meta" ] [ text (itemMeta item) ]
+        [ span [ class "dg-inbox-row-title" ] [ text item.title ]
+        , span [ class "dg-inbox-meta" ] [ text (itemMeta item) ]
+        ]
+
+
+{-| The selected Item in full, below the list, with what can be done to it.
+-}
+readingPane : Model -> InboxItem -> Html Msg
+readingPane model item =
+    let
+        busy =
+            Set.member item.id (busyItems model)
+
+        body =
+            case model.preview of
+                Just loaded ->
+                    if loaded.itemId == item.id then
+                        Just loaded.text
+
+                    else
+                        Nothing
+
+                Nothing ->
+                    Nothing
+    in
+    section [ class "dg-inbox-reading" ]
+        [ div [ class "dg-inbox-reading-heading" ]
+            [ div [] [ h3 [] [ text item.title ], span [ class "dg-inbox-meta" ] [ text (itemMeta item) ] ]
+            , div [ class "dg-inbox-row-actions" ]
+                (mailButton item
+                    ++ [ button [ onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ]
+                            [ text
+                                (if item.file.extension == "md" then
+                                    "Open note"
+
+                                 else
+                                    "Open file"
+                                )
+                            ]
+                       , button [ class "mod-cta", Html.Attributes.disabled busy, onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
+                       , button [ class "mod-warning", Html.Attributes.disabled busy, onClick (DeleteItem item.id) ] [ text "Delete" ]
+                       ]
+                )
             ]
-        , div [ class "dg-inbox-row-actions" ]
-            (mailButton item
-                ++ [ button [ class "mod-cta", Html.Attributes.disabled (Set.member item.id busy), onClick (StartProcessing (Just item.id)) ] [ text "Process" ]
-                   , button [ class "mod-warning", Html.Attributes.disabled (Set.member item.id busy), onClick (DeleteItem item.id) ] [ text "Delete" ]
-                   ]
-            )
+        , if isAudio item.file.extension then
+            audio [ class "dg-inbox-audio", controls True, preload "metadata", src item.resourceUrl ] []
+
+          else
+            case body of
+                Nothing ->
+                    div [ class "dg-inbox-reading-body is-empty" ] [ text "Loading…" ]
+
+                Just "" ->
+                    div [ class "dg-inbox-reading-body is-empty" ] [ text "No additional notes." ]
+
+                Just textBody ->
+                    div [ class "dg-inbox-reading-body" ] [ text textBody ]
         ]
 
 
