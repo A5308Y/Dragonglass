@@ -109,6 +109,8 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   pure functions in `src/domain/delegation.ts` (tested in `tests/delegation.test.ts`).
 - The scope is the Project, every Project below it, their Actions, their Project
   Material and each Project's `linked_files`, one hop. Widening it is a deliberate change.
+  The Waiting Actions of earlier runs are left out: they are bookkeeping, and an agent
+  took them for its task list.
 - A local model (`agent/runner-local`, our own loop against LM Studio) may instead read
   the whole vault, but only offline: the proxy then passes nothing but the model route.
   The rule is "the more it sees, the less it can reach"; Claude runs never get the vault.

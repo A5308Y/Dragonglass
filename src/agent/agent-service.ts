@@ -191,7 +191,15 @@ export class AgentService {
   /** Collects what a run for this Project would get, without writing anything. */
   async plan(projectId: string, wholeVault = false): Promise<DelegationPlan> {
     const snapshot = this.repository.index.getSnapshot();
-    const scope = delegationScope(projectId, snapshot.projects, snapshot.actions);
+    // The Waiting Actions that stood for earlier runs are bookkeeping, not material: an agent
+    // reading "Agent: …" Actions, done or not, could take them for its task list.
+    const agentActionIds = new Set(this.runs.flatMap((run) => (run.actionId ? [run.actionId] : [])));
+    const agentActionPaths = new Set([...agentActionIds].flatMap((id) => {
+      const action = snapshot.actionsById.get(id);
+      return action ? [action.file.path] : [];
+    }));
+    const fullScope = delegationScope(projectId, snapshot.projects, snapshot.actions);
+    const scope = { ...fullScope, actions: fullScope.actions.filter((action) => !agentActionIds.has(action.id)) };
     const files = new Map<string, TFile>();
     // Obsidian lists no files in hidden folders, so .obsidian (with the mail passwords) and .trash stay out.
     if (wholeVault) for (const file of this.app.vault.getFiles()) files.set(file.path, file);
@@ -210,6 +218,7 @@ export class AgentService {
         } else missingLinks.push(`${project.title}: ${link}`);
       }
     }
+    for (const path of agentActionPaths) files.delete(path);
     const sorted = [...files.values()].sort((left, right) => left.path.localeCompare(right.path));
     return {
       scope,
