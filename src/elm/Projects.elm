@@ -181,6 +181,7 @@ type alias AgentRun =
     , costUsd : Maybe Float
     , budgetUsd : Float
     , runtime : String
+    , harness : String
     , model : String
     , offline : Bool
     , wholeVault : Bool
@@ -1660,7 +1661,12 @@ viewAgentRun model run =
         spent =
             if run.runtime == "local" then
                 String.join " · "
-                    (("Local: " ++ run.model)
+                    ((if run.harness == "smolagents" then
+                        "Local (smolagents): " ++ run.model
+
+                      else
+                        "Local: " ++ run.model
+                     )
                         :: (if run.wholeVault then
                                 [ "whole vault" ]
 
@@ -2846,6 +2852,7 @@ agentRunDecoder =
         |> andMap (Decode.field "costUsd" (Decode.nullable Decode.float))
         |> andMap (Decode.field "budgetUsd" Decode.float)
         |> andMap (Decode.field "runtime" Decode.string)
+        |> andMap (Decode.field "harness" Decode.string)
         |> andMap (Decode.field "model" Decode.string)
         |> andMap (Decode.field "offline" Decode.bool)
         |> andMap (Decode.field "wholeVault" Decode.bool)

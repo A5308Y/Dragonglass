@@ -1,6 +1,6 @@
 import { Modal, Notice, Setting, type App, type ButtonComponent } from "obsidian";
 import { formatBytes, type AgentService, type DelegationPlan, type RerunDefaults } from "../agent/agent-service";
-import type { AgentRuntime } from "../domain/delegation";
+import type { AgentRuntime, LocalHarness } from "../domain/delegation";
 import type { AgentSettings } from "../domain/types";
 
 /**
@@ -30,6 +30,7 @@ export async function delegateProject(
 class DelegateModal extends Modal {
   private starting = false;
   private runtime: AgentRuntime = "claude";
+  private harness: LocalHarness = "loop";
   private budget: number;
   private summaryEl!: HTMLElement;
   private budgetSetting!: Setting;
@@ -46,6 +47,7 @@ class DelegateModal extends Modal {
     super(app);
     this.budget = previous?.budgetUsd ?? settings.defaultBudgetUsd;
     this.runtime = previous?.runtime ?? "claude";
+    this.harness = previous?.harness ?? "loop";
   }
 
   onOpen(): void {
@@ -53,14 +55,17 @@ class DelegateModal extends Modal {
     contentEl.addClass("dg-button-scope", "dg-delegate");
     this.titleEl.setText(`${this.previous ? "Run again" : "Delegate"}: “${this.plan.breadcrumb}”`);
 
+    const localModel = this.settings.localModel || "the one loaded in LM Studio";
     new Setting(contentEl)
       .setName("Agent")
       .addDropdown((dropdown) => dropdown
         .addOption("claude", `Claude (${this.settings.model})`)
-        .addOption("local", `Local model (${this.settings.localModel || "the one loaded in LM Studio"})`)
-        .setValue(this.runtime)
+        .addOption("local", `Local model, Dragonglass's loop (${localModel})`)
+        .addOption("local-smol", `Local model, smolagents (${localModel})`)
+        .setValue(this.runtime === "claude" ? "claude" : this.harness === "smolagents" ? "local-smol" : "local")
         .onChange((value) => {
-          this.runtime = value === "local" ? "local" : "claude";
+          this.runtime = value === "claude" ? "claude" : "local";
+          this.harness = value === "local-smol" ? "smolagents" : "loop";
           // Claude only ever reads the Project's tree.
           if (this.runtime === "claude" && this.plan.wholeVault) void this.replan(false);
           else this.render();
@@ -125,6 +130,7 @@ class DelegateModal extends Modal {
       try {
         await this.agent.delegate(this.plan, instructions.value, {
           runtime: this.runtime,
+          harness: this.harness,
           budgetUsd: this.budget,
           ...(continueEarlier && this.previous?.earlier ? { earlierAttempt: this.previous.earlier } : {}),
         });

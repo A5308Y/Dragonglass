@@ -147,6 +147,7 @@ export class ElmProjectsHost {
           costUsd: run.costUsd,
           budgetUsd: run.budgetUsd,
           runtime: run.runtime,
+          harness: run.harness ?? "",
           model: run.model,
           offline: run.offline,
           wholeVault: run.wholeVault,

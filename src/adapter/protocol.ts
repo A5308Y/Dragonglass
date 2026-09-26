@@ -74,6 +74,8 @@ export interface ElmAgentDto {
     costUsd: number | null;
     budgetUsd: number;
     runtime: string;
+    /** For local runs: "loop" or "smolagents". */
+    harness: string;
     model: string;
     offline: boolean;
     wholeVault: boolean;

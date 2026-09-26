@@ -160,6 +160,21 @@ lists), `LOCAL_MODEL_UPSTREAM` (default `http://host.docker.internal:1234`),
 the conversation grows past that many characters, the oldest tool results are shortened.
 Keep it well below the model's context length; about four characters make a token.
 
+### smolagents as the harness
+
+`agent-smol` (`runner-smol/run.py`) runs the same kind of task with Hugging Face's
+smolagents `CodeAgent` instead of our own loop: the model acts by writing short Python
+snippets that call the same tools, so one step can read several files and keep what it
+learned in variables, and every `SMOL_PLANNING_INTERVAL` steps (5) it revises its plan. Same
+contract, sandbox, proxy and settings as `agent-local`; in Dragonglass choose
+"Local model, smolagents" in the Delegate dialog, or by hand:
+
+```sh
+RUN_DIR=./runs/local-check docker compose run --rm --build agent-smol
+```
+
+smolagents is pinned in `runner-smol/requirements.txt`; its API is marked experimental.
+
 ### Offline, with the whole vault
 
 `AGENT_OFFLINE=1` cuts the run off from the internet entirely: the proxy then passes only

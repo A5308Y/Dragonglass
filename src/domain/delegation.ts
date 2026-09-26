@@ -272,6 +272,8 @@ export interface AgentRunRecord {
   runtime: AgentRuntime;
   /** A local run cut off from the internet, which is what allows it the whole vault. */
   offline: boolean;
+  /** For local runs: which harness drives the model. */
+  harness?: LocalHarness;
   wholeVault: boolean;
   /** The runner's result subtype, once it wrote one: `success`, `interrupted`, `error_…`. */
   resultSubtype?: string;
@@ -293,6 +295,9 @@ export interface AgentRunRecord {
 }
 
 export type AgentRuntime = "claude" | "local";
+
+/** What drives a local model: Dragonglass's own small loop, or smolagents' CodeAgent. */
+export type LocalHarness = "loop" | "smolagents";
 
 /** One line of what an agent did: a thought (a summary of its reasoning), something it said, or a tool call. */
 export interface AgentActivity {

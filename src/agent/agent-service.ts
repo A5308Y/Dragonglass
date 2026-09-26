@@ -40,6 +40,7 @@ import {
   type AgentRunStatus,
   type AgentRuntime,
   type DelegationScope,
+  type LocalHarness,
   type EarlierAttempt,
 } from "../domain/delegation";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
@@ -95,6 +96,8 @@ const DOCKER_CANDIDATES = ["/usr/local/bin/docker", "/opt/homebrew/bin/docker", 
 
 export interface DelegationOptions {
   runtime: AgentRuntime;
+  /** For local runs: which harness drives the model. */
+  harness?: LocalHarness;
   /** Claude runs only: the spending cap in US dollars. */
   budgetUsd: number;
   /** An earlier run to continue from: the brief tells the agent where it got to. */
@@ -106,6 +109,7 @@ export interface RerunDefaults {
   projectId: string;
   instructions: string;
   runtime: AgentRuntime;
+  harness: LocalHarness;
   wholeVault: boolean;
   budgetUsd: number;
   /** Where the earlier run got to, to continue from it. */
@@ -303,6 +307,7 @@ export class AgentService {
       createdAt: createdAt.toISOString(),
       instructions: instructions.trim(),
       runtime: options.runtime,
+      ...(local ? { harness: options.harness ?? "loop" } : {}),
       offline: local && plan.wholeVault,
       wholeVault: plan.wholeVault,
       budgetUsd: local ? 0 : options.budgetUsd,
@@ -337,6 +342,7 @@ export class AgentService {
       projectId: meta.projectId,
       instructions,
       runtime: meta.runtime === "local" ? "local" : "claude",
+      harness: meta.harness === "smolagents" ? "smolagents" : "loop",
       wholeVault: meta.wholeVault === true,
       budgetUsd: typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd,
     };
@@ -504,6 +510,7 @@ export class AgentService {
       // A local run names the model it actually used in its result.
       model: typeof result?.model === "string" ? result.model : typeof meta.model === "string" ? meta.model : "",
       runtime: meta.runtime === "local" ? "local" : "claude",
+      ...(meta.runtime === "local" ? { harness: meta.harness === "smolagents" ? "smolagents" as const : "loop" as const } : {}),
       offline: meta.offline === true,
       wholeVault: meta.wholeVault === true,
       ...(typeof result?.subtype === "string" ? { resultSubtype: result.subtype } : {}),
@@ -600,7 +607,8 @@ export class AgentService {
       const budgetUsd = typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd;
       const runEnv = env ?? await this.runEnv(runtime, meta.wholeVault === true, budgetUsd);
       await this.docker(
-        ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--rm", "--build", "--name", containerName(runId), runtime === "local" ? "agent-local" : "agent"],
+        ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--rm", "--build", "--name", containerName(runId),
+          runtime === "claude" ? "agent" : meta.harness === "smolagents" ? "agent-smol" : "agent-local"],
         { RUN_DIR: runDir, ...runEnv },
       );
       await this.writeHostNotes(runId, { starting: false });
@@ -684,7 +692,7 @@ export class AgentService {
       const reportPath = resultsFolder ? normalizePath(`${resultsFolder}/REPORT.md`) : "";
       const report = reportPath ? this.app.vault.getAbstractFileByPath(reportPath) : null;
       const spent = run.runtime === "local"
-        ? `Local: ${run.model}${run.wholeVault ? " · whole vault" : ""}${run.offline ? " · offline" : ""}`
+        ? `Local${run.harness === "smolagents" ? " (smolagents)" : ""}: ${run.model}${run.wholeVault ? " · whole vault" : ""}${run.offline ? " · offline" : ""}`
         : typeof run.costUsd === "number"
           ? `Cost: about $${run.costUsd.toFixed(2)} of $${run.budgetUsd.toFixed(2)}`
           : `Budget: $${run.budgetUsd.toFixed(2)}`;
