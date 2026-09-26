@@ -65,15 +65,28 @@ describe("Sub-project board metadata", () => {
     const projects = [parent, child, inactiveChild];
 
     expect(projectActionIssue(parent, projects, [action("A1", child.id, "next")])).toBeNull();
-    expect(projectActionIssue(parent, projects, [])).toBe("No open Actions");
+    expect(projectActionIssue(parent, projects, [])).toBe("No open Actions in sub-project: Child");
     expect(projectActionIssue(parent, projects, [action("A1", child.id, "waiting")])).toBeNull();
-    expect(projectActionIssue(parent, projects, [action("A1", parent.id, "next")])).toBe("No open Actions");
+    expect(projectActionIssue(parent, projects, [action("A1", parent.id, "next")])).toBe("No open Actions in sub-project: Child");
+    expect(projectActionIssue(child, projects, [])).toBe("No open Actions");
 
     const grandchild = project("G", "Grandchild", { parentProjectId: child.id });
     const tree = [...projects, grandchild];
     expect(projectActionIssue(parent, tree, [action("A1", grandchild.id, "next")])).toBeNull();
     expect(projectActionIssue(child, tree, [action("A1", grandchild.id, "next")])).toBeNull();
-    expect(projectActionIssue(parent, tree, [action("A1", child.id, "next")])).toBe("No open Actions");
+    expect(projectActionIssue(parent, tree, [action("A1", child.id, "next")])).toBe("No open Actions in sub-project: Grandchild");
+  });
+
+  it("points the way through sub-projects that are not Active", () => {
+    const parent = project("P", "Parent");
+    const parked = project("B", "Parked", { parentProjectId: parent.id, status: "backlog" });
+    const hidden = project("H", "Hidden", { parentProjectId: parked.id });
+    const other = project("O", "Other", { parentProjectId: parent.id });
+    const tree = [parent, parked, hidden, other];
+
+    expect(projectActionIssue(parked, tree, [])).toBe("No open Actions in sub-project: Hidden");
+    expect(projectActionIssue(parent, tree, [])).toBe("No open Actions in 2 sub-projects: Other, Hidden");
+    expect(projectActionIssue({ ...parked, status: "someday" }, [parent, { ...parked, status: "someday" }], [])).toBeNull();
   });
 
   it("normalizes custom tags", () => {

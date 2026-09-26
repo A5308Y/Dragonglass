@@ -4,21 +4,30 @@ import { ranksForOrder } from "./ranking";
 import type { Action, Project, ProjectStatus } from "./types";
 import { normalizeVaultPath } from "../utils/path";
 
-export type ProjectActionIssue = "No open Actions";
-
 /**
- * The Action-health issue displayed on an Active Project card, using the same
- * tree-level gate as Project Review.
+ * The Action-health issue shown on a Project's card and detail view, using the same
+ * tree-level gate as Project Review, and naming the Projects that need an Action so
+ * the way to them is clear: "No open Actions" for the Project itself, "No open
+ * Actions in sub-project: Order materials" or "No open Actions in 2 sub-projects: A, B".
+ * A Project is never both: one with an Active sub-project leaves its Actions to it.
+ *
+ * A Project that is not Active needs no Action itself, but still reports one inside
+ * it, so a Backlog or Someday/Maybe sub-project hiding an Active Project without an
+ * Action points the way down too.
  */
 export function projectActionIssue(
   project: Project,
   projects: readonly Project[],
   actions: readonly Action[],
-): ProjectActionIssue | null {
-  if (project.status !== "active") return null;
+): string | null {
   // Every open Action status keeps a Project moving, so a blocker has none left.
   const blockers = projectsBlockingReview(project, projectReviewMembers(project, projects), actions);
-  return blockers.length ? "No open Actions" : null;
+  if (!blockers.length) return null;
+  const others = blockers.filter((blocker) => blocker.id !== project.id).map((blocker) => blocker.title);
+  if (!others.length) return "No open Actions";
+  return others.length === 1
+    ? `No open Actions in sub-project: ${others[0]}`
+    : `No open Actions in ${others.length} sub-projects: ${others.join(", ")}`;
 }
 
 /** Whether a file or folder belongs anywhere in a Project's full support-material subtree. */
