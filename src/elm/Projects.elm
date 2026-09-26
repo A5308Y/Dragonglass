@@ -1010,6 +1010,7 @@ viewBoard model =
                 , button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewProjectModal Nothing ProjectStatus.Active)) ] [ text "New Project" ]
                 ]
             ]
+        , Ui.issuesView (\path -> Send IgnoreReply (Command.OpenFile path)) model.snapshot.issues
         , div [ class "dg-toolbar dg-project-toolbar" ]
             [ input [ type_ "search", placeholder "Search Projects", value model.search, onInput SearchChanged ] []
             , label [ class "dg-toolbar-toggle" ]

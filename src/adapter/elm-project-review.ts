@@ -7,6 +7,7 @@ import { reviewWeekStart } from "../domain/weekly-review";
 import { projectReviewHealth, projectReviewQueue } from "../domain/project-review";
 import type { Project } from "../domain/types";
 import { confirmDeleteProject } from "../ui/delete-project";
+import { setProjectStatus } from "../ui/project-moves";
 import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
@@ -135,7 +136,7 @@ export class ElmProjectReviewHost {
       case "trash-project":
         return confirmDeleteProject(this.services, command.projectId);
       case "set-project-status":
-        return this.services.repository.setProjectStatus(command.projectId, command.status);
+        return setProjectStatus(this.services, command.projectId, command.status);
       case "open-someday-review":
         this.continueToSomeday();
         return;

@@ -1,5 +1,6 @@
 import { wouldCreateProjectCycle } from "./project-hierarchy";
 import { projectReviewMembers, projectsBlockingReview } from "./project-review";
+import { strandedProjects } from "./project-tree";
 import { ranksForOrder } from "./ranking";
 import type { Action, Project, ProjectStatus } from "./types";
 import { normalizeVaultPath } from "../utils/path";
@@ -11,15 +12,17 @@ import { normalizeVaultPath } from "../utils/path";
  * Actions in sub-project: Order materials" or "No open Actions in 2 sub-projects: A, B".
  * A Project is never both: one with an Active sub-project leaves its Actions to it.
  *
- * A Project that is not Active needs no Action itself, but still reports one inside
- * it, so a Backlog or Someday/Maybe sub-project hiding an Active Project without an
- * Action points the way down too.
+ * Only Active Projects report: nothing below an inactive Project needs an Action.
+ * An Active sub-project on the way down reports too, so the cards lead to the Project.
  */
 export function projectActionIssue(
   project: Project,
   projects: readonly Project[],
   actions: readonly Action[],
 ): string | null {
+  if (project.status !== "active") return null;
+  // A stranded Project, Active below an inactive one, counts as parked; the index reports it.
+  if (strandedProjects(projects).some((entry) => entry.project.id === project.id)) return null;
   // Every open Action status keeps a Project moving, so a blocker has none left.
   const blockers = projectsBlockingReview(project, projectReviewMembers(project, projects), actions);
   if (!blockers.length) return null;

@@ -15,6 +15,7 @@ import type {
   InboxProcessingInput,
   Project,
   ProjectChanges,
+  ProjectWriteOptions,
   ProjectInput,
 } from "../domain/types";
 import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
@@ -23,6 +24,7 @@ import { externalLinksInNote, formatExternalLink, parseExternalLink } from "../d
 import { mailProcessingBody } from "../domain/mail-note";
 import { actionKeepsContext, actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
+import { ancestorsToActivate, projectStatusLabel, statusChangeProblem } from "../domain/project-tree";
 import { linkedFileEntry, normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
 import { localDate, parseDateOnly } from "../utils/date";
@@ -326,6 +328,8 @@ export class GtdRepository {
     if (parent && projectHierarchyIssue(parent, this.index.getSnapshot().projectsById)) {
       throw new Error("The selected parent Project has an invalid hierarchy.");
     }
+    // An Active sub-project makes its parents Active; a finished parent must be reopened by hand.
+    const activating = (input.status ?? "active") === "active" && parent ? this.ancestorsToActivate(parent.id, title, {}) : [];
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().projectsDirectory) || "GTD/Projects");
     const path = this.uniqueMarkdownPath(directory, title, id);
     const supportRoot = parent ? await this.ensureProjectSupportPath(parent) : await this.ensureFolder(PROJECT_SUPPORT_ROOT);
@@ -362,6 +366,7 @@ export class GtdRepository {
     };
     const body = `# ${title}\n\n## Desired outcome\n\n${input.desiredOutcome?.trim() ?? ""}\n\n## Notes\n\n${input.notes?.trim() ?? ""}\n\n## Support material\n\n\`${supportPath}/\`\n`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
+    for (const ancestor of activating) await this.activateProjectFile(ancestor);
     const project: Project = { type: "gtd-project", id, title, status, created, file, supportPath };
     if (input.activateAt) project.activateAt = input.activateAt;
     if (completed) project.completed = completed;
@@ -448,7 +453,14 @@ export class GtdRepository {
     return this.updateAction(id, { status: "next" });
   }
 
-  async updateProject(id: string, changes: ProjectChanges): Promise<void> {
+  /**
+   * Writes Project changes, keeping the tree consistent (see `src/domain/project-tree.ts`):
+   * a status the tree does not allow is refused, and a Project that ends up Active
+   * activates every Project above it. Completed or Cancelled parents are only
+   * reopened with `reopenAncestors`, which the views set after asking; Undo sets
+   * `restoring` to put an earlier state back exactly.
+   */
+  async updateProject(id: string, changes: ProjectChanges, options: ProjectWriteOptions = {}): Promise<void> {
     const project = this.requireProject(id);
     const snapshot = this.index.getSnapshot();
     const parent = changes.parentProjectId
@@ -473,6 +485,7 @@ export class GtdRepository {
     if (blockers && wouldCreateProjectDependencyCycle(project.id, blockers, snapshot.projectsById)) {
       throw new Error("Project dependencies cannot contain a cycle.");
     }
+    const activating = options.restoring ? [] : this.treeChangesFor(project, changes, parent, options);
     await this.enqueue(project.file.path, async () => {
       const oldTitle = project.title;
       const newTitle = changes.title?.trim() || oldTitle;
@@ -523,10 +536,43 @@ export class GtdRepository {
         await this.renameMarkdownFile(project.file, changes.title.trim(), project.id);
       }
     });
+    for (const ancestor of activating) await this.activateProjectFile(ancestor);
   }
 
-  async setProjectStatus(id: string, status: Project["status"]): Promise<void> {
-    return this.updateProject(id, { status, ...(status === "someday" ? {} : { activateAt: "" }) });
+  /** Checks a change against the tree rules and returns the parents it activates, topmost first. */
+  private treeChangesFor(project: Project, changes: ProjectChanges, parent: Project | undefined, options: ProjectWriteOptions): Project[] {
+    const snapshot = this.index.getSnapshot();
+    const statusChanged = changes.status !== undefined && changes.status !== project.status;
+    const parentId = changes.parentProjectId !== undefined ? parent?.id : project.parentProjectId;
+    const parentChanged = changes.parentProjectId !== undefined && (parentId ?? "") !== (project.parentProjectId ?? "");
+    if (statusChanged) {
+      const problem = statusChangeProblem(project, changes.status!, snapshot.projects);
+      if (problem) throw new Error(problem);
+    }
+    if ((changes.status ?? project.status) !== "active" || !(statusChanged || parentChanged)) return [];
+    return this.ancestorsToActivate(parentId, project.title, options);
+  }
+
+  private ancestorsToActivate(parentId: string | undefined, title: string, options: ProjectWriteOptions): Project[] {
+    const activating = ancestorsToActivate(parentId, this.index.getSnapshot().projectsById);
+    const finished = activating.find((ancestor) => ancestor.status === "completed" || ancestor.status === "cancelled");
+    if (finished && !options.reopenAncestors) {
+      throw new Error(`“${finished.title}” is ${projectStatusLabel(finished.status)}. Reopen it before making “${title}” Active.`);
+    }
+    return activating;
+  }
+
+  /** Makes a parent Active because a Project below it became Active. */
+  private async activateProjectFile(project: Project): Promise<void> {
+    await this.enqueue(project.file.path, () => this.app.fileManager.processFrontMatter(project.file, (frontmatter) => {
+      frontmatter.status = "active";
+      frontmatter.completed = null;
+      frontmatter.activate_at = null;
+    }));
+  }
+
+  async setProjectStatus(id: string, status: Project["status"], options: ProjectWriteOptions = {}): Promise<void> {
+    return this.updateProject(id, { status, ...(status === "someday" ? {} : { activateAt: "" }) }, options);
   }
 
   async readDesiredOutcome(project: Project): Promise<string> {

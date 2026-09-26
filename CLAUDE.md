@@ -83,6 +83,20 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   and `styles.css`; it does not build.
 - `npm test` runs the vitest suite.
 
+## Project trees
+
+- An Active Project's parent, and every Project above it, is Active too. The rule
+  lives in `src/domain/project-tree.ts` and `GtdRepository.updateProject` /
+  `createProjectRecord` enforce it: activating activates the Projects above,
+  parking or cancelling a Project with Active sub-projects is refused, and
+  completing is refused while any sub-project is Active or in the Backlog.
+- Status changes from views go through `setProjectStatus` / `moveProject` in
+  `src/ui/project-moves.ts`, which ask before reopening a finished parent
+  (`reopenAncestors`) and offer one Undo for the cascade. Undo writes with
+  `restoring`, which skips the rules to put the earlier state back exactly.
+- Active Projects below an inactive one ("stranded") count as parked for the
+  missing-Action rule and show up as index issues until fixed by hand.
+
 ## Ranking cards
 
 - Board order is an integer rank (`order` on Projects, `priority` on Actions).

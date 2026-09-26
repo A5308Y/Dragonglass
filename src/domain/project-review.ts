@@ -1,5 +1,6 @@
 import type { Action, GtdSnapshot, Project } from "./types";
 import { projectDescendantIds } from "./project-hierarchy";
+import { strandedProjects } from "./project-tree";
 
 export function projectReviewMembers(root: Project, projects: readonly Project[]): Project[] {
   const ids = projectDescendantIds(root.id, projects);
@@ -51,13 +52,18 @@ export function projectsBlockingReview(_root: Project, members: readonly Project
  * Active Projects that need an Action of their own: none is open, and no active
  * sub-project at any depth carries the work instead. The one rule behind every
  * missing-Action marker, the Project issues and the review gate alike.
+ *
+ * An Active Project below an inactive one breaks the tree rule (see
+ * `project-tree.ts`) and counts as parked: it neither needs an Action nor carries
+ * the Projects above it. The index reports it as an issue to fix instead.
  */
 export function projectsNeedingAction(projects: readonly Project[], actions: readonly Action[]): Project[] {
   const byId = new Map(projects.map((project) => [project.id, project]));
+  const stranded = new Set(strandedProjects(projects).map((entry) => entry.project.id));
   // Walking up from each active Project marks every ancestor it carries, in one pass.
   const carried = new Set<string>();
   for (const project of projects) {
-    if (project.status !== "active") continue;
+    if (project.status !== "active" || stranded.has(project.id)) continue;
     const seen = new Set([project.id]);
     let parentId = project.parentProjectId;
     while (parentId && !seen.has(parentId) && byId.has(parentId)) {
@@ -66,7 +72,7 @@ export function projectsNeedingAction(projects: readonly Project[], actions: rea
       parentId = byId.get(parentId)!.parentProjectId;
     }
   }
-  return activeProjectsWithoutNextAction(projects, actions).filter((project) => !carried.has(project.id));
+  return activeProjectsWithoutNextAction(projects, actions).filter((project) => !carried.has(project.id) && !stranded.has(project.id));
 }
 
 export interface ProjectReviewHealth {

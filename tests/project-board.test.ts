@@ -77,16 +77,18 @@ describe("Sub-project board metadata", () => {
     expect(projectActionIssue(parent, tree, [action("A1", child.id, "next")])).toBe("No open Actions in sub-project: Grandchild");
   });
 
-  it("points the way through sub-projects that are not Active", () => {
+  it("ignores everything below a sub-project that is not Active", () => {
     const parent = project("P", "Parent");
     const parked = project("B", "Parked", { parentProjectId: parent.id, status: "backlog" });
-    const hidden = project("H", "Hidden", { parentProjectId: parked.id });
+    // Active below a Backlog Project breaks the tree rule; it counts as parked.
+    const stranded = project("H", "Stranded", { parentProjectId: parked.id });
     const other = project("O", "Other", { parentProjectId: parent.id });
-    const tree = [parent, parked, hidden, other];
+    const tree = [parent, parked, stranded, other];
 
-    expect(projectActionIssue(parked, tree, [])).toBe("No open Actions in sub-project: Hidden");
-    expect(projectActionIssue(parent, tree, [])).toBe("No open Actions in 2 sub-projects: Other, Hidden");
-    expect(projectActionIssue({ ...parked, status: "someday" }, [parent, { ...parked, status: "someday" }], [])).toBeNull();
+    expect(projectActionIssue(parked, tree, [])).toBeNull();
+    expect(projectActionIssue(stranded, tree, [])).toBeNull();
+    expect(projectActionIssue(parent, tree, [])).toBe("No open Actions in sub-project: Other");
+    expect(projectActionIssue(parent, [parent, parked, stranded], [])).toBe("No open Actions");
   });
 
   it("normalizes custom tags", () => {

@@ -223,10 +223,10 @@ issuesView openFile issues =
                 [ text
                     (String.fromInt (List.length issues)
                         ++ (if List.length issues == 1 then
-                                " GTD file has a metadata problem."
+                                " GTD file has a problem."
 
                             else
-                                " GTD files have metadata problems."
+                                " GTD files have problems."
                            )
                         ++ " Show which"
                     )

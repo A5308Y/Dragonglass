@@ -5,10 +5,12 @@ import { confirmDialog } from "../ui/confirm";
 import { Elm } from "../../.generated/elm-runtime.js";
 import { parseActionList } from "../domain/action-import";
 import { parseSubprojectList } from "../domain/project-import";
+import { ancestorsToActivate } from "../domain/project-tree";
 import { parseProjectTags, planProjectParentChange, projectTagAdditions } from "../domain/project-board";
 import type { Action, ActionInput, Project, ProjectChanges } from "../domain/types";
 import { confirmCompleteProject } from "../ui/complete-project";
 import { confirmDeleteProject } from "../ui/delete-project";
+import { activationOptions } from "../ui/project-moves";
 import { isVaultImage, resolveVaultImage } from "../ui/image-input";
 import type { GtdServices } from "../ui/services";
 import { normalizeVaultPath } from "../utils/path";
@@ -164,9 +166,21 @@ export class ElmModal extends Modal {
         const current = this.services.repository.index.getSnapshot().projectsById.get(command.projectId);
         const sourcePath = current?.file.path ?? "";
         // Declining the completion prompt still saves the other edits.
-        const status = command.changes.status === "completed" && !await confirmCompleteProject(this.services, command.projectId)
+        let status = command.changes.status === "completed" && !await confirmCompleteProject(this.services, command.projectId)
           ? current?.status ?? command.changes.status
           : command.changes.status;
+        let parentProjectId = command.changes.parentProjectId;
+        // An Active Project activates the Projects above it; declining to reopen a
+        // finished one keeps the old status and parent, and still saves the rest.
+        let options = await activationOptions(this.services, current, status, parentProjectId || undefined);
+        if (!options) {
+          status = current?.status ?? status;
+          parentProjectId = current?.parentProjectId ?? "";
+          options = {};
+        }
+        const activating = status === "active"
+          ? ancestorsToActivate(parentProjectId || undefined, this.services.repository.index.getSnapshot().projectsById)
+          : [];
         await this.services.repository.updateProject(command.projectId, {
           title: command.changes.title,
           status,
@@ -175,8 +189,9 @@ export class ElmModal extends Modal {
           image: this.validatedImage(command.changes.image, sourcePath),
           tags: parseProjectTags(command.changes.tags.join(",")),
           reviewed: command.changes.reviewed,
-          parentProjectId: command.changes.parentProjectId,
-        });
+          parentProjectId,
+        }, options);
+        if (activating.length) new Notice(`Also activated ${activating.map((item) => `“${item.title}”`).join(", ")}.`);
         return;
       }
       case "trash-project":

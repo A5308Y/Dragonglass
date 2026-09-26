@@ -143,6 +143,14 @@ export type ActionChanges = Partial<
   energy?: Energy | "";
 };
 
+/** How a Project write treats the tree rules; see `GtdRepository.updateProject`. */
+export interface ProjectWriteOptions {
+  /** Reopens Completed or Cancelled parents of a Project that becomes Active. The views ask first. */
+  reopenAncestors?: boolean;
+  /** Puts an earlier state back exactly, as Undo does, without applying the tree rules. */
+  restoring?: boolean;
+}
+
 export type ProjectChanges = Partial<
   Pick<Project, "title" | "status" | "area" | "reviewed" | "activateAt" | "supportPath" | "image" | "tags" | "order" | "blockedByProjectIds" | "parentProjectId">
 >;
@@ -150,7 +158,7 @@ export type ProjectChanges = Partial<
 export interface IndexIssue {
   path: string;
   message: string;
-  kind: "invalid" | "duplicate-id";
+  kind: "invalid" | "duplicate-id" | "stranded";
 }
 
 export interface GtdSnapshot {

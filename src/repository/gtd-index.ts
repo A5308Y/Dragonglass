@@ -2,6 +2,7 @@ import { MetadataCache, Plugin, TAbstractFile, TFile, Vault } from "obsidian";
 import type { Action, GtdSnapshot, InboxItem, IndexIssue, Project } from "../domain/types";
 import { parseAction, parseInboxItem, parseProject } from "../domain/validation";
 import { projectHierarchyIssue } from "../domain/project-hierarchy";
+import { projectStatusLabel, strandedProjects } from "../domain/project-tree";
 import { localDate } from "../utils/date";
 import { isPathInDirectory, rawInboxId } from "../utils/path";
 
@@ -138,6 +139,15 @@ export class GtdIndex {
     for (const project of projectsById.values()) {
       const message = projectHierarchyIssue(project, projectsById);
       if (message) issues.push({ path: project.file.path, kind: "invalid", message });
+    }
+    // Trees that break the rule, from before it was enforced or from edits by hand.
+    for (const { project, inactiveAncestor } of strandedProjects([...projectsById.values()])) {
+      issues.push({
+        path: project.file.path,
+        kind: "stranded",
+        message: `Active, but “${inactiveAncestor.title}” above it is ${projectStatusLabel(inactiveAncestor.status)}. `
+          + "Activate that Project or park this one.",
+      });
     }
 
     this.current = {
