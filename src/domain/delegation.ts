@@ -9,6 +9,7 @@
  */
 
 import { projectDescendants, projectStatusLabel } from "./project-tree";
+import { escapeVaultText } from "./text";
 import type { Action, Project } from "./types";
 import { normalizeVaultPath } from "../utils/path";
 
@@ -206,6 +207,55 @@ export function withoutEntityFrontmatter(markdown: string): { text: string; chan
   const rest = markdown.slice(match[0].length);
   const body = kept.some((line) => line.trim()) ? `---\n${kept.join("\n")}\n---\n${rest}` : rest;
   return { text: body, changed: true };
+}
+
+// REPORTING TO THE INBOX
+
+export interface RunReportInput {
+  projectTitle: string;
+  /** The Project note's vault path, for a link back to it. */
+  projectPath: string;
+  status: AgentRunStatus;
+  statusText: string;
+  /** "Local: qwen/… · offline" or "about $0.42 of $5.00". */
+  spent: string;
+  /** The vault folder its results were copied into, or `""`. */
+  resultsFolder: string;
+  /** Whether REPORT.md is among the results. */
+  hasReport: boolean;
+  /** The start of REPORT.md, as the agent wrote it. */
+  reportExcerpt: string;
+}
+
+const REPORT_EXCERPT_CHARS = 1_500;
+
+/**
+ * The Inbox Item an ended run leaves, so what it produced, or that it failed, is
+ * processed like anything else that arrives. The report is the agent's text, which may
+ * carry what it read on the web, so it is escaped like imported mail and quoted.
+ */
+export function runReportInboxItem(input: RunReportInput): { title: string; body: string } {
+  const finished = input.status === "finished";
+  const alias = (text: string) => text.replace(/[[\]|#^]/g, " ").trim();
+  const link = (path: string, text: string) => `[[${path.replace(/\.md$/, "")}|${alias(text)}]]`;
+  const excerpt = input.reportExcerpt.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
+  const shortened = excerpt.length > REPORT_EXCERPT_CHARS ? `${excerpt.slice(0, REPORT_EXCERPT_CHARS).trimEnd()}\n…` : excerpt;
+  const quoted = shortened
+    ? escapeVaultText(shortened).split("\n").map((line) => (line ? `> ${line}` : ">")).join("\n")
+    : "";
+  return {
+    title: `${finished ? "Agent report" : "Agent run ended"}: ${input.projectTitle}`,
+    body: [
+      `The agent working on ${link(input.projectPath, input.projectTitle)} ended: ${input.statusText}.`,
+      input.spent,
+      "",
+      input.resultsFolder
+        ? `Results: ${input.hasReport ? `${link(`${input.resultsFolder}/REPORT.md`, "the report")}, and the rest in ` : ""}\`${input.resultsFolder}\`.`
+        : "It left no results.",
+      ...(finished ? [] : ["", "To try again, use “Run again…” in the Agent section of the Project's page."]),
+      ...(quoted ? ["", "## Report", "", quoted] : []),
+    ].join("\n"),
+  };
 }
 
 // RUNS

@@ -114,6 +114,8 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - A local model (`agent/runner-local`, our own loop against LM Studio) may instead read
   the whole vault, but only offline: the proxy then passes nothing but the model route.
   The rule is "the more it sees, the less it can reach"; Claude runs never get the vault.
+- An ended run leaves an Inbox Item (`runReportInboxItem`; setting `agent.reportToInbox`):
+  the report's start is escaped like mail and quoted, since agents copy text from the web.
 - Deleting a run removes its folder (after asking; it has no trash) but appends it to
   `deleted-runs.jsonl` in the runs folder, so its cost still counts and its Waiting
   Action stays out of later runs' material.

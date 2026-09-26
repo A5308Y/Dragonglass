@@ -269,6 +269,8 @@ export interface AgentSettings {
   model: string;
   /** How many turns (tool round trips) a Claude run may take before it is stopped. */
   maxTurns: number;
+  /** Whether an ended run leaves an Inbox Item with its report, to be processed like anything else. */
+  reportToInbox: boolean;
   /** The local model's id on the model server; empty uses whichever model is loaded. */
   localModel: string;
   /** The OpenAI-compatible model server as the containers see your Mac, e.g. LM Studio. */

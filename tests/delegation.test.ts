@@ -9,6 +9,7 @@ import {
   agentRunStatusText,
   briefInstructions,
   withoutEntityFrontmatter,
+  runReportInboxItem,
   delegationBrief,
   delegationScope,
   resultsFolderName,
@@ -188,6 +189,48 @@ describe("Importing an agent's notes", () => {
     const note = "---\ntype: meeting\nid: 7\n---\nText";
     expect(withoutEntityFrontmatter(note)).toEqual({ text: note, changed: false });
     expect(withoutEntityFrontmatter("No frontmatter")).toEqual({ text: "No frontmatter", changed: false });
+  });
+});
+
+describe("Reporting a run to the Inbox", () => {
+  const base = {
+    projectTitle: "Kitchen",
+    projectPath: "GTD/Projects/Kitchen.md",
+    spent: "about $0.42 of $5.00",
+    resultsFolder: "Projects/Kitchen/Agent runs/2026-09-26 1400 Kitchen",
+    hasReport: true,
+  };
+
+  it("links a finished run's report and quotes its start, escaped", () => {
+    const { title, body } = runReportInboxItem({
+      ...base,
+      status: "finished",
+      statusText: "Finished",
+      reportExcerpt: "---\ntags: x\n---\n# Suppliers\n\nSee [[Secret plan]] #urgent\n- first",
+    });
+    expect(title).toBe("Agent report: Kitchen");
+    expect(body).toContain("The agent working on [[GTD/Projects/Kitchen|Kitchen]] ended: Finished.");
+    expect(body).toContain("[[Projects/Kitchen/Agent runs/2026-09-26 1400 Kitchen/REPORT|the report]]");
+    expect(body).toContain("> # Suppliers");
+    expect(body).toContain("> See \\[\\[Secret plan\\]\\] \\#urgent");
+    expect(body).not.toContain("tags: x");
+    expect(body).not.toContain("Run again");
+  });
+
+  it("says when a run ended without finishing, and how to try again", () => {
+    const { title, body } = runReportInboxItem({
+      ...base,
+      status: "failed",
+      statusText: "Stopped at its turn limit",
+      resultsFolder: "",
+      hasReport: false,
+      reportExcerpt: "",
+    });
+    expect(title).toBe("Agent run ended: Kitchen");
+    expect(body).toContain("ended: Stopped at its turn limit.");
+    expect(body).toContain("It left no results.");
+    expect(body).toContain("“Run again…”");
+    expect(body).not.toContain("## Report");
   });
 });
 

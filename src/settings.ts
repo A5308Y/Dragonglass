@@ -385,6 +385,14 @@ export class GtdSettingTab extends PluginSettingTab {
         });
       });
 
+    new Setting(sectionEl)
+      .setName("Report to the Inbox")
+      .setDesc("When a run ends, add an Inbox Item with its report, or with why it stopped, to process like anything else.")
+      .addToggle((toggle) => toggle.setValue(agent.reportToInbox).onChange(async (value) => {
+        agent.reportToInbox = value;
+        await save();
+      }));
+
     sectionEl.createEl("h4", { text: "Local model" });
     sectionEl.createEl("p", {
       text: "Runs with a model on this Mac through LM Studio or another OpenAI-compatible server. They cost nothing, "

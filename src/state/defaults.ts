@@ -83,6 +83,7 @@ export function defaultSettings(): GtdSettings {
       defaultBudgetUsd: 5,
       model: "claude-opus-5-5",
       maxTurns: 80,
+      reportToInbox: true,
       localModel: "",
       localModelUrl: "http://host.docker.internal:1234",
       localKeychainService: "",

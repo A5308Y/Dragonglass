@@ -33,6 +33,7 @@ import {
   delegationScope,
   resultsFolderName,
   runFolderName,
+  runReportInboxItem,
   withoutEntityFrontmatter,
   type AgentActivity,
   type AgentRunRecord,
@@ -625,6 +626,9 @@ export class AgentService {
       await this.completeWaitingAction(run);
       await this.writeHostNotes(run.id, { importedTo: imported.folder, finishedAt: new Date().toISOString() });
       const status = agentRunStatus(run, false);
+      // A run taken out of the queue never started; there is nothing to report on.
+      const neverStarted = status === "stopped" && !imported.folder && !run.activity?.length;
+      if (this.getSettings().reportToInbox && !neverStarted) await this.reportToInbox(run, status, imported.folder);
       const cost = typeof run.costUsd === "number" ? `, about $${run.costUsd.toFixed(2)}` : "";
       const files = imported.count ? `${imported.count} file${imported.count === 1 ? "" : "s"} in its Project Material` : "nothing in the outbox";
       const cleaned = imported.cleaned
@@ -668,6 +672,36 @@ export class AgentService {
       }
     }
     return { folder, count: files.length, cleaned };
+  }
+
+  /**
+   * Leaves an Inbox Item for an ended run: its report to process, or the news that it
+   * failed, so the next step is decided in the Inbox like anything else that arrives.
+   */
+  private async reportToInbox(run: AgentRunRecord, status: AgentRunStatus, resultsFolder: string): Promise<void> {
+    try {
+      const project = this.repository.index.getSnapshot().projectsById.get(run.projectId);
+      const reportPath = resultsFolder ? normalizePath(`${resultsFolder}/REPORT.md`) : "";
+      const report = reportPath ? this.app.vault.getAbstractFileByPath(reportPath) : null;
+      const spent = run.runtime === "local"
+        ? `Local: ${run.model}${run.wholeVault ? " · whole vault" : ""}${run.offline ? " · offline" : ""}`
+        : typeof run.costUsd === "number"
+          ? `Cost: about $${run.costUsd.toFixed(2)} of $${run.budgetUsd.toFixed(2)}`
+          : `Budget: $${run.budgetUsd.toFixed(2)}`;
+      const item = runReportInboxItem({
+        projectTitle: run.projectTitle,
+        projectPath: project?.file.path ?? run.projectTitle,
+        status,
+        statusText: agentRunStatusText(run, status),
+        spent,
+        resultsFolder,
+        hasReport: report instanceof TFile,
+        reportExcerpt: report instanceof TFile ? await this.app.vault.read(report) : "",
+      });
+      await this.repository.createInboxItem(item.title, item.body);
+    } catch (error) {
+      new Notice(`Could not add the agent's report to the Inbox: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private async ensureVaultFolder(path: string): Promise<void> {
