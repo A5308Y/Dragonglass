@@ -71,6 +71,8 @@ const MAX_VAULT_BYTES = 4 * 1024 * 1024 * 1024;
 const POLL_ACTIVE_MS = 3_000;
 const POLL_IDLE_MS = 60_000;
 const STALE_START_MS = 30 * 60_000;
+/** How often leftover Docker networks and proxies of ended runs are looked for. */
+const CLEANUP_INTERVAL_MS = 10 * 60_000;
 /** How much of a run's activity log is shown, and how much of the file is read to find it. */
 const ACTIVITY_ENTRIES = 25;
 const ACTIVITY_TAIL_BYTES = 64 * 1024;
@@ -136,6 +138,7 @@ export class AgentService {
   private readonly actionState = new Map<string, string>();
   /** Activity already read, per run, by the log's size; a finished run's log is read once. */
   private readonly activityCache = new Map<string, { size: number; entries: AgentActivity[] }>();
+  private lastCleanup = 0;
   private timer: number | null = null;
   private scanning: Promise<void> | null = null;
 
@@ -405,6 +408,11 @@ export class AgentService {
       }
     }
     this.runs = runs;
+
+    if (Date.now() - this.lastCleanup > CLEANUP_INTERVAL_MS) {
+      this.lastCleanup = Date.now();
+      void this.cleanUpDocker(runs);
+    }
 
     // The oldest queued local run starts once the local model is free.
     const next = runs.filter((run) => run.queued && run.runtime === "local").sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
@@ -682,6 +690,30 @@ export class AgentService {
   private localModelBusy(): boolean {
     return this.runs.some((run) => run.runtime === "local" && !run.queued && !run.startError
       && (this.launching.has(run.id) || Boolean(run.starting) || this.running.has(containerName(run.id))));
+  }
+
+  /**
+   * Removes what ended runs left in Docker: each run has two networks and a proxy, and
+   * runs that failed to start, or whose start Obsidian cut off, skipped the cleanup that
+   * ending normally does. Docker has room for only a few dozen networks.
+   */
+  private async cleanUpDocker(runs: readonly AgentRunRecord[]): Promise<void> {
+    try {
+      const composeFile = await this.composeFile();
+      const active = new Set(runs
+        .filter((run) => run.starting || this.launching.has(run.id) || this.running.has(containerName(run.id)))
+        .map((run) => composeProject(run.id)));
+      // Compose names a project's networks "<project>_<network>".
+      const projects = new Set((await this.docker(["network", "ls", "--filter", "name=^dg-", "--format", "{{.Name}}"]))
+        .split("\n")
+        .map((name) => name.trim().replace(/_[^_]+$/, ""))
+        .filter((project) => project.startsWith("dg-") && !active.has(project)));
+      for (const project of projects) {
+        await this.dockerQuietly(["compose", "-f", composeFile, "-p", project, "down", "--remove-orphans"]);
+      }
+    } catch {
+      // Docker isn't running, or the kit isn't set up: nothing to clean now; the next pass tries again.
+    }
   }
 
   // HOST PLUMBING
