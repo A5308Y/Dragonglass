@@ -370,6 +370,51 @@ export class GtdSettingTab extends PluginSettingTab {
         agent.model = value.trim();
         await save();
       }));
+
+    sectionEl.createEl("h4", { text: "Local model" });
+    sectionEl.createEl("p", {
+      text: "Runs with a model on this Mac through LM Studio or another OpenAI-compatible server. They cost nothing, "
+        + "and offline they may read the whole vault.",
+    });
+
+    new Setting(sectionEl)
+      .setName("Local model")
+      .setDesc("The model's id on the server. Empty uses whichever model is loaded.")
+      .addText((text) => text.setPlaceholder("qwen/qwen3.8-27b").setValue(agent.localModel).onChange(async (value) => {
+        agent.localModel = value.trim();
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Model server")
+      .setDesc("As the containers see your Mac: host.docker.internal instead of localhost.")
+      .addText((text) => text.setValue(agent.localModelUrl).onChange(async (value) => {
+        if (!value.trim()) return;
+        agent.localModelUrl = value.trim();
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Model server key")
+      .setDesc("The Keychain item holding the server's API key, if it requires one; only the proxy gets it. Empty for none.")
+      .addText((text) => text.setPlaceholder("dragonglass-lmstudio").setValue(agent.localKeychainService).onChange(async (value) => {
+        agent.localKeychainService = value.trim();
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Time limit")
+      .setDesc("Minutes a local run may take before it is stopped.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "5";
+        text.setValue(String(agent.localMaxMinutes)).onChange(async (value) => {
+          const minutes = Number(value);
+          if (!Number.isInteger(minutes) || minutes < 1) return;
+          agent.localMaxMinutes = minutes;
+          await save();
+        });
+      });
   }
 
   private displayFeeds(containerEl: HTMLElement): void {

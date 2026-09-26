@@ -86,6 +86,20 @@ describe("Delegation brief", () => {
     expect(brief).toContain("1 Action, their Project Material and 2 linked files");
     expect(brief).toContain("- Tiles (Backlog): `material/GTD/Projects/Tiles.md`");
   });
+
+  it("says when the material is the whole vault, and still names the Project's own notes", () => {
+    const brief = delegationBrief({
+      wholeVault: true,
+      breadcrumb: "Kitchen",
+      desiredOutcome: "Done.",
+      instructions: "Find related notes.",
+      projects: [project("K", "Kitchen")],
+      actionCount: 2,
+      linkedFileCount: 0,
+    });
+    expect(brief).toContain("holds a copy of the whole vault");
+    expect(brief).toContain("- Kitchen (Active): `material/GTD/Projects/Kitchen.md`");
+  });
 });
 
 describe("The Waiting Action", () => {
@@ -122,6 +136,9 @@ describe("Run status and costs", () => {
     createdAt: "2026-09-26T07:00:00Z",
     budgetUsd: 5,
     model: "claude-opus-5-5",
+    runtime: "claude",
+    offline: false,
+    wholeVault: false,
     costUsd: null,
     openQuestions: [],
     ...changes,
@@ -141,6 +158,7 @@ describe("Run status and costs", () => {
   it("says why a run failed", () => {
     expect(agentRunStatusText(run({ resultSubtype: "error_max_budget_usd" }), "failed")).toBe("Stopped at its budget");
     expect(agentRunStatusText(run({ startError: "Docker is not running" }), "failed")).toBe("Could not start: Docker is not running");
+    expect(agentRunStatusText(run({ resultSubtype: "error_max_time" }), "failed")).toBe("Stopped at its time limit");
   });
 
   it("adds up costs per Project and per tree", () => {

@@ -82,6 +82,10 @@ export function defaultSettings(): GtdSettings {
       keychainService: "dragonglass-agent",
       defaultBudgetUsd: 5,
       model: "claude-opus-5-5",
+      localModel: "",
+      localModelUrl: "http://host.docker.internal:1234",
+      localKeychainService: "",
+      localMaxMinutes: 120,
     },
     feeds: {
       enabled: false,

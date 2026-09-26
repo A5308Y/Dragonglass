@@ -1,60 +1,71 @@
 import { Modal, Notice, Setting, type App, type ButtonComponent } from "obsidian";
 import { formatBytes, type AgentService, type DelegationPlan } from "../agent/agent-service";
+import type { AgentRuntime } from "../domain/delegation";
+import type { AgentSettings } from "../domain/types";
 
 /**
  * Asks what the agent should do with a Project tree, shows exactly what it will get,
  * and starts the run. The file list is there so the scope can be checked before
  * anything leaves the vault.
+ *
+ * Claude reads the Project's tree. A local model may read the tree with internet
+ * access, or the whole vault without any: the more it sees, the less it can reach.
  */
-export async function delegateProject(app: App, agent: AgentService, projectId: string, defaultBudgetUsd: number): Promise<void> {
+export async function delegateProject(app: App, agent: AgentService, projectId: string, settings: AgentSettings): Promise<void> {
   if (!agent.available()) {
     new Notice("Delegating to an agent needs the Obsidian desktop app on macOS.");
     return;
   }
   const plan = await agent.plan(projectId);
-  new DelegateModal(app, agent, plan, defaultBudgetUsd).open();
+  new DelegateModal(app, agent, plan, settings).open();
 }
 
 class DelegateModal extends Modal {
   private starting = false;
+  private runtime: AgentRuntime = "claude";
+  private budget: number;
+  private summaryEl!: HTMLElement;
+  private budgetSetting!: Setting;
+  private scopeSetting!: Setting;
+  private limitEl!: HTMLElement;
 
   constructor(
     app: App,
     private readonly agent: AgentService,
-    private readonly plan: DelegationPlan,
-    private readonly defaultBudgetUsd: number,
+    private plan: DelegationPlan,
+    private readonly settings: AgentSettings,
   ) {
     super(app);
+    this.budget = settings.defaultBudgetUsd;
   }
 
   onOpen(): void {
-    const { contentEl, plan } = this;
+    const { contentEl } = this;
     contentEl.addClass("dg-button-scope", "dg-delegate");
-    this.titleEl.setText(`Delegate “${plan.breadcrumb}”`);
+    this.titleEl.setText(`Delegate “${this.plan.breadcrumb}”`);
 
-    const projects = plan.scope.projects.length;
-    const actions = plan.scope.actions.length;
-    contentEl.createEl("p", {
-      text: `The agent gets copies of ${count(projects, "Project")}, ${count(actions, "Action")} and `
-        + `${count(plan.files.length, "file")} in all (${formatBytes(plan.totalBytes)}), including their Project Material `
-        + `and ${count(plan.linkedFileCount, "linked file")}. Nothing else from the vault.`,
-    });
-    if (plan.missingLinks.length) {
-      contentEl.createEl("p", {
-        cls: "dg-delegate-warning",
-        text: `⚠ ${count(plan.missingLinks.length, "linked file")} no longer exist and won't be included: ${plan.missingLinks.join(", ")}.`,
-      });
-    }
-    const files = contentEl.createEl("details", { cls: "dg-delegate-files" });
-    files.createEl("summary", { text: "Show the files" });
-    const list = files.createEl("ul");
-    for (const file of plan.files) list.createEl("li", { text: file.path });
+    new Setting(contentEl)
+      .setName("Agent")
+      .addDropdown((dropdown) => dropdown
+        .addOption("claude", `Claude (${this.settings.model})`)
+        .addOption("local", `Local model (${this.settings.localModel || "the one loaded in LM Studio"})`)
+        .setValue(this.runtime)
+        .onChange((value) => {
+          this.runtime = value === "local" ? "local" : "claude";
+          // Claude only ever reads the Project's tree.
+          if (this.runtime === "claude" && this.plan.wholeVault) void this.replan(false);
+          else this.render();
+        }));
 
-    contentEl.createEl("p", {
-      cls: "dg-delegate-warning",
-      text: "⚠ The agent can reach the internet, so it could pass on what it was given. Only delegate trees that aren't "
-        + "sensitive. Every request it makes is logged in the run folder.",
-    });
+    this.scopeSetting = new Setting(contentEl)
+      .setName("What it may read")
+      .addDropdown((dropdown) => dropdown
+        .addOption("tree", "This Project's tree, with internet access")
+        .addOption("vault", "The whole vault, offline")
+        .setValue(this.plan.wholeVault ? "vault" : "tree")
+        .onChange((value) => void this.replan(value === "vault")));
+
+    this.summaryEl = contentEl.createDiv();
 
     const instructionsId = "dg-delegate-instructions";
     contentEl.createEl("label", { text: "What should the agent do?", attr: { for: instructionsId }, cls: "dg-delegate-label" });
@@ -63,27 +74,31 @@ class DelegateModal extends Modal {
       attr: { id: instructionsId, rows: "6", placeholder: "For example: compare three tile suppliers near Berlin and draft an order." },
     });
 
-    let budget = this.defaultBudgetUsd;
-    new Setting(contentEl)
+    this.budgetSetting = new Setting(contentEl)
       .setName("Budget")
       .setDesc("US dollars. The run stops once its estimated spend passes this.")
       .addText((text) => {
         text.inputEl.type = "number";
         text.inputEl.min = "0.5";
         text.inputEl.step = "0.5";
-        text.setValue(String(budget)).onChange((value) => {
-          budget = Number(value);
+        text.setValue(String(this.budget)).onChange((value) => {
+          this.budget = Number(value);
         });
       });
+    this.limitEl = contentEl.createEl("p", {
+      cls: "dg-delegate-note",
+      text: `A local run costs nothing and stops after ${this.settings.localMaxMinutes} minutes at the latest.`,
+    });
 
     const error = contentEl.createEl("p", { cls: "dg-delegate-error" });
+    let startButton!: ButtonComponent;
     const start = async () => {
       if (this.starting) return;
       this.starting = true;
       error.setText("");
       startButton.setDisabled(true).setButtonText("Starting…");
       try {
-        await this.agent.delegate(this.plan, instructions.value, budget);
+        await this.agent.delegate(this.plan, instructions.value, { runtime: this.runtime, budgetUsd: this.budget });
         new Notice(`Starting the agent on “${this.plan.scope.root.title}”. Its progress shows on the Project's page.`);
         this.close();
       } catch (reason) {
@@ -93,7 +108,6 @@ class DelegateModal extends Modal {
       }
     };
 
-    let startButton!: ButtonComponent;
     new Setting(contentEl)
       .addButton((button) => button.setButtonText("Cancel").onClick(() => this.close()))
       .addButton((button) => {
@@ -105,11 +119,61 @@ class DelegateModal extends Modal {
       void start();
       return false;
     });
+    this.render();
     instructions.focus();
   }
 
   onClose(): void {
     this.contentEl.empty();
+  }
+
+  private async replan(wholeVault: boolean): Promise<void> {
+    this.summaryEl.setText(wholeVault ? "Collecting the vault's files…" : "Collecting the Project's files…");
+    this.plan = await this.agent.plan(this.plan.scope.root.id, wholeVault);
+    this.render();
+  }
+
+  /** What the agent gets and what it can reach, for the current choices. */
+  private render(): void {
+    const { plan } = this;
+    const local = this.runtime === "local";
+    this.scopeSetting.settingEl.toggle(local);
+    this.budgetSetting.settingEl.toggle(!local);
+    this.limitEl.toggle(local);
+
+    const summary = this.summaryEl;
+    summary.empty();
+    summary.createEl("p", {
+      text: plan.wholeVault
+        ? `The agent gets a read-only copy of the whole vault: ${count(plan.files.length, "file")} (${formatBytes(plan.totalBytes)}), `
+          + "without Obsidian's settings and the trash. The task is about this Project and the Projects below it."
+        : `The agent gets copies of ${count(plan.scope.projects.length, "Project")}, ${count(plan.scope.actions.length, "Action")} and `
+          + `${count(plan.files.length, "file")} in all (${formatBytes(plan.totalBytes)}), including their Project Material `
+          + `and ${count(plan.linkedFileCount, "linked file")}. Nothing else from the vault.`,
+    });
+    if (plan.missingLinks.length && !plan.wholeVault) {
+      summary.createEl("p", {
+        cls: "dg-delegate-warning",
+        text: `⚠ ${count(plan.missingLinks.length, "linked file")} no longer exist and won't be included: ${plan.missingLinks.join(", ")}.`,
+      });
+    }
+    const files = summary.createEl("details", { cls: "dg-delegate-files" });
+    files.createEl("summary", { text: "Show the files" });
+    const list = files.createEl("ul");
+    for (const file of plan.files.slice(0, 2_000)) list.createEl("li", { text: file.path });
+    if (plan.files.length > 2_000) list.createEl("li", { text: `… and ${plan.files.length - 2_000} more` });
+
+    summary.createEl("p", {
+      cls: "dg-delegate-warning",
+      text: plan.wholeVault
+        ? "🔒 Offline: the agent has no internet access at all, so nothing it reads can leave your Mac. "
+          + "It reaches only the local model server."
+        : local
+          ? "⚠ The model runs on your Mac, but the agent can reach the internet (without search), so it could pass on what "
+            + "it was given. Every request it makes is logged in the run folder."
+          : "⚠ The material goes to Anthropic's API, and the agent can reach the internet, so it could pass on what it was "
+            + "given. Only delegate trees that aren't sensitive. Every request it makes is logged in the run folder.",
+    });
   }
 }
 

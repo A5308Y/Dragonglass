@@ -10,8 +10,11 @@ questions, and adds its results to the Project Material.
    `security add-generic-password -a "$USER" -s dragonglass-agent -w`
 2. In Dragonglass's settings, under **Agent delegation**, set **Agent kit folder** to this
    folder. Docker Desktop has to be running.
-3. On a Project, choose **Delegate to agent…** from its menu or its page. The dialog lists
-   every file the agent will get; say what you want done, set a budget, and start.
+3. On a Project, choose **Delegate to agent…** from its menu or its page. Choose Claude or
+   a local model; a local model may read either the Project's tree, with internet access,
+   or the whole vault, offline. The dialog lists every file the agent will get; say what
+   you want done, set a budget for Claude, and start. For local runs, set the model
+   server (and its key's Keychain item, if it needs one) under **Agent delegation**.
 
 The run carries on in the background, also when Obsidian is closed. The Project's page
 shows its status and cost, and its questions with a place to answer them. A Waiting

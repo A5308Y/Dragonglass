@@ -1821,6 +1821,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-delegate .dg-delegate-label { display: block; margin: 12px 0 4px; font-weight: var(--font-semibold); }
 .dg-delegate .dg-delegate-instructions { width: 100%; resize: vertical; }
 .dg-delegate .dg-delegate-warning { color: var(--text-muted); }
+.dg-delegate .dg-delegate-note { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-delegate .dg-delegate-error { color: var(--text-error); }
 .dg-delegate .dg-delegate-error:empty { display: none; }
 .dg-delegate-files ul {

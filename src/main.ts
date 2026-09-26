@@ -86,7 +86,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       showProjectDetail: (id) => void this.openProjectDetail(id),
       openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
       openPomodoro: (projectId) => void this.openPomodoro(projectId),
-      delegateProject: (projectId) => delegateProject(this.app, this.agent, projectId, this.settings.agent.defaultBudgetUsd),
+      delegateProject: (projectId) => delegateProject(this.app, this.agent, projectId, this.settings.agent),
     };
 
     this.registerView(BOARD_VIEW_TYPE, (leaf) => new ActionBoardView(leaf, this.services));
@@ -186,6 +186,16 @@ export default class DragonglassGtdPlugin extends Plugin {
           ? saved.agent.defaultBudgetUsd
           : defaults.agent.defaultBudgetUsd,
         model: typeof saved?.agent?.model === "string" && saved.agent.model.trim() ? saved.agent.model.trim() : defaults.agent.model,
+        localModel: typeof saved?.agent?.localModel === "string" ? saved.agent.localModel.trim() : defaults.agent.localModel,
+        localModelUrl: typeof saved?.agent?.localModelUrl === "string" && saved.agent.localModelUrl.trim()
+          ? saved.agent.localModelUrl.trim()
+          : defaults.agent.localModelUrl,
+        localKeychainService: typeof saved?.agent?.localKeychainService === "string"
+          ? saved.agent.localKeychainService.trim()
+          : defaults.agent.localKeychainService,
+        localMaxMinutes: Number.isInteger(saved?.agent?.localMaxMinutes) && saved!.agent!.localMaxMinutes > 0
+          ? saved!.agent!.localMaxMinutes
+          : defaults.agent.localMaxMinutes,
       },
       feeds: {
         ...defaults.feeds,

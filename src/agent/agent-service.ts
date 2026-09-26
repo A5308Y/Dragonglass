@@ -34,6 +34,7 @@ import {
   runFolderName,
   type AgentRunRecord,
   type AgentRunStatus,
+  type AgentRuntime,
   type DelegationScope,
 } from "../domain/delegation";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
@@ -62,10 +63,17 @@ function nodeModules(): NodeModules | null {
 
 /** Largest amount of material a run may copy; a tree bigger than this is probably a mistake. */
 const MAX_MATERIAL_BYTES = 500 * 1024 * 1024;
+const MAX_VAULT_BYTES = 4 * 1024 * 1024 * 1024;
 const POLL_ACTIVE_MS = 3_000;
 const POLL_IDLE_MS = 60_000;
 const STALE_START_MS = 30 * 60_000;
 const DOCKER_CANDIDATES = ["/usr/local/bin/docker", "/opt/homebrew/bin/docker", "/Applications/Docker.app/Contents/Resources/bin/docker"];
+
+export interface DelegationOptions {
+  runtime: AgentRuntime;
+  /** Claude runs only: the spending cap in US dollars. */
+  budgetUsd: number;
+}
 
 export interface AgentRunView extends AgentRunRecord {
   status: AgentRunStatus;
@@ -77,6 +85,8 @@ export interface AgentRunView extends AgentRunRecord {
 /** What delegating a Project would hand over, shown before a run starts. */
 export interface DelegationPlan {
   scope: DelegationScope;
+  /** The whole vault instead of the Project's tree; only for local runs, which are then offline. */
+  wholeVault: boolean;
   breadcrumb: string;
   desiredOutcome: string;
   files: TFile[];
@@ -156,10 +166,12 @@ export class AgentService {
   }
 
   /** Collects what a run for this Project would get, without writing anything. */
-  async plan(projectId: string): Promise<DelegationPlan> {
+  async plan(projectId: string, wholeVault = false): Promise<DelegationPlan> {
     const snapshot = this.repository.index.getSnapshot();
     const scope = delegationScope(projectId, snapshot.projects, snapshot.actions);
     const files = new Map<string, TFile>();
+    // Obsidian lists no files in hidden folders, so .obsidian (with the mail passwords) and .trash stay out.
+    if (wholeVault) for (const file of this.app.vault.getFiles()) files.set(file.path, file);
     for (const project of scope.projects) files.set(project.file.path, project.file);
     for (const action of scope.actions) files.set(action.file.path, action.file);
     for (const file of this.app.vault.getFiles()) {
@@ -178,6 +190,7 @@ export class AgentService {
     const sorted = [...files.values()].sort((left, right) => left.path.localeCompare(right.path));
     return {
       scope,
+      wholeVault,
       breadcrumb: projectBreadcrumbs(snapshot.projects).get(projectId) ?? scope.root.title,
       desiredOutcome: await this.repository.readDesiredOutcome(scope.root),
       files: sorted,
@@ -188,18 +201,35 @@ export class AgentService {
   }
 
   /** Builds the run folder and starts the containers; the run carries on in the background. */
-  async delegate(plan: DelegationPlan, instructions: string, budgetUsd: number): Promise<string> {
+  async delegate(plan: DelegationPlan, instructions: string, options: DelegationOptions): Promise<string> {
     const node = requireNode();
+    const local = options.runtime === "local";
     if (!this.available()) throw new Error("Delegating needs the Obsidian desktop app on macOS.");
     if (!instructions.trim()) throw new Error("Say what you'd like the agent to do.");
-    if (!(budgetUsd > 0)) throw new Error("Set a budget above zero.");
-    if (plan.totalBytes > MAX_MATERIAL_BYTES) {
-      throw new Error(`This tree holds ${formatBytes(plan.totalBytes)} of material, more than the ${formatBytes(MAX_MATERIAL_BYTES)} a run may copy.`);
+    // Whatever the agent reads can leave through the internet, so only an offline local run gets the whole vault.
+    if (plan.wholeVault && !local) throw new Error("Only a local model, offline, may read the whole vault.");
+    if (!local && !(options.budgetUsd > 0)) throw new Error("Set a budget above zero.");
+    const limit = plan.wholeVault ? MAX_VAULT_BYTES : MAX_MATERIAL_BYTES;
+    if (plan.totalBytes > limit) {
+      throw new Error(`That is ${formatBytes(plan.totalBytes)} of material, more than the ${formatBytes(limit)} a run may copy.`);
     }
     const settings = this.getSettings();
     const composeFile = await this.composeFile();
     const docker = await this.dockerPath();
-    const apiKey = await this.apiKey();
+    const env: Record<string, string> = local
+      ? {
+        LOCAL_MODEL: settings.localModel,
+        LOCAL_MODEL_UPSTREAM: settings.localModelUrl,
+        LOCAL_MODEL_API_KEY: settings.localKeychainService ? await this.keychainSecret(settings.localKeychainService) : "",
+        AGENT_OFFLINE: plan.wholeVault ? "1" : "0",
+        AGENT_MAX_MINUTES: String(settings.localMaxMinutes),
+      }
+      : {
+        ANTHROPIC_API_KEY: await this.keychainSecret(settings.keychainService),
+        AGENT_MAX_BUDGET_USD: String(options.budgetUsd),
+        AGENT_MODEL: settings.model,
+        AGENT_OFFLINE: "0",
+      };
 
     const root = plan.scope.root;
     const createdAt = new Date();
@@ -215,6 +245,7 @@ export class AgentService {
       await node.fs.writeFile(target, new Uint8Array(await this.app.vault.readBinary(file)));
     }
     const brief = delegationBrief({
+      wholeVault: plan.wholeVault,
       breadcrumb: plan.breadcrumb,
       desiredOutcome: plan.desiredOutcome,
       instructions,
@@ -228,13 +259,16 @@ export class AgentService {
       projectId: root.id,
       projectTitle: root.title,
       createdAt: createdAt.toISOString(),
-      budgetUsd,
-      model: settings.model,
+      runtime: options.runtime,
+      offline: local && plan.wholeVault,
+      wholeVault: plan.wholeVault,
+      budgetUsd: local ? 0 : options.budgetUsd,
+      model: local ? settings.localModel || "the loaded local model" : settings.model,
     });
     await this.writeHostNotes(runId, { starting: true, ...await this.createWaitingAction(root.id, instructions) });
     await this.scan();
 
-    void this.launch(runId, runDir, composeFile, docker, apiKey, budgetUsd, settings.model);
+    void this.launch(runId, runDir, composeFile, docker, local ? "agent-local" : "agent", env);
     return runId;
   }
 
@@ -336,7 +370,11 @@ export class AgentService {
       projectTitle: typeof meta.projectTitle === "string" ? meta.projectTitle : name,
       createdAt: typeof meta.createdAt === "string" ? meta.createdAt : "",
       budgetUsd: typeof meta.budgetUsd === "number" ? meta.budgetUsd : 0,
-      model: typeof meta.model === "string" ? meta.model : "",
+      // A local run names the model it actually used in its result.
+      model: typeof result?.model === "string" ? result.model : typeof meta.model === "string" ? meta.model : "",
+      runtime: meta.runtime === "local" ? "local" : "claude",
+      offline: meta.offline === true,
+      wholeVault: meta.wholeVault === true,
       ...(typeof result?.subtype === "string" ? { resultSubtype: result.subtype } : {}),
       costUsd: typeof result?.costUsd === "number" ? result.costUsd : null,
       openQuestions: questions
@@ -352,12 +390,12 @@ export class AgentService {
 
   // STARTING AND FINISHING
 
-  private async launch(runId: string, runDir: string, composeFile: string, docker: string, apiKey: string, budgetUsd: number, model: string): Promise<void> {
+  private async launch(runId: string, runDir: string, composeFile: string, docker: string, service: string, env: Record<string, string>): Promise<void> {
     this.launching.add(runId);
     try {
       await this.docker(
-        ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--rm", "--build", "--name", containerName(runId), "agent"],
-        { RUN_DIR: runDir, ANTHROPIC_API_KEY: apiKey, AGENT_MAX_BUDGET_USD: String(budgetUsd), AGENT_MODEL: model },
+        ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--rm", "--build", "--name", containerName(runId), service],
+        { RUN_DIR: runDir, ...env },
         docker,
       );
       await this.writeHostNotes(runId, { starting: false });
@@ -505,9 +543,8 @@ export class AgentService {
     throw new Error(configured ? `Docker was not found at ${configured}.` : "Docker was not found. Install Docker Desktop, or set its path in the settings.");
   }
 
-  /** The API key, from the macOS Keychain, read only when a run starts and never stored. */
-  private async apiKey(): Promise<string> {
-    const service = this.getSettings().keychainService;
+  /** An API key from the macOS Keychain, read only when a run starts and never stored. */
+  private async keychainSecret(service: string): Promise<string> {
     try {
       const key = (await this.exec("/usr/bin/security", ["find-generic-password", "-s", service, "-w"])).trim();
       if (key) return key;

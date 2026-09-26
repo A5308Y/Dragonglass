@@ -180,6 +180,10 @@ type alias AgentRun =
     , statusText : String
     , costUsd : Maybe Float
     , budgetUsd : Float
+    , runtime : String
+    , model : String
+    , offline : Bool
+    , wholeVault : Bool
     , reportPath : String
     , questions : List AgentQuestion
     }
@@ -1645,13 +1649,32 @@ viewAgentRun model run =
         active =
             List.member run.status [ "starting", "running", "waiting" ]
 
+        -- A local run costs nothing; what matters there is which model it used and what it could reach.
         spent =
-            case run.costUsd of
-                Just amount ->
-                    usd amount ++ " of " ++ usd run.budgetUsd
+            if run.runtime == "local" then
+                String.join " · "
+                    (("Local: " ++ run.model)
+                        :: (if run.wholeVault then
+                                [ "whole vault" ]
 
-                Nothing ->
-                    "Budget " ++ usd run.budgetUsd
+                            else
+                                []
+                           )
+                        ++ (if run.offline then
+                                [ "offline" ]
+
+                            else
+                                []
+                           )
+                    )
+
+            else
+                case run.costUsd of
+                    Just amount ->
+                        usd amount ++ " of " ++ usd run.budgetUsd
+
+                    Nothing ->
+                        "Budget " ++ usd run.budgetUsd
     in
     article [ classList [ ( "dg-agent-run", True ), ( "is-waiting", run.status == "waiting" ) ] ]
         [ div [ class "dg-agent-run-heading" ]
@@ -2748,6 +2771,10 @@ agentRunDecoder =
         |> andMap (Decode.field "statusText" Decode.string)
         |> andMap (Decode.field "costUsd" (Decode.nullable Decode.float))
         |> andMap (Decode.field "budgetUsd" Decode.float)
+        |> andMap (Decode.field "runtime" Decode.string)
+        |> andMap (Decode.field "model" Decode.string)
+        |> andMap (Decode.field "offline" Decode.bool)
+        |> andMap (Decode.field "wholeVault" Decode.bool)
         |> andMap (Decode.field "reportPath" Decode.string)
         |> andMap
             (Decode.field "questions"

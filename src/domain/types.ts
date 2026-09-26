@@ -267,6 +267,14 @@ export interface AgentSettings {
   /** The spending cap a new run starts with, in US dollars. */
   defaultBudgetUsd: number;
   model: string;
+  /** The local model's id on the model server; empty uses whichever model is loaded. */
+  localModel: string;
+  /** The OpenAI-compatible model server as the containers see your Mac, e.g. LM Studio. */
+  localModelUrl: string;
+  /** The Keychain item holding the model server's API key, or empty when it needs none. */
+  localKeychainService: string;
+  /** How long a local run may take, in minutes. */
+  localMaxMinutes: number;
 }
 
 export interface PomodoroSettings {

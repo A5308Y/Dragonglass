@@ -43,6 +43,8 @@ export function delegationScope(rootId: string, projects: readonly Project[], ac
 export const MATERIAL_FOLDER = "material";
 
 export interface BriefInput {
+  /** Whether the material is the whole vault rather than this Project's tree. */
+  wholeVault?: boolean;
   breadcrumb: string;
   desiredOutcome: string;
   instructions: string;
@@ -75,10 +77,18 @@ export function delegationBrief(input: BriefInput): string {
     "",
     "## The material",
     "",
-    `\`${MATERIAL_FOLDER}/\` holds copies of the vault files for this Project, at their paths in the vault:`,
-    "the Project notes below, "
-      + `${plural(input.actionCount, "Action")}, their Project Material and `
-      + `${plural(input.linkedFileCount, "linked file")}. It is reference: change nothing there.`,
+    ...(input.wholeVault
+      ? [
+        `\`${MATERIAL_FOLDER}/\` holds a copy of the whole vault, at the files' paths in the vault, as reference:`,
+        "use whatever helps. The task is about this Project; these are its notes and the Projects below it.",
+        `Its ${plural(input.actionCount, "Action")} and its Project Material are in there too.`,
+      ]
+      : [
+        `\`${MATERIAL_FOLDER}/\` holds copies of the vault files for this Project, at their paths in the vault:`,
+        "the Project notes below, "
+          + `${plural(input.actionCount, "Action")}, their Project Material and `
+          + `${plural(input.linkedFileCount, "linked file")}. It is reference: change nothing there.`,
+      ]),
     "",
     ...projectLines,
     "",
@@ -136,6 +146,11 @@ export interface AgentRunRecord {
   createdAt: string;
   budgetUsd: number;
   model: string;
+  /** Claude through the API, or a model on this Mac; local runs cost nothing. */
+  runtime: AgentRuntime;
+  /** A local run cut off from the internet, which is what allows it the whole vault. */
+  offline: boolean;
+  wholeVault: boolean;
   /** The runner's result subtype, once it wrote one: `success`, `interrupted`, `error_…`. */
   resultSubtype?: string;
   costUsd: number | null;
@@ -150,6 +165,8 @@ export interface AgentRunRecord {
   actionId?: string;
   actionTitle?: string;
 }
+
+export type AgentRuntime = "claude" | "local";
 
 export type AgentRunStatus = "starting" | "running" | "waiting" | "finished" | "failed" | "stopped" | "interrupted";
 
@@ -183,6 +200,8 @@ export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus):
       if (run.startError) return `Could not start: ${run.startError}`;
       if (run.resultSubtype === "error_max_budget_usd") return "Stopped at its budget";
       if (run.resultSubtype === "error_max_turns") return "Stopped at its turn limit";
+      if (run.resultSubtype === "error_max_time") return "Stopped at its time limit";
+      if (run.resultSubtype === "error_no_tool_calls") return "Stopped: the model kept answering without using its tools";
       return "Failed";
   }
 }

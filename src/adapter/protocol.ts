@@ -72,6 +72,10 @@ export interface ElmAgentDto {
     statusText: string;
     costUsd: number | null;
     budgetUsd: number;
+    runtime: string;
+    model: string;
+    offline: boolean;
+    wholeVault: boolean;
     reportPath: string;
     questions: Array<{ id: string; question: string; askedAt: string }>;
   }>;
