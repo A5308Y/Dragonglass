@@ -703,10 +703,14 @@ export class AgentService {
       const active = new Set(runs
         .filter((run) => run.starting || this.launching.has(run.id) || this.running.has(containerName(run.id)))
         .map((run) => composeProject(run.id)));
-      // Compose names a project's networks "<project>_<network>".
-      const projects = new Set((await this.docker(["network", "ls", "--filter", "name=^dg-", "--format", "{{.Name}}"]))
-        .split("\n")
-        .map((name) => name.trim().replace(/_[^_]+$/, ""))
+      // Docker's name filters match anywhere in the name, so the prefix is checked here. Compose
+      // names a project's networks "<project>_<network>" and its containers "<project>-<service>-<n>";
+      // a run's proxy that is still running keeps its networks in use.
+      const lines = async (args: string[]) => (await this.docker(args)).split("\n").map((line) => line.trim()).filter(Boolean);
+      const fromNetworks = (await lines(["network", "ls", "--filter", "name=dg-", "--format", "{{.Name}}"]))
+        .map((name) => name.replace(/_[^_]+$/, ""));
+      const fromContainers = (await lines(["ps", "-a", "--filter", "name=dg-", "--format", "{{.Label \"com.docker.compose.project\"}}"]));
+      const projects = new Set([...fromNetworks, ...fromContainers]
         .filter((project) => project.startsWith("dg-") && !active.has(project)));
       for (const project of projects) {
         await this.dockerQuietly(["compose", "-f", composeFile, "-p", project, "down", "--remove-orphans"]);
