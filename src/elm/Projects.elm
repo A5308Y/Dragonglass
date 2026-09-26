@@ -1607,7 +1607,7 @@ viewOutcome model project =
                     , rows 5
                     , placeholder ("What will be true when this Project is complete? (" ++ saveChord model ++ " to save)")
                     , onInput OutcomeChanged
-                    , Ui.onModEnter { save = SaveOutcome, ignore = NoOp }
+                    , Ui.onModEnter SaveOutcome
                     ]
                     []
                 , div [ class "dg-outcome-edit-actions" ]
@@ -1953,7 +1953,7 @@ viewDiary model =
                 , rows 3
                 , placeholder ("Observation or decision… (" ++ saveChord model ++ " to add)")
                 , onInput DiaryChanged
-                , Ui.onModEnter { save = AddDiaryEntry, ignore = NoOp }
+                , Ui.onModEnter AddDiaryEntry
                 ]
                 []
             , button [ class "mod-cta", disabled (String.isEmpty (String.trim model.diaryDraft)), onClick AddDiaryEntry ] [ text "Add entry" ]
@@ -2239,7 +2239,7 @@ viewSupportBody model file editing =
             [ textarea
                 [ value model.supportDraft
                 , onInput SupportDraftChanged
-                , Ui.onModEnter { save = SaveSupportNote file.path, ignore = NoOp }
+                , Ui.onModEnter (SaveSupportNote file.path)
                 ]
                 []
             , div [ class "dg-support-note-edit-actions" ]

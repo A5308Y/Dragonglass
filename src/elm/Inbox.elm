@@ -453,8 +453,9 @@ type Chord
     | DeleteChord
 
 
-{-| ⌘/Ctrl+Enter processes; ⌘/Ctrl+Shift+Backspace deletes and moves on. Plain
-⌘/Ctrl+Backspace is left alone, because it deletes text in a field.
+{-| ⌘/Ctrl+Shift+Backspace deletes and moves on. Plain ⌘/Ctrl+Backspace is left
+alone, because it deletes text in a field. ⌘/Ctrl+Enter, which processes, comes
+through `Ui.onModEnter`, since Obsidian's keymap takes ⌘+Enter first.
 -}
 onProcessorChord : Html.Attribute Msg
 onProcessorChord =
@@ -465,10 +466,7 @@ onProcessorChord =
                     modifier =
                         meta || ctrl
                 in
-                if modifier && key == "Enter" then
-                    Decode.succeed { message = ProcessorChord ProcessChord, stopPropagation = True, preventDefault = True }
-
-                else if modifier && shift && key == "Backspace" then
+                if modifier && shift && key == "Backspace" then
                     Decode.succeed { message = ProcessorChord DeleteChord, stopPropagation = True, preventDefault = True }
 
                 else
@@ -1048,7 +1046,7 @@ processorView model =
                     else
                         toFloat processed / toFloat model.sessionTotal * 100
             in
-            div [ class "dg-processor", onProcessorChord ]
+            div [ class "dg-processor", onProcessorChord, Ui.onModEnter (ProcessorChord ProcessChord) ]
                 [ div [ class "dg-workflow-progress" ]
                     [ span [] [ text (String.fromInt processed ++ " / " ++ String.fromInt model.sessionTotal ++ " processed") ]
                     , span [ classList [ ( "is-overdue", model.seconds == 0 ) ] ] [ text (Ui.timer model.seconds) ]

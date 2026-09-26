@@ -527,14 +527,12 @@ setupView model =
                 , placeholder ("What will be true at the end of these " ++ model.minutes ++ " minutes?")
                 , onInput IntentionChanged
                 , Ui.onModEnter
-                    { save =
-                        if ready then
-                            Start
+                    (if ready then
+                        Start
 
-                        else
-                            NoOp
-                    , ignore = NoOp
-                    }
+                     else
+                        NoOp
+                    )
                 ]
                 []
             ]
@@ -730,7 +728,7 @@ wrapUpView model active =
                 , value model.reflection
                 , placeholder "What got done? What got in the way? What comes next?"
                 , onInput ReflectionChanged
-                , Ui.onModEnter { save = Finish, ignore = NoOp }
+                , Ui.onModEnter Finish
                 ]
                 []
             ]

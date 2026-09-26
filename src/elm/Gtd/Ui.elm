@@ -105,30 +105,15 @@ onEnter handlers =
 
 
 {-| ⌘/Ctrl+Enter, the chord that saves a multi-line field without leaving it.
--}
-onModEnter : { save : msg, ignore : msg } -> Html.Attribute msg
-onModEnter handlers =
-    custom "keydown"
-        (Decode.map3
-            (\key meta ctrl ->
-                let
-                    submit =
-                        key == Enter && (meta || ctrl)
-                in
-                { message =
-                    if submit then
-                        handlers.save
 
-                    else
-                        handlers.ignore
-                , stopPropagation = submit
-                , preventDefault = submit
-                }
-            )
-            keyDecoder
-            (Decode.field "metaKey" Decode.bool)
-            (Decode.field "ctrlKey" Decode.bool)
-        )
+Obsidian's keymap takes ⌘+Enter before a field sees the key press, so the host
+delivers the chord as a `dg-mod-enter` event instead (see `src/ui/mod-enter.ts`);
+the view must route it with `routeModEnter`.
+
+-}
+onModEnter : msg -> Html.Attribute msg
+onModEnter save =
+    on "dg-mod-enter" (Decode.succeed save)
 
 
 preventDefaultOn : String -> msg -> Html.Attribute msg

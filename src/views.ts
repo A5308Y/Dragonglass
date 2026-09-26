@@ -10,6 +10,7 @@ import { ElmPomodoroHost } from "./adapter/elm-pomodoro";
 import type { PomodoroService } from "./pomodoro/pomodoro-service";
 import type { FeedService } from "./feeds/feed-service";
 import type { GtdServices } from "./ui/services";
+import { routeModEnter } from "./ui/mod-enter";
 
 export const BOARD_VIEW_TYPE = "dragonglass-action-board";
 export const BRAINSTORM_VIEW_TYPE = "dragonglass-brainstorm";
@@ -87,7 +88,10 @@ export class GtdPomodoroView extends ItemView {
   private host: ElmPomodoroHost | null = null;
   private pendingProjectId: string | null = null;
 
-  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices, private readonly pomodoro: PomodoroService) { super(leaf); }
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices, private readonly pomodoro: PomodoroService) {
+    super(leaf);
+    routeModEnter(this);
+  }
   getViewType(): string { return POMODORO_VIEW_TYPE; }
   getDisplayText(): string { return "GTD Pomodoro"; }
   getIcon(): string { return "timer"; }
@@ -139,6 +143,7 @@ export class GtdInboxView extends ItemView {
 
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
     super(leaf);
+    routeModEnter(this);
   }
 
   getViewType(): string { return INBOX_VIEW_TYPE; }
@@ -208,6 +213,7 @@ export class GtdProjectsView extends ItemView {
 
   constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) {
     super(leaf);
+    routeModEnter(this);
   }
 
   getViewType(): string { return PROJECTS_VIEW_TYPE; }

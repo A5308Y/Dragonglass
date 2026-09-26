@@ -45,6 +45,13 @@ button [ class "dg-foo dg-flat-button", onClick ... ] [ ... ]
 - `.dg-labelled` is `display: contents`, so a CSS rule written as
   `parent > input` must also allow `parent > .dg-labelled > input`.
 
+## ⌘/Ctrl+Enter
+
+Obsidian binds Mod+Enter globally, and its keymap takes ⌘+Enter before an Elm
+keydown handler sees it, so a keydown-based chord only works with Ctrl on a Mac.
+Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
+`routeModEnter(this)` from `src/ui/mod-enter.ts` in the view's constructor.
+
 ## Destructive actions: Undo first, dialogs for the rest
 
 - A reversible single change (deleting one Inbox Item or Action, cancelling a
