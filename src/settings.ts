@@ -13,6 +13,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private unsubscribeMailStatus: (() => void) | undefined;
   private feedsExpanded = false;
   private pomodoroExpanded = false;
+  private agentExpanded = false;
   private mailExpanded = false;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
@@ -112,6 +113,7 @@ export class GtdSettingTab extends PluginSettingTab {
     this.displayPomodoro(containerEl);
     this.displayFeeds(containerEl);
     this.displayMail(containerEl);
+    this.displayAgent(containerEl);
 
     containerEl.createEl("h3", { text: "Google Calendar" });
     containerEl.createEl("p", {
@@ -286,6 +288,87 @@ export class GtdSettingTab extends PluginSettingTab {
         }
         this.plugin.settings.pomodoro.storePath = path;
         await this.plugin.saveSettings(false);
+      }));
+  }
+
+  /**
+   * Delegating Project trees to an agent in a local container. The API key is not a
+   * setting: it stays in the macOS Keychain and is read only when a run starts, so it
+   * never lands in this plugin's data file, which syncs with the vault.
+   */
+  private displayAgent(containerEl: HTMLElement): void {
+    const section = containerEl.createEl("details", { cls: "dg-settings-section" });
+    section.open = this.agentExpanded;
+    section.createEl("summary", { text: "Agent delegation", cls: "dg-settings-section-summary" });
+    section.addEventListener("toggle", () => {
+      this.agentExpanded = section.open;
+    });
+    const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
+    sectionEl.createEl("p", {
+      text: "Delegate a Project tree to an agent that works on a copy of it in a Docker container, with internet access "
+        + "through a logging proxy. Its results are added to the Project Material. Runs use your Anthropic API key and "
+        + "are billed per token. Needs the desktop app on macOS and Docker Desktop; see agent/README.md in the repository.",
+    });
+    const agent = this.plugin.settings.agent;
+    const save = async () => this.plugin.saveSettings(false);
+
+    new Setting(sectionEl)
+      .setName("Agent kit folder")
+      .setDesc("The repository's “agent” folder, holding compose.yaml and the container images.")
+      .addText((text) => text.setPlaceholder("~/Repositories/dragonglass/agent").setValue(agent.kitDirectory).onChange(async (value) => {
+        agent.kitDirectory = value.trim();
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Runs folder")
+      .setDesc("Where each run's copy of the material, results and logs are kept, outside the vault. "
+        + "Empty uses ~/Library/Application Support/Dragonglass/agent-runs. A shared folder lets a server run them later.")
+      .addText((text) => text.setPlaceholder("~/Library/Application Support/Dragonglass/agent-runs").setValue(agent.runsDirectory).onChange(async (value) => {
+        agent.runsDirectory = value.trim();
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Keychain item")
+      .setDesc("The macOS Keychain item holding your Anthropic API key. Add it in Terminal with: "
+        + `security add-generic-password -a "$USER" -s ${agent.keychainService} -w`)
+      .addText((text) => text.setValue(agent.keychainService).onChange(async (value) => {
+        if (!value.trim()) return;
+        agent.keychainService = value.trim();
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Docker")
+      .setDesc("The docker program. Empty tries the usual Docker Desktop locations.")
+      .addText((text) => text.setPlaceholder("/usr/local/bin/docker").setValue(agent.dockerPath).onChange(async (value) => {
+        agent.dockerPath = value.trim();
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Default budget")
+      .setDesc("US dollars a new run may spend before it is stopped. It can be changed for each run.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "0.5";
+        text.inputEl.step = "0.5";
+        text.setValue(String(agent.defaultBudgetUsd)).onChange(async (value) => {
+          const budget = Number(value);
+          if (!(budget > 0)) return;
+          agent.defaultBudgetUsd = budget;
+          await save();
+        });
+      });
+
+    new Setting(sectionEl)
+      .setName("Model")
+      .setDesc("The Claude model runs use.")
+      .addText((text) => text.setValue(agent.model).onChange(async (value) => {
+        if (!value.trim()) return;
+        agent.model = value.trim();
+        await save();
       }));
   }
 

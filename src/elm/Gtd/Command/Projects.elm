@@ -49,6 +49,9 @@ type Command
         }
     | OpenSomedayReview
     | OpenPomodoro ProjectId
+    | DelegateProject ProjectId
+    | AnswerAgentQuestion String String String
+    | StopAgentRun String
     | OpenFile String
     | ShowMenu Float Float (List MenuEntry)
 
@@ -161,6 +164,15 @@ toBase command =
 
         OpenPomodoro projectId ->
             Base.OpenPomodoro projectId
+
+        DelegateProject projectId ->
+            Base.DelegateProject projectId
+
+        AnswerAgentQuestion runId questionId answer ->
+            Base.AnswerAgentQuestion runId questionId answer
+
+        StopAgentRun runId ->
+            Base.StopAgentRun runId
 
         OpenFile path ->
             Base.OpenFile path

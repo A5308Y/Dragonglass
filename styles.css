@@ -1790,6 +1790,45 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   line-height: var(--line-height-normal);
 }
 .dg-diary-add button { min-height: 36px; }
+
+/* Agent runs on a Project's page, and the dialog that starts one. */
+.dg-agent-cost { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-agent-runs { display: flex; flex-direction: column; gap: 8px; }
+.dg-agent-run {
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+.dg-agent-run.is-waiting { border-color: var(--interactive-accent); }
+.dg-agent-run-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.dg-agent-run-heading strong { display: block; }
+.dg-agent-run-meta { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-agent-question {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.dg-agent-question-text { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dg-agent-question textarea { width: 100%; min-height: 64px; resize: vertical; }
+.dg-agent-question-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+
+.dg-delegate .dg-delegate-label { display: block; margin: 12px 0 4px; font-weight: var(--font-semibold); }
+.dg-delegate .dg-delegate-instructions { width: 100%; resize: vertical; }
+.dg-delegate .dg-delegate-warning { color: var(--text-muted); }
+.dg-delegate .dg-delegate-error { color: var(--text-error); }
+.dg-delegate .dg-delegate-error:empty { display: none; }
+.dg-delegate-files ul {
+  max-height: 180px;
+  margin: 6px 0 0;
+  overflow: auto;
+  font-size: var(--font-ui-smaller);
+}
 .dg-diary-list span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-diary-list p { margin: 2px 0 0; }
 .dg-review-stats { display: block; }

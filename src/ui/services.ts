@@ -1,10 +1,13 @@
 import type { App, TFile } from "obsidian";
 import type { ActionStatus, GtdSettings, ProjectStatus } from "../domain/types";
+import type { AgentService } from "../agent/agent-service";
 import type { GtdRepository } from "../repository/gtd-repository";
 
 export interface GtdServices {
   app: App;
   repository: GtdRepository;
+  /** Runs delegated Project trees in the agent sandbox. */
+  agent: AgentService;
   getSettings: () => GtdSettings;
   saveSettings: (settings: GtdSettings, refreshViews?: boolean) => Promise<void>;
   openFile: (file: TFile) => Promise<void>;
@@ -24,4 +27,6 @@ export interface GtdServices {
   openSomedayReview: () => void;
   /** Opens the Pomodoro view, with this Project chosen when no session is running. */
   openPomodoro: (projectId?: string) => void;
+  /** Shows what delegating a Project tree would hand over, and starts the run. */
+  delegateProject: (projectId: string) => Promise<void>;
 }

@@ -48,12 +48,13 @@ try {
 
 // Which sub-project the run's cost belongs to: input/run.json when Dragonglass writes
 // one, else the first line under "## Project" in the brief.
-const project = await runProject();
+const runMeta = await readRunMeta();
+const project = runProject();
 const startedAt = new Date().toISOString();
 const resultFile = path.join(EXCHANGE, "result.json");
 
 async function writeResult(fields) {
-  const result = { project, model: MODEL, effort: EFFORT, maxBudgetUsd: MAX_BUDGET_USD, startedAt, finishedAt: new Date().toISOString(), ...fields };
+  const result = { project, ...(runMeta.projectId ? { projectId: runMeta.projectId } : {}), model: MODEL, effort: EFFORT, maxBudgetUsd: MAX_BUDGET_USD, startedAt, finishedAt: new Date().toISOString(), ...fields };
   await fs.writeFile(resultFile, `${JSON.stringify(result, null, 2)}\n`);
 }
 
@@ -198,13 +199,18 @@ try {
 console.log(`Outbox: ${(await fs.readdir(OUTBOX)).join(", ") || "(empty)"}`);
 process.exit(exitCode);
 
-async function runProject() {
+async function readRunMeta() {
   try {
     const meta = JSON.parse(await fs.readFile(path.join(INPUT, "run.json"), "utf8"));
-    if (typeof meta.projectTitle === "string" && meta.projectTitle.trim()) return meta.projectTitle.trim();
+    return meta && typeof meta === "object" ? meta : {};
   } catch {
     // No run.json: a run started by hand.
+    return {};
   }
+}
+
+function runProject() {
+  if (typeof runMeta.projectTitle === "string" && runMeta.projectTitle.trim()) return runMeta.projectTitle.trim();
   const section = /^##\s+Project\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/m.exec(brief)?.[1] ?? "";
   const line = section.replace(/<!--[\s\S]*?-->/g, "").split("\n").map((text) => text.trim()).find(Boolean);
   return line || "(no project named in the brief)";

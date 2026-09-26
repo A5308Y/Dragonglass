@@ -44,6 +44,7 @@ interface ProjectFlags {
 export class ElmProjectsHost {
   private readonly app: ElmApp;
   private readonly unsubscribe: () => void;
+  private readonly unsubscribeAgent: () => void;
   private readonly unsubscribePort: () => void;
   private closed = false;
 
@@ -65,6 +66,8 @@ export class ElmProjectsHost {
       failureMessage: "The Project operation failed.",
     });
     this.unsubscribe = services.repository.index.subscribe(() => this.sendSnapshot());
+    this.unsubscribeAgent = services.agent.subscribe(() => this.sendAgent());
+    this.sendAgent();
   }
 
   refresh(): void {
@@ -84,6 +87,7 @@ export class ElmProjectsHost {
     this.closed = true;
     this.unsubscribePort();
     this.unsubscribe();
+    this.unsubscribeAgent();
   }
 
   private flags(initialProjectId: string | null): ProjectFlags {
@@ -126,6 +130,28 @@ export class ElmProjectsHost {
     this.send({ type: "snapshot", snapshot: this.snapshot() });
     // Metadata includes vault resources that are deliberately not part of the shared snapshot.
     this.send({ type: "project-meta", projectMeta: this.projectMeta() });
+  }
+
+  private sendAgent(): void {
+    const agent = this.services.agent;
+    this.send({
+      type: "agent",
+      agent: {
+        available: agent.available(),
+        runs: agent.views().map((run) => ({
+          id: run.id,
+          projectId: run.projectId,
+          createdAt: run.createdAt,
+          status: run.status,
+          statusText: run.statusText,
+          costUsd: run.costUsd,
+          budgetUsd: run.budgetUsd,
+          reportPath: run.reportPath,
+          questions: run.status === "waiting" ? run.openQuestions : [],
+        })),
+        costs: [...agent.costs()].map(([projectId, cost]) => ({ projectId, ...cost })),
+      },
+    });
   }
 
   private send(event: ElmProjectsEvent): void {
@@ -266,6 +292,12 @@ export class ElmProjectsHost {
       case "show-menu":
         this.showMenu(command.x, command.y, command.entries);
         return;
+      case "delegate-project":
+        return this.services.delegateProject(command.projectId);
+      case "answer-agent-question":
+        return this.services.agent.answer(command.runId, command.questionId, command.answer);
+      case "stop-agent-run":
+        return this.services.agent.stop(command.runId);
     }
     return assertNever(command);
   }

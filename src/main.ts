@@ -23,6 +23,8 @@ import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
 import { PomodoroService } from "./pomodoro/pomodoro-service";
+import { AgentService } from "./agent/agent-service";
+import { delegateProject } from "./ui/delegate";
 import type { PomodoroSession } from "./domain/pomodoro";
 
 export default class DragonglassGtdPlugin extends Plugin {
@@ -34,6 +36,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private ribbonAttention!: RibbonAttention;
   private mail!: MailService;
   private pomodoro!: PomodoroService;
+  private agent!: AgentService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
 
@@ -58,9 +61,11 @@ export default class DragonglassGtdPlugin extends Plugin {
       (session) => this.logPomodoro(session),
       () => void this.openPomodoro(),
     );
+    this.agent = new AgentService(this.app, this.repository, () => this.settings.agent);
     this.services = {
       app: this.app,
       repository: this.repository,
+      agent: this.agent,
       getSettings: () => this.settings,
       saveSettings: async (settings, refreshViews = true) => {
         this.settings = settings;
@@ -81,6 +86,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       showProjectDetail: (id) => void this.openProjectDetail(id),
       openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
       openPomodoro: (projectId) => void this.openPomodoro(projectId),
+      delegateProject: (projectId) => delegateProject(this.app, this.agent, projectId, this.settings.agent.defaultBudgetUsd),
     };
 
     this.registerView(BOARD_VIEW_TYPE, (leaf) => new ActionBoardView(leaf, this.services));
@@ -168,6 +174,18 @@ export default class DragonglassGtdPlugin extends Plugin {
           ? saved!.pomodoro!.focusMinutes
           : defaults.pomodoro.focusMinutes,
         logToDiary: saved?.pomodoro?.logToDiary === true,
+      },
+      agent: {
+        runsDirectory: typeof saved?.agent?.runsDirectory === "string" ? saved.agent.runsDirectory.trim() : defaults.agent.runsDirectory,
+        kitDirectory: typeof saved?.agent?.kitDirectory === "string" ? saved.agent.kitDirectory.trim() : defaults.agent.kitDirectory,
+        dockerPath: typeof saved?.agent?.dockerPath === "string" ? saved.agent.dockerPath.trim() : defaults.agent.dockerPath,
+        keychainService: typeof saved?.agent?.keychainService === "string" && saved.agent.keychainService.trim()
+          ? saved.agent.keychainService.trim()
+          : defaults.agent.keychainService,
+        defaultBudgetUsd: typeof saved?.agent?.defaultBudgetUsd === "number" && saved.agent.defaultBudgetUsd > 0
+          ? saved.agent.defaultBudgetUsd
+          : defaults.agent.defaultBudgetUsd,
+        model: typeof saved?.agent?.model === "string" && saved.agent.model.trim() ? saved.agent.model.trim() : defaults.agent.model,
       },
       feeds: {
         ...defaults.feeds,
@@ -362,6 +380,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.register(this.calendarSync.start());
     this.register(this.feeds.start());
     this.register(this.mail.start());
+    this.register(this.agent.start());
     // Dots on the ribbon icons for views with something to do; the hourly pass catches a new day.
     this.register(this.index.subscribe(() => {
       this.ribbonAttention.schedule();

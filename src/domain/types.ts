@@ -246,11 +246,27 @@ export interface GtdSettings {
   feeds: FeedSettings;
   mail: MailSettings;
   pomodoro: PomodoroSettings;
+  agent: AgentSettings;
   /** The weekday the Weekly Review falls due, as `Date.getDay()` counts: 0 is Sunday. */
   weeklyReviewDay: number;
   /** The day the last Weekly Review was finished, or `""` before the first one. */
   lastWeeklyReview: string;
   schemaVersion: number;
+}
+
+/** Delegating a Project tree to an agent in a local container; see `agent/README.md`. */
+export interface AgentSettings {
+  /** Where run folders live, outside the vault. Empty means the platform default. */
+  runsDirectory: string;
+  /** The folder holding `compose.yaml` and the runner and proxy images: the repository's `agent/`. */
+  kitDirectory: string;
+  /** The `docker` binary. Empty means the usual install locations are tried. */
+  dockerPath: string;
+  /** The macOS Keychain item (service name) holding the Anthropic API key. */
+  keychainService: string;
+  /** The spending cap a new run starts with, in US dollars. */
+  defaultBudgetUsd: number;
+  model: string;
 }
 
 export interface PomodoroSettings {

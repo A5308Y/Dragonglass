@@ -108,6 +108,7 @@ type Pending
     | AppendDiary
     | OpenNewSupportNote
     | MoveProjects (List ProjectId)
+    | AnswerSent String
 
 
 {-| A drop already shown on the board while the host writes it. `order` is left
@@ -154,10 +155,43 @@ type alias Model =
     , supportDraft : String
     , draggedProject : Maybe ProjectId
     , subprojectDropTarget : Maybe SubprojectDropTarget
+    , agent : AgentState
+    , agentAnswers : Dict String String
     , requests : Requests Pending
     , error : Maybe String
     , isMac : Bool
     }
+
+
+{-| Agent runs and their costs, from the host; see `src/agent/agent-service.ts`.
+-}
+type alias AgentState =
+    { available : Bool
+    , runs : List AgentRun
+    , costs : Dict ProjectId { own : Float, tree : Float }
+    }
+
+
+type alias AgentRun =
+    { id : String
+    , projectId : ProjectId
+    , createdAt : String
+    , status : String
+    , statusText : String
+    , costUsd : Maybe Float
+    , budgetUsd : Float
+    , reportPath : String
+    , questions : List AgentQuestion
+    }
+
+
+type alias AgentQuestion =
+    { id : String, question : String, askedAt : String }
+
+
+emptyAgent : AgentState
+emptyAgent =
+    { available = False, runs = [], costs = Dict.empty }
 
 
 type Msg
@@ -188,6 +222,8 @@ type Msg
     | OutcomeChanged String
     | SaveOutcome
     | DiaryChanged String
+    | AgentAnswerChanged String String
+    | SendAgentAnswer String String
     | ToggleAllDiary
     | LinkUrlChanged String
     | LinkTitleChanged String
@@ -280,6 +316,8 @@ init flags =
                     , supportDraft = ""
                     , draggedProject = Nothing
                     , subprojectDropTarget = Nothing
+                    , agent = emptyAgent
+                    , agentAnswers = Dict.empty
                     , requests = Host.noRequests
                     , error = Nothing
                     , isMac = decoded.isMac
@@ -450,6 +488,23 @@ update msg model =
 
         DiaryChanged body ->
             ( { model | diaryDraft = body }, Cmd.none )
+
+        AgentAnswerChanged key answer ->
+            ( { model | agentAnswers = Dict.insert key answer model.agentAnswers }, Cmd.none )
+
+        SendAgentAnswer runId questionId ->
+            let
+                key =
+                    answerKey runId questionId
+
+                answer =
+                    Dict.get key model.agentAnswers |> Maybe.withDefault "" |> String.trim
+            in
+            if String.isEmpty answer then
+                ( model, Cmd.none )
+
+            else
+                send (AnswerSent key) (Command.AnswerAgentQuestion runId questionId answer) model
 
         ToggleAllDiary ->
             ( { model | showAllDiary = not model.showAllDiary }, Cmd.none )
@@ -816,6 +871,7 @@ type HostEvent
     | ProjectMetaEvent (List ProjectMeta)
     | ProjectDetailEvent ProjectDetail
     | ShowProjectEvent (Maybe ProjectId)
+    | AgentEvent AgentState
     | Replied Host.Outcome
 
 
@@ -857,6 +913,9 @@ receiveHost value model =
 
         Ok (ProjectMetaEvent items) ->
             ( { model | meta = metaDict items }, Cmd.none )
+
+        Ok (AgentEvent agent) ->
+            ( { model | agent = agent }, Cmd.none )
 
         Ok (ProjectDetailEvent detail) ->
             if model.selectedProjectId == Just detail.projectId then
@@ -921,6 +980,9 @@ finish pending resultValue model =
 
                 Err _ ->
                     ( model, Cmd.none )
+
+        AnswerSent key ->
+            ( { model | agentAnswers = Dict.remove key model.agentAnswers }, Cmd.none )
 
         AppendDiary ->
             case Decode.decodeValue diaryDecoder resultValue of
@@ -1528,6 +1590,7 @@ viewDetail model project =
                     , viewOutcome model project
                     , viewActionsSection model project openActions completedActions
                     , viewSubprojects model project
+                    , viewAgent model project
                     ]
 
                 SupportTab ->
@@ -1538,6 +1601,134 @@ viewDetail model project =
                     ]
             )
         ]
+
+
+{-| The Project's agent runs: status, cost, the agent's questions with a place to
+answer them, and the way to its report. Also what delegating has cost this tree.
+-}
+viewAgent : Model -> Project -> Html Msg
+viewAgent model project =
+    let
+        runs =
+            List.filter (\run -> run.projectId == project.id) model.agent.runs
+
+        cost =
+            Dict.get project.id model.agent.costs
+    in
+    if not model.agent.available && List.isEmpty runs then
+        text ""
+
+    else
+        section [ class "dg-detail-section dg-agent-panel" ]
+            [ div [ class "dg-detail-section-heading" ]
+                [ h3 [ class "dg-detail-eyebrow" ] [ text "Agent" ]
+                , div [ class "dg-detail-section-actions" ]
+                    [ Ui.maybeView cost (\amounts -> span [ class "dg-agent-cost" ] [ text (costSummary amounts) ])
+                    , if model.agent.available then
+                        button [ onClick (Send IgnoreReply (Command.DelegateProject project.id)) ] [ text "Delegate to agent…" ]
+
+                      else
+                        text ""
+                    ]
+                ]
+            , if List.isEmpty runs then
+                p [ class "dg-muted" ] [ text "No runs yet. An agent works on a copy of this Project's tree and adds its results to the Project Material." ]
+
+              else
+                div [ class "dg-agent-runs" ] (List.map (viewAgentRun model) runs)
+            ]
+
+
+viewAgentRun : Model -> AgentRun -> Html Msg
+viewAgentRun model run =
+    let
+        active =
+            List.member run.status [ "starting", "running", "waiting" ]
+
+        spent =
+            case run.costUsd of
+                Just amount ->
+                    usd amount ++ " of " ++ usd run.budgetUsd
+
+                Nothing ->
+                    "Budget " ++ usd run.budgetUsd
+    in
+    article [ classList [ ( "dg-agent-run", True ), ( "is-waiting", run.status == "waiting" ) ] ]
+        [ div [ class "dg-agent-run-heading" ]
+            [ div []
+                [ strong [] [ text run.statusText ]
+                , span [ class "dg-agent-run-meta" ] [ text (String.replace "T" " " (String.left 16 run.createdAt) ++ " UTC · " ++ spent) ]
+                ]
+            , div [ class "dg-detail-section-actions" ]
+                [ if String.isEmpty run.reportPath then
+                    text ""
+
+                  else
+                    button [ onClick (Send IgnoreReply (Command.OpenFile run.reportPath)) ] [ text "Open report" ]
+                , if active then
+                    button [ class "mod-warning", onClick (Send IgnoreReply (Command.StopAgentRun run.id)) ] [ text "Stop" ]
+
+                  else
+                    text ""
+                ]
+            ]
+        , div [] (List.map (viewAgentQuestion model run) run.questions)
+        ]
+
+
+viewAgentQuestion : Model -> AgentRun -> AgentQuestion -> Html Msg
+viewAgentQuestion model run question =
+    let
+        key =
+            answerKey run.id question.id
+
+        draft =
+            Dict.get key model.agentAnswers |> Maybe.withDefault ""
+    in
+    div [ class "dg-agent-question" ]
+        [ p [ class "dg-agent-question-text" ] [ text ("❓ " ++ question.question) ]
+        , Ui.labelled "Your answer"
+            (textarea
+                [ rows 3
+                , value draft
+                , placeholder "Your answer…"
+                , onInput (AgentAnswerChanged key)
+                , Ui.onModEnter (SendAgentAnswer run.id question.id)
+                ]
+                []
+            )
+        , div [ class "dg-agent-question-actions" ]
+            [ button
+                [ class "mod-cta"
+                , disabled (String.isEmpty (String.trim draft))
+                , onClick (SendAgentAnswer run.id question.id)
+                ]
+                [ text "Answer" ]
+            ]
+        ]
+
+
+answerKey : String -> String -> String
+answerKey runId questionId =
+    runId ++ "/" ++ questionId
+
+
+costSummary : { own : Float, tree : Float } -> String
+costSummary amounts =
+    if amounts.tree > amounts.own then
+        "Agent cost: " ++ usd amounts.own ++ " here, " ++ usd amounts.tree ++ " with sub-projects"
+
+    else
+        "Agent cost: " ++ usd amounts.own
+
+
+usd : Float -> String
+usd amount =
+    let
+        cents =
+            round (amount * 100)
+    in
+    "$" ++ String.fromInt (cents // 100) ++ "." ++ String.padLeft 2 '0' (String.fromInt (modBy 100 cents))
 
 
 viewDetailTabs : Model -> Project -> List Action -> Html Msg
@@ -2296,7 +2487,9 @@ projectMenu x y model project =
             ++ areaEntries model project
             ++ [ MenuSeparator
                , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
-               , MenuItem "New Action…" (Command.NewActionModal (Just project.id))
+               ]
+            ++ delegateEntry model project
+            ++ [ MenuItem "New Action…" (Command.NewActionModal (Just project.id))
                , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id) ProjectStatus.Active)
                , MenuItem "Open note" (Command.OpenFile project.file.path)
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
@@ -2381,12 +2574,23 @@ subprojectMenu x y model project =
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
                , MenuItem "Open note" (Command.OpenFile project.file.path)
                , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
-               , MenuItem "New Action…" (Command.NewActionModal (Just project.id))
+               ]
+            ++ delegateEntry model project
+            ++ [ MenuItem "New Action…" (Command.NewActionModal (Just project.id))
                , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id) ProjectStatus.Active)
                , MenuSeparator
                , MenuItem "Delete Project…" (Command.TrashProject project.id)
                ]
         )
+
+
+delegateEntry : Model -> Project -> List MenuEntry
+delegateEntry model project =
+    if model.agent.available then
+        [ MenuItem "Delegate to agent…" (Command.DelegateProject project.id) ]
+
+    else
+        []
 
 
 statusEntries : Project -> (ProjectStatus -> Command) -> List MenuEntry
@@ -2517,6 +2721,51 @@ flagsDecoder =
         (Decode.field "isMac" Decode.bool)
 
 
+agentDecoder : Decoder AgentState
+agentDecoder =
+    Decode.map3 AgentState
+        (Decode.field "available" Decode.bool)
+        (Decode.field "runs" (Decode.list agentRunDecoder))
+        (Decode.field "costs"
+            (Decode.list
+                (Decode.map3 (\projectId own tree -> ( projectId, { own = own, tree = tree } ))
+                    (Decode.field "projectId" Decode.string)
+                    (Decode.field "own" Decode.float)
+                    (Decode.field "tree" Decode.float)
+                )
+                |> Decode.map Dict.fromList
+            )
+        )
+
+
+agentRunDecoder : Decoder AgentRun
+agentRunDecoder =
+    Decode.succeed AgentRun
+        |> andMap (Decode.field "id" Decode.string)
+        |> andMap (Decode.field "projectId" Decode.string)
+        |> andMap (Decode.field "createdAt" Decode.string)
+        |> andMap (Decode.field "status" Decode.string)
+        |> andMap (Decode.field "statusText" Decode.string)
+        |> andMap (Decode.field "costUsd" (Decode.nullable Decode.float))
+        |> andMap (Decode.field "budgetUsd" Decode.float)
+        |> andMap (Decode.field "reportPath" Decode.string)
+        |> andMap
+            (Decode.field "questions"
+                (Decode.list
+                    (Decode.map3 AgentQuestion
+                        (Decode.field "id" Decode.string)
+                        (Decode.field "question" Decode.string)
+                        (Decode.field "askedAt" Decode.string)
+                    )
+                )
+            )
+
+
+andMap : Decoder a -> Decoder (a -> b) -> Decoder b
+andMap =
+    Decode.map2 (|>)
+
+
 projectMetaDecoder : Decoder ProjectMeta
 projectMetaDecoder =
     Decode.map7 ProjectMeta
@@ -2616,6 +2865,9 @@ hostEventDecoder =
                     "show-project" ->
                         Decode.map ShowProjectEvent (Decode.field "projectId" (Decode.maybe Decode.string))
 
+                    "agent" ->
+                        Decode.map AgentEvent (Decode.field "agent" agentDecoder)
+
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder
 
@@ -2661,6 +2913,8 @@ emptyModel message =
     , supportDraft = ""
     , draggedProject = Nothing
     , subprojectDropTarget = Nothing
+    , agent = emptyAgent
+    , agentAnswers = Dict.empty
     , requests = Host.noRequests
     , error = Just message
     , isMac = False

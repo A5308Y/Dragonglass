@@ -90,6 +90,10 @@ type Command
         }
     | ReviewSomedayProject ProjectId String
     | OpenSomedayReview
+      -- Agent delegation
+    | DelegateProject ProjectId
+    | AnswerAgentQuestion String String String
+    | StopAgentRun String
       -- Pomodoro
     | OpenPomodoro ProjectId
     | StartPomodoro { projectId : ProjectId, intention : String, focusActionIds : List ActionId, minutes : Int }
@@ -491,6 +495,19 @@ encode command =
 
         OpenSomedayReview ->
             object "open-someday-review" []
+
+        DelegateProject projectId ->
+            object "delegate-project" [ ( "projectId", Encode.string projectId ) ]
+
+        AnswerAgentQuestion runId questionId answer ->
+            object "answer-agent-question"
+                [ ( "runId", Encode.string runId )
+                , ( "questionId", Encode.string questionId )
+                , ( "answer", Encode.string answer )
+                ]
+
+        StopAgentRun runId ->
+            object "stop-agent-run" [ ( "runId", Encode.string runId ) ]
 
         OpenPomodoro projectId ->
             object "open-pomodoro" [ ( "projectId", Encode.string projectId ) ]

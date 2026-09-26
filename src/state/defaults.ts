@@ -75,6 +75,14 @@ export function defaultSettings(): GtdSettings {
       focusMinutes: 25,
       logToDiary: false,
     },
+    agent: {
+      runsDirectory: "",
+      kitDirectory: "",
+      dockerPath: "",
+      keychainService: "dragonglass-agent",
+      defaultBudgetUsd: 5,
+      model: "claude-opus-5-5",
+    },
     feeds: {
       enabled: false,
       storePath: "GTD/feeds.json",

@@ -1,8 +1,25 @@
-# Delegating a Project tree to an agent: Step 0
+# Delegating a Project tree to an agent
 
-A hand-driven spike, before any plugin code depends on it. It proves that an agent can
-work on a copy of one Project tree inside a sandbox, reach the internet but nothing on
-your Mac or network, never hold the API key, and ask you questions.
+An agent works on a copy of one Project tree inside a sandbox: it can reach the
+internet but nothing on your Mac or network, never holds the API key, can ask you
+questions, and adds its results to the Project Material.
+
+## From Dragonglass
+
+1. Put your Anthropic API key in the macOS Keychain (it never goes into the vault):
+   `security add-generic-password -a "$USER" -s dragonglass-agent -w`
+2. In Dragonglass's settings, under **Agent delegation**, set **Agent kit folder** to this
+   folder. Docker Desktop has to be running.
+3. On a Project, choose **Delegate to agent…** from its menu or its page. The dialog lists
+   every file the agent will get; say what you want done, set a budget, and start.
+
+The run carries on in the background, also when Obsidian is closed. The Project's page
+shows its status and cost, and its questions with a place to answer them. When it ends,
+everything in its outbox is copied into the Project Material under
+`Agent runs/<date> <title>/`, including `REPORT.md`; nothing of yours is changed.
+
+Run folders live in `~/Library/Application Support/Dragonglass/agent-runs` unless the
+settings say otherwise. The rest of this page describes the sandbox and running it by hand.
 
 ## How it fits together
 
@@ -87,8 +104,11 @@ sub-project it was for (the first line under `## Project` in the brief). To see 
 delegating has cost per sub-project:
 
 ```sh
-node scripts/costs.mjs
+node scripts/costs.mjs                                                   # runs started by hand
+node scripts/costs.mjs ~/Library/Application\ Support/Dragonglass/agent-runs   # runs from Dragonglass
 ```
+
+Dragonglass shows the same on each Project's page, per Project and for its whole tree.
 
 The numbers are the SDK's estimates from token counts and list prices; the Claude
 Console's usage page is the actual bill. A run you stop by hand shows "cost unknown".
