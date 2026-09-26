@@ -62,10 +62,11 @@ class DelegateModal extends Modal {
         .addOption("claude", `Claude (${this.settings.model})`)
         .addOption("local", `Local model, Dragonglass's loop (${localModel})`)
         .addOption("local-smol", `Local model, smolagents (${localModel})`)
-        .setValue(this.runtime === "claude" ? "claude" : this.harness === "smolagents" ? "local-smol" : "local")
+        .addOption("local-qwen", `Local model, Qwen-Agent (${localModel})`)
+        .setValue(this.runtime === "claude" ? "claude" : this.harness === "smolagents" ? "local-smol" : this.harness === "qwen-agent" ? "local-qwen" : "local")
         .onChange((value) => {
           this.runtime = value === "claude" ? "claude" : "local";
-          this.harness = value === "local-smol" ? "smolagents" : "loop";
+          this.harness = value === "local-smol" ? "smolagents" : value === "local-qwen" ? "qwen-agent" : "loop";
           // Claude only ever reads the Project's tree.
           if (this.runtime === "claude" && this.plan.wholeVault) void this.replan(false);
           else this.render();

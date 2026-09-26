@@ -152,6 +152,41 @@ services:
     cpus: 2
     pids_limit: 256
 
+  # The same kind of run again, with Alibaba's Qwen-Agent, which speaks Qwen models' own tool-call format.
+  agent-qwen:
+    build: ./runner-qwen
+    depends_on: [proxy]
+    environment:
+      LOCAL_MODEL_BASE_URL: http://proxy:8080/local/v1
+      LOCAL_MODEL: ${LOCAL_MODEL:-}
+      AGENT_OFFLINE: ${AGENT_OFFLINE:-0}
+      AGENT_MAX_TURNS: ${AGENT_MAX_TURNS:-60}
+      AGENT_MAX_MINUTES: ${AGENT_MAX_MINUTES:-120}
+      AGENT_ANSWER_TIMEOUT_MINUTES: ${AGENT_ANSWER_TIMEOUT_MINUTES:-240}
+      LOCAL_MAX_REPLY_TOKENS: ${LOCAL_MAX_REPLY_TOKENS:-8192}
+      LOCAL_CONTEXT_TOKENS: ${LOCAL_CONTEXT_TOKENS:-32768}
+      HTTPS_PROXY: http://proxy:8080
+      HTTP_PROXY: http://proxy:8080
+      https_proxy: http://proxy:8080
+      http_proxy: http://proxy:8080
+      NO_PROXY: proxy
+      no_proxy: proxy
+    volumes:
+      - ${RUN_DIR}/input:/workspace/input:ro
+      - ${RUN_DIR}/outbox:/workspace/outbox
+      - ${RUN_DIR}/exchange:/workspace/exchange
+    tmpfs:
+      - /tmp:rw,nosuid,size=1g
+      - /home/agent:rw,nosuid,size=512m,uid=1000,gid=1000
+    networks: [sandbox]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "1000:1000"
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+
 networks:
   # No route out: the agent reaches only the proxy.
   sandbox:

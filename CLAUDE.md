@@ -119,9 +119,9 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - Deleting a run removes its folder (after asking; it has no trash) but appends it to
   `deleted-runs.jsonl` in the runs folder, so its cost still counts and its Waiting
   Action stays out of later runs' material.
-- Local runs have two harnesses behind the same contract: our loop (`agent/runner-local`)
-  and smolagents' CodeAgent (`agent/runner-smol`, pinned). `run.json` records `harness`,
-  which picks the compose service; everything in Dragonglass is shared.
+- Local runs have three harnesses behind the same contract: our loop (`agent/runner-local`),
+  smolagents' CodeAgent (`agent/runner-smol`) and Qwen-Agent (`agent/runner-qwen`), both
+  pinned. `run.json` records `harness`; `localHarnessService` picks the compose service.
 - Local runs are queued: only one holds the local model at a time (starting, working or
   waiting for an answer); the scan starts the oldest queued run once it is free. A queued
   run builds its environment and reads its keys only when it launches.

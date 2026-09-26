@@ -1661,11 +1661,15 @@ viewAgentRun model run =
         spent =
             if run.runtime == "local" then
                 String.join " · "
-                    ((if run.harness == "smolagents" then
-                        "Local (smolagents): " ++ run.model
+                    ((case run.harness of
+                        "smolagents" ->
+                            "Local (smolagents): " ++ run.model
 
-                      else
-                        "Local: " ++ run.model
+                        "qwen-agent" ->
+                            "Local (Qwen-Agent): " ++ run.model
+
+                        _ ->
+                            "Local: " ++ run.model
                      )
                         :: (if run.wholeVault then
                                 [ "whole vault" ]

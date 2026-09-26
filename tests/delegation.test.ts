@@ -9,6 +9,8 @@ import {
   agentRunStatusText,
   briefInstructions,
   withoutEntityFrontmatter,
+  localHarness,
+  localHarnessService,
   runReportInboxItem,
   delegationBrief,
   delegationScope,
@@ -231,6 +233,15 @@ describe("Reporting a run to the Inbox", () => {
     expect(body).toContain("It left no results.");
     expect(body).toContain("“Run again…”");
     expect(body).not.toContain("## Report");
+  });
+});
+
+describe("Local harnesses", () => {
+  it("maps each harness to its container, and anything unknown to Dragonglass's own loop", () => {
+    expect(localHarnessService(localHarness("smolagents"))).toBe("agent-smol");
+    expect(localHarnessService(localHarness("qwen-agent"))).toBe("agent-qwen");
+    expect(localHarnessService(localHarness("loop"))).toBe("agent-local");
+    expect(localHarnessService(localHarness(undefined))).toBe("agent-local");
   });
 });
 

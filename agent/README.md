@@ -175,6 +175,21 @@ RUN_DIR=./runs/local-check docker compose run --rm --build agent-smol
 
 smolagents is pinned in `runner-smol/requirements.txt`; its API is marked experimental.
 
+### Qwen-Agent as the harness
+
+`agent-qwen` (`runner-qwen/run.py`) uses Alibaba's Qwen-Agent. It describes the tools to
+the model in the format Qwen models are trained on and parses the tool calls out of the
+reply itself, so it doesn't depend on the model server understanding the model's tool calls;
+it also shortens the conversation to fit `LOCAL_CONTEXT_TOKENS` on its own. Same contract and
+tools as the others; choose "Local model, Qwen-Agent" in Dragonglass, or by hand:
+
+```sh
+RUN_DIR=./runs/local-check docker compose run --rm --build agent-qwen
+```
+
+qwen-agent is pinned in `runner-qwen/requirements.txt`, together with four packages it
+imports without declaring them.
+
 ### Offline, with the whole vault
 
 `AGENT_OFFLINE=1` cuts the run off from the internet entirely: the proxy then passes only

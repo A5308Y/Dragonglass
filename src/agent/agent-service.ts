@@ -34,6 +34,9 @@ import {
   resultsFolderName,
   runFolderName,
   runReportInboxItem,
+  localHarness,
+  localHarnessLabel,
+  localHarnessService,
   withoutEntityFrontmatter,
   type AgentActivity,
   type AgentRunRecord,
@@ -342,7 +345,7 @@ export class AgentService {
       projectId: meta.projectId,
       instructions,
       runtime: meta.runtime === "local" ? "local" : "claude",
-      harness: meta.harness === "smolagents" ? "smolagents" : "loop",
+      harness: localHarness(meta.harness),
       wholeVault: meta.wholeVault === true,
       budgetUsd: typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd,
     };
@@ -510,7 +513,7 @@ export class AgentService {
       // A local run names the model it actually used in its result.
       model: typeof result?.model === "string" ? result.model : typeof meta.model === "string" ? meta.model : "",
       runtime: meta.runtime === "local" ? "local" : "claude",
-      ...(meta.runtime === "local" ? { harness: meta.harness === "smolagents" ? "smolagents" as const : "loop" as const } : {}),
+      ...(meta.runtime === "local" ? { harness: localHarness(meta.harness) } : {}),
       offline: meta.offline === true,
       wholeVault: meta.wholeVault === true,
       ...(typeof result?.subtype === "string" ? { resultSubtype: result.subtype } : {}),
@@ -608,7 +611,7 @@ export class AgentService {
       const runEnv = env ?? await this.runEnv(runtime, meta.wholeVault === true, budgetUsd);
       await this.docker(
         ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--rm", "--build", "--name", containerName(runId),
-          runtime === "claude" ? "agent" : meta.harness === "smolagents" ? "agent-smol" : "agent-local"],
+          runtime === "claude" ? "agent" : localHarnessService(localHarness(meta.harness))],
         { RUN_DIR: runDir, ...runEnv },
       );
       await this.writeHostNotes(runId, { starting: false });
@@ -692,7 +695,7 @@ export class AgentService {
       const reportPath = resultsFolder ? normalizePath(`${resultsFolder}/REPORT.md`) : "";
       const report = reportPath ? this.app.vault.getAbstractFileByPath(reportPath) : null;
       const spent = run.runtime === "local"
-        ? `Local${run.harness === "smolagents" ? " (smolagents)" : ""}: ${run.model}${run.wholeVault ? " · whole vault" : ""}${run.offline ? " · offline" : ""}`
+        ? `Local${run.harness && run.harness !== "loop" ? ` (${localHarnessLabel(run.harness)})` : ""}: ${run.model}${run.wholeVault ? " · whole vault" : ""}${run.offline ? " · offline" : ""}`
         : typeof run.costUsd === "number"
           ? `Cost: about $${run.costUsd.toFixed(2)} of $${run.budgetUsd.toFixed(2)}`
           : `Budget: $${run.budgetUsd.toFixed(2)}`;
@@ -783,6 +786,7 @@ export class AgentService {
         AGENT_MAX_MINUTES: String(settings.localMaxMinutes),
         AGENT_MAX_TURNS: String(settings.localMaxTurns),
         LOCAL_MAX_REPLY_TOKENS: String(settings.localMaxReplyTokens),
+        LOCAL_CONTEXT_TOKENS: String(settings.localContextTokens),
         // About three characters a token, less the room the tools, the reply and the model's thinking need.
         LOCAL_CONTEXT_CHARS: String(Math.max(8_000, Math.floor((settings.localContextTokens - 4_000) * 3))),
       };

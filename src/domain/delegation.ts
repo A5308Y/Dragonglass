@@ -296,8 +296,21 @@ export interface AgentRunRecord {
 
 export type AgentRuntime = "claude" | "local";
 
-/** What drives a local model: Dragonglass's own small loop, or smolagents' CodeAgent. */
-export type LocalHarness = "loop" | "smolagents";
+/** What drives a local model: Dragonglass's own small loop, smolagents' CodeAgent, or Qwen-Agent. */
+export type LocalHarness = "loop" | "smolagents" | "qwen-agent";
+
+export function localHarness(value: unknown): LocalHarness {
+  return value === "smolagents" || value === "qwen-agent" ? value : "loop";
+}
+
+/** The compose service that runs a local harness. */
+export function localHarnessService(harness: LocalHarness): string {
+  return harness === "smolagents" ? "agent-smol" : harness === "qwen-agent" ? "agent-qwen" : "agent-local";
+}
+
+export function localHarnessLabel(harness: LocalHarness): string {
+  return harness === "smolagents" ? "smolagents" : harness === "qwen-agent" ? "Qwen-Agent" : "Dragonglass's loop";
+}
 
 /** One line of what an agent did: a thought (a summary of its reasoning), something it said, or a tool call. */
 export interface AgentActivity {

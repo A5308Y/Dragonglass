@@ -1,0 +1,7 @@
+# The version the runner was written and tested against.
+qwen-agent==0.0.34
+# Imported by qwen-agent without being declared as its dependencies (found by importing it in a clean venv).
+numpy
+soundfile
+tqdm
+python-dateutil
