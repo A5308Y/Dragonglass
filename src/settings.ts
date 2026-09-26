@@ -410,9 +410,12 @@ export class GtdSettingTab extends PluginSettingTab {
   /**
    * Email import.
    *
-   * Accounts and their app passwords live here, in the plugin's own data file, and
-   * deliberately not in the vault file the sync watermarks live in — that one syncs
-   * between devices and a mail password has no business travelling with it.
+   * Accounts and their app passwords live in the plugin's own data file
+   * (`.obsidian/plugins/dragonglass-gtd/data.json`), as plain text, and not in the
+   * vault note that holds the sync watermarks, so they never show up in the vault's
+   * notes. The data file is still inside the vault, though: iCloud, Obsidian Sync
+   * with plugin settings, or git sync it like any other file. That is why the
+   * settings ask for a revocable app password, never the account password.
    */
   private displayMail(containerEl: HTMLElement): void {
     const mail = this.plugin.getMailService();
