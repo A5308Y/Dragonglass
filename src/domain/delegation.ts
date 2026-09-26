@@ -145,6 +145,37 @@ function firstLine(text: string): string {
   return line.length > TITLE_TEXT_LIMIT ? `${line.slice(0, TITLE_TEXT_LIMIT - 1).trimEnd()}…` : line;
 }
 
+// IMPORTING RESULTS
+
+/** The frontmatter that makes a note a Dragonglass Project, Action or Inbox Item, and ties it to others. */
+const ENTITY_KEYS = new Set(["type", "id", "project_id", "project", "parent_project_id", "parent_project", "blocked_by_project_ids", "support_path"]);
+
+/**
+ * An agent's note as it may enter the vault: when it carries a Dragonglass entity's
+ * frontmatter, often copied from the material it was given, that part is removed, so the
+ * note arrives as an ordinary note instead of a second Project with the same id. Other
+ * frontmatter stays.
+ */
+export function withoutEntityFrontmatter(markdown: string): { text: string; changed: boolean } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/.exec(markdown);
+  if (!match) return { text: markdown, changed: false };
+  const lines = match[1]!.split(/\r?\n/);
+  const isEntity = lines.some((line) => /^type:\s*["']?gtd-[\w-]+["']?\s*$/.test(line));
+  if (!isEntity) return { text: markdown, changed: false };
+  const kept: string[] = [];
+  let dropping = false;
+  for (const line of lines) {
+    const key = /^([A-Za-z_][\w-]*):/.exec(line)?.[1];
+    if (key !== undefined) dropping = ENTITY_KEYS.has(key);
+    // A dropped key's list items and continuation lines go with it.
+    else if (!/^[\s-]/.test(line)) dropping = false;
+    if (!dropping) kept.push(line);
+  }
+  const rest = markdown.slice(match[0].length);
+  const body = kept.some((line) => line.trim()) ? `---\n${kept.join("\n")}\n---\n${rest}` : rest;
+  return { text: body, changed: true };
+}
+
 // RUNS
 
 /** What Dragonglass records about a run, next to what the runner writes itself. */

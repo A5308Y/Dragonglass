@@ -117,7 +117,10 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   run ends. Its id lives in the run's `host.json`; once someone changes it by hand
   (not Waiting any more, or deleted), the service leaves it alone.
 - The API key stays in the macOS Keychain and is read only when a run starts; never
-  put it in settings, which sync with the vault. Results come back only as new files.
+  put it in settings, which sync with the vault. Results come back only as new files,
+  and a note carrying a Project's or Action's frontmatter (agents copy it from the
+  material) is imported without it (`withoutEntityFrontmatter`), or it would clash with
+  the original's id.
 
 ## Ranking cards
 

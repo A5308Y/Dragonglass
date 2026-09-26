@@ -8,6 +8,7 @@ import {
   agentRunStatus,
   agentRunStatusText,
   briefInstructions,
+  withoutEntityFrontmatter,
   delegationBrief,
   delegationScope,
   resultsFolderName,
@@ -128,6 +129,41 @@ describe("The Waiting Action", () => {
     const long = agentQuestionTitle("x".repeat(100));
     expect(long).toHaveLength("Agent asks: ".length + 70);
     expect(long.endsWith("…")).toBe(true);
+  });
+});
+
+describe("Importing an agent's notes", () => {
+  it("turns a copied Project note into an ordinary note, keeping other frontmatter", () => {
+    const copy = [
+      "---",
+      "type: gtd-project",
+      "id: 01ABC",
+      "title: Kitchen brainstorm",
+      "status: active",
+      "parent_project_id: 01PARENT",
+      "parent_project: \"[[House]]\"",
+      "blocked_by_project_ids:",
+      "  - 01X",
+      "  - 01Y",
+      "tags:",
+      "  - ideas",
+      "---",
+      "# Kitchen brainstorm",
+      "",
+    ].join("\n");
+    const { text, changed } = withoutEntityFrontmatter(copy);
+    expect(changed).toBe(true);
+    expect(text).toBe(["---", "title: Kitchen brainstorm", "status: active", "tags:", "  - ideas", "---", "# Kitchen brainstorm", ""].join("\n"));
+  });
+
+  it("drops the frontmatter block when nothing else is left", () => {
+    expect(withoutEntityFrontmatter("---\ntype: gtd-action\nid: 1\nproject_id: 2\n---\nBody\n").text).toBe("Body\n");
+  });
+
+  it("leaves ordinary notes alone", () => {
+    const note = "---\ntype: meeting\nid: 7\n---\nText";
+    expect(withoutEntityFrontmatter(note)).toEqual({ text: note, changed: false });
+    expect(withoutEntityFrontmatter("No frontmatter")).toEqual({ text: "No frontmatter", changed: false });
   });
 });
 

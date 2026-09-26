@@ -33,6 +33,7 @@ import {
   delegationScope,
   resultsFolderName,
   runFolderName,
+  withoutEntityFrontmatter,
   type AgentActivity,
   type AgentRunRecord,
   type AgentRunStatus,
@@ -498,7 +499,10 @@ export class AgentService {
       const status = agentRunStatus(run, false);
       const cost = typeof run.costUsd === "number" ? `, about $${run.costUsd.toFixed(2)}` : "";
       const files = imported.count ? `${imported.count} file${imported.count === 1 ? "" : "s"} in its Project Material` : "nothing in the outbox";
-      new Notice(`The agent on “${run.projectTitle}”: ${agentRunStatusText(run, status)}, ${files}${cost}.`, 15_000);
+      const cleaned = imported.cleaned
+        ? ` ${imported.cleaned} note${imported.cleaned === 1 ? "" : "s"} carried a copy of a Project's or Action's metadata, which was removed.`
+        : "";
+      new Notice(`The agent on “${run.projectTitle}”: ${agentRunStatusText(run, status)}, ${files}${cost}.${cleaned}`, 15_000);
     } catch (error) {
       new Notice(`Could not finish the agent run for “${run.projectTitle}”: ${error instanceof Error ? error.message : String(error)}`, 15_000);
     } finally {
@@ -511,23 +515,31 @@ export class AgentService {
    * Copies everything the agent wrote into a new folder under the Project's Project
    * Material. Only new files are written, into a folder of their own.
    */
-  private async importOutbox(run: AgentRunRecord): Promise<{ folder: string; count: number }> {
+  private async importOutbox(run: AgentRunRecord): Promise<{ folder: string; count: number; cleaned: number }> {
     const node = requireNode();
     const outbox = node.path.join(this.runsDirectory(), run.id, "outbox");
     const files = await listFiles(node, outbox);
-    if (!files.length) return { folder: "", count: 0 };
+    if (!files.length) return { folder: "", count: 0, cleaned: 0 };
     const project = this.repository.index.getSnapshot().projectsById.get(run.projectId);
     if (!project?.supportPath) throw new Error("The Project, or its Project Material folder, no longer exists.");
     const base = normalizePath(`${project.supportPath}/Agent runs/${resultsFolderName(new Date(run.createdAt || Date.now()), run.projectTitle)}`);
     let folder = base;
     for (let suffix = 2; this.app.vault.getAbstractFileByPath(folder); suffix += 1) folder = `${base} ${suffix}`;
+    let cleaned = 0;
     for (const relative of files) {
       const target = normalizePath(`${folder}/${relative.split(node.path.sep).join("/")}`);
       await this.ensureVaultFolder(target.slice(0, target.lastIndexOf("/")));
       const data = await node.fs.readFile(node.path.join(outbox, relative));
-      await this.app.vault.createBinary(target, data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer);
+      if (target.toLowerCase().endsWith(".md")) {
+        // A copied Project or Action note would be a second one with the same id; it arrives as a plain note.
+        const { text, changed } = withoutEntityFrontmatter(data.toString("utf8"));
+        if (changed) cleaned += 1;
+        await this.app.vault.create(target, text);
+      } else {
+        await this.app.vault.createBinary(target, data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer);
+      }
     }
-    return { folder, count: files.length };
+    return { folder, count: files.length, cleaned };
   }
 
   private async ensureVaultFolder(path: string): Promise<void> {
