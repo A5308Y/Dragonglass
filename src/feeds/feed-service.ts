@@ -178,7 +178,7 @@ export class FeedService {
    * The whole batch is remembered so one Undo puts a whole sweep back; nothing has
    * been written to the vault, so there is nothing to recover from the trash.
    */
-  async discard(keys: readonly string[]): Promise<number> {
+  async discard(keys: readonly string[]): Promise<FeedItem[]> {
     await this.load();
     const resolving = new Set(keys);
     const removed: FeedItem[] = [];
@@ -190,11 +190,11 @@ export class FeedService {
       removed.push(...hit);
       store = withFeedState(store, source.id, resolveItems(state, hit.map((item) => item.key)));
     }
-    if (!removed.length) return 0;
+    if (!removed.length) return [];
     this.store = store;
     this.lastSweep = removed;
     await this.persist();
-    return removed.length;
+    return removed;
   }
 
   /** Resolves Items after something else has consumed them, leaving Undo alone. */
@@ -209,10 +209,19 @@ export class FeedService {
   }
 
   async undoLastSweep(): Promise<number> {
+    return this.restore(this.lastSweep);
+  }
+
+  /**
+   * Puts discarded Items back on the list. Items already back are left alone, so
+   * the header's Undo and the Undo notice can both be used on one sweep.
+   */
+  async restore(items: readonly FeedItem[]): Promise<number> {
     await this.load();
-    if (!this.lastSweep.length) return 0;
-    const returning = this.lastSweep;
-    this.lastSweep = [];
+    if (!items.length) return 0;
+    const returning = [...items];
+    const returned = new Set(returning.map((item) => item.key));
+    this.lastSweep = this.lastSweep.filter((item) => !returned.has(item.key));
     let store = this.store;
     for (const source of store.sources) {
       const mine = returning.filter((item) => item.feedId === source.id);
