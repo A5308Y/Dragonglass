@@ -86,7 +86,7 @@ class DelegateModal extends Modal {
 
     this.budgetSetting = new Setting(contentEl)
       .setName("Budget")
-      .setDesc("US dollars. The run stops once its estimated spend passes this.")
+      .setDesc(`US dollars. The run stops once its estimated spend passes this, or after ${this.settings.maxTurns} turns.`)
       .addText((text) => {
         text.inputEl.type = "number";
         text.inputEl.min = "0.5";
@@ -97,7 +97,8 @@ class DelegateModal extends Modal {
       });
     this.limitEl = contentEl.createEl("p", {
       cls: "dg-delegate-note",
-      text: `A local run costs nothing and stops after ${this.settings.localMaxMinutes} minutes at the latest.`,
+      text: `A local run costs nothing. It stops after ${this.settings.localMaxTurns} turns or `
+        + `${this.settings.localMaxMinutes} minutes, whichever comes first.`,
     });
 
     const error = contentEl.createEl("p", { cls: "dg-delegate-error" });

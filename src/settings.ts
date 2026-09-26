@@ -371,6 +371,20 @@ export class GtdSettingTab extends PluginSettingTab {
         await save();
       }));
 
+    new Setting(sectionEl)
+      .setName("Turn limit")
+      .setDesc("Turns (tool round trips) a Claude run may take before it is stopped. Its budget still caps what it costs.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "1";
+        text.setValue(String(agent.maxTurns)).onChange(async (value) => {
+          const turns = Number(value);
+          if (!Number.isInteger(turns) || turns < 1) return;
+          agent.maxTurns = turns;
+          await save();
+        });
+      });
+
     sectionEl.createEl("h4", { text: "Local model" });
     sectionEl.createEl("p", {
       text: "Runs with a model on this Mac through LM Studio or another OpenAI-compatible server. They cost nothing, "
@@ -413,6 +427,20 @@ export class GtdSettingTab extends PluginSettingTab {
           const tokens = Number(value);
           if (!Number.isInteger(tokens) || tokens < 4096) return;
           agent.localContextTokens = tokens;
+          await save();
+        });
+      });
+
+    new Setting(sectionEl)
+      .setName("Turn limit")
+      .setDesc("Turns a local run may take before it is stopped. Local runs cost nothing, so this can be high; the time limit still applies.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "1";
+        text.setValue(String(agent.localMaxTurns)).onChange(async (value) => {
+          const turns = Number(value);
+          if (!Number.isInteger(turns) || turns < 1) return;
+          agent.localMaxTurns = turns;
           await save();
         });
       });

@@ -267,6 +267,8 @@ export interface AgentSettings {
   /** The spending cap a new run starts with, in US dollars. */
   defaultBudgetUsd: number;
   model: string;
+  /** How many turns (tool round trips) a Claude run may take before it is stopped. */
+  maxTurns: number;
   /** The local model's id on the model server; empty uses whichever model is loaded. */
   localModel: string;
   /** The OpenAI-compatible model server as the containers see your Mac, e.g. LM Studio. */
@@ -275,6 +277,8 @@ export interface AgentSettings {
   localKeychainService: string;
   /** How long a local run may take, in minutes. */
   localMaxMinutes: number;
+  /** How many turns a local run may take; they cost nothing, so this can be much higher. */
+  localMaxTurns: number;
   /** The context length the local model is loaded with, in tokens; the run stays well below it. */
   localContextTokens: number;
 }
