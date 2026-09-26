@@ -235,6 +235,7 @@ describe("Run status and costs", () => {
     expect(agentRunStatusText(run({ resultSubtype: "error_max_budget_usd" }), "failed")).toBe("Stopped at its budget");
     expect(agentRunStatusText(run({ startError: "Docker is not running" }), "failed")).toBe("Could not start: Docker is not running");
     expect(agentRunStatusText(run({ resultSubtype: "error_max_time" }), "failed")).toBe("Stopped at its time limit");
+    expect(agentRunStatusText(run({ resultSubtype: "error_repeating" }), "failed")).toBe("Stopped: it kept repeating the same step");
   });
 
   it("adds up costs per Project and per tree", () => {

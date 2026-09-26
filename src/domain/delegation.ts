@@ -288,6 +288,7 @@ export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus):
       if (run.resultSubtype === "error_max_turns") return "Stopped at its turn limit";
       if (run.resultSubtype === "error_max_time") return "Stopped at its time limit";
       if (run.resultSubtype === "error_no_tool_calls") return "Stopped: the model kept answering without using its tools";
+      if (run.resultSubtype === "error_repeating") return "Stopped: it kept repeating the same step";
       return "Failed";
   }
 }
