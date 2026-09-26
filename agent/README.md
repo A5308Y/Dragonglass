@@ -122,6 +122,55 @@ Console's usage page is the actual bill. A run you stop by hand shows "cost unkn
 - Whether `ask_human` holds up over a long wait.
 - What a run costs (`exchange/result.json`) and how useful the outbox is.
 
+## A local model (LM Studio)
+
+`agent-local` runs the same kind of task with a model on your Mac instead of Claude:
+our own small agent loop (`runner-local/run.mjs`) talking to LM Studio's
+OpenAI-compatible server. It has tools to list, read and search the input, write to the
+outbox, run shell commands, fetch URLs, and ask you questions; there is no web search.
+Local runs cost nothing, so their result records $0 and the token counts instead.
+
+Setting up LM Studio:
+
+- Load a model with tool-use support, and set its context length to 32k or more.
+- Start the server (Developer tab, or `lms server start`) on port 1234, and leave
+  "Serve on local network" off. The agent reaches it only through the proxy's `/local`
+  route, which goes to `host.docker.internal:1234` and nowhere else on your Mac.
+
+Check the sandbox with the local model, online and then offline:
+
+```sh
+cd agent
+mkdir -p runs/local-check/{input,outbox,exchange,logs}
+cp example/local-check-brief.md runs/local-check/input/brief.md
+echo "A file to read." > runs/local-check/input/sample.md
+RUN_DIR=./runs/local-check docker compose run --rm --build agent-local
+```
+
+Settings, as environment variables: `LOCAL_MODEL` (default: the first model the server
+lists), `LOCAL_MODEL_UPSTREAM` (default `http://host.docker.internal:1234`),
+`AGENT_MAX_TURNS` (60), `AGENT_MAX_MINUTES` (120), and `LOCAL_CONTEXT_CHARS` (100000): once
+the conversation grows past that many characters, the oldest tool results are shortened.
+Keep it well below the model's context length; about four characters make a token.
+
+### Offline, with the whole vault
+
+`AGENT_OFFLINE=1` cuts the run off from the internet entirely: the proxy then passes only
+the local model's route, refuses everything else, and the agent gets no fetch tool. That
+is the condition for giving it more than one Project tree to read: whatever it reads
+can't leave your Mac. To give it the whole vault, read-only, without Obsidian's settings
+(which hold the mail passwords) and the trash:
+
+```sh
+mkdir -p runs/vault/{input,outbox,exchange,logs}
+rsync -a --exclude .obsidian --exclude .trash "/path/to/your/vault/" runs/vault/input/vault/
+cp example/brief.md runs/vault/input/brief.md    # name the sub-project it is for, and the task
+AGENT_OFFLINE=1 RUN_DIR=./runs/vault docker compose run --rm --build agent-local
+```
+
+Copying reads every file, so notes that iCloud keeps only in the cloud are downloaded
+first; for a large vault that takes a while.
+
 ## The contract, for other agents later
 
 Dragonglass only relies on the folder layout above: `input/brief.md` plus read-only

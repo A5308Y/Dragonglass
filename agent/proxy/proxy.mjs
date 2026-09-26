@@ -1,12 +1,18 @@
 // The agent's only way out of its sandbox network, and the only place the API key lives.
 //
-// Two jobs on one port:
+// Three jobs on one port:
 //   - Claude API: the agent's ANTHROPIC_BASE_URL points here. Requests to /v1/... go to
 //     api.anthropic.com with the real key added; the agent only ever holds a placeholder.
+//   - A local model: requests to /local/... go to LOCAL_MODEL_UPSTREAM, the model server
+//     on your Mac (LM Studio). This is the one deliberate way to your Mac, and it goes to
+//     that address only.
 //   - Everything else: the agent's HTTP(S)_PROXY points here too. HTTPS arrives as
 //     CONNECT host:port, which is tunnelled without being decrypted; plain HTTP is
 //     forwarded. Destinations on your Mac or your local network are refused, and so
 //     are ports other than ALLOWED_PORTS.
+//
+// With PROXY_OFFLINE=1 only the local model is reachable: no Claude API, no internet.
+// That is what lets an agent read the whole vault: nothing it reads can leave.
 //
 // Every request is appended to PROXY_LOG as one JSON line. For HTTPS only the host is
 // visible, never the path or the content.
@@ -21,11 +27,8 @@ const PORT = Number(process.env.PROXY_PORT || 8080);
 const API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const LOG = process.env.PROXY_LOG || "/logs/requests.jsonl";
 const ALLOWED_PORTS = new Set((process.env.ALLOWED_PORTS || "80,443").split(",").map(Number));
-
-if (!API_KEY) {
-  console.error("ANTHROPIC_API_KEY is not set for the proxy.");
-  process.exit(1);
-}
+const LOCAL_MODEL_UPSTREAM = process.env.LOCAL_MODEL_UPSTREAM ? new URL(process.env.LOCAL_MODEL_UPSTREAM) : null;
+const OFFLINE = process.env.PROXY_OFFLINE === "1";
 
 function log(entry) {
   const line = JSON.stringify({ at: new Date().toISOString(), ...entry });
@@ -81,6 +84,12 @@ function withoutHopHeaders(headers) {
 }
 
 function forwardToClaude(req, res) {
+  if (OFFLINE || !API_KEY) {
+    const refused = OFFLINE ? "offline run" : "no API key given to the proxy";
+    res.writeHead(503, { "content-type": "text/plain" }).end(`Refused by the Dragonglass proxy: ${refused}\n`);
+    log({ kind: "api", method: req.method, path: req.url, refused });
+    return;
+  }
   if (!req.url.startsWith("/v1/")) {
     res.writeHead(404).end();
     log({ kind: "api", method: req.method, path: req.url, refused: "not a /v1 path" });
@@ -107,7 +116,39 @@ function forwardToClaude(req, res) {
   req.pipe(upstream);
 }
 
+/** The one route to your Mac: the local model server, and nothing else there. */
+function forwardToLocalModel(req, res) {
+  if (!LOCAL_MODEL_UPSTREAM) {
+    res.writeHead(503, { "content-type": "text/plain" }).end("Refused by the Dragonglass proxy: no local model configured\n");
+    log({ kind: "local", method: req.method, path: req.url, refused: "no local model configured" });
+    return;
+  }
+  const path = req.url.slice("/local".length) || "/";
+  const headers = withoutHopHeaders(req.headers);
+  headers.host = LOCAL_MODEL_UPSTREAM.host;
+  const started = Date.now();
+  const upstream = http.request(
+    { host: LOCAL_MODEL_UPSTREAM.hostname, port: Number(LOCAL_MODEL_UPSTREAM.port || 80), method: req.method, path, headers },
+    (response) => {
+      res.writeHead(response.statusCode || 502, response.headers);
+      response.pipe(res);
+      response.on("end", () => log({ kind: "local", method: req.method, path, status: response.statusCode, ms: Date.now() - started }));
+    },
+  );
+  upstream.on("error", (error) => {
+    if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
+    res.end(`The local model server did not answer: ${error.message}\n`);
+    log({ kind: "local", method: req.method, path, error: error.message });
+  });
+  req.pipe(upstream);
+}
+
 async function forwardHttp(req, res) {
+  if (OFFLINE) {
+    res.writeHead(403, { "content-type": "text/plain" }).end("Refused by the Dragonglass proxy: offline run\n");
+    log({ kind: "http", method: req.method, url: req.url, refused: "offline run" });
+    return;
+  }
   let target;
   try {
     target = new URL(req.url);
@@ -140,7 +181,8 @@ async function forwardHttp(req, res) {
 }
 
 const server = http.createServer((req, res) => {
-  if (req.url.startsWith("/")) forwardToClaude(req, res);
+  if (req.url === "/local" || req.url.startsWith("/local/")) forwardToLocalModel(req, res);
+  else if (req.url.startsWith("/")) forwardToClaude(req, res);
   else void forwardHttp(req, res);
 });
 
@@ -152,7 +194,7 @@ server.on("connect", async (req, client, head) => {
   }
   const host = match[1];
   const port = Number(match[2]);
-  const { address, refused } = await resolvePublic(host, port);
+  const { address, refused } = OFFLINE ? { refused: "offline run" } : await resolvePublic(host, port);
   if (refused) {
     // The reason goes in the status line and the body, so the agent can tell a policy
     // refusal from a service that is down.
@@ -179,4 +221,4 @@ server.on("connect", async (req, client, head) => {
   client.on("error", close);
 });
 
-server.listen(PORT, () => console.log(`Dragonglass agent proxy listening on ${PORT}, logging to ${LOG}`));
+server.listen(PORT, () => console.log(`Dragonglass agent proxy listening on ${PORT}${OFFLINE ? ", offline" : ""}, logging to ${LOG}`));
