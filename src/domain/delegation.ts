@@ -95,6 +95,15 @@ export function delegationBrief(input: BriefInput): string {
   ].join("\n");
 }
 
+/**
+ * The instructions a brief was written from, for running it again: the text under
+ * "What I'd like from you", up to the next section.
+ */
+export function briefInstructions(brief: string): string {
+  const match = /^## What I'd like from you\s*$([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(brief);
+  return match?.[1]?.trim() ?? "";
+}
+
 /** A run folder's name: sortable, unique per second, readable. */
 export function runFolderName(date: Date, title: string): string {
   const stamp = date.toISOString().slice(0, 19).replace("T", "-").replace(/:/g, "");

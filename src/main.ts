@@ -87,6 +87,10 @@ export default class DragonglassGtdPlugin extends Plugin {
       openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
       openPomodoro: (projectId) => void this.openPomodoro(projectId),
       delegateProject: (projectId) => delegateProject(this.app, this.agent, projectId, this.settings.agent),
+      rerunAgentRun: async (runId) => {
+        const previous = await this.agent.rerunDefaults(runId);
+        await delegateProject(this.app, this.agent, previous.projectId, this.settings.agent, previous);
+      },
     };
 
     this.registerView(BOARD_VIEW_TYPE, (leaf) => new ActionBoardView(leaf, this.services));

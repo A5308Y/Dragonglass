@@ -1693,6 +1693,12 @@ viewAgentRun model run =
 
                   else
                     text ""
+                , -- Opens the Delegate dialog filled in from this run, to adjust and start again.
+                  if model.agent.available && List.member run.status [ "failed", "stopped", "interrupted" ] then
+                    button [ onClick (Send IgnoreReply (Command.RerunAgentRun run.id)) ] [ text "Run again…" ]
+
+                  else
+                    text ""
                 ]
             ]
         , div [] (List.map (viewAgentQuestion model run) run.questions)

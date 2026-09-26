@@ -28,6 +28,7 @@ import {
   agentQuestionTitle,
   agentRunStatus,
   agentRunStatusText,
+  briefInstructions,
   delegationBrief,
   delegationScope,
   resultsFolderName,
@@ -72,6 +73,15 @@ const DOCKER_CANDIDATES = ["/usr/local/bin/docker", "/opt/homebrew/bin/docker", 
 export interface DelegationOptions {
   runtime: AgentRuntime;
   /** Claude runs only: the spending cap in US dollars. */
+  budgetUsd: number;
+}
+
+/** A finished run's choices, for starting it again from the Delegate dialog. */
+export interface RerunDefaults {
+  projectId: string;
+  instructions: string;
+  runtime: AgentRuntime;
+  wholeVault: boolean;
   budgetUsd: number;
 }
 
@@ -261,6 +271,7 @@ export class AgentService {
       projectId: root.id,
       projectTitle: root.title,
       createdAt: createdAt.toISOString(),
+      instructions: instructions.trim(),
       runtime: options.runtime,
       offline: local && plan.wholeVault,
       wholeVault: plan.wholeVault,
@@ -272,6 +283,24 @@ export class AgentService {
 
     void this.launch(runId, runDir, composeFile, docker, local ? "agent-local" : "agent", env);
     return runId;
+  }
+
+  /** What a run was started with, so it can be started again; older runs keep their instructions only in the brief. */
+  async rerunDefaults(runId: string): Promise<RerunDefaults> {
+    const node = requireNode();
+    if (!/^[\w.-]+$/.test(runId)) throw new Error("Unknown run.");
+    const input = node.path.join(this.runsDirectory(), runId, "input");
+    const meta = await readJson(node, node.path.join(input, "run.json"));
+    if (!meta || typeof meta.projectId !== "string") throw new Error("This run's details are missing.");
+    let instructions = typeof meta.instructions === "string" ? meta.instructions : "";
+    if (!instructions) instructions = briefInstructions(await node.fs.readFile(node.path.join(input, "brief.md"), "utf8").catch(() => ""));
+    return {
+      projectId: meta.projectId,
+      instructions,
+      runtime: meta.runtime === "local" ? "local" : "claude",
+      wholeVault: meta.wholeVault === true,
+      budgetUsd: typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd,
+    };
   }
 
   /** Hands the agent an answer; it picks it up within seconds. */

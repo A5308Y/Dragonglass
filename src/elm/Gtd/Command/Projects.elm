@@ -52,6 +52,7 @@ type Command
     | DelegateProject ProjectId
     | AnswerAgentQuestion String String String
     | StopAgentRun String
+    | RerunAgentRun String
     | OpenFile String
     | ShowMenu Float Float (List MenuEntry)
 
@@ -173,6 +174,9 @@ toBase command =
 
         StopAgentRun runId ->
             Base.StopAgentRun runId
+
+        RerunAgentRun runId ->
+            Base.RerunAgentRun runId
 
         OpenFile path ->
             Base.OpenFile path

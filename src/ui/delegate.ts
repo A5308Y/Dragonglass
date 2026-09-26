@@ -1,5 +1,5 @@
 import { Modal, Notice, Setting, type App, type ButtonComponent } from "obsidian";
-import { formatBytes, type AgentService, type DelegationPlan } from "../agent/agent-service";
+import { formatBytes, type AgentService, type DelegationPlan, type RerunDefaults } from "../agent/agent-service";
 import type { AgentRuntime } from "../domain/delegation";
 import type { AgentSettings } from "../domain/types";
 
@@ -11,13 +11,20 @@ import type { AgentSettings } from "../domain/types";
  * Claude reads the Project's tree. A local model may read the tree with internet
  * access, or the whole vault without any: the more it sees, the less it can reach.
  */
-export async function delegateProject(app: App, agent: AgentService, projectId: string, settings: AgentSettings): Promise<void> {
+export async function delegateProject(
+  app: App,
+  agent: AgentService,
+  projectId: string,
+  settings: AgentSettings,
+  previous?: RerunDefaults,
+): Promise<void> {
   if (!agent.available()) {
     new Notice("Delegating to an agent needs the Obsidian desktop app on macOS.");
     return;
   }
-  const plan = await agent.plan(projectId);
-  new DelegateModal(app, agent, plan, settings).open();
+  // Running again starts from the earlier run's choices, with the material copied afresh.
+  const plan = await agent.plan(projectId, previous?.runtime === "local" && previous.wholeVault);
+  new DelegateModal(app, agent, plan, settings, previous).open();
 }
 
 class DelegateModal extends Modal {
@@ -34,15 +41,17 @@ class DelegateModal extends Modal {
     private readonly agent: AgentService,
     private plan: DelegationPlan,
     private readonly settings: AgentSettings,
+    private readonly previous?: RerunDefaults,
   ) {
     super(app);
-    this.budget = settings.defaultBudgetUsd;
+    this.budget = previous?.budgetUsd ?? settings.defaultBudgetUsd;
+    this.runtime = previous?.runtime ?? "claude";
   }
 
   onOpen(): void {
     const { contentEl } = this;
     contentEl.addClass("dg-button-scope", "dg-delegate");
-    this.titleEl.setText(`Delegate “${this.plan.breadcrumb}”`);
+    this.titleEl.setText(`${this.previous ? "Run again" : "Delegate"}: “${this.plan.breadcrumb}”`);
 
     new Setting(contentEl)
       .setName("Agent")
@@ -73,6 +82,7 @@ class DelegateModal extends Modal {
       cls: "dg-delegate-instructions",
       attr: { id: instructionsId, rows: "6", placeholder: "For example: compare three tile suppliers near Berlin and draft an order." },
     });
+    if (this.previous) instructions.value = this.previous.instructions;
 
     this.budgetSetting = new Setting(contentEl)
       .setName("Budget")

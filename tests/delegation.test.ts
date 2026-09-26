@@ -7,6 +7,7 @@ import {
   agentQuestionTitle,
   agentRunStatus,
   agentRunStatusText,
+  briefInstructions,
   delegationBrief,
   delegationScope,
   resultsFolderName,
@@ -85,6 +86,20 @@ describe("Delegation brief", () => {
     expect(brief).toContain("Compare three tile suppliers.");
     expect(brief).toContain("1 Action, their Project Material and 2 linked files");
     expect(brief).toContain("- Tiles (Backlog): `material/GTD/Projects/Tiles.md`");
+  });
+
+  it("gives back the instructions a brief was written from", () => {
+    const brief = delegationBrief({
+      breadcrumb: "Kitchen",
+      desiredOutcome: "Done.",
+      instructions: "Compare suppliers.\n\n## Not a heading of the brief? It is, but only at line start.",
+      projects: [project("K", "Kitchen")],
+      actionCount: 0,
+      linkedFileCount: 0,
+    });
+    expect(briefInstructions(brief)).toBe("Compare suppliers.");
+    expect(briefInstructions("# Brief\n\n## What I'd like from you\n\nOnly this.\n")).toBe("Only this.");
+    expect(briefInstructions("no sections")).toBe("");
   });
 
   it("says when the material is the whole vault, and still names the Project's own notes", () => {

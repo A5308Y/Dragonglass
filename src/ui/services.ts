@@ -29,4 +29,6 @@ export interface GtdServices {
   openPomodoro: (projectId?: string) => void;
   /** Shows what delegating a Project tree would hand over, and starts the run. */
   delegateProject: (projectId: string) => Promise<void>;
+  /** Opens the Delegate dialog filled in from an earlier run, to start it again. */
+  rerunAgentRun: (runId: string) => Promise<void>;
 }

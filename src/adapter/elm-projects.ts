@@ -302,6 +302,8 @@ export class ElmProjectsHost {
         return this.services.agent.answer(command.runId, command.questionId, command.answer);
       case "stop-agent-run":
         return this.services.agent.stop(command.runId);
+      case "rerun-agent-run":
+        return this.services.rerunAgentRun(command.runId);
     }
     return assertNever(command);
   }
