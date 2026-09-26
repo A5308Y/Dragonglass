@@ -1,0 +1,71 @@
+# Step 0 of delegating a Project tree to an agent: two containers.
+#
+#   agent  runs the task. It sits on the internal "sandbox" network only, so it cannot
+#          reach anything directly: not the internet, not your Mac, not your LAN. It sees
+#          only the run's input (read-only), outbox and exchange folders.
+#   proxy  is the agent's only way out. It holds the API key, forwards Claude API calls,
+#          tunnels other HTTP(S) to public addresses, refuses local ones, logs everything.
+#
+# Run from this folder:  RUN_DIR=./runs/demo docker compose run --rm --build agent
+# See README.md.
+
+name: dragonglass-agent
+
+services:
+  proxy:
+    build: ./proxy
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY in your shell before starting a run}
+      PROXY_LOG: /logs/requests.jsonl
+    volumes:
+      - ${RUN_DIR:?Set RUN_DIR to the run folder, e.g. ./runs/demo}/logs:/logs
+    networks: [sandbox, egress]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 64
+
+  agent:
+    build: ./runner
+    depends_on: [proxy]
+    environment:
+      # The key never enters this container: the proxy replaces the placeholder.
+      ANTHROPIC_BASE_URL: http://proxy:8080
+      ANTHROPIC_API_KEY: placeholder-the-proxy-adds-the-real-key
+      HTTPS_PROXY: http://proxy:8080
+      HTTP_PROXY: http://proxy:8080
+      https_proxy: http://proxy:8080
+      http_proxy: http://proxy:8080
+      NO_PROXY: proxy
+      no_proxy: proxy
+      # Node's own fetch only honours the proxy variables when asked to.
+      NODE_USE_ENV_PROXY: "1"
+      AGENT_MODEL: ${AGENT_MODEL:-claude-opus-5}
+      AGENT_MAX_TURNS: ${AGENT_MAX_TURNS:-80}
+      AGENT_ANSWER_TIMEOUT_MINUTES: ${AGENT_ANSWER_TIMEOUT_MINUTES:-240}
+      DISABLE_TELEMETRY: "1"
+      DISABLE_ERROR_REPORTING: "1"
+      DISABLE_AUTOUPDATER: "1"
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+    volumes:
+      - ${RUN_DIR}/input:/workspace/input:ro
+      - ${RUN_DIR}/outbox:/workspace/outbox
+      - ${RUN_DIR}/exchange:/workspace/exchange
+    tmpfs:
+      - /tmp:rw,nosuid,size=1g
+      - /home/node:rw,nosuid,size=512m,uid=1000,gid=1000
+    networks: [sandbox]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "1000:1000"
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+
+networks:
+  # No route out: the agent reaches only the proxy.
+  sandbox:
+    internal: true
+  egress: {}
