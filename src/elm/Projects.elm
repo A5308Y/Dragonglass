@@ -1687,7 +1687,7 @@ viewAgentRun model run =
         [ div [ class "dg-agent-run-heading" ]
             [ div []
                 [ strong [] [ text run.statusText ]
-                , span [ class "dg-agent-run-meta" ] [ text (String.replace "T" " " (String.left 16 run.createdAt) ++ " UTC · " ++ spent) ]
+                , span [ class "dg-agent-run-meta" ] [ text (run.createdAt ++ " · " ++ spent) ]
                 ]
             , div [ class "dg-detail-section-actions" ]
                 [ if String.isEmpty run.reportPath then
@@ -1743,7 +1743,7 @@ viewAgentActivity run =
                     (List.map
                         (\entry ->
                             Html.li [ classList [ ( "dg-agent-activity-entry", True ), ( "is-" ++ entry.kind, True ) ] ]
-                                [ span [ class "dg-agent-activity-time" ] [ text (String.slice 11 19 entry.at) ]
+                                [ span [ class "dg-agent-activity-time" ] [ text entry.at ]
                                 , span [] [ text (activityLabel entry.kind ++ " " ++ entry.text) ]
                                 ]
                         )

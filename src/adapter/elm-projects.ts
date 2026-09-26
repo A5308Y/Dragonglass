@@ -141,7 +141,7 @@ export class ElmProjectsHost {
         runs: agent.views().map((run) => ({
           id: run.id,
           projectId: run.projectId,
-          createdAt: run.createdAt,
+          createdAt: localDateTime(run.createdAt),
           status: run.status,
           statusText: run.statusText,
           costUsd: run.costUsd,
@@ -152,7 +152,7 @@ export class ElmProjectsHost {
           wholeVault: run.wholeVault,
           reportPath: run.reportPath,
           questions: run.status === "waiting" ? run.openQuestions : [],
-          activity: run.activity ?? [],
+          activity: (run.activity ?? []).map((entry) => ({ ...entry, at: localTimeOfDay(entry.at) })),
         })),
         costs: [...agent.costs()].map(([projectId, cost]) => ({ projectId, ...cost })),
       },
@@ -371,4 +371,19 @@ export class ElmProjectsHost {
     }
     menu.showAtPosition({ x, y });
   }
+}
+
+/** An ISO timestamp as a date and time in this device's time zone, or as given when it doesn't parse. */
+function localDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localTimeOfDay(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }

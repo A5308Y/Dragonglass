@@ -67,6 +67,7 @@ export interface ElmAgentDto {
   runs: Array<{
     id: string;
     projectId: string;
+    /** When the run was started, in this device's time zone: "2026-09-26 14:05". */
     createdAt: string;
     status: string;
     statusText: string;
@@ -78,6 +79,7 @@ export interface ElmAgentDto {
     wholeVault: boolean;
     reportPath: string;
     questions: Array<{ id: string; question: string; askedAt: string }>;
+    /** Newest first; `at` is the time of day in this device's time zone: "14:05:12". */
     activity: Array<{ at: string; kind: string; text: string }>;
   }>;
   costs: Array<{ projectId: string; own: number; tree: number }>;
