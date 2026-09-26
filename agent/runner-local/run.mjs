@@ -191,8 +191,15 @@ const tools = {
       timeout_seconds: { type: "integer", description: "Default 120, at most 600." },
     },
     required: ["command"],
-    run: async ({ command, timeout_seconds = 120 }) =>
-      trim(await shell("bash", ["-lc", String(command)], Math.min(600, Math.max(1, Number(timeout_seconds) || 120))), 20_000) || "(no output)",
+    run: async ({ command, timeout_seconds = 120 }) => {
+      // pipefail: a failed curl at the start of a pipe shows as a failure, not as empty output.
+      const output = await shell("bash", ["-o", "pipefail", "-lc", String(command)], Math.min(600, Math.max(1, Number(timeout_seconds) || 120)));
+      // A small model easily misses that it is offline; a web request says so where it looks.
+      const offlineNote = OFFLINE && /https?:\/\//.test(String(command))
+        ? "\n[This run is offline: every web request is refused. Work with the material in /workspace/input.]"
+        : "";
+      return `${trim(output, 20_000) || "(no output)"}${offlineNote}`;
+    },
   },
   ...(OFFLINE ? {} : {
     fetch_url: {
