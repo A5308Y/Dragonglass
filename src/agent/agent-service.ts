@@ -23,7 +23,9 @@ import type * as NodeOs from "node:os";
 import type * as NodePath from "node:path";
 import {
   MATERIAL_FOLDER,
+  agentActionTitle,
   agentCosts,
+  agentQuestionTitle,
   agentRunStatus,
   agentRunStatusText,
   delegationBrief,
@@ -37,6 +39,7 @@ import {
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import type { AgentSettings } from "../domain/types";
 import type { GtdRepository } from "../repository/gtd-repository";
+import { localDate } from "../utils/date";
 
 interface NodeModules {
   fs: typeof FsPromises;
@@ -83,6 +86,8 @@ export interface DelegationPlan {
 }
 
 interface HostNotes {
+  actionId?: string;
+  actionTitle?: string;
   starting?: boolean;
   startError?: string;
   importedTo?: string;
@@ -96,6 +101,8 @@ export class AgentService {
   private readonly announced = new Set<string>();
   private readonly finishing = new Set<string>();
   private readonly launching = new Set<string>();
+  /** What was last written to each run's Waiting Action, so a slow index doesn't cause repeat writes. */
+  private readonly actionState = new Map<string, string>();
   private timer: number | null = null;
   private scanning: Promise<void> | null = null;
 
@@ -224,7 +231,7 @@ export class AgentService {
       budgetUsd,
       model: settings.model,
     });
-    await this.writeHostNotes(runId, { starting: true });
+    await this.writeHostNotes(runId, { starting: true, ...await this.createWaitingAction(root.id, instructions) });
     await this.scan();
 
     void this.launch(runId, runDir, composeFile, docker, apiKey, budgetUsd, settings.model);
@@ -297,6 +304,7 @@ export class AgentService {
 
     for (const run of runs) {
       const alive = this.running.has(containerName(run.id));
+      if (alive || run.starting) await this.syncWaitingAction(run);
       for (const question of alive ? run.openQuestions : []) {
         const key = `${run.id}/${question.id}`;
         if (this.announced.has(key)) continue;
@@ -337,6 +345,8 @@ export class AgentService {
       ...(host?.starting && !staleStart ? { starting: true } : {}),
       ...(host?.startError ? { startError: host.startError } : staleStart ? { startError: "it was still starting when Obsidian closed" } : {}),
       ...(host?.importedTo !== undefined ? { importedTo: host.importedTo } : {}),
+      ...(host?.actionId ? { actionId: host.actionId } : {}),
+      ...(host?.actionTitle ? { actionTitle: host.actionTitle } : {}),
     };
   }
 
@@ -370,6 +380,7 @@ export class AgentService {
       const composeFile = await this.composeFile().catch(() => "");
       if (composeFile) await this.dockerQuietly(["compose", "-f", composeFile, "-p", composeProject(run.id), "down", "--remove-orphans"]);
       const imported = await this.importOutbox(run);
+      await this.completeWaitingAction(run);
       await this.writeHostNotes(run.id, { importedTo: imported.folder, finishedAt: new Date().toISOString() });
       const status = agentRunStatus(run, false);
       const cost = typeof run.costUsd === "number" ? `, about $${run.costUsd.toFixed(2)}` : "";
@@ -412,6 +423,57 @@ export class AgentService {
       current = current ? `${current}/${part}` : part;
       if (!this.app.vault.getAbstractFileByPath(current)) await this.app.vault.createFolder(current);
     }
+  }
+
+  // THE WAITING ACTION
+
+  /**
+   * A Waiting Action in the delegated Project stands for the run, so the Project counts
+   * as moving and the run shows wherever Actions do. A run still starts when it can't
+   * be created; the Project's page shows the run either way.
+   */
+  private async createWaitingAction(projectId: string, instructions: string): Promise<HostNotes> {
+    const title = agentActionTitle(instructions);
+    try {
+      const actionId = await this.repository.createAction({ title, status: "waiting", projectId, context: "", waitingSince: localDate() });
+      return { actionId, actionTitle: title };
+    } catch (error) {
+      new Notice(`The run starts without a Waiting Action: ${error instanceof Error ? error.message : String(error)}`);
+      return {};
+    }
+  }
+
+  /**
+   * While the agent waits for an answer, the Action says what it asks and is due for
+   * follow-up today, which flags it on the board; once answered it reads as before.
+   */
+  private async syncWaitingAction(run: AgentRunRecord): Promise<void> {
+    const action = run.actionId ? this.repository.index.getSnapshot().actionsById.get(run.actionId) : undefined;
+    // Gone, finished or moved on by hand: the person has taken it over.
+    if (!action || action.status !== "waiting" || !run.actionTitle) return;
+    const question = run.openQuestions[0];
+    const title = question ? agentQuestionTitle(question.question) : run.actionTitle;
+    const followUp = question ? localDate() : "";
+    const wanted = `${title}\n${followUp}`;
+    const current = this.actionState.get(action.id) ?? `${action.title}\n${action.followUp ?? ""}`;
+    if (current === wanted) return;
+    this.actionState.set(action.id, wanted);
+    try {
+      await this.repository.updateAction(action.id, { title, followUp });
+    } catch {
+      this.actionState.delete(action.id);
+    }
+  }
+
+  /** The run has ended, so its Waiting Action is done; the report is what's left to look at. */
+  private async completeWaitingAction(run: AgentRunRecord): Promise<void> {
+    const action = run.actionId ? this.repository.index.getSnapshot().actionsById.get(run.actionId) : undefined;
+    if (!action || action.status !== "waiting") return;
+    this.actionState.delete(action.id);
+    await this.repository.updateAction(action.id, {
+      ...(run.actionTitle ? { title: run.actionTitle } : {}),
+      status: "done",
+    });
   }
 
   // HOST PLUMBING

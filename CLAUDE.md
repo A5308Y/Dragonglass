@@ -109,6 +109,10 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   pure functions in `src/domain/delegation.ts` (tested in `tests/delegation.test.ts`).
 - The scope is the Project, every Project below it, their Actions, their Project
   Material and each Project's `linked_files`, one hop. Widening it is a deliberate change.
+- Each run creates a Waiting Action in the delegated Project ("Agent: …"), renamed to
+  "Agent asks: …" with a follow-up of today while a question is open, and done when the
+  run ends. Its id lives in the run's `host.json`; once someone changes it by hand
+  (not Waiting any more, or deleted), the service leaves it alone.
 - The API key stays in the macOS Keychain and is read only when a run starts; never
   put it in settings, which sync with the vault. Results come back only as new files.
 

@@ -73,6 +73,14 @@ export class GtdRepository {
     await this.convertInboxItemToAction(item, input);
   }
 
+  /** Creates one Action file directly, without an Inbox Item, and returns its id. */
+  async createAction(input: ActionInput): Promise<string> {
+    const project = input.projectId ? this.requireProject(input.projectId) : undefined;
+    const id = createUlid();
+    await this.createActionFile(input.title, input, localDate(), project, id);
+    return id;
+  }
+
   /** Creates Action files straight from a pasted list. Returns how many were written. */
   async importActions(inputs: readonly ActionInput[]): Promise<number> {
     if (inputs.some((input) => input.title.trim() && actionRequiresContext(input.status) && !input.context.trim())) {
@@ -666,11 +674,10 @@ export class GtdRepository {
     return this.createActionFile(title, { title, status: "next", context }, captured, project);
   }
 
-  private async createActionFile(title: string, input: ActionInput, captured: string, project?: Project): Promise<TFile> {
+  private async createActionFile(title: string, input: ActionInput, captured: string, project?: Project, id = createUlid()): Promise<TFile> {
     const context = input.context.trim();
     if (actionRequiresContext(input.status) && !context) throw new Error("A context is required.");
     validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
-    const id = createUlid();
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().actionsDirectory) || "GTD/Actions");
     const path = this.uniqueMarkdownPath(directory, title, id);
     const status = input.status ?? "next";

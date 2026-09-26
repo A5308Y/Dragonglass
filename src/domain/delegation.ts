@@ -104,6 +104,28 @@ function slug(title: string): string {
   return title.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "project";
 }
 
+// THE WAITING ACTION
+
+/**
+ * While an agent works on a Project, the Project carries a Waiting Action, so it counts
+ * as moving and the run shows on the Actions board and in reviews. Its title says what
+ * the agent is doing, or what it is asking while it waits for an answer.
+ */
+export function agentActionTitle(instructions: string): string {
+  return `Agent: ${firstLine(instructions) || "delegated work"}`;
+}
+
+export function agentQuestionTitle(question: string): string {
+  return `Agent asks: ${firstLine(question) || "a question"}`;
+}
+
+const TITLE_TEXT_LIMIT = 70;
+
+function firstLine(text: string): string {
+  const line = text.split("\n").map((part) => part.replace(/\s+/g, " ").trim()).find(Boolean) ?? "";
+  return line.length > TITLE_TEXT_LIMIT ? `${line.slice(0, TITLE_TEXT_LIMIT - 1).trimEnd()}…` : line;
+}
+
 // RUNS
 
 /** What Dragonglass records about a run, next to what the runner writes itself. */
@@ -124,6 +146,9 @@ export interface AgentRunRecord {
   startError?: string;
   /** The vault folder its results were copied into. */
   importedTo?: string;
+  /** The Waiting Action that stands for the run in the Project, and its title while no question is open. */
+  actionId?: string;
+  actionTitle?: string;
 }
 
 export type AgentRunStatus = "starting" | "running" | "waiting" | "finished" | "failed" | "stopped" | "interrupted";

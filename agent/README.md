@@ -14,7 +14,9 @@ questions, and adds its results to the Project Material.
    every file the agent will get; say what you want done, set a budget, and start.
 
 The run carries on in the background, also when Obsidian is closed. The Project's page
-shows its status and cost, and its questions with a place to answer them. When it ends,
+shows its status and cost, and its questions with a place to answer them. A Waiting
+Action "Agent: …" stands for the run in the Project; while the agent waits for you it
+reads "Agent asks: …" and is flagged for follow-up, and it is done when the run ends. When it ends,
 everything in its outbox is copied into the Project Material under
 `Agent runs/<date> <title>/`, including `REPORT.md`; nothing of yours is changed.
 

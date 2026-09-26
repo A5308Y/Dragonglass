@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
 import type { Action, Project } from "../src/domain/types";
 import {
+  agentActionTitle,
   agentCosts,
+  agentQuestionTitle,
   agentRunStatus,
   agentRunStatusText,
   delegationBrief,
@@ -83,6 +85,20 @@ describe("Delegation brief", () => {
     expect(brief).toContain("Compare three tile suppliers.");
     expect(brief).toContain("1 Action, their Project Material and 2 linked files");
     expect(brief).toContain("- Tiles (Backlog): `material/GTD/Projects/Tiles.md`");
+  });
+});
+
+describe("The Waiting Action", () => {
+  it("says what the agent does, from the first line of the instructions", () => {
+    expect(agentActionTitle("\n  Compare three   tile suppliers.\nThen draft an order.")).toBe("Agent: Compare three tile suppliers.");
+    expect(agentActionTitle("   ")).toBe("Agent: delegated work");
+  });
+
+  it("says what the agent asks while it waits, shortened for a card", () => {
+    expect(agentQuestionTitle("Which budget?")).toBe("Agent asks: Which budget?");
+    const long = agentQuestionTitle("x".repeat(100));
+    expect(long).toHaveLength("Agent asks: ".length + 70);
+    expect(long.endsWith("…")).toBe(true);
   });
 });
 
