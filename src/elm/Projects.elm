@@ -186,7 +186,14 @@ type alias AgentRun =
     , wholeVault : Bool
     , reportPath : String
     , questions : List AgentQuestion
+    , activity : List AgentActivity
     }
+
+
+{-| One line of what the agent did: "thought", "text" or "tool". Newest first.
+-}
+type alias AgentActivity =
+    { at : String, kind : String, text : String }
 
 
 type alias AgentQuestion =
@@ -1702,7 +1709,54 @@ viewAgentRun model run =
                 ]
             ]
         , div [] (List.map (viewAgentQuestion model run) run.questions)
+        , viewAgentActivity run
         ]
+
+
+{-| What the agent is doing, folded away: the collapsed line shows its latest step, so
+progress is visible without opening it. The box keeps its open state across updates,
+since it is left to the browser.
+-}
+viewAgentActivity : AgentRun -> Html Msg
+viewAgentActivity run =
+    case run.activity of
+        [] ->
+            text ""
+
+        latest :: _ ->
+            node "details"
+                [ class "dg-agent-activity" ]
+                [ node "summary"
+                    []
+                    [ span [ class "dg-agent-activity-label" ] [ text "What it's doing" ]
+                    , span [ class "dg-agent-activity-latest" ] [ text (activityLabel latest.kind ++ " " ++ latest.text) ]
+                    ]
+                , Html.ul [ class "dg-agent-activity-list" ]
+                    (List.map
+                        (\entry ->
+                            Html.li [ classList [ ( "dg-agent-activity-entry", True ), ( "is-" ++ entry.kind, True ) ] ]
+                                [ span [ class "dg-agent-activity-time" ] [ text (String.slice 11 19 entry.at) ]
+                                , span [] [ text (activityLabel entry.kind ++ " " ++ entry.text) ]
+                                ]
+                        )
+                        run.activity
+                    )
+                ]
+
+
+{-| A symbol and a word, so the kind of step is not told by colour or symbol alone.
+-}
+activityLabel : String -> String
+activityLabel kind =
+    case kind of
+        "thought" ->
+            "💭 Thinking:"
+
+        "tool" ->
+            "🔧"
+
+        _ ->
+            "🤖"
 
 
 viewAgentQuestion : Model -> AgentRun -> AgentQuestion -> Html Msg
@@ -2789,6 +2843,16 @@ agentRunDecoder =
                         (Decode.field "id" Decode.string)
                         (Decode.field "question" Decode.string)
                         (Decode.field "askedAt" Decode.string)
+                    )
+                )
+            )
+        |> andMap
+            (Decode.field "activity"
+                (Decode.list
+                    (Decode.map3 AgentActivity
+                        (Decode.field "at" Decode.string)
+                        (Decode.field "kind" Decode.string)
+                        (Decode.field "text" Decode.string)
                     )
                 )
             )

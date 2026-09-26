@@ -170,12 +170,21 @@ export interface AgentRunRecord {
   startError?: string;
   /** The vault folder its results were copied into. */
   importedTo?: string;
+  /** The agent's latest thoughts, narration and tool calls, newest first. */
+  activity?: AgentActivity[];
   /** The Waiting Action that stands for the run in the Project, and its title while no question is open. */
   actionId?: string;
   actionTitle?: string;
 }
 
 export type AgentRuntime = "claude" | "local";
+
+/** One line of what an agent did: a thought (a summary of its reasoning), something it said, or a tool call. */
+export interface AgentActivity {
+  at: string;
+  kind: "thought" | "text" | "tool";
+  text: string;
+}
 
 export type AgentRunStatus = "starting" | "running" | "waiting" | "finished" | "failed" | "stopped" | "interrupted";
 

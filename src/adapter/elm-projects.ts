@@ -152,6 +152,7 @@ export class ElmProjectsHost {
           wholeVault: run.wholeVault,
           reportPath: run.reportPath,
           questions: run.status === "waiting" ? run.openQuestions : [],
+          activity: run.activity ?? [],
         })),
         costs: [...agent.costs()].map(([projectId, cost]) => ({ projectId, ...cost })),
       },

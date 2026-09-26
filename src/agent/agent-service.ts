@@ -33,6 +33,7 @@ import {
   delegationScope,
   resultsFolderName,
   runFolderName,
+  type AgentActivity,
   type AgentRunRecord,
   type AgentRunStatus,
   type AgentRuntime,
@@ -68,6 +69,9 @@ const MAX_VAULT_BYTES = 4 * 1024 * 1024 * 1024;
 const POLL_ACTIVE_MS = 3_000;
 const POLL_IDLE_MS = 60_000;
 const STALE_START_MS = 30 * 60_000;
+/** How much of a run's activity log is shown, and how much of the file is read to find it. */
+const ACTIVITY_ENTRIES = 25;
+const ACTIVITY_TAIL_BYTES = 64 * 1024;
 const DOCKER_CANDIDATES = ["/usr/local/bin/docker", "/opt/homebrew/bin/docker", "/Applications/Docker.app/Contents/Resources/bin/docker"];
 
 export interface DelegationOptions {
@@ -123,6 +127,8 @@ export class AgentService {
   private readonly launching = new Set<string>();
   /** What was last written to each run's Waiting Action, so a slow index doesn't cause repeat writes. */
   private readonly actionState = new Map<string, string>();
+  /** Activity already read, per run, by the log's size; a finished run's log is read once. */
+  private readonly activityCache = new Map<string, { size: number; entries: AgentActivity[] }>();
   private timer: number | null = null;
   private scanning: Promise<void> | null = null;
 
@@ -414,9 +420,45 @@ export class AgentService {
       ...(host?.starting && !staleStart ? { starting: true } : {}),
       ...(host?.startError ? { startError: host.startError } : staleStart ? { startError: "it was still starting when Obsidian closed" } : {}),
       ...(host?.importedTo !== undefined ? { importedTo: host.importedTo } : {}),
+      activity: await this.readActivity(name, node.path.join(runDir, "exchange", "activity.jsonl")),
       ...(host?.actionId ? { actionId: host.actionId } : {}),
       ...(host?.actionTitle ? { actionTitle: host.actionTitle } : {}),
     };
+  }
+
+  /** The newest entries of a run's activity log, newest first. */
+  private async readActivity(runId: string, file: string): Promise<AgentActivity[]> {
+    const node = requireNode();
+    let size: number;
+    try {
+      size = (await node.fs.stat(file)).size;
+    } catch {
+      return [];
+    }
+    const cached = this.activityCache.get(runId);
+    if (cached?.size === size) return cached.entries;
+    const handle = await node.fs.open(file, "r");
+    try {
+      const length = Math.min(size, ACTIVITY_TAIL_BYTES);
+      const buffer = new Uint8Array(length);
+      await handle.read(buffer, 0, length, size - length);
+      const lines = new TextDecoder().decode(buffer).split("\n");
+      // The first line of a tail read may be cut off; it fails to parse and is skipped.
+      const entries = lines.flatMap((line): AgentActivity[] => {
+        try {
+          const value = JSON.parse(line) as Partial<AgentActivity>;
+          return typeof value.text === "string" && (value.kind === "thought" || value.kind === "text" || value.kind === "tool")
+            ? [{ at: String(value.at ?? ""), kind: value.kind, text: value.text }]
+            : [];
+        } catch {
+          return [];
+        }
+      }).slice(-ACTIVITY_ENTRIES).reverse();
+      this.activityCache.set(runId, { size, entries });
+      return entries;
+    } finally {
+      await handle.close();
+    }
   }
 
   // STARTING AND FINISHING

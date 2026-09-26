@@ -78,6 +78,7 @@ export interface ElmAgentDto {
     wholeVault: boolean;
     reportPath: string;
     questions: Array<{ id: string; question: string; askedAt: string }>;
+    activity: Array<{ at: string; kind: string; text: string }>;
   }>;
   costs: Array<{ projectId: string; own: number; tree: number }>;
 }

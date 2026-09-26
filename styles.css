@@ -1809,6 +1809,35 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 .dg-agent-run-heading strong { display: block; }
 .dg-agent-run-meta { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-agent-activity { margin-top: 8px; }
+.dg-agent-activity > summary {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+.dg-agent-activity-label { flex: 0 0 auto; font-weight: var(--font-semibold); }
+.dg-agent-activity-latest { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-agent-activity[open] .dg-agent-activity-latest { display: none; }
+.dg-agent-activity-list {
+  max-height: 260px;
+  margin: 6px 0 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  font-size: var(--font-ui-smaller);
+}
+.dg-agent-activity-entry {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+.dg-agent-activity-entry.is-thought { color: var(--text-muted); font-style: italic; }
+.dg-agent-activity-time { color: var(--text-faint); font-variant-numeric: tabular-nums; }
 .dg-agent-question {
   margin-top: 10px;
   padding-top: 10px;

@@ -39,6 +39,13 @@ await fs.mkdir(ANSWERS, { recursive: true });
 await fs.mkdir(SCRATCH, { recursive: true });
 const transcript = await fs.open(path.join(EXCHANGE, "transcript.jsonl"), "a");
 const record = (entry) => transcript.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
+// A short, readable account of what the agent is doing, for Dragonglass to show while it works.
+const activity = await fs.open(path.join(EXCHANGE, "activity.jsonl"), "a");
+const note = (kind, text) => {
+  const clean = String(text).replace(/\s+/g, " ").trim();
+  if (!clean) return Promise.resolve();
+  return activity.write(`${JSON.stringify({ at: new Date().toISOString(), kind, text: clean.length > 600 ? `${clean.slice(0, 599)}…` : clean })}\n`);
+};
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let brief;
@@ -249,11 +256,18 @@ try {
     turns += 1;
     const reply = await chatWithinContext();
     const message = reply.message;
+    // Reasoning arrives inline as <think>…</think>, or separately, depending on the model and server.
+    const thought = [message.reasoning_content, message.reasoning, ...thinkingParts(message.content ?? "")]
+      .filter((part) => typeof part === "string" && part.trim()).join(" ");
+    await note("thought", thought);
     const content = withoutThinking(message.content ?? "");
     const calls = message.tool_calls ?? [];
     messages.push({ role: "assistant", content, ...(calls.length ? { tool_calls: calls } : {}) });
     await record({ type: "assistant", content, toolCalls: calls });
-    if (content.trim()) console.log(`🤖 ${content.trim()}`);
+    if (content.trim()) {
+      console.log(`🤖 ${content.trim()}`);
+      await note("text", content);
+    }
 
     if (!calls.length) {
       // Some local models answer in prose instead of calling a tool; steer them back a few times.
@@ -281,6 +295,7 @@ try {
 await writeResult({ subtype });
 finished = true;
 await transcript.close();
+await activity.close();
 console.log(`\n${subtype === "success" ? "✅" : "⚠️"} ${subtype} after ${turns} turns (${usage.promptTokens} prompt + ${usage.completionTokens} completion tokens)`);
 console.log(`Outbox: ${(await fs.readdir(OUTBOX)).join(", ") || "(empty)"}`);
 process.exit(subtype === "success" ? 0 : 1);
@@ -296,6 +311,7 @@ async function runTool(call) {
     return `The arguments for ${name} were not valid JSON. Call it again with a JSON object.`;
   }
   console.log(`🔧 ${name} ${trim(JSON.stringify(args), 160)}`);
+  await note("tool", `${name} ${trim(JSON.stringify(args), 160)}`);
   try {
     return String(await tool.run(args ?? {}));
   } catch (error) {
@@ -442,6 +458,10 @@ function htmlToText(html) {
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n\s*/g, "\n\n")
     .trim();
+}
+
+function thinkingParts(text) {
+  return [...String(text).matchAll(/<think>([\s\S]*?)<\/think>/g)].map((match) => match[1]);
 }
 
 /** Reasoning models may put their thinking inline; it stays out of the conversation history. */

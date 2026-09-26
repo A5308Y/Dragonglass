@@ -31,9 +31,17 @@ const ANSWER_TIMEOUT_MS = Number(process.env.AGENT_ANSWER_TIMEOUT_MINUTES || 240
 await fs.mkdir(QUESTIONS, { recursive: true });
 await fs.mkdir(ANSWERS, { recursive: true });
 const transcript = await fs.open(path.join(EXCHANGE, "transcript.jsonl"), "a");
+// A short, readable account of what the agent is doing, for Dragonglass to show while it works.
+const activity = await fs.open(path.join(EXCHANGE, "activity.jsonl"), "a");
 
 async function record(entry) {
   await transcript.write(`${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
+}
+
+async function note(kind, text) {
+  const clean = String(text).replace(/\s+/g, " ").trim();
+  if (!clean) return;
+  await activity.write(`${JSON.stringify({ at: new Date().toISOString(), kind, text: clean.length > 600 ? `${clean.slice(0, 599)}…` : clean })}\n`);
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -133,6 +141,8 @@ const q = query({
   options: {
     model: MODEL,
     effort: EFFORT,
+    // Summaries of the model's thinking, shown in Dragonglass; thinking is billed the same either way.
+    thinking: { type: "adaptive", display: "summarized" },
     cwd: WORKSPACE,
     maxTurns: MAX_TURNS,
     maxBudgetUsd: MAX_BUDGET_USD,
@@ -167,8 +177,15 @@ try {
     await record({ type: "message", message });
     if (message.type === "assistant") {
       for (const block of message.message?.content ?? []) {
-        if (block.type === "text" && block.text.trim()) console.log(`🤖 ${block.text.trim()}`);
-        if (block.type === "tool_use") console.log(`🔧 ${block.name} ${summarizeInput(block.input)}`);
+        if (block.type === "thinking" && block.thinking?.trim()) await note("thought", block.thinking);
+        if (block.type === "text" && block.text.trim()) {
+          console.log(`🤖 ${block.text.trim()}`);
+          await note("text", block.text);
+        }
+        if (block.type === "tool_use") {
+          console.log(`🔧 ${block.name} ${summarizeInput(block.input)}`);
+          await note("tool", `${block.name.replace(/^mcp__dragonglass__/, "")} ${summarizeInput(block.input)}`);
+        }
       }
     } else if (message.type === "result") {
       finished = true;
@@ -195,6 +212,7 @@ try {
   console.error(`Run stopped: ${error?.message || error}`);
 } finally {
   await transcript.close();
+  await activity.close();
 }
 console.log(`Outbox: ${(await fs.readdir(OUTBOX)).join(", ") || "(empty)"}`);
 process.exit(exitCode);
