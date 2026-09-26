@@ -13,7 +13,7 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (InboxItemId)
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.Ui as Ui exposing (Key(..))
-import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, option, p, section, select, small, span, strong, text, textarea)
+import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, node, option, p, section, select, small, span, strong, text, textarea)
 import Html.Attributes exposing (attribute, checked, class, classList, controls, id, placeholder, preload, selected, src, style, tabindex, title, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
@@ -296,18 +296,24 @@ update msg model =
                 ( next, cmd )
 
             else
-                ( { next | selected = neighbourRow itemId model }, Cmd.batch [ cmd, focusRow (neighbourRow itemId model) ] )
+                selectRow (neighbourRow itemId model) next |> Tuple.mapSecond (\focusCmd -> Cmd.batch [ cmd, focusCmd ])
 
         SelectRow itemId ->
             ( { model | selected = Just itemId }, Cmd.none )
 
-        RowKey itemId key ->
+        RowKey focusedId key ->
+            let
+                -- The keys act on the selected Item, the one both markers show, even
+                -- if focus has not caught up with the selection yet.
+                itemId =
+                    selectedItem model |> Maybe.map .id |> Maybe.withDefault focusedId
+            in
             case key of
                 ArrowDown ->
-                    ( model, focusRow (adjacentRow 1 itemId model) )
+                    selectRow (adjacentRow 1 itemId model) model
 
                 ArrowUp ->
-                    ( model, focusRow (adjacentRow -1 itemId model) )
+                    selectRow (adjacentRow -1 itemId model) model
 
                 Enter ->
                     enterProcessing (Just itemId) model
@@ -367,6 +373,19 @@ update msg model =
 
         Send pending command ->
             send pending command model
+
+
+{-| Moves the selection and focus together, so the row that shows as selected is
+the one the keys act on.
+-}
+selectRow : Maybe InboxItemId -> Model -> ( Model, Cmd Msg )
+selectRow maybeId model =
+    case maybeId of
+        Just itemId ->
+            ( { model | selected = Just itemId }, focusRow (Just itemId) )
+
+        Nothing ->
+            ( model, Cmd.none )
 
 
 enterProcessing : Maybe InboxItemId -> Model -> ( Model, Cmd Msg )
@@ -909,6 +928,18 @@ inboxRow selectedId item =
         ]
 
 
+{-| An Item's note, rendered by Obsidian as it would show in the note itself.
+-}
+markdownView : String -> String -> InboxItem -> Html Msg
+markdownView className markdown item =
+    node "dg-markdown"
+        [ class (className ++ " markdown-rendered")
+        , attribute "data-markdown" markdown
+        , attribute "data-source-path" item.file.path
+        ]
+        []
+
+
 {-| The selected Item in full, below the list, with what can be done to it.
 -}
 readingPane : Model -> InboxItem -> Html Msg
@@ -960,7 +991,7 @@ readingPane model item =
                     div [ class "dg-inbox-reading-body is-empty" ] [ text "No additional notes." ]
 
                 Just textBody ->
-                    div [ class "dg-inbox-reading-body" ] [ text textBody ]
+                    markdownView "dg-inbox-reading-body" textBody item
         ]
 
 
@@ -1088,16 +1119,11 @@ itemCard model item =
         , if isAudio item.file.extension then
             audio [ class "dg-inbox-audio", controls True, preload "metadata", src item.resourceUrl ] []
 
-          else
-            div [ classList [ ( "dg-inbox-preview", True ), ( "is-empty", String.isEmpty body ) ] ]
-                [ text
-                    (if String.isEmpty body then
-                        "No additional notes."
+          else if String.isEmpty body then
+            div [ class "dg-inbox-preview is-empty" ] [ text "No additional notes." ]
 
-                     else
-                        body
-                    )
-                ]
+          else
+            markdownView "dg-inbox-preview" body item
         , label [ class "dg-processing-toggle dg-inbox-file-toggle" ]
             [ span [] [ text "Keep as reference" ]
             , input [ type_ "checkbox", checked model.fileOriginal, onCheck SetFileOriginal ] []

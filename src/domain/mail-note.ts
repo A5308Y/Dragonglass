@@ -6,7 +6,8 @@
  */
 
 import { addressLabel, parseAddress } from "./mime";
-import { escapeVaultText, htmlToText } from "./text";
+import { htmlToMarkdown } from "./html-markdown";
+import { escapeVaultText } from "./text";
 
 export interface MailMessage {
   /** The `Message-ID`, or `""` when the sender omitted one. */
@@ -70,11 +71,11 @@ export function mailItemNote(message: MailMessage, accountLabel: string, mailLin
   if (mailLink) lines.push(`Original: [Open in Apple Mail](${mailLink})`);
   if (message.hasAttachment) lines.push("Attachments: yes");
 
-  const plainBody = /<\/?[a-z][a-z0-9]*(?:\s[^<>]*)?\/?>/i.test(message.body)
-    ? htmlToText(message.body)
-    : message.body;
-  const body = escapeVaultText(plainBody.replace(/\r\n?/g, "\n").trim());
-  if (body) lines.push("", ...body.split("\n").map((line) => `> ${line}`));
+  // HTML keeps its structure as Markdown, which escapes everything else itself.
+  const body = /<\/?[a-z][a-z0-9]*(?:\s[^<>]*)?\/?>/i.test(message.body)
+    ? htmlToMarkdown(message.body.replace(/\r\n?/g, "\n"))
+    : escapeVaultText(message.body.replace(/\r\n?/g, "\n").trim());
+  if (body) lines.push("", ...body.split("\n").map((line) => (line ? `> ${line}` : ">")));
   return lines.join("\n");
 }
 
@@ -83,7 +84,17 @@ export function mailProcessingBody(body: string): string {
   const headerEnd = body.search(/\r?\n\r?\n/);
   const metadata = headerEnd < 0 ? body : body.slice(0, headerEnd);
   const rest = headerEnd < 0 ? "" : body.slice(headerEnd);
-  return (metadata.replace(/^Message-ID:[^\r\n]*(?:\r?\n|$)/m, "") + rest).trim();
+  return withoutRemoteMarkup((metadata.replace(/^Message-ID:[^\r\n]*(?:\r?\n|$)/m, "") + rest).trim());
+}
+
+/**
+ * The processor renders an Item as Markdown. Mail imported before bodies were
+ * converted to escaped Markdown may hold a sender's raw tag or image link as text,
+ * which would render and load; escaping them keeps such notes text. Newer imports
+ * are already escaped, and an escaped character stays as it is.
+ */
+function withoutRemoteMarkup(body: string): string {
+  return body.replace(/(?<!\\)</g, "\\<").replace(/(?<!\\)!\[/g, "!\\[");
 }
 
 /**

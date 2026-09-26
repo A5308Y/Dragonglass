@@ -321,9 +321,9 @@ describe("What an imported message becomes", () => {
     expect(note).toContain("\\#urgent");
   });
 
-  it("flattens markup a sender used in the body", () => {
-    expect(mailItemNote(message({ body: "<p>Quote <b>attached</b></p>" }), "Work"))
-      .toContain("> Quote attached");
+  it("keeps the structure of an HTML body as quoted Markdown", () => {
+    expect(mailItemNote(message({ body: "<p>Quote <b>attached</b></p><ul><li>One</li><li>Two</li></ul>" }), "Work"))
+      .toContain("> Quote **attached**\n>\n> - One\n> - Two");
   });
 
   it("keeps the complete message and its line breaks in the Inbox note", () => {
@@ -331,6 +331,11 @@ describe("What an imported message becomes", () => {
     const note = mailItemNote(message({ body: longBody }), "Work");
     expect(note).toContain(`> ${"A".repeat(700)}\n> Second line`);
     expect(note).not.toContain("Message-ID:");
+  });
+
+  it("keeps a sender's raw tags and image links as text when older mail is rendered", () => {
+    expect(mailProcessingBody("From: a\n\n> <img src=https://t.example/p.gif> ![x](https://t.example/q.gif) \\<kept"))
+      .toBe("From: a\n\n> \\<img src=https://t.example/p.gif> !\\[x](https://t.example/q.gif) \\<kept");
   });
 
   it("hides a legacy Message-ID only in the processor metadata", () => {
