@@ -464,15 +464,17 @@ onProcessorChord =
 
 
 {-| Keys pressed on the row itself; a key on one of its buttons is that button's.
+The arrows only move the selection: moving focus scrolls the list when the new
+row is out of view, so the browser's own arrow scrolling is cancelled.
 -}
 onRowKey : InboxItemId -> Html.Attribute Msg
 onRowKey itemId =
-    Html.Events.on "keydown"
+    Html.Events.preventDefaultOn "keydown"
         (Decode.at [ "target", "id" ] Decode.string
             |> Decode.andThen
                 (\targetId ->
                     if targetId == rowId itemId then
-                        Decode.map (RowKey itemId) Ui.keyDecoder
+                        Decode.map (\key -> ( RowKey itemId key, key == ArrowDown || key == ArrowUp )) Ui.keyDecoder
 
                     else
                         Decode.fail "key on a child of the row"
@@ -495,9 +497,50 @@ focus domId =
     Browser.Dom.focus domId |> Task.attempt (\_ -> Focused)
 
 
+listId : String
+listId =
+    "dg-inbox-list"
+
+
+{-| Focuses a row, scrolling the list only as far as needed to show it, as a mail
+client does. Focus alone would scroll an out-of-view row to the middle of the list.
+-}
 focusRow : Maybe InboxItemId -> Cmd Msg
-focusRow =
-    Maybe.map (rowId >> focus) >> Maybe.withDefault Cmd.none
+focusRow maybeId =
+    case maybeId of
+        Nothing ->
+            Cmd.none
+
+        Just itemId ->
+            Task.map3 revealRow
+                (Browser.Dom.getElement (rowId itemId))
+                (Browser.Dom.getElement listId)
+                (Browser.Dom.getViewportOf listId)
+                |> Task.andThen identity
+                |> Task.andThen (\_ -> Browser.Dom.focus (rowId itemId))
+                |> Task.attempt (\_ -> Focused)
+
+
+revealRow : Browser.Dom.Element -> Browser.Dom.Element -> Browser.Dom.Viewport -> Task.Task Browser.Dom.Error ()
+revealRow row list viewport =
+    let
+        top =
+            row.element.y - list.element.y
+
+        bottom =
+            top + row.element.height
+
+        scrollTop =
+            viewport.viewport.y
+    in
+    if top < 0 then
+        Browser.Dom.setViewportOf listId 0 (scrollTop + top)
+
+    else if bottom > viewport.viewport.height then
+        Browser.Dom.setViewportOf listId 0 (scrollTop + bottom - viewport.viewport.height)
+
+    else
+        Task.succeed ()
 
 
 {-| The Item the list's reading pane shows: the selected row, or the first one
@@ -826,7 +869,7 @@ listView model =
             [ input [ type_ "search", placeholder "Search Inbox", value model.search, onInput SearchChanged ] []
             , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · ⌫ delete · Enter process · O open" ]
             ]
-        , div [ class "dg-inbox-list", attribute "role" "list" ]
+        , div [ class "dg-inbox-list", id listId, attribute "role" "list" ]
             (if List.isEmpty items then
                 [ div [ class "dg-empty-row" ]
                     [ text
