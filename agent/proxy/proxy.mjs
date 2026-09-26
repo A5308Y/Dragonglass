@@ -28,6 +28,8 @@ const API_KEY = process.env.ANTHROPIC_API_KEY || "";
 const LOG = process.env.PROXY_LOG || "/logs/requests.jsonl";
 const ALLOWED_PORTS = new Set((process.env.ALLOWED_PORTS || "80,443").split(",").map(Number));
 const LOCAL_MODEL_UPSTREAM = process.env.LOCAL_MODEL_UPSTREAM ? new URL(process.env.LOCAL_MODEL_UPSTREAM) : null;
+// LM Studio's own API key, when it requires one; like the Anthropic key, the agent never sees it.
+const LOCAL_MODEL_API_KEY = process.env.LOCAL_MODEL_API_KEY || "";
 const OFFLINE = process.env.PROXY_OFFLINE === "1";
 
 function log(entry) {
@@ -126,6 +128,8 @@ function forwardToLocalModel(req, res) {
   const path = req.url.slice("/local".length) || "/";
   const headers = withoutHopHeaders(req.headers);
   headers.host = LOCAL_MODEL_UPSTREAM.host;
+  delete headers.authorization;
+  if (LOCAL_MODEL_API_KEY) headers.authorization = `Bearer ${LOCAL_MODEL_API_KEY}`;
   const started = Date.now();
   const upstream = http.request(
     { host: LOCAL_MODEL_UPSTREAM.hostname, port: Number(LOCAL_MODEL_UPSTREAM.port || 80), method: req.method, path, headers },

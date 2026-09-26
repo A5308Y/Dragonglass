@@ -29,6 +29,7 @@ services:
       PROXY_LOG: /logs/requests.jsonl
       # The one route to your Mac, for agent-local: the model server and nothing else.
       LOCAL_MODEL_UPSTREAM: ${LOCAL_MODEL_UPSTREAM:-http://host.docker.internal:1234}
+      LOCAL_MODEL_API_KEY: ${LOCAL_MODEL_API_KEY:-}
       PROXY_OFFLINE: ${AGENT_OFFLINE:-0}
     volumes:
       - ${RUN_DIR:?Set RUN_DIR to the run folder, e.g. ./runs/demo}/logs:/logs

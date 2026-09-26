@@ -136,6 +136,10 @@ Setting up LM Studio:
 - Start the server (Developer tab, or `lms server start`) on port 1234, and leave
   "Serve on local network" off. The agent reaches it only through the proxy's `/local`
   route, which goes to `host.docker.internal:1234` and nowhere else on your Mac.
+- Keep LM Studio's API key switched on, so other programs on your Mac can't use the model
+  server, and hand the key to the proxy only; the agent never sees it:
+  `LOCAL_MODEL_API_KEY="$(security find-generic-password -s dragonglass-lmstudio -w)"`
+  after storing it with `security add-generic-password -a "$USER" -s dragonglass-lmstudio -T "" -w`.
 
 Check the sandbox with the local model, online and then offline:
 
