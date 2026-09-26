@@ -196,6 +196,9 @@ export default class DragonglassGtdPlugin extends Plugin {
         localMaxMinutes: Number.isInteger(saved?.agent?.localMaxMinutes) && saved!.agent!.localMaxMinutes > 0
           ? saved!.agent!.localMaxMinutes
           : defaults.agent.localMaxMinutes,
+        localContextTokens: Number.isInteger(saved?.agent?.localContextTokens) && saved!.agent!.localContextTokens >= 4096
+          ? saved!.agent!.localContextTokens
+          : defaults.agent.localContextTokens,
       },
       feeds: {
         ...defaults.feeds,

@@ -86,6 +86,7 @@ export function defaultSettings(): GtdSettings {
       localModelUrl: "http://host.docker.internal:1234",
       localKeychainService: "",
       localMaxMinutes: 120,
+      localContextTokens: 32768,
     },
     feeds: {
       enabled: false,

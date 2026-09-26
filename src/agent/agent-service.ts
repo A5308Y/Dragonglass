@@ -223,6 +223,8 @@ export class AgentService {
         LOCAL_MODEL_API_KEY: settings.localKeychainService ? await this.keychainSecret(settings.localKeychainService) : "",
         AGENT_OFFLINE: plan.wholeVault ? "1" : "0",
         AGENT_MAX_MINUTES: String(settings.localMaxMinutes),
+        // About three characters a token, less the room the tools, the reply and the model's thinking need.
+        LOCAL_CONTEXT_CHARS: String(Math.max(8_000, Math.floor((settings.localContextTokens - 4_000) * 3))),
       }
       : {
         ANTHROPIC_API_KEY: await this.keychainSecret(settings.keychainService),

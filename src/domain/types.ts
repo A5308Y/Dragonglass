@@ -275,6 +275,8 @@ export interface AgentSettings {
   localKeychainService: string;
   /** How long a local run may take, in minutes. */
   localMaxMinutes: number;
+  /** The context length the local model is loaded with, in tokens; the run stays well below it. */
+  localContextTokens: number;
 }
 
 export interface PomodoroSettings {

@@ -403,6 +403,21 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     new Setting(sectionEl)
+      .setName("Context length")
+      .setDesc("Tokens, as set for the model in LM Studio. Agent runs need 32768 or more; the run keeps its conversation below this.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "4096";
+        text.inputEl.step = "1024";
+        text.setValue(String(agent.localContextTokens)).onChange(async (value) => {
+          const tokens = Number(value);
+          if (!Number.isInteger(tokens) || tokens < 4096) return;
+          agent.localContextTokens = tokens;
+          await save();
+        });
+      });
+
+    new Setting(sectionEl)
       .setName("Time limit")
       .setDesc("Minutes a local run may take before it is stopped.")
       .addText((text) => {

@@ -29,8 +29,9 @@ const MAX_MINUTES = Number(process.env.AGENT_MAX_MINUTES || 120);
 const ANSWER_TIMEOUT_MS = Number(process.env.AGENT_ANSWER_TIMEOUT_MINUTES || 240) * 60_000;
 const OFFLINE = process.env.AGENT_OFFLINE === "1";
 // Old tool results are shortened once the conversation passes this many characters, roughly
-// a quarter as many tokens. It should sit well below the model's context length.
-const CONTEXT_CHARS = Number(process.env.LOCAL_CONTEXT_CHARS || 100_000);
+// a quarter as many tokens. It should sit well below the model's context length; when the
+// server still says a request is too long, the limit shrinks and the request is retried.
+let contextChars = Number(process.env.LOCAL_CONTEXT_CHARS || 100_000);
 const MODEL_TIMEOUT_MS = 15 * 60_000;
 
 await fs.mkdir(QUESTIONS, { recursive: true });
@@ -246,8 +247,7 @@ try {
       break;
     }
     turns += 1;
-    compactContext();
-    const reply = await chat();
+    const reply = await chatWithinContext();
     const message = reply.message;
     const content = withoutThinking(message.content ?? "");
     const calls = message.tool_calls ?? [];
@@ -303,6 +303,22 @@ async function runTool(call) {
   }
 }
 
+/** Asks the model, shrinking the conversation when the server says it doesn't fit. */
+async function chatWithinContext() {
+  for (let attempt = 1; ; attempt += 1) {
+    compactContext();
+    try {
+      return await chat();
+    } catch (error) {
+      const tooLong = /context|too long|exceeds|maximum.*tokens/i.test(String(error?.message));
+      if (!tooLong || attempt >= 4) throw error;
+      contextChars = Math.floor(contextChars * 0.6);
+      await record({ type: "context-shrunk", contextChars });
+      console.log(`↻ The request didn't fit the model's context; shortening older tool results (to ${contextChars} characters) and trying again.`);
+    }
+  }
+}
+
 async function chat() {
   let response;
   // A dropped connection gets three more tries, a few seconds apart, before the run gives up.
@@ -336,10 +352,28 @@ async function chat() {
 /** Keeps the conversation within reach of the model's context by shortening the oldest tool results. */
 function compactContext() {
   const size = () => messages.reduce((sum, message) => sum + JSON.stringify(message).length, 0);
-  for (const message of messages) {
-    if (size() <= CONTEXT_CHARS) return;
+  // Oldest first, and never the latest exchange, which the model is working on.
+  const older = messages.slice(0, -2);
+  for (const message of older) {
+    if (size() <= contextChars) return;
     if (message.role === "tool" && message.content.length > 300) {
       message.content = `${message.content.slice(0, 200)}\n… [shortened to save space; call the tool again if you need it]`;
+    }
+  }
+  // Still too long: shorten what the model itself wrote earlier, except the system prompt and brief.
+  for (const message of older.slice(2)) {
+    if (size() <= contextChars) return;
+    if (message.role === "assistant" && message.content.length > 400) {
+      message.content = `${message.content.slice(0, 300)} … [shortened]`;
+    }
+  }
+  // Last resort: a single result too big for the context, usually the newest, is cut to what fits.
+  for (const message of messages) {
+    const excess = size() - contextChars;
+    if (excess <= 0) return;
+    if (message.role === "tool" && message.content.length > 1_000) {
+      const keep = Math.max(500, message.content.length - excess - 200);
+      message.content = `${message.content.slice(0, keep)}\n… [cut: too long for the model's context; read a smaller part, e.g. with offset and limit]`;
     }
   }
 }
