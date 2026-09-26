@@ -100,7 +100,32 @@ const workingNotes = [];
 const NOTES_CHARS = 6_000;
 /** How often each exact tool call was made, to stop a model going round in circles. */
 const callCounts = new Map();
-const REPEATABLE = new Set(["write_file", "run_shell", "remember", "ask_human", "finish"]);
+const REPEATABLE = new Set(["write_file", "remember", "ask_human", "finish"]);
+
+/**
+ * What a call counts as, for spotting repetition. The same URL is the same request whether it
+ * comes through fetch_url or curl in the shell, with or without a trailing slash; shell
+ * commands are compared with their spacing evened out, and get one more try than reads.
+ */
+function repetitionKeys(name, args) {
+  if (name === "fetch_url") return [{ key: `url ${normalizeUrl(args.url)}`, limit: 3 }];
+  if (name === "run_shell") {
+    const command = String(args.command ?? "").replace(/\s+/g, " ").trim();
+    const urls = [...command.matchAll(/https?:\/\/[^\s"'<>|;)]+/g)].map((match) => ({ key: `url ${normalizeUrl(match[0])}`, limit: 3 }));
+    return [{ key: `shell ${command}`, limit: 4 }, ...urls];
+  }
+  return [{ key: `${name} ${JSON.stringify(args)}`, limit: 3 }];
+}
+
+function normalizeUrl(value) {
+  try {
+    const url = new URL(String(value).trim());
+    url.hash = "";
+    return `${url.protocol}//${url.host.toLowerCase()}${url.pathname.replace(/\/+$/, "")}${url.search}`;
+  } catch {
+    return String(value).trim();
+  }
+}
 let blockedInARow = 0;
 
 const tools = {
@@ -360,16 +385,21 @@ async function runTool(call) {
   }
   console.log(`🔧 ${name} ${trim(JSON.stringify(args), 160)}`);
   await note("tool", `${name} ${trim(JSON.stringify(args), 160)}`);
-  // The same read or fetch a third time means the model is going round in circles.
+  // The same read, fetch or command over and over means the model is going round in circles.
   if (!REPEATABLE.has(name)) {
-    const key = `${name} ${JSON.stringify(args)}`;
-    const count = (callCounts.get(key) ?? 0) + 1;
-    callCounts.set(key, count);
-    if (count >= 3) {
+    const counted = repetitionKeys(name, args ?? {}).map(({ key, limit }) => {
+      const count = (callCounts.get(key) ?? 0) + 1;
+      callCounts.set(key, count);
+      return { key, limit, count };
+    });
+    const repeated = counted.find(({ count, limit }) => count >= limit);
+    if (repeated) {
       blockedInARow += 1;
-      await note("text", `(Blocked a repeated ${name}: the same call for the ${count}th time.)`);
-      return `You have already called ${name} with exactly these arguments ${count - 1} times, and the result hasn't changed. `
-        + "Don't call it again. Use your working notes, note what you still need with remember, or move on to the next step.";
+      const what = repeated.key.startsWith("url ") ? `the URL ${repeated.key.slice(4)}` : `this ${name} call`;
+      await note("text", `(Blocked a repeat: ${what}, requested ${repeated.count} times.)`);
+      return `You have already requested ${what} ${repeated.count - 1} times, and the result hasn't changed. `
+        + "Don't request it again, with this or another tool. Use your working notes, note what you still need with "
+        + "remember, or move on to the next step.";
     }
   }
   blockedInARow = 0;
