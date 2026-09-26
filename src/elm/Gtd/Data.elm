@@ -188,22 +188,58 @@ schedule action =
                 Maybe.map (Timed start) action.durationMinutes
 
 
-{-| How a card or row words an Action's schedule.
+{-| How a card or row words an Action's schedule, in local time: "Today 09:00–10:30",
+"2026-10-02 14:00–14:45" or "2026-10-02 · all day".
 -}
-scheduleText : Action -> Maybe String
-scheduleText action =
+scheduleText : String -> Action -> Maybe String
+scheduleText today action =
+    let
+        day date =
+            if date == today then
+                "Today"
+
+            else
+                date
+    in
     case ( schedule action, action.status ) of
         ( Just (AllDay date), _ ) ->
-            Just (date ++ " · all day")
+            Just (day date ++ " · all day")
 
         ( Just (Timed start minutes), _ ) ->
-            Just (start ++ " · " ++ String.fromInt minutes ++ " min")
+            let
+                -- The host sends the local wall-clock time; the stored start is UTC.
+                local =
+                    Maybe.withDefault start action.scheduledLocal
+
+                time =
+                    String.slice 11 16 local
+            in
+            Just (day (String.left 10 local) ++ " " ++ time ++ "–" ++ addMinutes time minutes)
 
         ( Nothing, ActionStatus.Scheduled ) ->
             Just "Missing schedule"
 
         ( Nothing, _ ) ->
             Nothing
+
+
+{-| An `HH:mm` clock time moved on by some minutes, wrapping past midnight.
+-}
+addMinutes : String -> Int -> String
+addMinutes time minutes =
+    case List.map String.toInt (String.split ":" time) of
+        [ Just hours, Just mins ] ->
+            let
+                total =
+                    modBy (24 * 60) (hours * 60 + mins + minutes)
+
+                pad n =
+                    String.padLeft 2 '0' (String.fromInt n)
+            in
+            pad (total // 60) ++ ":" ++ pad (modBy 60 total)
+
+        _ ->
+            "+" ++ String.fromInt minutes ++ " min"
 
 
 isDateOnly : String -> Bool

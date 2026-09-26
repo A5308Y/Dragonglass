@@ -1408,7 +1408,8 @@ cardView model action =
             ( Nothing, _ ) ->
                 text ""
         , div [ class "dg-card-meta" ]
-            [ Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
+            [ Ui.maybeView (Data.scheduleText model.snapshot.today action) (\schedule -> span [ class "dg-card-schedule" ] [ text ("🗓 " ++ schedule) ])
+            , Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
             , Ui.maybeView action.energy Energy.badge
             , Ui.maybeView action.due
                 (\due ->
@@ -1433,7 +1434,6 @@ cardView model action =
                     else
                         span [] [ text ("Follow up " ++ date) ]
                 )
-            , Ui.maybeView (Data.scheduleText action) (\schedule -> span [] [ text schedule ])
             ]
         ]
 
