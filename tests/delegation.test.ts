@@ -196,6 +196,7 @@ describe("Run status and costs", () => {
   });
 
   it("reads a run's state from whether it runs and what the runner reported", () => {
+    expect(agentRunStatus(run({ queued: true }), false)).toBe("queued");
     expect(agentRunStatus(run({ starting: true }), false)).toBe("starting");
     expect(agentRunStatus(run(), true)).toBe("running");
     expect(agentRunStatus(run({ openQuestions: [{ id: "q", question: "?", askedAt: "" }] }), true)).toBe("waiting");

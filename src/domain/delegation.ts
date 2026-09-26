@@ -195,6 +195,8 @@ export interface AgentRunRecord {
   resultSubtype?: string;
   costUsd: number | null;
   openQuestions: Array<{ id: string; question: string; askedAt: string }>;
+  /** A local run waiting for the local model, which serves one run at a time. */
+  queued?: boolean;
   /** Set while the containers are being built and started. */
   starting?: boolean;
   /** Why the run could not start, when it could not. */
@@ -217,11 +219,12 @@ export interface AgentActivity {
   text: string;
 }
 
-export type AgentRunStatus = "starting" | "running" | "waiting" | "finished" | "failed" | "stopped" | "interrupted";
+export type AgentRunStatus = "queued" | "starting" | "running" | "waiting" | "finished" | "failed" | "stopped" | "interrupted";
 
 /** A run's state: `alive` when its agent container is still running. */
 export function agentRunStatus(run: AgentRunRecord, alive: boolean): AgentRunStatus {
   if (run.startError) return "failed";
+  if (run.queued) return "queued";
   if (run.starting) return "starting";
   if (alive) return run.openQuestions.length ? "waiting" : "running";
   if (run.resultSubtype === "success") return "finished";
@@ -233,6 +236,8 @@ export function agentRunStatus(run: AgentRunRecord, alive: boolean): AgentRunSta
 /** How a run's state reads on the Project's page. */
 export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus): string {
   switch (status) {
+    case "queued":
+      return "Queued: it starts when the local model is free";
     case "starting":
       return "Starting (the first run builds the containers, which takes a few minutes)";
     case "running":

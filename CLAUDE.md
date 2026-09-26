@@ -112,6 +112,9 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - A local model (`agent/runner-local`, our own loop against LM Studio) may instead read
   the whole vault, but only offline: the proxy then passes nothing but the model route.
   The rule is "the more it sees, the less it can reach"; Claude runs never get the vault.
+- Local runs are queued: only one holds the local model at a time (starting, working or
+  waiting for an answer); the scan starts the oldest queued run once it is free. A queued
+  run builds its environment and reads its keys only when it launches.
 - Each run creates a Waiting Action in the delegated Project ("Agent: …"), renamed to
   "Agent asks: …" with a follow-up of today while a question is open, and done when the
   run ends. Its id lives in the run's `host.json`; once someone changes it by hand

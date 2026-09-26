@@ -113,6 +113,7 @@ export interface DelegationPlan {
 interface HostNotes {
   actionId?: string;
   actionTitle?: string;
+  queued?: boolean;
   starting?: boolean;
   startError?: string;
   importedTo?: string;
@@ -231,27 +232,12 @@ export class AgentService {
       throw new Error(`That is ${formatBytes(plan.totalBytes)} of material, more than the ${formatBytes(limit)} a run may copy.`);
     }
     const settings = this.getSettings();
-    const composeFile = await this.composeFile();
-    const docker = await this.dockerPath();
-    const env: Record<string, string> = local
-      ? {
-        LOCAL_MODEL: settings.localModel,
-        LOCAL_MODEL_UPSTREAM: settings.localModelUrl,
-        LOCAL_MODEL_API_KEY: settings.localKeychainService ? await this.keychainSecret(settings.localKeychainService) : "",
-        AGENT_OFFLINE: plan.wholeVault ? "1" : "0",
-        AGENT_MAX_MINUTES: String(settings.localMaxMinutes),
-        AGENT_MAX_TURNS: String(settings.localMaxTurns),
-        LOCAL_MAX_REPLY_TOKENS: String(settings.localMaxReplyTokens),
-        // About three characters a token, less the room the tools, the reply and the model's thinking need.
-        LOCAL_CONTEXT_CHARS: String(Math.max(8_000, Math.floor((settings.localContextTokens - 4_000) * 3))),
-      }
-      : {
-        ANTHROPIC_API_KEY: await this.keychainSecret(settings.keychainService),
-        AGENT_MAX_BUDGET_USD: String(options.budgetUsd),
-        AGENT_MODEL: settings.model,
-        AGENT_MAX_TURNS: String(settings.maxTurns),
-        AGENT_OFFLINE: "0",
-      };
+    // Checked now, so a missing kit or Docker is reported before anything is copied.
+    await this.composeFile();
+    await this.dockerPath();
+    // The local model serves one run at a time; a second one waits its turn.
+    const queue = local && this.localModelBusy();
+    const env = queue ? null : await this.runEnv(options.runtime, plan.wholeVault, options.budgetUsd);
 
     const root = plan.scope.root;
     const createdAt = new Date();
@@ -288,10 +274,11 @@ export class AgentService {
       budgetUsd: local ? 0 : options.budgetUsd,
       model: local ? settings.localModel || "the loaded local model" : settings.model,
     });
-    await this.writeHostNotes(runId, { starting: true, ...await this.createWaitingAction(root.id, instructions) });
+    await this.writeHostNotes(runId, { ...(queue ? { queued: true } : { starting: true }), ...await this.createWaitingAction(root.id, instructions) });
     await this.scan();
 
-    void this.launch(runId, runDir, composeFile, docker, local ? "agent-local" : "agent", env);
+    if (env) void this.launch(runId, env);
+    else new Notice(`Queued: “${root.title}” starts when the local model is free.`);
     return runId;
   }
 
@@ -330,7 +317,14 @@ export class AgentService {
   /** Stops a run; the agent records that it was stopped, and what it made so far is imported. */
   async stop(runId: string): Promise<void> {
     if (!/^[\w.-]+$/.test(runId)) throw new Error("Unknown run.");
-    await this.docker(["stop", "-t", "15", containerName(runId)]);
+    if (this.runs.find((run) => run.id === runId)?.queued) {
+      // Never started: it leaves the queue as a stopped run, which can be run again.
+      const node = requireNode();
+      await writeJson(node, node.path.join(this.runsDirectory(), runId, "exchange", "result.json"), { subtype: "interrupted", costUsd: 0 });
+      await this.writeHostNotes(runId, { queued: false });
+    } else {
+      await this.docker(["stop", "-t", "15", containerName(runId)]);
+    }
     await this.scan();
   }
 
@@ -346,7 +340,7 @@ export class AgentService {
 
   private schedule(): void {
     if (this.timer !== null) window.clearTimeout(this.timer);
-    const active = this.runs.some((run) => run.starting || (run.importedTo === undefined && !run.startError && this.running.has(containerName(run.id))));
+    const active = this.runs.some((run) => run.queued || run.starting || (run.importedTo === undefined && !run.startError && this.running.has(containerName(run.id))));
     this.timer = window.setTimeout(() => void this.scan(), active ? POLL_ACTIVE_MS : POLL_IDLE_MS);
   }
 
@@ -366,7 +360,7 @@ export class AgentService {
     // Only runs that may still be going need Docker asked about them. A start this session
     // didn't launch was cut off by Obsidian closing, and may have come up nonetheless.
     const orphanedStart = (run: AgentRunRecord) => Boolean(run.starting) && !this.launching.has(run.id);
-    const candidates = runs.filter((run) => !run.startError && run.importedTo === undefined && (!run.starting || orphanedStart(run)));
+    const candidates = runs.filter((run) => !run.startError && run.importedTo === undefined && (!run.starting || orphanedStart(run) || run.queued));
     if (candidates.length) {
       try {
         this.running = new Set((await this.docker(["ps", "--format", "{{.Names}}"])).split("\n").map((line) => line.trim()).filter(Boolean));
@@ -389,6 +383,16 @@ export class AgentService {
     }
     this.runs = runs;
 
+    // The oldest queued local run starts once the local model is free.
+    const next = runs.filter((run) => run.queued && run.runtime === "local").sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+    if (next && !this.localModelBusy() && !this.launching.has(next.id)) {
+      delete next.queued;
+      next.starting = true;
+      await this.writeHostNotes(next.id, { queued: false, starting: true });
+      new Notice(`The local model is free: starting the queued run on “${next.projectTitle}”.`);
+      void this.launch(next.id);
+    }
+
     for (const run of runs) {
       const alive = this.running.has(containerName(run.id));
       if (alive || run.starting) await this.syncWaitingAction(run);
@@ -398,7 +402,7 @@ export class AgentService {
         this.announced.add(key);
         new Notice(`The agent working on “${run.projectTitle}” asks: ${question.question}\n\nAnswer on the Project's page.`, 20_000);
       }
-      if (!alive && !run.starting && !run.startError && run.importedTo === undefined && !this.finishing.has(run.id)) {
+      if (!alive && !run.queued && !run.starting && !run.startError && run.importedTo === undefined && !this.finishing.has(run.id)) {
         void this.finish(run);
       }
     }
@@ -430,6 +434,7 @@ export class AgentService {
       openQuestions: questions
         .filter((question) => typeof question.id === "string" && typeof question.question === "string" && !answered.has(question.id))
         .map((question) => ({ id: String(question.id), question: String(question.question), askedAt: String(question.askedAt ?? "") })),
+      ...(host?.queued ? { queued: true } : {}),
       ...(host?.starting ? { starting: true } : {}),
       ...(host?.startError ? { startError: host.startError } : {}),
       ...(host?.importedTo !== undefined ? { importedTo: host.importedTo } : {}),
@@ -476,20 +481,31 @@ export class AgentService {
 
   // STARTING AND FINISHING
 
-  private async launch(runId: string, runDir: string, composeFile: string, docker: string, service: string, env: Record<string, string>): Promise<void> {
+  /**
+   * Starts a run's containers. A queued run gets its settings (and keys) only now, from
+   * its run.json and the current settings, since it may start in a later session.
+   */
+  private async launch(runId: string, env?: Record<string, string>): Promise<void> {
+    const node = requireNode();
+    const runDir = node.path.join(this.runsDirectory(), runId);
+    let composeFile = "";
     this.launching.add(runId);
     try {
+      composeFile = await this.composeFile();
+      const meta = (await readJson(node, node.path.join(runDir, "input", "run.json"))) ?? {};
+      const runtime: AgentRuntime = meta.runtime === "local" ? "local" : "claude";
+      const budgetUsd = typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd;
+      const runEnv = env ?? await this.runEnv(runtime, meta.wholeVault === true, budgetUsd);
       await this.docker(
-        ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--rm", "--build", "--name", containerName(runId), service],
-        { RUN_DIR: runDir, ...env },
-        docker,
+        ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--rm", "--build", "--name", containerName(runId), runtime === "local" ? "agent-local" : "agent"],
+        { RUN_DIR: runDir, ...runEnv },
       );
       await this.writeHostNotes(runId, { starting: false });
       new Notice(`The agent started on “${this.runs.find((run) => run.id === runId)?.projectTitle ?? runId}”.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await this.writeHostNotes(runId, { starting: false, startError: lastLine(message) });
-      await this.dockerQuietly(["compose", "-f", composeFile, "-p", composeProject(runId), "down", "--remove-orphans"]);
+      if (composeFile) await this.dockerQuietly(["compose", "-f", composeFile, "-p", composeProject(runId), "down", "--remove-orphans"]);
       new Notice(`The agent could not start: ${lastLine(message)}`, 15_000);
     } finally {
       this.launching.delete(runId);
@@ -611,6 +627,40 @@ export class AgentService {
     });
   }
 
+  /** What the runner and proxy are started with, from the current settings; keys come from the Keychain. */
+  private async runEnv(runtime: AgentRuntime, wholeVault: boolean, budgetUsd: number): Promise<Record<string, string>> {
+    const settings = this.getSettings();
+    if (runtime === "local") {
+      return {
+        LOCAL_MODEL: settings.localModel,
+        LOCAL_MODEL_UPSTREAM: settings.localModelUrl,
+        LOCAL_MODEL_API_KEY: settings.localKeychainService ? await this.keychainSecret(settings.localKeychainService) : "",
+        AGENT_OFFLINE: wholeVault ? "1" : "0",
+        AGENT_MAX_MINUTES: String(settings.localMaxMinutes),
+        AGENT_MAX_TURNS: String(settings.localMaxTurns),
+        LOCAL_MAX_REPLY_TOKENS: String(settings.localMaxReplyTokens),
+        // About three characters a token, less the room the tools, the reply and the model's thinking need.
+        LOCAL_CONTEXT_CHARS: String(Math.max(8_000, Math.floor((settings.localContextTokens - 4_000) * 3))),
+      };
+    }
+    return {
+      ANTHROPIC_API_KEY: await this.keychainSecret(settings.keychainService),
+      AGENT_MAX_BUDGET_USD: String(budgetUsd),
+      AGENT_MODEL: settings.model,
+      AGENT_MAX_TURNS: String(settings.maxTurns),
+      AGENT_OFFLINE: "0",
+    };
+  }
+
+  /**
+   * Whether a local run holds the local model: starting, working, or waiting for an
+   * answer, since the run continues the moment one arrives.
+   */
+  private localModelBusy(): boolean {
+    return this.runs.some((run) => run.runtime === "local" && !run.queued && !run.startError
+      && (this.launching.has(run.id) || Boolean(run.starting) || this.running.has(containerName(run.id))));
+  }
+
   // HOST PLUMBING
 
   private async composeFile(): Promise<string> {
@@ -682,6 +732,7 @@ export class AgentService {
     const current = ((await readJson(node, file)) ?? {}) as HostNotes;
     const next: HostNotes = { ...current, ...changes };
     if (!next.starting) delete next.starting;
+    if (!next.queued) delete next.queued;
     await writeJson(node, file, next);
   }
 

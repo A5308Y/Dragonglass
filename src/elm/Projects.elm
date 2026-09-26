@@ -1654,7 +1654,7 @@ viewAgentRun : Model -> AgentRun -> Html Msg
 viewAgentRun model run =
     let
         active =
-            List.member run.status [ "starting", "running", "waiting" ]
+            List.member run.status [ "queued", "starting", "running", "waiting" ]
 
         -- A local run costs nothing; what matters there is which model it used and what it could reach.
         spent =
@@ -1696,7 +1696,15 @@ viewAgentRun model run =
                   else
                     button [ onClick (Send IgnoreReply (Command.OpenFile run.reportPath)) ] [ text "Open report" ]
                 , if active then
-                    button [ class "mod-warning", onClick (Send IgnoreReply (Command.StopAgentRun run.id)) ] [ text "Stop" ]
+                    button [ class "mod-warning", onClick (Send IgnoreReply (Command.StopAgentRun run.id)) ]
+                        [ text
+                            (if run.status == "queued" then
+                                "Remove from queue"
+
+                             else
+                                "Stop"
+                            )
+                        ]
 
                   else
                     text ""
