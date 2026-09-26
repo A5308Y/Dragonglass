@@ -89,6 +89,30 @@ describe("Delegation brief", () => {
     expect(brief).toContain("- Tiles (Backlog): `material/GTD/Projects/Tiles.md`");
   });
 
+  it("tells a new run about an earlier attempt, and keeps its own instructions recoverable", () => {
+    const brief = delegationBrief({
+      breadcrumb: "Kitchen",
+      desiredOutcome: "Done.",
+      instructions: "Compare suppliers.",
+      projects: [project("K", "Kitchen")],
+      actionCount: 0,
+      linkedFileCount: 0,
+      earlierAttempt: {
+        statusText: "Stopped at its turn limit",
+        resultsFolder: "Projects/Kitchen/Agent runs/2026-09-26 1400 Kitchen",
+        activity: [
+          { at: "", kind: "thought", text: "Two suppliers left." },
+          { at: "", kind: "tool", text: "write_file suppliers.md" },
+        ],
+      },
+    });
+    expect(brief).toContain("that run ended as: Stopped at its turn limit.");
+    expect(brief).toContain("`material/Projects/Kitchen/Agent runs/2026-09-26 1400 Kitchen/`");
+    expect(brief).toContain("- Thought: Two suppliers left.\n- Tool: write_file suppliers.md");
+    // Running again from this run must not pick up the earlier-attempt text as instructions.
+    expect(briefInstructions(brief)).toBe("Compare suppliers.");
+  });
+
   it("gives back the instructions a brief was written from", () => {
     const brief = delegationBrief({
       breadcrumb: "Kitchen",

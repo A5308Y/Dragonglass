@@ -42,7 +42,38 @@ export function delegationScope(rootId: string, projects: readonly Project[], ac
 /** The folder, inside a run's input, that holds the copied vault files at their vault paths. */
 export const MATERIAL_FOLDER = "material";
 
+/** What an earlier run on the same task got to, so a new run can build on it. */
+export interface EarlierAttempt {
+  /** How the earlier run ended, as the Project's page words it. */
+  statusText: string;
+  /** The vault folder its results were copied into, or `""` when it left none. */
+  resultsFolder: string;
+  /** Its last steps, oldest first. */
+  activity: AgentActivity[];
+}
+
+/** The part of a brief that tells the agent about an earlier attempt, and to build on it. */
+export function earlierAttemptSection(earlier: EarlierAttempt): string {
+  const steps = earlier.activity.map((entry) => {
+    const label = entry.kind === "thought" ? "Thought" : entry.kind === "tool" ? "Tool" : "Said";
+    return `- ${label}: ${entry.text}`;
+  });
+  return [
+    "## An earlier attempt",
+    "",
+    `This task was started before, and that run ended as: ${earlier.statusText}.`,
+    earlier.resultsFolder
+      ? `What it produced is in \`${MATERIAL_FOLDER}/${earlier.resultsFolder}/\`. Read it first, and build on it rather than starting over; `
+        + "put your own results in the outbox, including updated versions of files you improve."
+      : "It left no files, so start over, but avoid what made it stop.",
+    ...(steps.length ? ["", "Its last steps:", "", ...steps] : []),
+    "",
+  ].join("\n");
+}
+
 export interface BriefInput {
+  /** An earlier run on the same task to continue from. */
+  earlierAttempt?: EarlierAttempt;
   /** Whether the material is the whole vault rather than this Project's tree. */
   wholeVault?: boolean;
   breadcrumb: string;
@@ -75,6 +106,7 @@ export function delegationBrief(input: BriefInput): string {
     "",
     input.instructions.trim(),
     "",
+    ...(input.earlierAttempt ? [earlierAttemptSection(input.earlierAttempt)] : []),
     "## The material",
     "",
     ...(input.wholeVault

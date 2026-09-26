@@ -39,6 +39,7 @@ import {
   type AgentRunStatus,
   type AgentRuntime,
   type DelegationScope,
+  type EarlierAttempt,
 } from "../domain/delegation";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
 import type { AgentSettings } from "../domain/types";
@@ -79,6 +80,8 @@ export interface DelegationOptions {
   runtime: AgentRuntime;
   /** Claude runs only: the spending cap in US dollars. */
   budgetUsd: number;
+  /** An earlier run to continue from: the brief tells the agent where it got to. */
+  earlierAttempt?: EarlierAttempt;
 }
 
 /** A finished run's choices, for starting it again from the Delegate dialog. */
@@ -88,6 +91,8 @@ export interface RerunDefaults {
   runtime: AgentRuntime;
   wholeVault: boolean;
   budgetUsd: number;
+  /** Where the earlier run got to, to continue from it. */
+  earlier?: EarlierAttempt;
 }
 
 export interface AgentRunView extends AgentRunRecord {
@@ -253,6 +258,7 @@ export class AgentService {
       await node.fs.writeFile(target, new Uint8Array(await this.app.vault.readBinary(file)));
     }
     const brief = delegationBrief({
+      ...(options.earlierAttempt ? { earlierAttempt: options.earlierAttempt } : {}),
       wholeVault: plan.wholeVault,
       breadcrumb: plan.breadcrumb,
       desiredOutcome: plan.desiredOutcome,
@@ -291,7 +297,15 @@ export class AgentService {
     if (!meta || typeof meta.projectId !== "string") throw new Error("This run's details are missing.");
     let instructions = typeof meta.instructions === "string" ? meta.instructions : "";
     if (!instructions) instructions = briefInstructions(await node.fs.readFile(node.path.join(input, "brief.md"), "utf8").catch(() => ""));
+    const view = this.views().find((run) => run.id === runId);
     return {
+      ...(view ? {
+        earlier: {
+          statusText: view.statusText,
+          resultsFolder: view.importedTo ?? "",
+          activity: (view.activity ?? []).slice(0, 15).reverse(),
+        },
+      } : {}),
       projectId: meta.projectId,
       instructions,
       runtime: meta.runtime === "local" ? "local" : "claude",

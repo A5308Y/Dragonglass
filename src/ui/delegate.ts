@@ -84,6 +84,20 @@ class DelegateModal extends Modal {
     });
     if (this.previous) instructions.value = this.previous.instructions;
 
+    let continueEarlier = Boolean(this.previous?.earlier);
+    if (this.previous?.earlier) {
+      const earlier = this.previous.earlier;
+      new Setting(contentEl)
+        .setName("Continue from the earlier run")
+        .setDesc(`It ended as: ${earlier.statusText}. `
+          + (earlier.resultsFolder
+            ? "The agent is told where its results are and what it did last, and builds on them."
+            : "It left no files; the agent is told what it did last."))
+        .addToggle((toggle) => toggle.setValue(continueEarlier).onChange((value) => {
+          continueEarlier = value;
+        }));
+    }
+
     this.budgetSetting = new Setting(contentEl)
       .setName("Budget")
       .setDesc(`US dollars. The run stops once its estimated spend passes this, or after ${this.settings.maxTurns} turns.`)
@@ -109,7 +123,11 @@ class DelegateModal extends Modal {
       error.setText("");
       startButton.setDisabled(true).setButtonText("Starting…");
       try {
-        await this.agent.delegate(this.plan, instructions.value, { runtime: this.runtime, budgetUsd: this.budget });
+        await this.agent.delegate(this.plan, instructions.value, {
+          runtime: this.runtime,
+          budgetUsd: this.budget,
+          ...(continueEarlier && this.previous?.earlier ? { earlierAttempt: this.previous.earlier } : {}),
+        });
         new Notice(`Starting the agent on “${this.plan.scope.root.title}”. Its progress shows on the Project's page.`);
         this.close();
       } catch (reason) {
