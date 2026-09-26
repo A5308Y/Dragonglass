@@ -2,27 +2,67 @@ import { Notice, normalizePath, type App, type TFile } from "obsidian";
 
 const UNDO_TIMEOUT_MS = 10_000;
 
+/** The Undo notice on screen, which later changes join while it is up. */
+interface UndoRun {
+  notice: Notice;
+  message: HTMLElement;
+  button: HTMLButtonElement;
+  undos: Array<() => Promise<void>>;
+  timer: number;
+  used: boolean;
+}
+
+let current: UndoRun | undefined;
+
 /**
  * Reports a reversible change with an Undo button, instead of asking first.
  * The notice stays up long enough to notice a slip; undoing after it closes is
  * not offered.
+ *
+ * Changes made while the notice is up join it rather than stacking notices, so
+ * deleting ten Items in a row shows one notice: the latest change, and an Undo
+ * that takes back the whole run, newest first. Each change restarts the timer.
  */
 export function showUndoNotice(message: string, undo: () => Promise<void>): void {
+  const run = current && !current.used && current.notice.noticeEl.isConnected ? current : startRun();
+  run.undos.push(undo);
+  run.message.setText(message);
+  run.button.setText(run.undos.length === 1 ? "Undo" : `Undo all ${run.undos.length}`);
+  window.clearTimeout(run.timer);
+  run.timer = window.setTimeout(() => run.notice.hide(), UNDO_TIMEOUT_MS);
+}
+
+function startRun(): UndoRun {
   const fragment = document.createDocumentFragment();
   const body = fragment.createDiv({ cls: "dg-undo-notice" });
-  body.createSpan({ text: message });
+  const message = body.createSpan();
   const button = body.createEl("button", { text: "Undo", cls: "mod-cta" });
-  const notice = new Notice(fragment, UNDO_TIMEOUT_MS);
-  let used = false;
+  // Hidden by the timer below, so a joining change can keep it up longer.
+  const notice = new Notice(fragment, 0);
+  const run: UndoRun = { notice, message, button, undos: [], timer: 0, used: false };
   button.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (used) return;
-    used = true;
+    if (run.used) return;
+    run.used = true;
+    window.clearTimeout(run.timer);
     notice.hide();
-    undo().catch((error: unknown) => {
-      new Notice(error instanceof Error ? `Could not undo: ${error.message}` : "Could not undo.");
-    });
+    void undoAll(run.undos);
   });
+  current = run;
+  return run;
+}
+
+async function undoAll(undos: ReadonlyArray<() => Promise<void>>): Promise<void> {
+  const failures: string[] = [];
+  for (const undo of [...undos].reverse()) {
+    try {
+      await undo();
+    } catch (error: unknown) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (failures.length === 1) new Notice(`Could not undo: ${failures[0]}`);
+  else if (failures.length) new Notice(`Could not undo ${failures.length} of ${undos.length} changes: ${failures[0]}`);
 }
 
 /**
