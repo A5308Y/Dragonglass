@@ -3,6 +3,7 @@ module Gtd.ProjectStatus exposing
     , all
     , board
     , decoder
+    , defaultColumns
     , encode
     , isOpen
     , key
@@ -28,17 +29,24 @@ type ProjectStatus
     | Cancelled
 
 
-{-| Every status, including the one that owns no board column.
+{-| Every status.
 -}
 all : List ProjectStatus
 all =
     [ Active, Backlog, Someday, Completed, Cancelled ]
 
 
-{-| The statuses the Projects board and sub-project boards lay out as columns.
+{-| The statuses the Projects board can lay out as columns, in order: all of them.
 -}
 board : List ProjectStatus
 board =
+    all
+
+
+{-| The columns shown until the person picks their own; Cancelled is there to switch on.
+-}
+defaultColumns : List ProjectStatus
+defaultColumns =
     [ Active, Backlog, Someday, Completed ]
 
 

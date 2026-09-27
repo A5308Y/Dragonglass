@@ -16,8 +16,11 @@ export const PROJECT_STATUSES = [
   "cancelled",
 ] as const;
 
-/** The Project statuses that own a board column; Cancelled Projects leave the board. */
-export const BOARD_PROJECT_STATUSES = [
+/** The Project statuses that can be board columns: all of them. */
+export const BOARD_PROJECT_STATUSES = PROJECT_STATUSES;
+
+/** The columns shown until the person picks their own; Cancelled is there to switch on. */
+export const DEFAULT_PROJECT_BOARD_COLUMNS = [
   "active",
   "backlog",
   "someday",

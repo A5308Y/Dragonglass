@@ -302,7 +302,7 @@ init flags =
                     , sections = decoded.snapshot.settings.projectBoardSections
                     , visibleColumns =
                         if List.isEmpty columns then
-                            ProjectStatus.board
+                            ProjectStatus.defaultColumns
 
                         else
                             columns
@@ -683,12 +683,13 @@ moveProject projectId status beforeId model =
     showMove (placementsAfterMove model projectId status beforeId) (Command.MoveSubproject projectId status beforeId) model
 
 
-{-| Shows the moves at once and sends the command that writes them. Completing a
-Project may still ask for confirmation, so that move waits for the vault instead.
+{-| Shows the moves at once and sends the command that writes them. Completing or
+cancelling a Project may still ask for confirmation or be refused, so that move waits
+for the vault instead.
 -}
 showMove : Dict ProjectId PendingMove -> Command -> Model -> ( Model, Cmd Msg )
 showMove moves command model =
-    if Dict.isEmpty moves || List.any (\move -> move.status == ProjectStatus.Completed) (Dict.values moves) then
+    if Dict.isEmpty moves || List.any (\move -> List.member move.status [ ProjectStatus.Completed, ProjectStatus.Cancelled ]) (Dict.values moves) then
         send IgnoreReply command model
 
     else
@@ -1309,7 +1310,7 @@ out of the way until asked.
 -}
 isSecondaryColumn : ProjectStatus -> Bool
 isSecondaryColumn status =
-    status == ProjectStatus.Someday || status == ProjectStatus.Completed
+    List.member status [ ProjectStatus.Someday, ProjectStatus.Completed, ProjectStatus.Cancelled ]
 
 
 viewCollapsedColumn : Model -> ProjectStatus -> Html Msg
@@ -2064,7 +2065,7 @@ viewSubprojects model project =
             List.filter (\child -> List.member child.status [ ProjectStatus.Active, ProjectStatus.Backlog ]) visible
 
         secondary =
-            List.filter (\child -> List.member child.status [ ProjectStatus.Someday, ProjectStatus.Completed ]) visible
+            List.filter (\child -> List.member child.status secondaryStatuses) visible
     in
     section [ class "dg-detail-section dg-subprojects-panel" ]
         [ div [ class "dg-detail-section-heading" ]
@@ -2107,17 +2108,22 @@ viewSubprojects model project =
             (List.map (viewSubprojectColumn model project primary) [ ProjectStatus.Active, ProjectStatus.Backlog ])
         , div [ classList [ ( "dg-subproject-secondary", True ), ( "is-open", model.showSecondary ) ] ]
             [ button [ class "dg-disclosure dg-subproject-secondary-toggle dg-flat-button", onClick ToggleSecondary ]
-                [ span [] [ text (disclosure model.showSecondary ++ " Someday/Maybe and Completed") ]
+                [ span [] [ text (disclosure model.showSecondary ++ " Someday/Maybe, Completed and Cancelled") ]
                 , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length secondary)) ]
                 ]
             , if model.showSecondary then
                 div [ class "dg-subproject-columns dg-subproject-columns-secondary" ]
-                    (List.map (viewSubprojectColumn model project secondary) [ ProjectStatus.Someday, ProjectStatus.Completed ])
+                    (List.map (viewSubprojectColumn model project secondary) secondaryStatuses)
 
               else
                 text ""
             ]
         ]
+
+
+secondaryStatuses : List ProjectStatus
+secondaryStatuses =
+    [ ProjectStatus.Someday, ProjectStatus.Completed, ProjectStatus.Cancelled ]
 
 
 viewSubprojectColumn : Model -> Project -> List Project -> ProjectStatus -> Html Msg
@@ -3016,7 +3022,7 @@ emptyModel message =
     , showImages = False
     , columnsBy = ColumnsByStatus
     , sections = NoSections
-    , visibleColumns = ProjectStatus.board
+    , visibleColumns = ProjectStatus.defaultColumns
     , columnsOpen = False
     , selecting = False
     , selectedIds = Set.empty

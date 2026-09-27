@@ -155,7 +155,7 @@ export default class DragonglassGtdPlugin extends Plugin {
         : defaults.weeklyReviewDay,
       lastWeeklyReview: typeof saved?.lastWeeklyReview === "string" ? saved.lastWeeklyReview : defaults.lastWeeklyReview,
       projectBoardColumns: Array.isArray(saved?.projectBoardColumns)
-        ? saved.projectBoardColumns.filter((status) => isProjectStatus(status) && status !== "cancelled")
+        ? saved.projectBoardColumns.filter((status) => isProjectStatus(status))
         : defaults.projectBoardColumns,
       schemaVersion: defaults.schemaVersion,
       mail: {

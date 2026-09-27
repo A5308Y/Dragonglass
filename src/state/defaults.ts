@@ -1,5 +1,5 @@
 import { DEFAULT_WEEKLY_REVIEW_DAY } from "../domain/weekly-review";
-import { BOARD_PROJECT_STATUSES } from "../domain/types";
+import { DEFAULT_PROJECT_BOARD_COLUMNS } from "../domain/types";
 import type { GtdSettings, SavedView } from "../domain/types";
 
 const DEFAULT_SORT = { field: "created", direction: "desc" } as const;
@@ -58,7 +58,7 @@ export function defaultSettings(): GtdSettings {
     projectBoardSections: "none",
     defaultActionStatus: "next",
     showDoneColumn: true,
-    projectBoardColumns: [...BOARD_PROJECT_STATUSES],
+    projectBoardColumns: [...DEFAULT_PROJECT_BOARD_COLUMNS],
     savedViews: createDefaultViews(),
     activeSavedViewId: null,
     weeklyReviewDay: DEFAULT_WEEKLY_REVIEW_DAY,
