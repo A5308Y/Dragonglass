@@ -18,6 +18,7 @@ import {
   type PomodoroWrapUp,
 } from "../domain/pomodoro";
 import type { PomodoroSettings } from "../domain/types";
+import { withExternalLink } from "../domain/mite";
 import { SyncedJsonFile } from "../state/synced-json-file";
 import { showUndoNotice } from "../ui/undo";
 
@@ -119,6 +120,11 @@ export class PomodoroService {
     if (!active) return;
     await this.update(discardPomodoro(this.store));
     showUndoNotice(`Discarded the Pomodoro for “${active.projectTitle}”.`, () => this.update(restorePomodoro(this.store, active)));
+  }
+
+  /** Records what a finished session became in a time tracker, so it isn't sent twice. */
+  async recordExternal(sessionId: string, integration: string, id: string): Promise<void> {
+    await this.update(withExternalLink(this.store, sessionId, integration, id, new Date().toISOString()));
   }
 
   private async update(next: PomodoroStore): Promise<void> {

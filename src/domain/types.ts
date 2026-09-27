@@ -1,4 +1,5 @@
 import type { TFile } from "obsidian";
+import type { MiteSettings } from "./mite";
 
 export const ACTION_STATUSES = [
   "next",
@@ -306,6 +307,8 @@ export interface PomodoroSettings {
   focusMinutes: number;
   /** Also add one line per finished session to the Project's Diary. */
   logToDiary: boolean;
+  /** Sending finished sessions to mite as time entries. */
+  mite: MiteSettings;
 }
 
 export interface FeedSettings {

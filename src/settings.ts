@@ -1,5 +1,9 @@
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, SecretComponent, Setting } from "obsidian";
 import { confirmDialog } from "./ui/confirm";
+import { miteAccount } from "./domain/mite";
+import { projectBreadcrumbs } from "./domain/project-hierarchy";
+import type { MiteChoice } from "./pomodoro/mite-sync";
+import { localDate } from "./utils/date";
 import { CodexLoginModal } from "./ui/codex-login";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
@@ -14,6 +18,8 @@ export class GtdSettingTab extends PluginSettingTab {
   private unsubscribeMailStatus: (() => void) | undefined;
   private feedsExpanded = false;
   private pomodoroExpanded = false;
+  /** mite's projects and services, loaded on request while the settings are open. */
+  private miteChoices: { projects: MiteChoice[]; services: MiteChoice[] } | null = null;
   private agentExpanded = false;
   private mailExpanded = false;
 
@@ -289,6 +295,183 @@ export class GtdSettingTab extends PluginSettingTab {
         }
         this.plugin.settings.pomodoro.storePath = path;
         await this.plugin.saveSettings(false);
+      }));
+
+    this.displayMite(sectionEl);
+  }
+
+  /**
+   * Sending finished Pomodoros to mite. The API key lives in Obsidian's secret storage on
+   * each device; the settings, which sync with the vault, hold only its name.
+   */
+  private displayMite(sectionEl: HTMLElement): void {
+    const mite = this.plugin.settings.pomodoro.mite;
+    const save = async () => this.plugin.saveSettings(false);
+    sectionEl.createEl("h4", { text: "mite" });
+    sectionEl.createEl("p", {
+      text: "Sends each finished Pomodoro to mite as its own time entry: the focused minutes, plus the break for a completed "
+        + "session. A Pomodoro stopped early counts only what was focused. Each is sent once, from whichever device is online.",
+    });
+
+    new Setting(sectionEl)
+      .setName("Send Pomodoros to mite")
+      .setDesc("Turning it on sends sessions from today on; change the day below to send earlier ones.")
+      .addToggle((toggle) => toggle.setValue(mite.enabled).onChange(async (value) => {
+        if (value && !mite.enabled) mite.sendFrom = localDate();
+        mite.enabled = value;
+        await save();
+        this.display();
+      }));
+    if (!mite.enabled) return;
+
+    new Setting(sectionEl)
+      .setName("Account")
+      .setDesc("The name in your mite address: “acme” for acme.mite.de.")
+      .addText((text) => text.setPlaceholder("acme").setValue(mite.account).onChange(async (value) => {
+        mite.account = miteAccount(value);
+        this.miteChoices = null;
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("API key")
+      .setDesc("Pick or create a secret holding the key from mite's account page (“Allow API access”). "
+        + "Secrets stay on this device; on each other device, create one with the same name.")
+      .addComponent((el) => new SecretComponent(this.app, el).setValue(mite.apiKeySecret).onChange(async (value) => {
+        mite.apiKeySecret = value;
+        this.miteChoices = null;
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Break after a Pomodoro")
+      .setDesc("Minutes added to each completed Pomodoro. Stopped ones get none.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "0";
+        text.inputEl.max = "60";
+        text.setValue(String(mite.breakMinutes)).onChange(async (value) => {
+          const minutes = Number(value);
+          if (!Number.isInteger(minutes) || minutes < 0 || minutes > 60) return;
+          mite.breakMinutes = minutes;
+          await save();
+        });
+      });
+
+    new Setting(sectionEl)
+      .setName("Send sessions from")
+      .setDesc("Sessions that ended before this day are never sent.")
+      .addText((text) => {
+        text.inputEl.type = "date";
+        text.setValue(mite.sendFrom).onChange(async (value) => {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+          mite.sendFrom = value;
+          await save();
+          this.display();
+        });
+      });
+
+    const choices = this.miteChoices;
+    if (!choices) {
+      new Setting(sectionEl)
+        .setName("Projects and services")
+        .setDesc("Load them from mite to choose where each Project's Pomodoros go.")
+        .addButton((button) => button.setButtonText("Load from mite").onClick(async () => {
+          button.setDisabled(true).setButtonText("Loading…");
+          try {
+            const [projects, services] = await Promise.all([this.plugin.mite.projects(), this.plugin.mite.services()]);
+            this.miteChoices = { projects, services };
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+            button.setDisabled(false).setButtonText("Load from mite");
+          }
+        }));
+    } else {
+      new Setting(sectionEl)
+        .setName("Default service")
+        .setDesc("The service (Leistung) an entry gets unless its Project names another.")
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", "None");
+          for (const service of choices.services) dropdown.addOption(String(service.id), service.name);
+          dropdown.setValue(mite.defaultServiceId ? String(mite.defaultServiceId) : "").onChange(async (value) => {
+            mite.defaultServiceId = value ? Number(value) : null;
+            mite.defaultServiceLabel = choices.services.find((service) => String(service.id) === value)?.name ?? "";
+            await save();
+          });
+        });
+    }
+
+    // Where each Project's Pomodoros go; sub-projects inherit it.
+    const projects = this.plugin.projectList();
+    const breadcrumbs = projectBreadcrumbs(projects);
+    const nameOf = (projectId: string) => breadcrumbs.get(projectId) ?? projects.find((project) => project.id === projectId)?.title ?? "A deleted Project";
+    const mapped = Object.entries(mite.projects).sort(([left], [right]) => nameOf(left).localeCompare(nameOf(right)));
+    for (const [projectId, target] of mapped) {
+      new Setting(sectionEl)
+        .setName(nameOf(projectId))
+        .setDesc(`→ ${target.label}. Its sub-projects too, unless they have their own.`)
+        .addButton((button) => button.setButtonText("Remove").onClick(async () => {
+          delete mite.projects[projectId];
+          await save();
+          this.display();
+        }));
+    }
+    if (choices) {
+      let projectId = "";
+      let miteProject = "";
+      let service = "";
+      const open = projects
+        .filter((project) => project.status !== "completed" && project.status !== "cancelled" && !mite.projects[project.id])
+        .sort((left, right) => nameOf(left.id).localeCompare(nameOf(right.id)));
+      new Setting(sectionEl)
+        .setName("Add a Project")
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", "Dragonglass Project…");
+          for (const project of open) dropdown.addOption(project.id, nameOf(project.id));
+          dropdown.onChange((value) => {
+            projectId = value;
+          });
+        })
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", "mite project…");
+          for (const project of choices.projects) dropdown.addOption(String(project.id), project.name);
+          dropdown.onChange((value) => {
+            miteProject = value;
+          });
+        })
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", "Default service");
+          for (const entry of choices.services) dropdown.addOption(String(entry.id), entry.name);
+          dropdown.onChange((value) => {
+            service = value;
+          });
+        })
+        .addButton((button) => button.setButtonText("Add").onClick(async () => {
+          if (!projectId || !miteProject) return void new Notice("Choose a Project and a mite project.");
+          const projectName = choices.projects.find((entry) => String(entry.id) === miteProject)?.name ?? miteProject;
+          const serviceName = choices.services.find((entry) => String(entry.id) === service)?.name;
+          mite.projects[projectId] = {
+            projectId: Number(miteProject),
+            serviceId: service ? Number(service) : null,
+            label: serviceName ? `${projectName}, ${serviceName}` : projectName,
+          };
+          await save();
+          this.display();
+        }));
+    }
+
+    const pending = this.plugin.mite.pending();
+    new Setting(sectionEl)
+      .setName("Not sent yet")
+      .setDesc(pending.unsent
+        ? `${pending.unsent} finished Pomodoro${pending.unsent === 1 ? "" : "s"}`
+          + (pending.unmapped ? `, ${pending.unmapped} of them for Projects without a mite project.` : ".")
+        : "Every finished Pomodoro is in mite.")
+      .addButton((button) => button.setButtonText("Send now").setDisabled(!pending.unsent).onClick(async () => {
+        button.setDisabled(true).setButtonText("Sending…");
+        await this.plugin.sendToMite(true);
+        this.display();
       }));
   }
 

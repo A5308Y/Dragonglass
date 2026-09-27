@@ -1,3 +1,5 @@
+import { parseMiteSettings } from "../domain/mite";
+import { localDate } from "../utils/date";
 import { DEFAULT_WEEKLY_REVIEW_DAY } from "../domain/weekly-review";
 import { DEFAULT_PROJECT_BOARD_COLUMNS } from "../domain/types";
 import type { GtdSettings, SavedView } from "../domain/types";
@@ -74,6 +76,7 @@ export function defaultSettings(): GtdSettings {
       storePath: "GTD/pomodoros.json",
       focusMinutes: 25,
       logToDiary: false,
+      mite: parseMiteSettings({}, localDate()),
     },
     agent: {
       runsDirectory: "",

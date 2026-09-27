@@ -23,6 +23,8 @@ import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
 import { PomodoroService } from "./pomodoro/pomodoro-service";
+import { MiteSync } from "./pomodoro/mite-sync";
+import { parseMiteSettings } from "./domain/mite";
 import { AgentService } from "./agent/agent-service";
 import { delegateProject } from "./ui/delegate";
 import { confirmDeleteAgentRun } from "./ui/delete-agent-run";
@@ -37,6 +39,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private ribbonAttention!: RibbonAttention;
   private mail!: MailService;
   private pomodoro!: PomodoroService;
+  mite!: MiteSync;
   agent!: AgentService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
@@ -59,9 +62,10 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.pomodoro = new PomodoroService(
       this.app,
       () => this.settings.pomodoro,
-      (session) => this.logPomodoro(session),
+      (session) => this.pomodoroFinished(session),
       () => void this.openPomodoro(),
     );
+    this.mite = new MiteSync(this.app, this.pomodoro, () => this.settings.pomodoro.mite, () => this.index.getSnapshot().projects);
     this.agent = new AgentService(this.app, this.repository, () => this.settings.agent);
     this.services = {
       app: this.app,
@@ -118,6 +122,11 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.registerCommands();
 
     this.app.workspace.onLayoutReady(() => void this.initializeIndex());
+    // Sessions finished while offline, or on a device without the mite key, go out once the vault has settled.
+    this.app.workspace.onLayoutReady(() => {
+      const timer = window.setTimeout(() => void this.sendToMite(false), 30_000);
+      this.register(() => window.clearTimeout(timer));
+    });
   }
 
   onunload(): void {
@@ -180,6 +189,7 @@ export default class DragonglassGtdPlugin extends Plugin {
           ? saved!.pomodoro!.focusMinutes
           : defaults.pomodoro.focusMinutes,
         logToDiary: saved?.pomodoro?.logToDiary === true,
+        mite: parseMiteSettings(saved?.pomodoro?.mite, localDate()),
       },
       agent: {
         runsDirectory: typeof saved?.agent?.runsDirectory === "string" ? saved.agent.runsDirectory.trim() : defaults.agent.runsDirectory,
@@ -337,6 +347,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
     this.addCommand({ id: "open-pomodoro", name: "Open Pomodoro", callback: () => void this.openPomodoro() });
     this.addCommand({ id: "start-pomodoro", name: "Start Pomodoro…", callback: () => this.pickPomodoroProject() });
+    this.addCommand({ id: "send-pomodoros-to-mite", name: "Send Pomodoros to mite", callback: () => void this.sendToMite(true) });
     this.addCommand({ id: "open-feeds", name: "Open RSS Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
     this.addCommand({ id: "fetch-feeds", name: "Fetch RSS Feeds", callback: () => void this.fetchFeedsWithNotice() });
     this.addCommand({ id: "import-email", name: "Import Email", callback: () => void this.importMailWithNotice() });
@@ -521,6 +532,37 @@ export default class DragonglassGtdPlugin extends Plugin {
     const projects = this.index.getSnapshot().projects.filter((project) => project.status !== "completed" && project.status !== "cancelled");
     if (!projects.length) return void new Notice("There are no open Projects to focus on.");
     new OpenProjectModal(this.app, projects, (project) => void this.openPomodoro(project.id)).open();
+  }
+
+  private async pomodoroFinished(session: PomodoroSession): Promise<void> {
+    await this.logPomodoro(session);
+    void this.sendToMite(false);
+  }
+
+  /**
+   * Sends unsent Pomodoros to mite. Quiet when nothing happened, unless asked by hand;
+   * a session whose Project has no mite project yet is named once so it isn't forgotten.
+   */
+  /** Every Project, for the settings' mite mapping. */
+  projectList(): readonly Project[] {
+    return this.index.getSnapshot().projects;
+  }
+
+  async sendToMite(announce: boolean): Promise<void> {
+    const settings = this.settings.pomodoro.mite;
+    if (!settings.enabled) {
+      if (announce) new Notice("Turn on mite in the Pomodoro settings first.");
+      return;
+    }
+    if (!this.mite.ready() && !announce) return;
+    const result = await this.mite.sync();
+    const parts = [
+      result.sent ? `Sent ${result.sent} Pomodoro${result.sent === 1 ? "" : "s"} to mite.` : "",
+      result.unmapped ? `${result.unmapped} wait${result.unmapped === 1 ? "s" : ""} for a mite project: set one for the Project in the Pomodoro settings.` : "",
+      result.error ? `Not sent: ${result.error}` : "",
+    ].filter(Boolean);
+    if (parts.length) new Notice(parts.join(" "), result.error ? 10_000 : 5_000);
+    else if (announce) new Notice("Every finished Pomodoro is already in mite.");
   }
 
   /** Optionally notes a finished session in its Project's Diary. */

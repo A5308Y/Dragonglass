@@ -72,8 +72,14 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - A time-tracking sync should: read finished sessions from the service's store,
   convert each with `toTimeEntry` (key = session id, stable across re-syncs),
   and record what it sent in `session.external[<integration>] = { id, syncedAt }`
-  so a re-run updates rather than duplicates. `parsePomodoroStore` already keeps
-  `external` links, and nothing else writes them.
+  so a re-run updates rather than duplicates. `parsePomodoroStore` keeps
+  `external` links and `mergePomodoroStores` merges them between devices.
+- mite is the first such sync: rules in `src/domain/mite.ts`, sending in
+  `src/pomodoro/mite-sync.ts`. One entry per session; a completed session adds the
+  break minutes (setting), a stopped one doesn't. The mite project is set per
+  Dragonglass Project in the settings and inherited by sub-projects. The API key is
+  in Obsidian's secret storage (`app.secretStorage`, per device); settings hold only
+  the secret's name. New integrations with credentials should do the same.
 
 ## JSON stores shared between devices
 
