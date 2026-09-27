@@ -22,6 +22,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private miteChoices: { projects: MiteChoice[]; services: MiteChoice[] } | null = null;
   private agentExpanded = false;
   private mailExpanded = false;
+  private calendarExpanded = false;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
@@ -121,13 +122,22 @@ export class GtdSettingTab extends PluginSettingTab {
     this.displayFeeds(containerEl);
     this.displayMail(containerEl);
     this.displayAgent(containerEl);
+    this.displayCalendar(containerEl);
+  }
 
-    containerEl.createEl("h3", { text: "Google Calendar" });
-    containerEl.createEl("p", {
+  private displayCalendar(containerEl: HTMLElement): void {
+    const section = containerEl.createEl("details", { cls: "dg-settings-section" });
+    section.open = this.calendarExpanded;
+    section.createEl("summary", { text: "Google Calendar", cls: "dg-settings-section-summary" });
+    section.addEventListener("toggle", () => {
+      this.calendarExpanded = section.open;
+    });
+    const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
+    sectionEl.createEl("p", {
       text: "One-way sync for Calendar Actions through a user-owned Apps Script bridge. The endpoint is stored in this plugin's data file; the shared secret in each device's secret storage.",
     });
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Enable Google Calendar sync")
       .setDesc("Automatically reconcile Calendar Actions after changes and every five minutes.")
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.googleCalendar.enabled).onChange(async (value) => {
@@ -135,7 +145,7 @@ export class GtdSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings(false);
       }));
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Apps Script URL")
       .setDesc("HTTPS web-app deployment URL ending in /exec.")
       .addText((text) => text
@@ -148,7 +158,7 @@ export class GtdSettingTab extends PluginSettingTab {
 
     const calendarSecret = this.plugin.calendarSecret;
     let secretInput: HTMLInputElement;
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Shared secret")
       .setDesc("Must match the SHARED_SECRET Script Property. Use Show or Copy to transfer it to Apps Script. "
         + "It stays in this device's secret storage and doesn't sync; enter it on each device that syncs the calendar."
@@ -200,7 +210,7 @@ export class GtdSettingTab extends PluginSettingTab {
 
     // The copy from before the secret moved to secret storage, until every device has taken it.
     if (calendarSecret.hasLegacyCopy()) {
-      new Setting(containerEl)
+      new Setting(sectionEl)
         .setName("Old shared secret copy")
         .setDesc("⚠ The settings file, which syncs with the vault, still holds the shared secret as plain text. This device "
           + "has copied it into its secret storage. Once every device that syncs the calendar has started Dragonglass "
@@ -218,7 +228,7 @@ export class GtdSettingTab extends PluginSettingTab {
         }));
     }
 
-    new Setting(containerEl)
+    new Setting(sectionEl)
       .setName("Default Calendar Action duration")
       .setDesc("Minutes suggested when an Action first gets a time of day on the calendar.")
       .addText((text) => {
@@ -233,7 +243,7 @@ export class GtdSettingTab extends PluginSettingTab {
         });
       });
 
-    const connectionSetting = new Setting(containerEl)
+    const connectionSetting = new Setting(sectionEl)
       .setName("Connection and sync")
       .addButton((button) => button.setButtonText("Test").onClick(async () => {
         button.setDisabled(true);
