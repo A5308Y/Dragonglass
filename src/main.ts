@@ -24,6 +24,7 @@ import { createUlid } from "./utils/ulid";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
 import { PomodoroService } from "./pomodoro/pomodoro-service";
 import { MiteSync } from "./pomodoro/mite-sync";
+import { MailPasswords } from "./mail/mail-passwords";
 import { parseMiteSettings } from "./domain/mite";
 import { AgentService } from "./agent/agent-service";
 import { delegateProject } from "./ui/delegate";
@@ -40,12 +41,15 @@ export default class DragonglassGtdPlugin extends Plugin {
   private mail!: MailService;
   private pomodoro!: PomodoroService;
   mite!: MiteSync;
+  mailPasswords!: MailPasswords;
   agent!: AgentService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.mailPasswords = new MailPasswords(this.app, () => this.settings.mail);
+    this.mailPasswords.migrate();
     this.index = new GtdIndex(this.app.vault, this.app.metadataCache, () => this.settings.inboxDirectory);
     this.repository = new GtdRepository(this.app, this.index, () => this.settings);
     this.repository.onParentsActivated = (title, parents) => {
@@ -57,7 +61,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       this.app,
       this.repository,
       () => this.settings.mail,
-      (accountId) => this.settings.mail.passwords[accountId] ?? "",
+      (accountId) => this.mailPasswords.get(accountId),
     );
     this.pomodoro = new PomodoroService(
       this.app,

@@ -276,7 +276,7 @@ export class AgentService {
     const fullScope = delegationScope(projectId, snapshot.projects, snapshot.actions);
     const scope = { ...fullScope, actions: fullScope.actions.filter((action) => !agentActionIds.has(action.id)) };
     const files = new Map<string, TFile>();
-    // Obsidian lists no files in hidden folders, so .obsidian (with the mail passwords) and .trash stay out.
+    // Obsidian lists no files in hidden folders, so .obsidian (with the plugin settings) and .trash stay out.
     if (wholeVault) for (const file of this.app.vault.getFiles()) files.set(file.path, file);
     for (const project of scope.projects) files.set(project.file.path, project.file);
     for (const action of scope.actions) files.set(action.file.path, action.file);

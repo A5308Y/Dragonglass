@@ -329,10 +329,9 @@ export interface MailSettings {
   importCap: number;
   accounts: MailAccountSettings[];
   /**
-   * App passwords by account id.
-   *
-   * Stored as plain text in the plugin data file, like the calendar shared secret,
-   * and deliberately not in the vault file the watermarks live in — that one syncs.
+   * Old copies of app passwords by account id, from before they moved to Obsidian's
+   * secret storage (`MailPasswords`). Read only to migrate them; nothing new is written
+   * here, and the person removes them in the settings once every computer has copied them.
    */
   passwords: Record<string, string>;
 }

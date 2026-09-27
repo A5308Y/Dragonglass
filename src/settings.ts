@@ -837,12 +837,9 @@ export class GtdSettingTab extends PluginSettingTab {
   /**
    * Email import.
    *
-   * Accounts and their app passwords live in the plugin's own data file
-   * (`.obsidian/plugins/dragonglass-gtd/data.json`), as plain text, and not in the
-   * vault note that holds the sync watermarks, so they never show up in the vault's
-   * notes. The data file is still inside the vault, though: iCloud, Obsidian Sync
-   * with plugin settings, or git sync it like any other file. That is why the
-   * settings ask for a revocable app password, never the account password.
+   * Accounts live in the plugin's own data file, which syncs with the vault. Their app
+   * passwords live in Obsidian's secret storage on each device (`MailPasswords`), so
+   * they don't travel with it; each computer that syncs mail is given them once.
    */
   private displayMail(containerEl: HTMLElement): void {
     const mail = this.plugin.getMailService();
@@ -997,13 +994,14 @@ export class GtdSettingTab extends PluginSettingTab {
       let passwordInput: HTMLInputElement;
       new Setting(sectionEl)
         .setName("App password")
-        .setDesc("Use a provider-issued app password, never your account password: it is revocable and stored as plain text in this plugin's data file.")
+        .setDesc("Use a provider-issued app password, never your account password. It stays in this device's secret "
+          + "storage and doesn't sync; enter it on each computer that imports mail."
+          + (this.plugin.mailPasswords.get(account.id) ? "" : " ⚠ Not set on this device."))
         .addText((text) => {
           passwordInput = text.inputEl;
           text.inputEl.type = "password";
-          text.setValue(this.plugin.settings.mail.passwords[account.id] ?? "").onChange(async (value) => {
-            this.plugin.settings.mail.passwords[account.id] = value.trim();
-            await save();
+          text.setValue(this.plugin.mailPasswords.get(account.id)).onChange((value) => {
+            this.plugin.mailPasswords.set(account.id, value);
           });
         })
         .addButton((button) => button.setButtonText("Show").onClick(() => {
@@ -1014,7 +1012,7 @@ export class GtdSettingTab extends PluginSettingTab {
         .addButton((button) => button.setButtonText("Test").onClick(async () => {
           button.setDisabled(true);
           try {
-            const mailboxes = await mail.listMailboxes(account, this.plugin.settings.mail.passwords[account.id] ?? "");
+            const mailboxes = await mail.listMailboxes(account, this.plugin.mailPasswords.get(account.id));
             new Notice(`Connected. ${mailboxes.length} mailboxes:\n${mailboxes.slice(0, 25).join("\n")}`, 15_000);
           } catch (error) {
             new Notice(error instanceof Error ? error.message : "Could not connect.", 10_000);
@@ -1084,7 +1082,29 @@ export class GtdSettingTab extends PluginSettingTab {
           })) return;
           this.plugin.settings.mail.accounts = this.plugin.settings.mail.accounts.filter((entry) => entry.id !== account.id);
           delete this.plugin.settings.mail.passwords[account.id];
+          this.plugin.mailPasswords.forget(account.id);
           await mail.forget(account.id);
+          await this.plugin.saveSettings(false);
+          this.display();
+        }));
+    }
+
+    // Copies of the passwords from before they moved to secret storage, until every computer has taken them.
+    const legacy = this.plugin.mailPasswords.legacyCount();
+    if (legacy) {
+      new Setting(sectionEl)
+        .setName("Old password copies")
+        .setDesc(`⚠ The settings file, which syncs with the vault, still holds ${legacy} app password${legacy === 1 ? "" : "s"} `
+          + "as plain text. This device has copied them into its secret storage. Once every computer that imports mail "
+          + "has started Dragonglass since this update, remove them.")
+        .addButton((button) => button.setButtonText("Remove from settings file").setWarning().onClick(async () => {
+          if (!await confirmDialog(this.app, {
+            title: "Remove the old password copies?",
+            message: "A computer that hasn't started Dragonglass since this update will then need its app passwords entered again.",
+            confirmText: "Remove",
+            warning: true,
+          })) return;
+          this.plugin.settings.mail.passwords = {};
           await this.plugin.saveSettings(false);
           this.display();
         }));

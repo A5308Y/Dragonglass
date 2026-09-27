@@ -80,6 +80,9 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   Dragonglass Project in the settings and inherited by sub-projects. The API key is
   in Obsidian's secret storage (`app.secretStorage`, per device); settings hold only
   the secret's name. New integrations with credentials should do the same.
+- Mail app passwords are in secret storage too (`MailPasswords`, id
+  `dragonglass-mail-<account id>`). `settings.mail.passwords` only holds old copies
+  that each device migrates on start; never write new passwords there.
 
 ## JSON stores shared between devices
 
