@@ -355,6 +355,10 @@ export interface MailAccountSettings {
 export interface GoogleCalendarSettings {
   enabled: boolean;
   endpointUrl: string;
+  /**
+   * An old copy of the bridge's shared secret, from before it moved to Obsidian's secret
+   * storage (`CalendarSecret`). Read only to migrate it; nothing new is written here.
+   */
   sharedSecret: string;
   sourceId: string;
   defaultDurationMinutes: number;

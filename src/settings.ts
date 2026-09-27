@@ -124,7 +124,7 @@ export class GtdSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h3", { text: "Google Calendar" });
     containerEl.createEl("p", {
-      text: "One-way sync for Calendar Actions through a user-owned Apps Script bridge. The endpoint and secret are stored as plain text in this plugin's data file.",
+      text: "One-way sync for Calendar Actions through a user-owned Apps Script bridge. The endpoint is stored in this plugin's data file; the shared secret in each device's secret storage.",
     });
 
     new Setting(containerEl)
@@ -146,16 +146,18 @@ export class GtdSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings(false);
         }));
 
+    const calendarSecret = this.plugin.calendarSecret;
     let secretInput: HTMLInputElement;
     new Setting(containerEl)
       .setName("Shared secret")
-      .setDesc("Must match the SHARED_SECRET Script Property. Use Show or Copy to transfer it to Apps Script.")
+      .setDesc("Must match the SHARED_SECRET Script Property. Use Show or Copy to transfer it to Apps Script. "
+        + "It stays in this device's secret storage and doesn't sync; enter it on each device that syncs the calendar."
+        + (calendarSecret.get() ? "" : " ⚠ Not set on this device."))
       .addText((text) => {
         secretInput = text.inputEl;
         text.inputEl.type = "password";
-        text.setValue(this.plugin.settings.googleCalendar.sharedSecret).onChange(async (value) => {
-          this.plugin.settings.googleCalendar.sharedSecret = value.trim();
-          await this.plugin.saveSettings(false);
+        text.setValue(calendarSecret.get()).onChange((value) => {
+          calendarSecret.set(value);
         });
       })
       .addButton((button) => button.setButtonText("Show").onClick(() => {
@@ -164,7 +166,7 @@ export class GtdSettingTab extends PluginSettingTab {
         button.setButtonText(visible ? "Show" : "Hide");
       }))
       .addButton((button) => button.setButtonText("Copy").onClick(async () => {
-        const secret = this.plugin.settings.googleCalendar.sharedSecret;
+        const secret = calendarSecret.get();
         if (!secret) {
           new Notice("Generate or enter a shared secret first.");
           return;
@@ -180,21 +182,41 @@ export class GtdSettingTab extends PluginSettingTab {
         }
       }))
       .addButton((button) => button.setButtonText("Generate").onClick(async () => {
-        if (this.plugin.settings.googleCalendar.sharedSecret && !await confirmDialog(this.app, {
+        if (calendarSecret.get() && !await confirmDialog(this.app, {
           title: "Replace the shared secret?",
-          message: "The current secret stops working. You will also need to update the SHARED_SECRET Script Property.",
+          message: "The current secret stops working. You will also need to update the SHARED_SECRET Script Property, "
+            + "and enter the new secret on your other devices.",
           confirmText: "Replace secret",
           warning: true,
         })) return;
         const secret = randomSecret();
-        this.plugin.settings.googleCalendar.sharedSecret = secret;
-        await this.plugin.saveSettings(false);
+        calendarSecret.set(secret);
         secretInput.value = secret;
         secretInput.type = "text";
         secretInput.focus();
         secretInput.select();
         new Notice("Shared secret generated and selected. Copy it to the SHARED_SECRET Script Property.");
       }));
+
+    // The copy from before the secret moved to secret storage, until every device has taken it.
+    if (calendarSecret.hasLegacyCopy()) {
+      new Setting(containerEl)
+        .setName("Old shared secret copy")
+        .setDesc("⚠ The settings file, which syncs with the vault, still holds the shared secret as plain text. This device "
+          + "has copied it into its secret storage. Once every device that syncs the calendar has started Dragonglass "
+          + "since this update, remove it.")
+        .addButton((button) => button.setButtonText("Remove from settings file").setWarning().onClick(async () => {
+          if (!await confirmDialog(this.app, {
+            title: "Remove the old shared secret copy?",
+            message: "A device that hasn't started Dragonglass since this update will then need the secret entered again.",
+            confirmText: "Remove",
+            warning: true,
+          })) return;
+          this.plugin.settings.googleCalendar.sharedSecret = "";
+          await this.plugin.saveSettings(false);
+          this.display();
+        }));
+    }
 
     new Setting(containerEl)
       .setName("Default Calendar Action duration")

@@ -83,6 +83,7 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - Mail app passwords are in secret storage too (`MailPasswords`, id
   `dragonglass-mail-<account id>`). `settings.mail.passwords` only holds old copies
   that each device migrates on start; never write new passwords there.
+  The Google Calendar shared secret works the same way (`CalendarSecret`).
 
 ## JSON stores shared between devices
 

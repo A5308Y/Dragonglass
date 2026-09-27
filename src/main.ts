@@ -25,6 +25,7 @@ import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE
 import { PomodoroService } from "./pomodoro/pomodoro-service";
 import { MiteSync } from "./pomodoro/mite-sync";
 import { MailPasswords } from "./mail/mail-passwords";
+import { CalendarSecret } from "./calendar/calendar-secret";
 import { parseMiteSettings } from "./domain/mite";
 import { AgentService } from "./agent/agent-service";
 import { delegateProject } from "./ui/delegate";
@@ -42,6 +43,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private pomodoro!: PomodoroService;
   mite!: MiteSync;
   mailPasswords!: MailPasswords;
+  calendarSecret!: CalendarSecret;
   agent!: AgentService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
@@ -50,12 +52,14 @@ export default class DragonglassGtdPlugin extends Plugin {
     await this.loadSettings();
     this.mailPasswords = new MailPasswords(this.app, () => this.settings.mail);
     this.mailPasswords.migrate();
+    this.calendarSecret = new CalendarSecret(this.app, () => this.settings.googleCalendar);
+    this.calendarSecret.migrate();
     this.index = new GtdIndex(this.app.vault, this.app.metadataCache, () => this.settings.inboxDirectory);
     this.repository = new GtdRepository(this.app, this.index, () => this.settings);
     this.repository.onParentsActivated = (title, parents) => {
       new Notice(`Created “${title}” as Active, so ${quotedTitles(parents)} above it ${parents.length === 1 ? "is" : "are"} Active now too.`);
     };
-    this.calendarSync = new GoogleCalendarSync(this.app, this.index, () => this.settings.googleCalendar);
+    this.calendarSync = new GoogleCalendarSync(this.app, this.index, () => this.calendarSecret.settings());
     this.feeds = new FeedService(this.app, () => this.settings.feeds);
     this.mail = new MailService(
       this.app,
