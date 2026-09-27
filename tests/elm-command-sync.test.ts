@@ -52,6 +52,7 @@ const SURFACES = {
   modals: "Modals",
   somedayReview: "SomedayReview",
   pomodoro: "Pomodoro",
+  checklists: "Checklists",
 } as const satisfies Record<keyof typeof SURFACE_COMMANDS, string>;
 
 describe("Elm and TypeScript command lists", () => {

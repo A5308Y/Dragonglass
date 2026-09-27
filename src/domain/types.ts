@@ -250,6 +250,7 @@ export interface GtdSettings {
   feeds: FeedSettings;
   mail: MailSettings;
   pomodoro: PomodoroSettings;
+  checklists: ChecklistSettings;
   agent: AgentSettings;
   /** The weekday the Weekly Review falls due, as `Date.getDay()` counts: 0 is Sunday. */
   weeklyReviewDay: number;
@@ -309,6 +310,16 @@ export interface PomodoroSettings {
   logToDiary: boolean;
   /** Sending finished sessions to mite as time entries. */
   mite: MiteSettings;
+}
+
+/** Checklist notes and their runs; see `src/domain/checklist.ts`. */
+export interface ChecklistSettings {
+  /** The folder whose notes are checklists. */
+  directory: string;
+  /** The vault-relative JSON file holding the runs. */
+  storePath: string;
+  /** The path of the checklist to work through every day, or `""` for none. */
+  daily: string;
 }
 
 export interface FeedSettings {

@@ -20,6 +20,15 @@ import {
   startPomodoro,
   type PomodoroStore,
 } from "../src/domain/pomodoro";
+import {
+  emptyChecklistStore,
+  finishRun,
+  markItem,
+  mergeChecklistStores,
+  renameChecklist,
+  startRun,
+  type ChecklistStore,
+} from "../src/domain/checklist";
 import { SyncedJsonFile } from "../src/state/synced-json-file";
 
 const item = (key: string, published = "2026-09-01T00:00:00.000Z"): FeedItem => ({
@@ -140,6 +149,39 @@ describe("Merging the Pomodoro log", () => {
     });
     const merged = mergePomodoroStores(base, link("toggl"), link("clockify"));
     expect(Object.keys(merged.sessions[0]!.external).sort()).toEqual(["clockify", "toggl"]);
+  });
+});
+
+describe("Merging the checklist runs", () => {
+  const items = [{ key: "A", text: "A" }, { key: "B", text: "B" }];
+  const started = (id: string, at: string, store: ChecklistStore = emptyChecklistStore()) =>
+    startRun(store, { id, path: "Daily.md", title: "Daily", items }, new Date(at));
+
+  it("keeps each item's later mark when both devices ticked in one run", () => {
+    const base = started("one", "2026-09-10T08:00:00Z");
+    const mine = markItem(markItem(base, "one", "A", "done", new Date("2026-09-10T08:01:00Z")), "one", "B", "skipped", new Date("2026-09-10T08:03:00Z"));
+    const theirs = markItem(base, "one", "B", "done", new Date("2026-09-10T08:02:00Z"));
+    expect(mergeChecklistStores(base, mine, theirs).runs[0]!.marks).toEqual({
+      A: { state: "done", at: "2026-09-10T08:01:00.000Z" },
+      B: { state: "skipped", at: "2026-09-10T08:03:00.000Z" },
+    });
+  });
+
+  it("keeps a run finished on the other device finished, and runs started on both", () => {
+    const base = started("one", "2026-09-10T08:00:00Z");
+    const ticked = markItem(base, "one", "A", "done", new Date("2026-09-10T08:01:00Z"));
+    const mine = startRun(ticked, { id: "two", path: "Weekly.md", title: "Weekly", items }, new Date("2026-09-10T09:00:00Z"));
+    const theirs = finishRun(base, "one", items, new Date("2026-09-10T08:05:00Z"));
+    const merged = mergeChecklistStores(base, mine, theirs);
+    expect(merged.runs.map((run) => run.id)).toEqual(["two", "one"]);
+    expect(merged.runs[1]).toMatchObject({ finishedAt: "2026-09-10T08:05:00.000Z", marks: { A: { state: "done" } } });
+  });
+
+  it("keeps this device's rename of the checklist", () => {
+    const base = started("one", "2026-09-10T08:00:00Z");
+    const mine = renameChecklist(base, "Daily.md", "Morning.md", "Morning");
+    const theirs = markItem(base, "one", "A", "done", new Date("2026-09-10T08:01:00Z"));
+    expect(mergeChecklistStores(base, mine, theirs).runs[0]).toMatchObject({ path: "Morning.md", marks: { A: { state: "done" } } });
   });
 });
 

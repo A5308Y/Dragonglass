@@ -1,6 +1,6 @@
 /**
- * Pomodoro sessions: a fixed time slice of focus on one Project, with an
- * intention set before it starts and a short reflection after it ends.
+ * Pomodoro sessions: a fixed time slice of focus on one Project or one checklist run,
+ * with an intention set before it starts and a short reflection after it ends.
  *
  * The log is one JSON file in the vault, like the Feeds and Mail stores, so it
  * travels with vault sync. It is also the source a time-tracking integration will
@@ -28,13 +28,26 @@ export interface ExternalLink {
   syncedAt: string;
 }
 
+/** The checklist run a session is spent on, instead of a Project. */
+export interface PomodoroChecklist {
+  runId: string;
+  /** The checklist note's path when the session started. */
+  path: string;
+}
+
 interface SessionBasis {
   /** A ULID: the stable key an external time tracker reconciles against. */
   id: string;
+  /** Empty for a session on a checklist run. */
   projectId: string;
-  /** The Project's title and breadcrumb when the session started, so history survives renames and deletes. */
+  /**
+   * The Project's title and breadcrumb when the session started, so history survives
+   * renames and deletes. A checklist session has the checklist's title and no breadcrumb.
+   */
   projectTitle: string;
   projectPath: string;
+  /** Set when the session is spent on a checklist run; checklists aren't Projects. */
+  checklist?: PomodoroChecklist;
   intention: string;
   /** The Actions picked to work on, if any. */
   focusActionIds: string[];
@@ -77,6 +90,7 @@ export interface PomodoroStart {
   projectId: string;
   projectTitle: string;
   projectPath: string;
+  checklist?: PomodoroChecklist;
   intention: string;
   focusActionIds: string[];
   plannedMinutes: number;
@@ -105,6 +119,7 @@ export function emptyPomodoroStore(): PomodoroStore {
 
 export function startPomodoro(store: PomodoroStore, start: PomodoroStart, now: Date): PomodoroStore {
   if (store.active) throw new Error("A Pomodoro is already running.");
+  if (!start.projectId && !start.checklist) throw new Error("Choose a Project or a checklist first.");
   if (!start.intention.trim()) throw new Error("Set an intention before starting.");
   if (!Number.isInteger(start.plannedMinutes) || start.plannedMinutes < 1 || start.plannedMinutes > 180) {
     throw new Error("A Pomodoro lasts between 1 and 180 minutes.");
@@ -241,7 +256,10 @@ function parseBasis(raw: Record<string, unknown>): SessionBasis | null {
   const projectId = text(raw.projectId);
   const startedAt = text(raw.startedAt);
   const plannedMinutes = Number(raw.plannedMinutes);
-  if (!id || !projectId || Number.isNaN(Date.parse(startedAt)) || !Number.isInteger(plannedMinutes) || plannedMinutes < 1) {
+  const checklist = isRecord(raw.checklist) && text(raw.checklist.runId)
+    ? { runId: text(raw.checklist.runId), path: text(raw.checklist.path) }
+    : undefined;
+  if (!id || (!projectId && !checklist) || Number.isNaN(Date.parse(startedAt)) || !Number.isInteger(plannedMinutes) || plannedMinutes < 1) {
     return null;
   }
   return {
@@ -254,6 +272,7 @@ function parseBasis(raw: Record<string, unknown>): SessionBasis | null {
     completedActionIds: strings(raw.completedActionIds),
     plannedMinutes,
     startedAt,
+    ...(checklist ? { checklist } : {}),
   };
 }
 

@@ -87,14 +87,35 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   that each device migrates on start; never write new passwords there.
   The Google Calendar shared secret works the same way (`CalendarSecret`).
 
+## Checklists
+
+- Every note in the checklists folder (setting `checklists.directory`) is a checklist:
+  its task lines are the items, everything else is shown as written between them
+  (rendered by Obsidian, so links work). The note is the template and is never written;
+  a run keeps its marks (done, skipped, open) in `GTD/checklists.json`. Don't add
+  anything that writes ticks into the note or copies it per run.
+- Rules are in `src/domain/checklist.ts` (tested in `tests/checklist.test.ts`); the
+  service is `src/checklists/checklist-service.ts`. Items are keyed by their text (a
+  duplicate gets `#2`), so editing the note mid-run is fine; marks on removed items are
+  kept and shown as such.
+- A checklist is not a Project and not a set of Actions. Don't turn items into Actions;
+  what a run turns up is captured to the Inbox (`captureFromChecklist`).
+- One daily checklist (setting `checklists.daily`) puts a dot on the Checklists ribbon
+  icon until a run of it is finished that day. No daily Action, no calendar entry.
+- A Pomodoro can be spent on a checklist run instead of a Project: the session has
+  `checklist: { runId, path }`, an empty `projectId`, and the checklist's title as
+  `projectTitle`. Checklist sessions are never sent to mite and never go to a Diary.
+- Checklists should stay short (`SHORT_CHECKLIST_ITEMS`); the view says so past that,
+  and after a run names items skipped in each of the last three runs.
+
 ## JSON stores shared between devices
 
-- `GTD/feeds.json`, `GTD/mail.json` and `GTD/pomodoros.json` are written by every
+- `GTD/feeds.json`, `GTD/mail.json`, `GTD/pomodoros.json` and `GTD/checklists.json` are written by every
   device through `SyncedJsonFile` (`src/state/synced-json-file.ts`): each write is a
   three-way merge of the file as last seen, this device's copy and the file now, and a
   change from sync is merged into the copy in memory. Never write these files directly.
 - The merges are pure (`mergeFeedStores`, `mergeMailStores`, `mergePomodoroStores`,
-  tested in `tests/synced-stores.test.ts`): resolved and handled keys only grow, except
+  `mergeChecklistStores`, tested in `tests/synced-stores.test.ts`): resolved and handled keys only grow, except
   where this device deliberately took them back (Undo, reopening a mail backlog).
   A new field in a store needs a rule there too, or one device's value silently wins.
 

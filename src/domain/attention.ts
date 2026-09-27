@@ -16,6 +16,8 @@ export interface Attention {
   review: boolean;
   /** Unread feed Items. */
   feeds: boolean;
+  /** The daily checklist has no finished run today. */
+  checklists: boolean;
 }
 
 export function attention(
@@ -23,6 +25,7 @@ export function attention(
   unreadFeedItems: number,
   review: WeeklyReviewSettings,
   today = localDate(),
+  dailyChecklistDue = false,
 ): Attention {
   return {
     inbox: snapshot.inboxItems.length > 0,
@@ -31,6 +34,7 @@ export function attention(
       project.status === "active" && projectActionIssue(project, snapshot.projects, snapshot.actions) !== null),
     review: weeklyReviewDue(snapshot, review, today),
     feeds: unreadFeedItems > 0,
+    checklists: dailyChecklistDue,
   };
 }
 

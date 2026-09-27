@@ -27,6 +27,10 @@ export interface GtdServices {
   openSomedayReview: () => void;
   /** Opens the Pomodoro view, with this Project chosen when no session is running. */
   openPomodoro: (projectId?: string) => void;
+  /** Opens the Pomodoro view with this checklist chosen when no session is running. */
+  openChecklistPomodoro: (path: string) => void;
+  /** Opens the Checklists view on a run, or on the list. */
+  openChecklists: (runId?: string) => void;
   /** Shows what delegating a Project tree would hand over, and starts the run. */
   delegateProject: (projectId: string) => Promise<void>;
   /** Opens the Delegate dialog filled in from an earlier run, to start it again. */

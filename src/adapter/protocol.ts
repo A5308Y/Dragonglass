@@ -1,5 +1,17 @@
 import type { FeedStoreData } from "../domain/feed";
 import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../domain/pomodoro";
+import {
+  MARK_STATES,
+  SHORT_CHECKLIST_ITEMS,
+  checklistItems,
+  lastFinished,
+  openRun,
+  repeatedlySkipped,
+  type ChecklistBlock,
+  type ChecklistRun,
+  type ChecklistStore,
+  type MarkState,
+} from "../domain/checklist";
 import { addLocalDays, localDate } from "../utils/date";
 import { feedItemAge } from "../domain/feed-triage";
 import { isAllDaySchedule } from "../domain/schedule";
@@ -156,8 +168,10 @@ export interface ElmFeedsDto {
 /** The running session, with times as epoch milliseconds so Elm can count down without parsing dates. */
 export interface ElmActivePomodoroDto {
   id: string;
+  /** Empty for a session on a checklist run. */
   projectId: string;
   projectTitle: string;
+  checklist: { runId: string; path: string } | null;
   intention: string;
   focusActionIds: string[];
   completedActionIds: string[];
@@ -176,6 +190,8 @@ export interface ElmPomodoroSessionDto {
   projectId: string;
   projectTitle: string;
   projectPath: string;
+  /** The checklist note a checklist session was spent on. */
+  checklistPath: string | null;
   intention: string;
   /** Local `YYYY-MM-DD`. */
   day: string;
@@ -196,12 +212,33 @@ export interface ElmPomodoroDto {
   today: string;
   /** The Monday that starts the current week, local `YYYY-MM-DD`. */
   weekStart: string;
+  /** The checklists a session can be spent on. */
+  checklists: ElmChecklistChoiceDto[];
+  /** The run the running session is spent on, if it is a checklist session. */
+  checklistRun: ElmChecklistRunDto | null;
+}
+
+export interface ElmChecklistChoiceDto {
+  path: string;
+  title: string;
+  itemCount: number;
+}
+
+/** What the Pomodoro view is told about checklists. */
+export interface ElmPomodoroChecklists {
+  choices: ElmChecklistChoiceDto[];
+  run: ElmChecklistRunDto | null;
 }
 
 /** How many finished sessions the view is sent; the log itself keeps more. */
 const POMODORO_HISTORY_LIMIT = 500;
 
-export function elmPomodoro(store: PomodoroStore, focusMinutes: number, now = new Date()): ElmPomodoroDto {
+export function elmPomodoro(
+  store: PomodoroStore,
+  focusMinutes: number,
+  now = new Date(),
+  checklists: ElmPomodoroChecklists = { choices: [], run: null },
+): ElmPomodoroDto {
   const today = localDate(now);
   const active = store.active;
   return {
@@ -211,6 +248,7 @@ export function elmPomodoro(store: PomodoroStore, focusMinutes: number, now = ne
         id: active.id,
         projectId: active.projectId,
         projectTitle: active.projectTitle,
+        checklist: active.checklist ? { ...active.checklist } : null,
         intention: active.intention,
         focusActionIds: [...active.focusActionIds],
         completedActionIds: [...active.completedActionIds],
@@ -225,6 +263,7 @@ export function elmPomodoro(store: PomodoroStore, focusMinutes: number, now = ne
       projectId: session.projectId,
       projectTitle: session.projectTitle,
       projectPath: session.projectPath,
+      checklistPath: session.checklist?.path ?? null,
       intention: session.intention,
       day: localDate(new Date(session.startedAt)),
       startedTime: clockTime(session.startedAt),
@@ -237,6 +276,126 @@ export function elmPomodoro(store: PomodoroStore, focusMinutes: number, now = ne
     })),
     today,
     weekStart: addLocalDays(today, -((now.getDay() + 6) % 7)),
+    checklists: checklists.choices,
+    checklistRun: checklists.run,
+  };
+}
+
+/** A checklist run, with the note as it is now to show it by. */
+export interface ElmChecklistRunDto {
+  id: string;
+  path: string;
+  title: string;
+  /** Local `YYYY-MM-DD` and wall-clock time. */
+  startedDay: string;
+  startedTime: string;
+  finished: boolean;
+  /** The note's items and the Markdown between them; the recorded items when the note is gone. */
+  blocks: ChecklistBlock[];
+  noteMissing: boolean;
+  marks: Array<{ key: string; state: MarkState }>;
+  /** Items marked in this run that are no longer in the note. */
+  removed: Array<{ key: string; text: string; state: MarkState }>;
+  /** Items skipped in each of the last few runs, to ask whether they are still needed. */
+  repeatedlySkipped: string[];
+}
+
+export interface ElmChecklistSummaryDto {
+  path: string;
+  title: string;
+  itemCount: number;
+  /** The local day a run of it was last finished, or `""`. */
+  lastFinished: string;
+  openRunId: string | null;
+}
+
+export interface ElmChecklistRecentRunDto {
+  id: string;
+  title: string;
+  day: string;
+  done: number;
+  skipped: number;
+  open: number;
+}
+
+export interface ElmChecklistsDto {
+  directory: string;
+  /** The daily checklist's path, or `""`. */
+  daily: string;
+  dailyDone: boolean;
+  today: string;
+  /** Past this many items the view suggests shortening a checklist. */
+  shortLimit: number;
+  checklists: ElmChecklistSummaryDto[];
+  recent: ElmChecklistRecentRunDto[];
+  run: ElmChecklistRunDto | null;
+}
+
+/** A checklist note with its content, as the host read it. */
+export interface ChecklistNoteContent {
+  path: string;
+  title: string;
+  blocks: ChecklistBlock[];
+}
+
+const RECENT_RUNS = 10;
+
+export function elmChecklistRun(run: ChecklistRun, blocks: ChecklistBlock[] | null, store: ChecklistStore): ElmChecklistRunDto {
+  const shown: ChecklistBlock[] = blocks ?? run.items.map((item) => ({ kind: "item", key: item.key, text: item.text, depth: 0 }));
+  const current = new Set(checklistItems(shown).map((item) => item.key));
+  const recorded = new Map(run.items.map((item) => [item.key, item.text]));
+  return {
+    id: run.id,
+    path: run.path,
+    title: run.title,
+    startedDay: localDate(new Date(run.startedAt)),
+    startedTime: clockTime(run.startedAt),
+    finished: run.finishedAt !== null,
+    blocks: shown,
+    noteMissing: blocks === null,
+    marks: Object.entries(run.marks).map(([key, mark]) => ({ key, state: mark.state })),
+    removed: Object.entries(run.marks)
+      .filter(([key, mark]) => !current.has(key) && mark.state !== "open")
+      .map(([key, mark]) => ({ key, text: recorded.get(key) ?? key.replace(/#\d+$/, ""), state: mark.state })),
+    repeatedlySkipped: run.finishedAt !== null ? repeatedlySkipped(store, run.path, checklistItems(shown)) : [],
+  };
+}
+
+export function elmChecklists(
+  notes: readonly ChecklistNoteContent[],
+  store: ChecklistStore,
+  daily: string,
+  directory: string,
+  shown: ElmChecklistRunDto | null,
+  now = new Date(),
+): ElmChecklistsDto {
+  const today = localDate(now);
+  const finishedDay = (run: ChecklistRun | undefined) => (run?.finishedAt ? localDate(new Date(run.finishedAt)) : "");
+  return {
+    directory,
+    daily,
+    dailyDone: Boolean(daily) && finishedDay(lastFinished(store, daily)) === today,
+    today,
+    shortLimit: SHORT_CHECKLIST_ITEMS,
+    checklists: notes.map((note) => ({
+      path: note.path,
+      title: note.title,
+      itemCount: checklistItems(note.blocks).length,
+      lastFinished: finishedDay(lastFinished(store, note.path)),
+      openRunId: openRun(store, note.path)?.id ?? null,
+    })),
+    recent: store.runs.filter((run) => run.finishedAt !== null).slice(0, RECENT_RUNS).map((run) => {
+      const state = (key: string) => run.marks[key]?.state ?? "open";
+      return {
+        id: run.id,
+        title: run.title,
+        day: finishedDay(run),
+        done: run.items.filter((item) => state(item.key) === "done").length,
+        skipped: run.items.filter((item) => state(item.key) === "skipped").length,
+        open: run.items.filter((item) => state(item.key) === "open").length,
+      };
+    }),
+    run: shown,
   };
 }
 
@@ -468,6 +627,15 @@ type ElmNonMenuCommand =
   | { type: "finish-pomodoro"; outcome: PomodoroOutcome | null; reflection: string }
   | { type: "discard-pomodoro" }
   | { type: "complete-pomodoro-action"; actionId: string }
+  | { type: "start-checklist-pomodoro"; path: string; intention: string; minutes: number }
+  | { type: "open-checklist-pomodoro"; path: string }
+  | { type: "open-checklist-run"; runId: string }
+  | { type: "start-checklist-run"; path: string }
+  | { type: "show-checklist-run"; runId: string | null }
+  | { type: "mark-checklist-item"; runId: string; key: string; state: MarkState }
+  | { type: "finish-checklist-run"; runId: string }
+  | { type: "discard-checklist-run"; runId: string }
+  | { type: "capture-from-checklist"; path: string; text: string }
   | { type: "load-review-project"; projectId: string }
   | { type: "create-review-action"; title: string; projectId: string; context: string }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
@@ -564,7 +732,11 @@ export const SURFACE_COMMANDS = {
   somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project"],
   pomodoro: [
     "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro",
-    "complete-pomodoro-action", "show-project",
+    "complete-pomodoro-action", "show-project", "start-checklist-pomodoro", "mark-checklist-item", "open-checklist-run",
+  ],
+  checklists: [
+    "start-checklist-run", "show-checklist-run", "mark-checklist-item", "finish-checklist-run", "discard-checklist-run",
+    "capture-from-checklist", "open-checklist-pomodoro", "open-file",
   ],
   modals: [
     "save-new-action", "save-action", "schedule-action", "convert-action-to-subproject", "save-new-project", "save-project",
@@ -585,6 +757,7 @@ export type ElmBrainstormCommand = SurfaceCommand<"brainstorm">;
 export type ElmModalCommand = SurfaceCommand<"modals">;
 export type ElmSomedayReviewCommand = SurfaceCommand<"somedayReview">;
 export type ElmPomodoroCommand = SurfaceCommand<"pomodoro">;
+export type ElmChecklistsCommand = SurfaceCommand<"checklists">;
 
 export type ElmActionBoardMenuEntry = ElmMenuEntry<Exclude<ElmActionBoardCommand, { type: "show-menu" }>>;
 export type ElmProjectsMenuEntry = ElmMenuEntry<Exclude<ElmProjectsCommand, { type: "show-menu" }>>;
@@ -609,6 +782,9 @@ export const parseSomedayReviewCommand = parserFor<ElmSomedayReviewCommand>(
 );
 export const parsePomodoroCommand = parserFor<ElmPomodoroCommand>(
   (value): value is ElmPomodoroCommand => isSurfaceCommand(value, POMODORO_COMMANDS),
+);
+export const parseChecklistsCommand = parserFor<ElmChecklistsCommand>(
+  (value): value is ElmChecklistsCommand => isSurfaceCommand(value, CHECKLISTS_COMMANDS),
 );
 
 function parserFor<C>(validator: CommandValidator<C>): (value: unknown) => ElmCommandEnvelope<C> | null {
@@ -670,6 +846,7 @@ const BRAINSTORM_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.brains
 const MODAL_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.modals);
 const SOMEDAY_REVIEW_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.somedayReview);
 const POMODORO_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.pomodoro);
+const CHECKLISTS_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.checklists);
 
 function isSurfaceCommand(value: unknown, allowed: ReadonlySet<string>, nested?: CommandValidator<unknown>): boolean {
   if (!isRecord(value) || typeof value.type !== "string" || !allowed.has(value.type)) return false;
@@ -730,6 +907,25 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return (value.outcome === null || isOneOf(POMODORO_OUTCOMES, value.outcome)) && typeof value.reflection === "string";
     case "complete-pomodoro-action":
       return typeof value.actionId === "string";
+    case "start-checklist-pomodoro":
+      return typeof value.path === "string"
+        && typeof value.intention === "string"
+        && Number.isInteger(value.minutes)
+        && Number(value.minutes) >= 1
+        && Number(value.minutes) <= 180;
+    case "open-checklist-pomodoro":
+    case "start-checklist-run":
+      return typeof value.path === "string";
+    case "show-checklist-run":
+      return value.runId === null || typeof value.runId === "string";
+    case "open-checklist-run":
+    case "finish-checklist-run":
+    case "discard-checklist-run":
+      return typeof value.runId === "string";
+    case "mark-checklist-item":
+      return typeof value.runId === "string" && typeof value.key === "string" && isOneOf(MARK_STATES, value.state);
+    case "capture-from-checklist":
+      return typeof value.path === "string" && typeof value.text === "string";
     case "show-project":
       return typeof value.projectId === "string";
     case "edit-action":
@@ -1040,4 +1236,6 @@ export type ElmPomodoroEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "pomodoro"; pomodoro: ElmPomodoroDto }
   | { type: "select-project"; projectId: string }
+  | { type: "select-checklist"; path: string }
   | ElmCommandResultEvent;
+export type ElmChecklistsEvent = { type: "checklists"; checklists: ElmChecklistsDto } | ElmCommandResultEvent;

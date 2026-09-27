@@ -76,7 +76,7 @@ describe("mite time entries", () => {
     expect(entry).toEqual({ date_at: "2026-09-27", minutes: 30, note: "🍅 Tiles: Compare suppliers — achieved", project_id: 11, service_id: 7 });
   });
 
-  it("sends sessions once, from the chosen day on, and skips ones under a minute", () => {
+  it("sends Project sessions once, from the chosen day on, and skips ones under a minute", () => {
     const store: PomodoroStore = {
       version: 1,
       active: null,
@@ -85,6 +85,7 @@ describe("mite time entries", () => {
         session("old", { endedAt: "2026-08-01T08:25:00.000Z", startedAt: "2026-08-01T08:00:00.000Z" }),
         session("tiny", { focusedSeconds: 30, status: "stopped" }),
         session("new"),
+        session("checklist", { projectId: "", checklist: { runId: "R1", path: "GTD/Checklists/Daily.md" } }),
       ],
     };
     expect(unsentSessions(store, "2026-09-01").map((entry) => entry.id)).toEqual(["new"]);

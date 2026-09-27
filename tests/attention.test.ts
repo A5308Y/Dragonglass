@@ -24,7 +24,11 @@ const snapshot = (projects: Project[], actions: Action[], inboxItems: InboxItem[
 describe("attention dots", () => {
   it("stays quiet when nothing waits", () => {
     expect(attention(snapshot([project()], [action()]), 0, weekly, today))
-      .toEqual({ inbox: false, board: false, projects: false, review: false, feeds: false });
+      .toEqual({ inbox: false, board: false, projects: false, review: false, feeds: false, checklists: false });
+  });
+
+  it("marks the Checklists while the daily checklist is due", () => {
+    expect(attention(snapshot([project()], [action()]), 0, weekly, today, true).checklists).toBe(true);
   });
 
   it("marks the Inbox, the feeds, and a Project with an issue", () => {

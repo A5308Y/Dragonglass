@@ -21,8 +21,9 @@ import type { GtdServices } from "./ui/services";
 import { localDate } from "./utils/date";
 import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
-import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
+import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, CHECKLISTS_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdChecklistsView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
 import { PomodoroService } from "./pomodoro/pomodoro-service";
+import { ChecklistService } from "./checklists/checklist-service";
 import { MiteSync } from "./pomodoro/mite-sync";
 import { MailPasswords } from "./mail/mail-passwords";
 import { CalendarSecret } from "./calendar/calendar-secret";
@@ -41,6 +42,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private ribbonAttention!: RibbonAttention;
   private mail!: MailService;
   private pomodoro!: PomodoroService;
+  checklists!: ChecklistService;
   mite!: MiteSync;
   mailPasswords!: MailPasswords;
   calendarSecret!: CalendarSecret;
@@ -73,6 +75,11 @@ export default class DragonglassGtdPlugin extends Plugin {
       (session) => this.pomodoroFinished(session),
       () => void this.openPomodoro(),
     );
+    this.checklists = new ChecklistService(this.app, () => this.settings.checklists, async (oldPath, newPath) => {
+      if (this.settings.checklists.daily !== oldPath) return;
+      this.settings.checklists.daily = newPath;
+      await this.saveSettings(false);
+    });
     this.mite = new MiteSync(this.app, this.pomodoro, () => this.settings.pomodoro.mite, () => this.index.getSnapshot().projects);
     this.agent = new AgentService(this.app, this.repository, () => this.settings.agent);
     this.services = {
@@ -99,6 +106,8 @@ export default class DragonglassGtdPlugin extends Plugin {
       showProjectDetail: (id) => void this.openProjectDetail(id),
       openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
       openPomodoro: (projectId) => void this.openPomodoro(projectId),
+      openChecklistPomodoro: (path) => void this.openChecklistPomodoro(path),
+      openChecklists: (runId) => void this.openChecklists(runId),
       delegateProject: (projectId) => delegateProject(this.app, this.agent, projectId, this.settings.agent),
       deleteAgentRun: (runId) => confirmDeleteAgentRun(this.app, this.agent, runId),
       rerunAgentRun: async (runId) => {
@@ -114,7 +123,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.registerView(PROJECTS_VIEW_TYPE, (leaf) => new GtdProjectsView(leaf, this.services));
     this.registerView(REVIEW_VIEW_TYPE, (leaf) => new GtdProjectReviewView(leaf, this.services));
     this.registerView(SOMEDAY_VIEW_TYPE, (leaf) => new GtdSomedayReviewView(leaf, this.services));
-    this.registerView(POMODORO_VIEW_TYPE, (leaf) => new GtdPomodoroView(leaf, this.services, this.pomodoro));
+    this.registerView(POMODORO_VIEW_TYPE, (leaf) => new GtdPomodoroView(leaf, this.services, this.pomodoro, this.checklists));
+    this.registerView(CHECKLISTS_VIEW_TYPE, (leaf) => new GtdChecklistsView(leaf, this.services, this.checklists));
     this.register(this.pomodoro.start(this.addStatusBarItem()));
     const board = this.addRibbonIcon("list-checks", "Open GTD Action Board", () => void this.activateView(BOARD_VIEW_TYPE));
     const inbox = this.addRibbonIcon("inbox", "Open GTD Inbox", () => void this.activateView(INBOX_VIEW_TYPE));
@@ -122,9 +132,10 @@ export default class DragonglassGtdPlugin extends Plugin {
     const review = this.addRibbonIcon("clipboard-check", "Start GTD Project Review", () => void this.activateView(REVIEW_VIEW_TYPE));
     this.addRibbonIcon("lightbulb", "Open GTD Brainstorm", () => void this.activateView(BRAINSTORM_VIEW_TYPE));
     this.addRibbonIcon("timer", "Open GTD Pomodoro", () => void this.openPomodoro());
+    const checklists = this.addRibbonIcon("clipboard-list", "Open GTD Checklists", () => void this.openChecklists());
     const feeds = this.addRibbonIcon("rss", "Open RSS Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
-    this.ribbonAttention = new RibbonAttention({ board, inbox, projects, review, feeds }, () =>
-      attention(this.index.getSnapshot(), unreadItems(this.feeds.getStore()).length, this.settings));
+    this.ribbonAttention = new RibbonAttention({ board, inbox, projects, review, feeds, checklists }, () =>
+      attention(this.index.getSnapshot(), unreadItems(this.feeds.getStore()).length, this.settings, localDate(), this.checklists.dailyDue()));
     this.register(() => this.ribbonAttention.stop());
     this.addSettingTab(new GtdSettingTab(this.app, this));
     this.registerCommands();
@@ -198,6 +209,11 @@ export default class DragonglassGtdPlugin extends Plugin {
           : defaults.pomodoro.focusMinutes,
         logToDiary: saved?.pomodoro?.logToDiary === true,
         mite: parseMiteSettings(saved?.pomodoro?.mite, localDate()),
+      },
+      checklists: {
+        directory: normalizeVaultPath(saved?.checklists?.directory ?? "") || defaults.checklists.directory,
+        storePath: normalizeVaultPath(saved?.checklists?.storePath ?? "") || defaults.checklists.storePath,
+        daily: typeof saved?.checklists?.daily === "string" ? normalizeVaultPath(saved.checklists.daily) : "",
       },
       agent: {
         runsDirectory: typeof saved?.agent?.runsDirectory === "string" ? saved.agent.runsDirectory.trim() : defaults.agent.runsDirectory,
@@ -355,6 +371,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "open-brainstorm", name: "Open Brainstorm", callback: () => void this.activateView(BRAINSTORM_VIEW_TYPE) });
     this.addCommand({ id: "open-pomodoro", name: "Open Pomodoro", callback: () => void this.openPomodoro() });
     this.addCommand({ id: "start-pomodoro", name: "Start Pomodoro…", callback: () => this.pickPomodoroProject() });
+    this.addCommand({ id: "open-checklists", name: "Open Checklists", callback: () => void this.openChecklists() });
+    this.addCommand({ id: "run-daily-checklist", name: "Run the daily checklist", callback: () => void this.runDailyChecklist() });
     this.addCommand({ id: "send-pomodoros-to-mite", name: "Send Pomodoros to mite", callback: () => void this.sendToMite(true) });
     this.addCommand({ id: "open-feeds", name: "Open RSS Feeds", callback: () => void this.activateView(FEEDS_VIEW_TYPE) });
     this.addCommand({ id: "fetch-feeds", name: "Fetch RSS Feeds", callback: () => void this.fetchFeedsWithNotice() });
@@ -432,6 +450,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     await this.activateScheduledProjects();
     this.register(this.calendarSync.start());
     this.register(this.feeds.start());
+    this.register(this.checklists.start());
     this.register(this.mail.start());
     this.register(this.agent.start());
     // Dots on the ribbon icons for views with something to do; the hourly pass catches a new day.
@@ -440,6 +459,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       void this.recordFinishedWeeklyReview();
     }));
     this.register(this.feeds.subscribe(() => this.ribbonAttention.schedule()));
+    this.register(this.checklists.subscribe(() => this.ribbonAttention.schedule()));
     this.registerInterval(window.setInterval(() => {
       this.ribbonAttention.schedule();
       void this.recordFinishedWeeklyReview();
@@ -532,7 +552,29 @@ export default class DragonglassGtdPlugin extends Plugin {
 
   private async openPomodoro(projectId?: string): Promise<void> {
     const leaf = await this.activateView(POMODORO_VIEW_TYPE);
-    if (projectId && leaf.view instanceof GtdPomodoroView) leaf.view.selectProject(projectId);
+    if (projectId && leaf.view instanceof GtdPomodoroView) leaf.view.select({ kind: "project", projectId });
+  }
+
+  private async openChecklistPomodoro(path: string): Promise<void> {
+    const leaf = await this.activateView(POMODORO_VIEW_TYPE);
+    if (leaf.view instanceof GtdPomodoroView) leaf.view.select({ kind: "checklist", path });
+  }
+
+  private async openChecklists(runId?: string): Promise<void> {
+    const leaf = await this.activateView(CHECKLISTS_VIEW_TYPE);
+    if (runId && leaf.view instanceof GtdChecklistsView) leaf.view.showRun(runId);
+  }
+
+  /** Starts the daily checklist, or goes on with today's run of it. */
+  private async runDailyChecklist(): Promise<void> {
+    const daily = this.settings.checklists.daily;
+    if (!daily) return void new Notice("Choose a daily checklist in the Checklists settings first.");
+    try {
+      const run = await this.checklists.begin(daily);
+      await this.openChecklists(run.id);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "Could not start the daily checklist.");
+    }
   }
 
   /** Picks the Project for a new session from those still open. */

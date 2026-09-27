@@ -78,6 +78,11 @@ export function defaultSettings(): GtdSettings {
       logToDiary: false,
       mite: parseMiteSettings({}, localDate()),
     },
+    checklists: {
+      directory: "GTD/Checklists",
+      storePath: "GTD/checklists.json",
+      daily: "",
+    },
     agent: {
       runsDirectory: "",
       kitDirectory: "",

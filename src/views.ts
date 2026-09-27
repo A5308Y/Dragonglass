@@ -6,7 +6,9 @@ import { ElmInboxHost } from "./adapter/elm-inbox";
 import { ElmProjectsHost } from "./adapter/elm-projects";
 import { ElmProjectReviewHost } from "./adapter/elm-project-review";
 import { ElmSomedayReviewHost } from "./adapter/elm-someday-review";
-import { ElmPomodoroHost } from "./adapter/elm-pomodoro";
+import { ElmPomodoroHost, type PomodoroSubject } from "./adapter/elm-pomodoro";
+import { ElmChecklistsHost } from "./adapter/elm-checklists";
+import type { ChecklistService } from "./checklists/checklist-service";
 import type { PomodoroService } from "./pomodoro/pomodoro-service";
 import type { FeedService } from "./feeds/feed-service";
 import type { GtdServices } from "./ui/services";
@@ -20,6 +22,7 @@ export const PROJECTS_VIEW_TYPE = "dragonglass-projects";
 export const REVIEW_VIEW_TYPE = "dragonglass-project-review";
 export const SOMEDAY_VIEW_TYPE = "dragonglass-someday-review";
 export const POMODORO_VIEW_TYPE = "dragonglass-pomodoro";
+export const CHECKLISTS_VIEW_TYPE = "dragonglass-checklists";
 
 export class GtdBrainstormView extends ItemView {
   private host: ElmBrainstormHost | null = null;
@@ -86,9 +89,14 @@ export class GtdSomedayReviewView extends ItemView {
 
 export class GtdPomodoroView extends ItemView {
   private host: ElmPomodoroHost | null = null;
-  private pendingProjectId: string | null = null;
+  private pending: PomodoroSubject | null = null;
 
-  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices, private readonly pomodoro: PomodoroService) {
+  constructor(
+    leaf: WorkspaceLeaf,
+    private readonly services: GtdServices,
+    private readonly pomodoro: PomodoroService,
+    private readonly checklists: ChecklistService,
+  ) {
     super(leaf);
     routeModEnter(this);
   }
@@ -102,17 +110,46 @@ export class GtdPomodoroView extends ItemView {
     this.contentEl.empty();
   }
 
-  /** Chooses the Project for the next session; a running session is left alone. */
-  selectProject(projectId: string): void {
-    if (this.host) this.host.selectProject(projectId);
-    else this.pendingProjectId = projectId;
+  /** Chooses the Project or checklist for the next session; a running session is left alone. */
+  select(subject: PomodoroSubject): void {
+    if (this.host) this.host.select(subject);
+    else this.pending = subject;
   }
 
   refresh(): void {
     if (this.host) return this.host.refresh();
     this.contentEl.empty();
-    this.host = new ElmPomodoroHost(this.contentEl, this.services, this.pomodoro, this.pendingProjectId);
-    this.pendingProjectId = null;
+    this.host = new ElmPomodoroHost(this.contentEl, this.services, this.pomodoro, this.checklists, this.pending);
+    this.pending = null;
+  }
+}
+
+export class GtdChecklistsView extends ItemView {
+  private host: ElmChecklistsHost | null = null;
+  private pendingRunId: string | null = null;
+
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices, private readonly checklists: ChecklistService) { super(leaf); }
+  getViewType(): string { return CHECKLISTS_VIEW_TYPE; }
+  getDisplayText(): string { return "GTD Checklists"; }
+  getIcon(): string { return "clipboard-list"; }
+  async onOpen(): Promise<void> { this.refresh(); }
+  async onClose(): Promise<void> {
+    this.host?.destroy();
+    this.host = null;
+    this.contentEl.empty();
+  }
+
+  /** Shows a run, or the list of checklists for `null`. */
+  showRun(runId: string | null): void {
+    if (this.host) this.host.showRun(runId);
+    else this.pendingRunId = runId;
+  }
+
+  refresh(): void {
+    if (this.host) return void this.host.refresh();
+    this.contentEl.empty();
+    this.host = new ElmChecklistsHost(this.contentEl, this.services, this.checklists, this.pendingRunId);
+    this.pendingRunId = null;
   }
 }
 

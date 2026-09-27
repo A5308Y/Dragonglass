@@ -3,6 +3,7 @@ module Gtd.Command.Pomodoro exposing (Command(..), encode)
 {-| Commands the Pomodoro view alone is allowed to send.
 -}
 
+import Gtd.Checklist exposing (MarkState)
 import Gtd.Command as Base
 import Gtd.Id exposing (ActionId, ProjectId)
 import Gtd.PomodoroOutcome exposing (PomodoroOutcome)
@@ -17,6 +18,9 @@ type Command
     | DiscardPomodoro
     | CompletePomodoroAction ActionId
     | ShowProject ProjectId
+    | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
+    | MarkChecklistItem { runId : String, key : String, state : MarkState }
+    | OpenChecklistRun String
 
 
 encode : Command -> Encode.Value
@@ -43,4 +47,13 @@ encode command =
 
             ShowProject projectId ->
                 Base.ShowProject projectId
+
+            StartChecklistPomodoro fields ->
+                Base.StartChecklistPomodoro fields
+
+            MarkChecklistItem fields ->
+                Base.MarkChecklistItem fields
+
+            OpenChecklistRun runId ->
+                Base.OpenChecklistRun runId
         )

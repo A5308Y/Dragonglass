@@ -23,6 +23,7 @@ one place.
 -}
 
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
+import Gtd.Checklist as Checklist exposing (MarkState)
 import Gtd.Id exposing (ActionId, FeedItemKey, InboxItemId, ProjectId)
 import Gtd.PomodoroOutcome as PomodoroOutcome exposing (PomodoroOutcome)
 import Gtd.Energy as Energy exposing (Energy)
@@ -104,6 +105,16 @@ type Command
     | FinishPomodoro (Maybe PomodoroOutcome) String
     | DiscardPomodoro
     | CompletePomodoroAction ActionId
+    | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
+    | OpenChecklistPomodoro String
+      -- Checklists
+    | StartChecklistRun String
+    | ShowChecklistRun (Maybe String)
+    | OpenChecklistRun String
+    | MarkChecklistItem { runId : String, key : String, state : MarkState }
+    | FinishChecklistRun String
+    | DiscardChecklistRun String
+    | CaptureFromChecklist { path : String, text : String }
       -- Review
     | LoadReviewProject ProjectId
     | CreateReviewAction { title : String, projectId : ProjectId, context : String }
@@ -545,6 +556,41 @@ encode command =
 
         CompletePomodoroAction actionId ->
             object "complete-pomodoro-action" [ ( "actionId", Encode.string actionId ) ]
+
+        StartChecklistPomodoro fields ->
+            object "start-checklist-pomodoro"
+                [ ( "path", Encode.string fields.path )
+                , ( "intention", Encode.string fields.intention )
+                , ( "minutes", Encode.int fields.minutes )
+                ]
+
+        OpenChecklistPomodoro path ->
+            object "open-checklist-pomodoro" [ ( "path", Encode.string path ) ]
+
+        StartChecklistRun path ->
+            object "start-checklist-run" [ ( "path", Encode.string path ) ]
+
+        ShowChecklistRun maybeRunId ->
+            object "show-checklist-run" [ ( "runId", Maybe.map Encode.string maybeRunId |> Maybe.withDefault Encode.null ) ]
+
+        OpenChecklistRun runId ->
+            object "open-checklist-run" [ ( "runId", Encode.string runId ) ]
+
+        MarkChecklistItem fields ->
+            object "mark-checklist-item"
+                [ ( "runId", Encode.string fields.runId )
+                , ( "key", Encode.string fields.key )
+                , ( "state", Checklist.encodeMarkState fields.state )
+                ]
+
+        FinishChecklistRun runId ->
+            object "finish-checklist-run" [ ( "runId", Encode.string runId ) ]
+
+        DiscardChecklistRun runId ->
+            object "discard-checklist-run" [ ( "runId", Encode.string runId ) ]
+
+        CaptureFromChecklist fields ->
+            object "capture-from-checklist" [ ( "path", Encode.string fields.path ), ( "text", Encode.string fields.text ) ]
 
         LoadReviewProject projectId ->
             object "load-review-project" [ ( "projectId", Encode.string projectId ) ]

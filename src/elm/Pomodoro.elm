@@ -1,8 +1,10 @@
 port module Pomodoro exposing (main)
 
-{-| A focused time slice on one Project. Before it starts: pick the Project, see
-its Next Actions, and set an intention. While it runs: the intention and the time
-left. After it ends: a short wrap-up, filed in the history below.
+{-| A focused time slice on one Project or one checklist run. Before it starts:
+pick the Project and see its Next Actions, or pick a checklist, and set an
+intention. While it runs: the intention, the time left, and the Actions or
+checklist items to tick off. After it ends: a short wrap-up, filed in the history
+below.
 
 The session itself is kept by the host, so it survives closing this view. This
 view only counts down from the start and pause times the host reports.
@@ -12,6 +14,7 @@ view only counts down from the start and pause times the host reports.
 import Browser
 import Dict
 import Gtd.ActionStatus as ActionStatus
+import Gtd.Checklist as Checklist
 import Gtd.Command.Pomodoro as Command exposing (Command)
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
@@ -44,6 +47,7 @@ type alias Active =
     { id : String
     , projectId : ProjectId
     , projectTitle : String
+    , checklist : Maybe { runId : String, path : String }
     , intention : String
     , focusActionIds : List ActionId
     , completedActionIds : List ActionId
@@ -59,6 +63,7 @@ type alias Session =
     , projectId : ProjectId
     , projectTitle : String
     , projectPath : String
+    , checklistPath : Maybe String
     , intention : String
     , day : String
     , startedTime : String
@@ -77,7 +82,35 @@ type alias PomodoroState =
     , sessions : List Session
     , today : String
     , weekStart : String
+    , checklists : List ChecklistChoice
+    , checklistRun : Maybe Checklist.Run
     }
+
+
+type alias ChecklistChoice =
+    { path : String, title : String, itemCount : Int }
+
+
+{-| What a session is spent on. A checklist isn't a Project, so it is a subject of its own.
+-}
+type Subject
+    = OnProject Project
+    | OnChecklist ChecklistChoice
+
+
+type SubjectKey
+    = ProjectKey ProjectId
+    | ChecklistKey String
+
+
+subjectKey : Subject -> SubjectKey
+subjectKey subject =
+    case subject of
+        OnProject project ->
+            ProjectKey project.id
+
+        OnChecklist checklist ->
+            ChecklistKey checklist.path
 
 
 
@@ -85,15 +118,18 @@ type alias PomodoroState =
 
 
 type Scope
-    = AllProjects
-    | ThisProject
+    = AllSessions
+    | ThisSubject
 
 
 type alias Model =
     { snapshot : Snapshot
     , state : PomodoroState
     , nowMs : Int
-    , project : Picker Project
+    , subject : Picker Subject
+
+    -- A checklist chosen before the host has listed the checklists.
+    , pendingChecklist : Maybe String
     , focusIds : Set ActionId
     , intention : String
     , minutes : String
@@ -110,7 +146,7 @@ type alias Model =
 type Msg
     = GotHost Decode.Value
     | Tick Time.Posix
-    | ProjectPicker (Picker.PickerMsg Project)
+    | SubjectPicker (Picker.PickerMsg Subject)
     | ToggleFocus ActionId Bool
     | IntentionChanged String
     | MinutesChanged String
@@ -141,14 +177,18 @@ main =
 
 
 type alias Flags =
-    { snapshot : Snapshot, state : PomodoroState, initialProjectId : Maybe ProjectId, nowMs : Int }
+    { snapshot : Snapshot, state : PomodoroState, initialProjectId : Maybe ProjectId, initialChecklistPath : Maybe String, nowMs : Int }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
 init flags =
     case Decode.decodeValue flagsDecoder flags of
         Ok decoded ->
-            ( selectProject decoded.initialProjectId (initialModel decoded.snapshot decoded.state decoded.nowMs), Cmd.none )
+            ( initialModel decoded.snapshot decoded.state decoded.nowMs
+                |> selectProject decoded.initialProjectId
+                |> selectChecklist decoded.initialChecklistPath
+            , Cmd.none
+            )
 
         Err error ->
             let
@@ -163,14 +203,15 @@ initialModel snapshot state nowMs =
     { snapshot = snapshot
     , state = state
     , nowMs = nowMs
-    , project = Picker.init "" Nothing
+    , subject = Picker.init "" Nothing
+    , pendingChecklist = Nothing
     , focusIds = Set.empty
     , intention = ""
     , minutes = String.fromInt state.focusMinutes
     , wrappingUp = False
     , outcome = Nothing
     , reflection = ""
-    , scope = AllProjects
+    , scope = AllSessions
     , historyLimit = 20
     , requests = Host.noRequests
     , error = Nothing
@@ -179,7 +220,7 @@ initialModel snapshot state nowMs =
 
 emptyState : PomodoroState
 emptyState =
-    { focusMinutes = 25, active = Nothing, sessions = [], today = "", weekStart = "" }
+    { focusMinutes = 25, active = Nothing, sessions = [], today = "", weekStart = "", checklists = [], checklistRun = Nothing }
 
 
 selectProject : Maybe ProjectId -> Model -> Model
@@ -187,10 +228,33 @@ selectProject maybeId model =
     case maybeId |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects) of
         Just project ->
             { model
-                | project = Picker.init (Hierarchy.breadcrumb model.snapshot.projects project) (Just project)
+                | subject = Picker.init (Hierarchy.breadcrumb model.snapshot.projects project) (Just (OnProject project))
                 , focusIds = Set.empty
-                , scope = ThisProject
+                , scope = ThisSubject
+                , pendingChecklist = Nothing
             }
+
+        Nothing ->
+            model
+
+
+{-| Chooses a checklist, or waits for it until the host has listed the checklists.
+-}
+selectChecklist : Maybe String -> Model -> Model
+selectChecklist maybePath model =
+    case maybePath of
+        Just path ->
+            case List.filter (\checklist -> checklist.path == path) model.state.checklists |> List.head of
+                Just checklist ->
+                    { model
+                        | subject = Picker.init checklist.title (Just (OnChecklist checklist))
+                        , focusIds = Set.empty
+                        , scope = ThisSubject
+                        , pendingChecklist = Nothing
+                    }
+
+                Nothing ->
+                    { model | pendingChecklist = Just path }
 
         Nothing ->
             model
@@ -221,15 +285,16 @@ update msg model =
         Tick now ->
             ( { model | nowMs = Time.posixToMillis now }, Cmd.none )
 
-        ProjectPicker pickerMsg ->
+        SubjectPicker pickerMsg ->
             let
                 picked =
-                    Picker.update pickerMsg (projectSuggestions model) (Hierarchy.breadcrumb model.snapshot.projects) model.project
+                    Picker.update pickerMsg (subjectSuggestions model) (subjectLabel model) model.subject
             in
             ( { model
-                | project = picked
+                | subject = picked
+                , pendingChecklist = Nothing
                 , focusIds =
-                    if Maybe.map .id (Picker.selection picked) /= Maybe.map .id (Picker.selection model.project) then
+                    if Maybe.map subjectKey (Picker.selection picked) /= Maybe.map subjectKey (Picker.selection model.subject) then
                         Set.empty
 
                     else
@@ -257,19 +322,28 @@ update msg model =
             ( { model | minutes = minutes }, Cmd.none )
 
         Start ->
-            case ( Picker.selection model.project, plannedMinutes model ) of
-                ( Just project, Just minutes ) ->
+            case ( Picker.selection model.subject, plannedMinutes model ) of
+                ( Just subject, Just minutes ) ->
                     if String.isEmpty (String.trim model.intention) then
                         ( model, Cmd.none )
 
                     else
                         send
-                            (Command.StartPomodoro
-                                { projectId = project.id
-                                , intention = String.trim model.intention
-                                , focusActionIds = Set.toList model.focusIds
-                                , minutes = minutes
-                                }
+                            (case subject of
+                                OnProject project ->
+                                    Command.StartPomodoro
+                                        { projectId = project.id
+                                        , intention = String.trim model.intention
+                                        , focusActionIds = Set.toList model.focusIds
+                                        , minutes = minutes
+                                        }
+
+                                OnChecklist checklist ->
+                                    Command.StartChecklistPomodoro
+                                        { path = checklist.path
+                                        , intention = String.trim model.intention
+                                        , minutes = minutes
+                                        }
                             )
                             { model | wrappingUp = False, outcome = Nothing, reflection = "" }
 
@@ -348,6 +422,7 @@ type HostEvent
     = SnapshotEvent Snapshot
     | StateEvent PomodoroState
     | SelectProjectEvent ProjectId
+    | SelectChecklistEvent String
     | Replied Host.Outcome
 
 
@@ -363,10 +438,13 @@ receiveHost value model =
                 wrappingUp =
                     model.wrappingUp && state.active /= Nothing
             in
-            ( { model | state = state, wrappingUp = wrappingUp }, Cmd.none )
+            ( selectChecklist model.pendingChecklist { model | state = state, wrappingUp = wrappingUp }, Cmd.none )
 
         Ok (SelectProjectEvent projectId) ->
             ( selectProject (Just projectId) model, Cmd.none )
+
+        Ok (SelectChecklistEvent path) ->
+            ( selectChecklist (Just path) model, Cmd.none )
 
         Ok (Replied outcome) ->
             let
@@ -414,12 +492,42 @@ openProjects model =
     List.filter (\project -> ProjectStatus.isOpen project.status) model.snapshot.projects
 
 
+subjectSuggestions : Model -> List Subject
+subjectSuggestions model =
+    List.map OnProject (projectSuggestions model)
+        ++ (model.state.checklists
+                |> List.filter (\checklist -> Ui.matches (Picker.query model.subject) [ checklist.title, "checklist" ])
+                |> List.take 10
+                |> List.map OnChecklist
+           )
+
+
+subjectLabel : Model -> Subject -> String
+subjectLabel model subject =
+    case subject of
+        OnProject project ->
+            Hierarchy.breadcrumb model.snapshot.projects project
+
+        OnChecklist checklist ->
+            checklist.title
+
+
+subjectHint : Model -> Subject -> Maybe String
+subjectHint model subject =
+    case subject of
+        OnProject project ->
+            Hierarchy.area model.snapshot.projects project
+
+        OnChecklist _ ->
+            Just "Checklist"
+
+
 projectSuggestions : Model -> List Project
 projectSuggestions model =
     openProjects model
         |> List.filter
             (\project ->
-                Ui.matches (Picker.query model.project)
+                Ui.matches (Picker.query model.subject)
                     [ project.title, Hierarchy.breadcrumb model.snapshot.projects project, Maybe.withDefault "" (Hierarchy.area model.snapshot.projects project) ]
             )
         |> List.sortBy
@@ -444,22 +552,37 @@ nextActions model projectId =
 
 scopedSessions : Model -> List Session
 scopedSessions model =
-    case ( model.scope, scopeProjectId model ) of
-        ( ThisProject, Just projectId ) ->
-            List.filter (\session -> session.projectId == projectId) model.state.sessions
+    case ( model.scope, scopeSubject model ) of
+        ( ThisSubject, Just key ) ->
+            List.filter (\session -> sessionKey session == key) model.state.sessions
 
         _ ->
             model.state.sessions
 
 
-scopeProjectId : Model -> Maybe ProjectId
-scopeProjectId model =
+scopeSubject : Model -> Maybe SubjectKey
+scopeSubject model =
     case model.state.active of
         Just active ->
-            Just active.projectId
+            case active.checklist of
+                Just checklist ->
+                    Just (ChecklistKey checklist.path)
+
+                Nothing ->
+                    Just (ProjectKey active.projectId)
 
         Nothing ->
-            Picker.selection model.project |> Maybe.map .id
+            Picker.selection model.subject |> Maybe.map subjectKey
+
+
+sessionKey : Session -> SubjectKey
+sessionKey session =
+    case session.checklistPath of
+        Just path ->
+            ChecklistKey path
+
+        Nothing ->
+            ProjectKey session.projectId
 
 
 
@@ -492,7 +615,7 @@ setupView : Model -> Html Msg
 setupView model =
     let
         selected =
-            Picker.selection model.project
+            Picker.selection model.subject
 
         ready =
             selected /= Nothing && not (String.isEmpty (String.trim model.intention)) && plannedMinutes model /= Nothing
@@ -500,21 +623,25 @@ setupView model =
     section [ class "dg-pomodoro-card" ]
         [ h3 [] [ text "New Pomodoro" ]
         , div [ class "dg-pomodoro-field" ]
-            [ span [ class "dg-pomodoro-label" ] [ text "Project" ]
+            [ span [ class "dg-pomodoro-label" ] [ text "Project or checklist" ]
             , Picker.view
                 (Picker.config
-                    { placeholder = "Search Projects…"
-                    , label = Hierarchy.breadcrumb model.snapshot.projects
-                    , hint = Hierarchy.area model.snapshot.projects
-                    , tag = ProjectPicker
+                    { placeholder = "Search Projects and checklists…"
+                    , label = subjectLabel model
+                    , hint = subjectHint model
+                    , tag = SubjectPicker
                     }
                 )
-                (projectSuggestions model)
-                model.project
+                (subjectSuggestions model)
+                model.subject
             ]
         , case selected of
-            Just project ->
+            Just (OnProject project) ->
                 focusPicker model project
+
+            Just (OnChecklist checklist) ->
+                p [ class "dg-muted" ]
+                    [ text (Ui.plural checklist.itemCount "item" ++ ", to tick off while the timer runs. A run under way goes on; otherwise one starts.") ]
 
             Nothing ->
                 text ""
@@ -602,7 +729,7 @@ runningView model active =
     section [ class "dg-pomodoro-card dg-pomodoro-running" ]
         [ div [ class "dg-pomodoro-project" ]
             [ span [] [ text ("Since " ++ active.startedTime) ]
-            , button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject active.projectId)) ] [ text active.projectTitle ]
+            , subjectLink active
             ]
         , div [ classList [ ( "dg-pomodoro-clock", True ), ( "is-paused", paused ) ], attribute "role" "timer", attribute "aria-live" "off" ]
             [ text (Ui.timer left)
@@ -627,11 +754,50 @@ runningView model active =
         ]
 
 
-{-| The Actions picked for this session first, then the Project's other Next
-Actions, each of which can be ticked off without leaving the timer.
+subjectLink : Active -> Html Msg
+subjectLink active =
+    case active.checklist of
+        Just checklist ->
+            button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.OpenChecklistRun checklist.runId)) ]
+                [ text ("Checklist: " ++ active.projectTitle) ]
+
+        Nothing ->
+            button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject active.projectId)) ]
+                [ text active.projectTitle ]
+
+
+{-| What can be ticked off without leaving the timer: the checklist's items, or the
+Actions picked for this session and then the Project's other Next Actions.
 -}
 sessionActions : Model -> Active -> Html Msg
 sessionActions model active =
+    case active.checklist of
+        Just checklist ->
+            case model.state.checklistRun of
+                Just run ->
+                    if run.id == checklist.runId then
+                        div [ class "dg-pomodoro-field" ]
+                            [ span [ class "dg-pomodoro-label" ] [ text "Checklist" ]
+                            , Checklist.itemsView
+                                { mark = \key state -> Send (Command.MarkChecklistItem { runId = run.id, key = key, state = state })
+                                , capture = Nothing
+                                , readOnly = False
+                                }
+                                run
+                            ]
+
+                    else
+                        text ""
+
+                Nothing ->
+                    text ""
+
+        Nothing ->
+            projectActions model active
+
+
+projectActions : Model -> Active -> Html Msg
+projectActions model active =
     let
         byId =
             Dict.fromList (List.map (\action -> ( action.id, action )) model.snapshot.actions)
@@ -780,21 +946,23 @@ historyView model =
         days =
             groupByDay shown
 
-        scopeTitle =
-            case ( model.scope, scopeProjectId model |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects) ) of
-                ( ThisProject, Just project ) ->
-                    project.title
-
-                _ ->
-                    "All Projects"
     in
     section [ class "dg-pomodoro-history" ]
         [ div [ class "dg-pomodoro-history-heading" ]
             [ h3 [] [ text "History" ]
             , div [ class "dg-pomodoro-scope", attribute "role" "group", attribute "aria-labelledby" "dg-pomodoro-scope-label" ]
                 [ span [ id "dg-pomodoro-scope-label", class "dg-sr-only" ] [ text "Show sessions for" ]
-                , scopeButton model ThisProject "This Project" (scopeProjectId model == Nothing)
-                , scopeButton model AllProjects "All Projects" False
+                , scopeButton model
+                    ThisSubject
+                    (case scopeSubject model of
+                        Just (ChecklistKey _) ->
+                            "This checklist"
+
+                        _ ->
+                            "This Project"
+                    )
+                    (scopeSubject model == Nothing)
+                , scopeButton model AllSessions "All" False
                 ]
             ]
         , div [ class "dg-pomodoro-totals" ]
@@ -896,8 +1064,11 @@ sessionView model session =
             [ span [ class "dg-pomodoro-session-intention" ] [ text session.intention ]
             , div [ class "dg-pomodoro-session-meta" ]
                 (List.concat
-                    [ if model.scope == AllProjects || scopeProjectId model == Nothing then
-                        [ if Data.findProject session.projectId model.snapshot.projects /= Nothing then
+                    [ if model.scope == AllSessions || scopeSubject model == Nothing then
+                        [ if session.checklistPath /= Nothing then
+                            span [] [ text ("Checklist: " ++ session.projectTitle) ]
+
+                          else if Data.findProject session.projectId model.snapshot.projects /= Nothing then
                             button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject session.projectId)) ]
                                 [ text session.projectTitle ]
 
@@ -936,21 +1107,32 @@ sessionView model session =
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map4 Flags
+    Decode.map5 Flags
         (Decode.field "snapshot" Data.snapshotDecoder)
         (Decode.field "pomodoro" stateDecoder)
-        (Decode.field "initialProjectId" (Decode.maybe Decode.string))
+        (Decode.field "initialProjectId" (Decode.nullable Decode.string))
+        (Decode.field "initialChecklistPath" (Decode.nullable Decode.string))
         (Decode.field "nowMs" Decode.int)
 
 
 stateDecoder : Decoder PomodoroState
 stateDecoder =
-    Decode.map5 PomodoroState
+    Decode.map7 PomodoroState
         (Decode.field "focusMinutes" Decode.int)
         (Decode.field "active" (Decode.nullable activeDecoder))
         (Decode.field "sessions" (Decode.list sessionDecoder))
         (Decode.field "today" Decode.string)
         (Decode.field "weekStart" Decode.string)
+        (Decode.field "checklists"
+            (Decode.list
+                (Decode.map3 ChecklistChoice
+                    (Decode.field "path" Decode.string)
+                    (Decode.field "title" Decode.string)
+                    (Decode.field "itemCount" Decode.int)
+                )
+            )
+        )
+        (Decode.field "checklistRun" (Decode.nullable Checklist.runDecoder))
 
 
 activeDecoder : Decoder Active
@@ -959,6 +1141,15 @@ activeDecoder =
         |> andMap (Decode.field "id" Decode.string)
         |> andMap (Decode.field "projectId" Decode.string)
         |> andMap (Decode.field "projectTitle" Decode.string)
+        |> andMap
+            (Decode.field "checklist"
+                (Decode.nullable
+                    (Decode.map2 (\runId path -> { runId = runId, path = path })
+                        (Decode.field "runId" Decode.string)
+                        (Decode.field "path" Decode.string)
+                    )
+                )
+            )
         |> andMap (Decode.field "intention" Decode.string)
         |> andMap (Decode.field "focusActionIds" (Decode.list Decode.string))
         |> andMap (Decode.field "completedActionIds" (Decode.list Decode.string))
@@ -975,6 +1166,7 @@ sessionDecoder =
         |> andMap (Decode.field "projectId" Decode.string)
         |> andMap (Decode.field "projectTitle" Decode.string)
         |> andMap (Decode.field "projectPath" Decode.string)
+        |> andMap (Decode.field "checklistPath" (Decode.nullable Decode.string))
         |> andMap (Decode.field "intention" Decode.string)
         |> andMap (Decode.field "day" Decode.string)
         |> andMap (Decode.field "startedTime" Decode.string)
@@ -1005,6 +1197,9 @@ hostEventDecoder =
 
                     "select-project" ->
                         Decode.map SelectProjectEvent (Decode.field "projectId" Decode.string)
+
+                    "select-checklist" ->
+                        Decode.map SelectChecklistEvent (Decode.field "path" Decode.string)
 
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder

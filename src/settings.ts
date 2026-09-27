@@ -23,6 +23,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private agentExpanded = false;
   private mailExpanded = false;
   private calendarExpanded = false;
+  private checklistsExpanded = false;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
@@ -119,6 +120,7 @@ export class GtdSettingTab extends PluginSettingTab {
       });
 
     this.displayPomodoro(containerEl);
+    this.displayChecklists(containerEl);
     this.displayFeeds(containerEl);
     this.displayMail(containerEl);
     this.displayAgent(containerEl);
@@ -289,7 +291,7 @@ export class GtdSettingTab extends PluginSettingTab {
     });
     const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
     sectionEl.createEl("p", {
-      text: "Focused time slices on one Project, each with an intention and a short reflection. "
+      text: "Focused time slices on one Project or checklist, each with an intention and a short reflection. "
         + "Finished sessions are kept in a log that a time-tracking integration can later sync from.",
     });
 
@@ -330,6 +332,63 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     this.displayMite(sectionEl);
+  }
+
+  /** Checklist notes, and the one to work through every day. */
+  private displayChecklists(containerEl: HTMLElement): void {
+    const section = containerEl.createEl("details", { cls: "dg-settings-section" });
+    section.open = this.checklistsExpanded;
+    section.createEl("summary", { text: "Checklists", cls: "dg-settings-section-summary" });
+    section.addEventListener("toggle", () => {
+      this.checklistsExpanded = section.open;
+    });
+    const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
+    sectionEl.createEl("p", {
+      text: "Every note in the checklists folder is a checklist: its task lines are the items, and everything between them "
+        + "is shown as written. Working through one is a run, kept in a log of its own, so the note itself never changes.",
+    });
+    const settings = this.plugin.settings.checklists;
+    const save = async () => {
+      await this.plugin.saveSettings(false);
+      this.plugin.checklists.settingsChanged();
+    };
+
+    new Setting(sectionEl)
+      .setName("Checklists folder")
+      .setDesc("Vault-relative folder whose notes, including those in its subfolders, are checklists.")
+      .addText((text) => text.setValue(settings.directory).onChange(async (value) => {
+        settings.directory = normalizeVaultPath(value) || "GTD/Checklists";
+        await save();
+      }));
+
+    const notes = this.plugin.checklists.checklists();
+    new Setting(sectionEl)
+      .setName("Daily checklist")
+      .setDesc("The Checklists icon shows a dot until a run of it is finished that day. "
+        + (settings.daily && !notes.some((note) => note.path === settings.daily) ? "⚠ The chosen note is not in the checklists folder." : ""))
+      .addDropdown((dropdown) => {
+        dropdown.addOption("", "None");
+        for (const note of notes) dropdown.addOption(note.path, note.title);
+        if (settings.daily && !notes.some((note) => note.path === settings.daily)) dropdown.addOption(settings.daily, settings.daily);
+        dropdown.setValue(settings.daily).onChange(async (value) => {
+          settings.daily = value;
+          await save();
+          this.display();
+        });
+      });
+
+    new Setting(sectionEl)
+      .setName("Run log")
+      .setDesc("Vault-relative JSON file holding every run. It syncs with the vault. Changes apply after reloading the plugin.")
+      .addText((text) => text.setValue(settings.storePath).onChange(async (value) => {
+        const path = normalizeVaultPath(value) || "GTD/checklists.json";
+        if (isPathInDirectory(path, this.plugin.settings.inboxDirectory)) {
+          new Notice("The run log cannot live inside the Inbox directory, where every file becomes an Inbox Item.");
+          return;
+        }
+        settings.storePath = path;
+        await this.plugin.saveSettings(false);
+      }));
   }
 
   /**

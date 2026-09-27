@@ -102,6 +102,13 @@ describe("the Pomodoro log file", () => {
     expect(parsePomodoroStore(JSON.parse(JSON.stringify(synced)))).toEqual(synced);
   });
 
+  it("keeps a checklist session, which has no Project", () => {
+    const onChecklist = { ...start, projectId: "", projectTitle: "Daily", projectPath: "", checklist: { runId: "R1", path: "GTD/Checklists/Daily.md" } };
+    const finished = finishPomodoro(startPomodoro(emptyPomodoroStore(), onChecklist, at("10:00")), { outcome: null, reflection: "" }, at("10:25"));
+    expect(parsePomodoroStore(JSON.parse(JSON.stringify(finished)))).toEqual(finished);
+    expect(() => startPomodoro(emptyPomodoroStore(), { ...start, projectId: "" }, at("10:00"))).toThrow("Choose a Project or a checklist");
+  });
+
   it("drops malformed sessions instead of failing", () => {
     const parsed = parsePomodoroStore({
       active: { id: "x" },
