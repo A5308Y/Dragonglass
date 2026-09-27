@@ -77,7 +77,9 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - mite is the first such sync: rules in `src/domain/mite.ts`, sending in
   `src/pomodoro/mite-sync.ts`. One entry per session; a completed session adds the
   break minutes (setting), a stopped one doesn't. The mite project is set per
-  Dragonglass Project in the settings and inherited by sub-projects. The API key is
+  Dragonglass Project in the settings and inherited by sub-projects; sessions of
+  Projects without one are never sent. The sync only creates entries (POST): it never
+  updates or deletes anything in mite, and removing a mapping leaves sent entries alone. The API key is
   in Obsidian's secret storage (`app.secretStorage`, per device); settings hold only
   the secret's name. New integrations with credentials should do the same.
 - Mail app passwords are in secret storage too (`MailPasswords`, id

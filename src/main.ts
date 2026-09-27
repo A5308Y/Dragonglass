@@ -547,15 +547,15 @@ export default class DragonglassGtdPlugin extends Plugin {
     void this.sendToMite(false);
   }
 
-  /**
-   * Sends unsent Pomodoros to mite. Quiet when nothing happened, unless asked by hand;
-   * a session whose Project has no mite project yet is named once so it isn't forgotten.
-   */
   /** Every Project, for the settings' mite mapping. */
   projectList(): readonly Project[] {
     return this.index.getSnapshot().projects;
   }
 
+  /**
+   * Sends unsent Pomodoros to mite. Quiet when nothing happened, unless asked by hand;
+   * a session whose Project has no mite project yet is named once so it isn't forgotten.
+   */
   async sendToMite(announce: boolean): Promise<void> {
     const settings = this.settings.pomodoro.mite;
     if (!settings.enabled) {

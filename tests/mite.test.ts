@@ -110,7 +110,7 @@ describe("Sending to mite", () => {
       },
     } as unknown as PomodoroService;
     const app = { secretStorage: { getSecret: (name: string) => (name === "mite-key" ? "secret" : null) } } as unknown as App;
-    const requests: { url: string; headers: Record<string, string>; body?: string }[] = [];
+    const requests: { url: string; method: string; headers: Record<string, string>; body?: string }[] = [];
     const request: MiteRequest = async (sent) => {
       requests.push(sent);
       return { status: 201, text: JSON.stringify({ time_entry: { id: 99 } }) };
@@ -122,11 +122,14 @@ describe("Sending to mite", () => {
 
     expect(result).toEqual({ sent: 1, unmapped: 1, failed: 0, error: "" });
     expect(requests).toHaveLength(1);
+    expect(requests[0]!.method).toBe("POST");
     expect(requests[0]!.url).toBe("https://acme.mite.de/time_entries.json");
     expect(requests[0]!.headers["X-MiteApiKey"]).toBe("secret");
     expect(JSON.parse(requests[0]!.body!).time_entry.minutes).toBe(30);
     expect(store.sessions[0]!.external[MITE]?.id).toBe("99");
     expect((await sync.sync()).sent).toBe(0);
+    // Only the mapped session is ever sent, and only by creating an entry.
+    expect(requests.map((sent) => sent.method)).toEqual(["POST"]);
   });
 
   it("stops at a refused key instead of trying every session", async () => {
