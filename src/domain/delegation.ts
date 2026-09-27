@@ -298,7 +298,12 @@ export interface AgentRunRecord {
   actionTitle?: string;
 }
 
-export type AgentRuntime = "claude" | "local";
+/** Claude through the API, a model on this Mac, or OpenAI's Codex on a ChatGPT plan. */
+export type AgentRuntime = "claude" | "local" | "codex";
+
+export function agentRuntime(value: unknown): AgentRuntime {
+  return value === "local" || value === "codex" ? value : "claude";
+}
 
 /** What drives a local model: Dragonglass's own small loop, smolagents' CodeAgent, or Qwen-Agent. */
 export type LocalHarness = "loop" | "smolagents" | "qwen-agent";

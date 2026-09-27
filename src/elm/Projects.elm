@@ -1657,9 +1657,13 @@ viewAgentRun model run =
         active =
             List.member run.status [ "queued", "starting", "running", "waiting" ]
 
-        -- A local run costs nothing; what matters there is which model it used and what it could reach.
+        -- A local run costs nothing, and a Codex run is paid by the ChatGPT plan; what matters there is
+        -- which model it used and what it could reach.
         spent =
-            if run.runtime == "local" then
+            if run.runtime == "codex" then
+                "ChatGPT plan (Codex): " ++ run.model
+
+            else if run.runtime == "local" then
                 String.join " · "
                     ((case run.harness of
                         "smolagents" ->

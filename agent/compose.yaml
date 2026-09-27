@@ -1,8 +1,10 @@
-# Delegating a Project tree to an agent: a proxy plus one of two agents.
+# Delegating a Project tree to an agent: a proxy plus one of several agents.
 #
 #   agent        runs the task with Claude (runner/, the Claude Agent SDK).
 #   agent-local  runs it with a local model on your Mac (runner-local/, our own loop),
-#                through LM Studio or another OpenAI-compatible server.
+#                through LM Studio or another OpenAI-compatible server; agent-smol and
+#                agent-qwen do the same with smolagents and Qwen-Agent.
+#   agent-codex  runs it with OpenAI's Codex, signed in with a ChatGPT plan (runner-codex/).
 #
 # Either agent sits on the internal "sandbox" network only, so it cannot reach anything
 # directly: not the internet, not your Mac, not your LAN. It sees only the run's input
@@ -178,6 +180,40 @@ services:
     tmpfs:
       - /tmp:rw,nosuid,size=1g
       - /home/agent:rw,nosuid,size=512m,uid=1000,gid=1000
+    networks: [sandbox]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "1000:1000"
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 256
+
+  # OpenAI's Codex CLI with a ChatGPT sign-in, paid by the plan. Unlike the other agents it holds a
+  # credential: the sign-in in /codex, which it renews there. Sign the folder in once with
+  #   CODEX_HOME_DIR=… RUN_DIR=… docker compose run --rm agent-codex login
+  agent-codex:
+    build: ./runner-codex
+    depends_on: [proxy]
+    environment:
+      CODEX_HOME: /codex
+      CODEX_MODEL: ${CODEX_MODEL:-}
+      AGENT_MAX_MINUTES: ${AGENT_MAX_MINUTES:-60}
+      AGENT_ANSWER_TIMEOUT_MINUTES: ${AGENT_ANSWER_TIMEOUT_MINUTES:-240}
+      HTTPS_PROXY: http://proxy:8080
+      HTTP_PROXY: http://proxy:8080
+      https_proxy: http://proxy:8080
+      http_proxy: http://proxy:8080
+      NO_PROXY: proxy
+      no_proxy: proxy
+    volumes:
+      - ${RUN_DIR}/input:/workspace/input:ro
+      - ${RUN_DIR}/outbox:/workspace/outbox
+      - ${RUN_DIR}/exchange:/workspace/exchange
+      - ${CODEX_HOME_DIR:-./codex-home}:/codex
+    tmpfs:
+      - /tmp:rw,nosuid,size=1g
+      - /home/node:rw,nosuid,size=512m,uid=1000,gid=1000
     networks: [sandbox]
     read_only: true
     cap_drop: [ALL]

@@ -63,12 +63,13 @@ class DelegateModal extends Modal {
         .addOption("local", `Local model, Dragonglass's loop (${localModel})`)
         .addOption("local-smol", `Local model, smolagents (${localModel})`)
         .addOption("local-qwen", `Local model, Qwen-Agent (${localModel})`)
-        .setValue(this.runtime === "claude" ? "claude" : this.harness === "smolagents" ? "local-smol" : this.harness === "qwen-agent" ? "local-qwen" : "local")
+        .addOption("codex", `ChatGPT, with Codex and your plan (${this.settings.codexModel || "Codex's default model"})`)
+        .setValue(this.runtime !== "local" ? this.runtime : this.harness === "smolagents" ? "local-smol" : this.harness === "qwen-agent" ? "local-qwen" : "local")
         .onChange((value) => {
-          this.runtime = value === "claude" ? "claude" : "local";
+          this.runtime = value === "claude" || value === "codex" ? value : "local";
           this.harness = value === "local-smol" ? "smolagents" : value === "local-qwen" ? "qwen-agent" : "loop";
-          // Claude only ever reads the Project's tree.
-          if (this.runtime === "claude" && this.plan.wholeVault) void this.replan(false);
+          // Only a local run may read the whole vault.
+          if (this.runtime !== "local" && this.plan.wholeVault) void this.replan(false);
           else this.render();
         }));
 
@@ -115,11 +116,7 @@ class DelegateModal extends Modal {
           this.budget = Number(value);
         });
       });
-    this.limitEl = contentEl.createEl("p", {
-      cls: "dg-delegate-note",
-      text: `A local run costs nothing. It stops after ${this.settings.localMaxTurns} turns or `
-        + `${this.settings.localMaxMinutes} minutes, whichever comes first.`,
-    });
+    this.limitEl = contentEl.createEl("p", { cls: "dg-delegate-note" });
 
     const error = contentEl.createEl("p", { cls: "dg-delegate-error" });
     let startButton!: ButtonComponent;
@@ -174,8 +171,13 @@ class DelegateModal extends Modal {
     const { plan } = this;
     const local = this.runtime === "local";
     this.scopeSetting.settingEl.toggle(local);
-    this.budgetSetting.settingEl.toggle(!local);
-    this.limitEl.toggle(local);
+    this.budgetSetting.settingEl.toggle(this.runtime === "claude");
+    this.limitEl.toggle(this.runtime !== "claude");
+    this.limitEl.setText(local
+      ? `A local run costs nothing. It stops after ${this.settings.localMaxTurns} turns or `
+        + `${this.settings.localMaxMinutes} minutes, whichever comes first.`
+      : `A Codex run counts against your ChatGPT plan's usage limits, not per token. It stops after `
+        + `${this.settings.codexMaxMinutes} minutes.`);
 
     const summary = this.summaryEl;
     summary.empty();
@@ -204,7 +206,11 @@ class DelegateModal extends Modal {
       text: plan.wholeVault
         ? "🔒 Offline: the agent has no internet access at all, so nothing it reads can leave your Mac. "
           + "It reaches only the local model server."
-        : local
+        : this.runtime === "codex"
+          ? "⚠ The material goes to OpenAI, and the agent can reach the internet and search the web, so it could pass on "
+            + "what it was given. It also holds your ChatGPT sign-in inside the container. Only delegate trees that aren't "
+            + "sensitive. Every request it makes is logged in the run folder."
+          : local
           ? "⚠ The model runs on your Mac, but the agent can reach the internet (without search), so it could pass on what "
             + "it was given. Every request it makes is logged in the run folder."
           : "⚠ The material goes to Anthropic's API, and the agent can reach the internet, so it could pass on what it was "

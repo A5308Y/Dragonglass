@@ -37,7 +37,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private ribbonAttention!: RibbonAttention;
   private mail!: MailService;
   private pomodoro!: PomodoroService;
-  private agent!: AgentService;
+  agent!: AgentService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
 
@@ -206,6 +206,11 @@ export default class DragonglassGtdPlugin extends Plugin {
         maxTurns: Number.isInteger(saved?.agent?.maxTurns) && saved!.agent!.maxTurns > 0
           ? saved!.agent!.maxTurns
           : defaults.agent.maxTurns,
+        codexHomeDirectory: typeof saved?.agent?.codexHomeDirectory === "string" ? saved.agent.codexHomeDirectory.trim() : "",
+        codexModel: typeof saved?.agent?.codexModel === "string" ? saved.agent.codexModel.trim() : "",
+        codexMaxMinutes: Number.isInteger(saved?.agent?.codexMaxMinutes) && saved!.agent!.codexMaxMinutes > 0
+          ? saved!.agent!.codexMaxMinutes
+          : defaults.agent.codexMaxMinutes,
         localMaxTurns: Number.isInteger(saved?.agent?.localMaxTurns) && saved!.agent!.localMaxTurns > 0
           ? saved!.agent!.localMaxTurns
           : defaults.agent.localMaxTurns,

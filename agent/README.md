@@ -208,6 +208,34 @@ AGENT_OFFLINE=1 RUN_DIR=./runs/vault docker compose run --rm --build agent-local
 Copying reads every file, so notes that iCloud keeps only in the cloud are downloaded
 first; for a large vault that takes a while.
 
+## ChatGPT, through Codex
+
+`agent-codex` (`runner-codex/`) runs the task with OpenAI's Codex CLI, signed in with your
+ChatGPT plan: runs count against the plan's usage limits instead of costing per token. OpenAI
+supports plan sign-ins only in its own Codex, so this is Codex, not a harness of ours around a
+ChatGPT model. It asks questions through a small MCP server (`ask-human-mcp.mjs`) that writes
+the same `exchange/questions` files as the other runners, has web search, and goes out through
+the proxy like everything else. Analytics and update checks are switched off.
+
+**Unlike the other runners, this container holds a credential.** Codex keeps its sign-in in
+`CODEX_HOME` (mounted from `CODEX_HOME_DIR`, Dragonglass's own folder, not your `~/.codex`) and
+renews it there. The agent can read that folder and has internet access, so a prompt injection
+could send the sign-in away. Only delegate trees that aren't sensitive; to end the session,
+sign out of all devices on chatgpt.com (Settings → Security) and sign in again.
+
+Sign in once, from Dragonglass (Settings → Agent delegation → Sign in to ChatGPT) or by hand;
+Codex shows an address and a code to confirm there:
+
+```sh
+mkdir -p runs/codex-login/{input,outbox,exchange,logs}
+CODEX_HOME_DIR=./codex-home RUN_DIR=./runs/codex-login docker compose run --rm --build agent-codex login
+CODEX_HOME_DIR=./codex-home RUN_DIR=./runs/demo docker compose run --rm --build agent-codex
+```
+
+`CODEX_MODEL` picks the model (empty: Codex's default for the plan), and `AGENT_MAX_MINUTES`
+stops a run (default 60). Dragonglass runs one Codex run at a time and queues the next, since
+all of them share one sign-in. Codex is pinned in `runner-codex/Dockerfile`.
+
 ## The contract, for other agents later
 
 Dragonglass only relies on the folder layout above: `input/brief.md` plus read-only

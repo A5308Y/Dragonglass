@@ -281,6 +281,15 @@ export interface AgentSettings {
   localMaxMinutes: number;
   /** How many turns a local run may take; they cost nothing, so this can be much higher. */
   localMaxTurns: number;
+  /**
+   * The folder holding Codex's ChatGPT sign-in, Dragonglass's own rather than ~/.codex, so it
+   * can be ended on its own. Empty means the default next to the runs folder.
+   */
+  codexHomeDirectory: string;
+  /** The model Codex runs use; empty leaves the choice to Codex. */
+  codexModel: string;
+  /** How long a Codex run may take, in minutes. */
+  codexMaxMinutes: number;
   /** The context length the local model is loaded with, in tokens; the run stays well below it. */
   localContextTokens: number;
   /** The longest single reply a local model may write, in tokens, thinking included. */

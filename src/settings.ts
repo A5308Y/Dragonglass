@@ -1,5 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import { confirmDialog } from "./ui/confirm";
+import { CodexLoginModal } from "./ui/codex-login";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
 import { addImagePathSetting } from "./ui/image-input";
@@ -306,8 +307,8 @@ export class GtdSettingTab extends PluginSettingTab {
     const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
     sectionEl.createEl("p", {
       text: "Delegate a Project tree to an agent that works on a copy of it in a Docker container, with internet access "
-        + "through a logging proxy. Its results are added to the Project Material. Runs use your Anthropic API key and "
-        + "are billed per token. Needs the desktop app on macOS and Docker Desktop; see agent/README.md in the repository.",
+        + "through a logging proxy. Its results are added to the Project Material. Claude runs use your Anthropic API key "
+        + "and are billed per token; local and ChatGPT runs are set up below. Needs the desktop app on macOS and Docker Desktop; see agent/README.md in the repository.",
     });
     const agent = this.plugin.settings.agent;
     const save = async () => this.plugin.saveSettings(false);
@@ -478,6 +479,55 @@ export class GtdSettingTab extends PluginSettingTab {
           const minutes = Number(value);
           if (!Number.isInteger(minutes) || minutes < 1) return;
           agent.localMaxMinutes = minutes;
+          await save();
+        });
+      });
+
+    sectionEl.createEl("h4", { text: "ChatGPT (Codex)" });
+    sectionEl.createEl("p", {
+      text: "Runs with OpenAI's Codex, signed in with your ChatGPT plan: they count against the plan's usage limits instead "
+        + "of costing per token. The sign-in is kept in its own folder and mounted into the container, where the agent, "
+        + "which has internet access, could read it. Sign out on chatgpt.com (Settings → Security) to end it.",
+    });
+
+    const signIn = new Setting(sectionEl).setName("ChatGPT sign-in").setDesc("Checking…");
+    const showSignedIn = async () => {
+      signIn.setDesc(await this.plugin.agent.codexSignedIn()
+        ? `Signed in. Kept in ${this.plugin.agent.codexHome()}.`
+        : "Not signed in.");
+    };
+    void showSignedIn();
+    signIn.addButton((button) => button.setButtonText("Sign in to ChatGPT…").onClick(() => {
+      new CodexLoginModal(this.app, this.plugin.agent, () => void showSignedIn()).open();
+    }));
+
+    new Setting(sectionEl)
+      .setName("Sign-in folder")
+      .setDesc("Where Codex keeps the sign-in. Empty uses a “codex” folder next to the runs folder. Treat it like a password.")
+      .addText((text) => text.setPlaceholder("~/Library/Application Support/Dragonglass/codex").setValue(agent.codexHomeDirectory).onChange(async (value) => {
+        agent.codexHomeDirectory = value.trim();
+        await save();
+        void showSignedIn();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Codex model")
+      .setDesc("Empty uses Codex's default for your plan.")
+      .addText((text) => text.setPlaceholder("gpt-5.5-codex").setValue(agent.codexModel).onChange(async (value) => {
+        agent.codexModel = value.trim();
+        await save();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Codex time limit")
+      .setDesc("Minutes a Codex run may take before it is stopped.")
+      .addText((text) => {
+        text.inputEl.type = "number";
+        text.inputEl.min = "5";
+        text.setValue(String(agent.codexMaxMinutes)).onChange(async (value) => {
+          const minutes = Number(value);
+          if (!Number.isInteger(minutes) || minutes < 1) return;
+          agent.codexMaxMinutes = minutes;
           await save();
         });
       });

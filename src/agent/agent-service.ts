@@ -34,6 +34,7 @@ import {
   resultsFolderName,
   runFolderName,
   runReportInboxItem,
+  agentRuntime,
   localHarness,
   localHarnessLabel,
   localHarnessService,
@@ -216,6 +217,52 @@ export class AgentService {
     return node.path.join(node.os.homedir(), "Library", "Application Support", "Dragonglass", "agent-runs");
   }
 
+  /** Dragonglass's own Codex sign-in folder: not ~/.codex, so this session can be ended on its own. */
+  codexHome(): string {
+    const node = requireNode();
+    const configured = this.getSettings().codexHomeDirectory.trim();
+    if (configured) return configured.startsWith("~/") ? node.path.join(node.os.homedir(), configured.slice(2)) : configured;
+    return node.path.join(node.path.dirname(this.runsDirectory()), "codex");
+  }
+
+  async codexSignedIn(): Promise<boolean> {
+    const node = requireNode();
+    try {
+      await node.fs.access(node.path.join(this.codexHome(), "auth.json"));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Signs Dragonglass's Codex folder in to ChatGPT, in the Codex container, with a device code:
+   * `onOutput` receives what Codex prints, including the address and the code to confirm there.
+   */
+  async codexLogin(onOutput: (text: string) => void, signal?: AbortSignal): Promise<boolean> {
+    const node = requireNode();
+    const composeFile = await this.composeFile();
+    const docker = await this.dockerPath();
+    const home = this.codexHome();
+    await node.fs.mkdir(home, { recursive: true });
+    // Compose needs a run folder for the service's mounts; the sign-in doesn't use it.
+    const runDir = node.path.join(this.runsDirectory(), "codex-login");
+    for (const folder of ["input", "outbox", "exchange", "logs"]) await node.fs.mkdir(node.path.join(runDir, folder), { recursive: true });
+    const path = [node.path.dirname(docker), "/usr/local/bin", "/opt/homebrew/bin", "/Applications/Docker.app/Contents/Resources/bin", process.env.PATH ?? ""].join(":");
+    return new Promise((resolve) => {
+      const child = node.child.spawn(docker, ["compose", "-f", composeFile, "-p", "dg-codex-login", "run", "--rm", "--build", "-T", "agent-codex", "login"], {
+        env: { ...process.env, PATH: path, RUN_DIR: runDir, CODEX_HOME_DIR: home },
+      });
+      signal?.addEventListener("abort", () => child.kill("SIGTERM"));
+      child.stdout.on("data", (chunk: Buffer) => onOutput(chunk.toString()));
+      child.stderr.on("data", (chunk: Buffer) => onOutput(chunk.toString()));
+      child.on("close", async (code) => {
+        await this.dockerQuietly(["compose", "-f", composeFile, "-p", "dg-codex-login", "down", "--remove-orphans"]);
+        resolve(code === 0 && await this.codexSignedIn());
+      });
+    });
+  }
+
   /** Collects what a run for this Project would get, without writing anything. */
   async plan(projectId: string, wholeVault = false): Promise<DelegationPlan> {
     const snapshot = this.repository.index.getSnapshot();
@@ -268,7 +315,10 @@ export class AgentService {
     if (!instructions.trim()) throw new Error("Say what you'd like the agent to do.");
     // Whatever the agent reads can leave through the internet, so only an offline local run gets the whole vault.
     if (plan.wholeVault && !local) throw new Error("Only a local model, offline, may read the whole vault.");
-    if (!local && !(options.budgetUsd > 0)) throw new Error("Set a budget above zero.");
+    if (options.runtime === "claude" && !(options.budgetUsd > 0)) throw new Error("Set a budget above zero.");
+    if (options.runtime === "codex" && !(await this.codexSignedIn())) {
+      throw new Error("Sign in to ChatGPT for Codex first: Settings → Agent delegation → Sign in to ChatGPT.");
+    }
     const limit = plan.wholeVault ? MAX_VAULT_BYTES : MAX_MATERIAL_BYTES;
     if (plan.totalBytes > limit) {
       throw new Error(`That is ${formatBytes(plan.totalBytes)} of material, more than the ${formatBytes(limit)} a run may copy.`);
@@ -277,8 +327,8 @@ export class AgentService {
     // Checked now, so a missing kit or Docker is reported before anything is copied.
     await this.composeFile();
     await this.dockerPath();
-    // The local model serves one run at a time; a second one waits its turn.
-    const queue = local && this.localModelBusy();
+    // The local model, and Codex's one sign-in, serve one run at a time; a second one waits its turn.
+    const queue = options.runtime !== "claude" && this.laneBusy(options.runtime);
     const env = queue ? null : await this.runEnv(options.runtime, plan.wholeVault, options.budgetUsd);
 
     const root = plan.scope.root;
@@ -315,8 +365,9 @@ export class AgentService {
       ...(local ? { harness: options.harness ?? "loop" } : {}),
       offline: local && plan.wholeVault,
       wholeVault: plan.wholeVault,
-      budgetUsd: local ? 0 : options.budgetUsd,
-      model: local ? settings.localModel || "the loaded local model" : settings.model,
+      budgetUsd: options.runtime === "claude" ? options.budgetUsd : 0,
+      model: local ? settings.localModel || "the loaded local model"
+        : options.runtime === "codex" ? settings.codexModel || "Codex's default model" : settings.model,
     });
     await this.writeHostNotes(runId, { ...(queue ? { queued: true } : { starting: true }), ...await this.createWaitingAction(root.id, instructions) });
     await this.scan();
@@ -346,7 +397,7 @@ export class AgentService {
       } : {}),
       projectId: meta.projectId,
       instructions,
-      runtime: meta.runtime === "local" ? "local" : "claude",
+      runtime: agentRuntime(meta.runtime),
       harness: localHarness(meta.harness),
       wholeVault: meta.wholeVault === true,
       budgetUsd: typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd,
@@ -471,13 +522,14 @@ export class AgentService {
       void this.cleanUpDocker(runs);
     }
 
-    // The oldest queued local run starts once the local model is free.
-    const next = runs.filter((run) => run.queued && run.runtime === "local").sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
-    if (next && !this.localModelBusy() && !this.launching.has(next.id)) {
+    // In each lane, the oldest queued run starts once the lane is free.
+    for (const lane of ["local", "codex"] as const) {
+      const next = runs.filter((run) => run.queued && run.runtime === lane).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+      if (!next || this.laneBusy(lane) || this.launching.has(next.id)) continue;
       delete next.queued;
       next.starting = true;
       await this.writeHostNotes(next.id, { queued: false, starting: true });
-      new Notice(`The local model is free: starting the queued run on “${next.projectTitle}”.`);
+      new Notice(`${lane === "local" ? "The local model" : "Codex"} is free: starting the queued run on “${next.projectTitle}”.`);
       void this.launch(next.id);
     }
 
@@ -514,7 +566,7 @@ export class AgentService {
       budgetUsd: typeof meta.budgetUsd === "number" ? meta.budgetUsd : 0,
       // A local run names the model it actually used in its result.
       model: typeof result?.model === "string" ? result.model : typeof meta.model === "string" ? meta.model : "",
-      runtime: meta.runtime === "local" ? "local" : "claude",
+      runtime: agentRuntime(meta.runtime),
       ...(meta.runtime === "local" ? { harness: localHarness(meta.harness) } : {}),
       offline: meta.offline === true,
       wholeVault: meta.wholeVault === true,
@@ -610,13 +662,13 @@ export class AgentService {
     try {
       composeFile = await this.composeFile();
       const meta = (await readJson(node, node.path.join(runDir, "input", "run.json"))) ?? {};
-      const runtime: AgentRuntime = meta.runtime === "local" ? "local" : "claude";
+      const runtime = agentRuntime(meta.runtime);
       const budgetUsd = typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd;
       const runEnv = env ?? await this.runEnv(runtime, meta.wholeVault === true, budgetUsd);
       await this.docker(
         // Not --rm: the container is kept after it exits until its output has been saved (see finish).
         ["compose", "-f", composeFile, "-p", composeProject(runId), "run", "-d", "--build", "--name", containerName(runId),
-          runtime === "claude" ? "agent" : localHarnessService(localHarness(meta.harness))],
+          runtime === "claude" ? "agent" : runtime === "codex" ? "agent-codex" : localHarnessService(localHarness(meta.harness))],
         { RUN_DIR: runDir, ...runEnv },
       );
       await this.writeHostNotes(runId, { starting: false });
@@ -725,7 +777,7 @@ export class AgentService {
       const project = this.repository.index.getSnapshot().projectsById.get(run.projectId);
       const reportPath = resultsFolder ? normalizePath(`${resultsFolder}/REPORT.md`) : "";
       const report = reportPath ? this.app.vault.getAbstractFileByPath(reportPath) : null;
-      const spent = run.runtime === "local"
+      const spent = run.runtime === "codex" ? `ChatGPT plan (Codex): ${run.model}` : run.runtime === "local"
         ? `Local${run.harness && run.harness !== "loop" ? ` (${localHarnessLabel(run.harness)})` : ""}: ${run.model}${run.wholeVault ? " · whole vault" : ""}${run.offline ? " · offline" : ""}`
         : typeof run.costUsd === "number"
           ? `Cost: about $${run.costUsd.toFixed(2)} of $${run.budgetUsd.toFixed(2)}`
@@ -808,6 +860,14 @@ export class AgentService {
   /** What the runner and proxy are started with, from the current settings; keys come from the Keychain. */
   private async runEnv(runtime: AgentRuntime, wholeVault: boolean, budgetUsd: number): Promise<Record<string, string>> {
     const settings = this.getSettings();
+    if (runtime === "codex") {
+      return {
+        CODEX_HOME_DIR: this.codexHome(),
+        CODEX_MODEL: settings.codexModel,
+        AGENT_MAX_MINUTES: String(settings.codexMaxMinutes),
+        AGENT_OFFLINE: "0",
+      };
+    }
     if (runtime === "local") {
       return {
         LOCAL_MODEL: settings.localModel,
@@ -832,11 +892,12 @@ export class AgentService {
   }
 
   /**
-   * Whether a local run holds the local model: starting, working, or waiting for an
-   * answer, since the run continues the moment one arrives.
+   * Whether a run of this runtime is going: starting, working, or waiting for an answer,
+   * since it continues the moment one arrives. Local runs share one model; Codex runs share
+   * one sign-in, which each run renews, so two at once could break it.
    */
-  private localModelBusy(): boolean {
-    return this.runs.some((run) => run.runtime === "local" && !run.queued && !run.startError
+  private laneBusy(runtime: AgentRuntime): boolean {
+    return this.runs.some((run) => run.runtime === runtime && !run.queued && !run.startError
       && (this.launching.has(run.id) || Boolean(run.starting) || this.running.has(containerName(run.id))));
   }
 
@@ -916,7 +977,8 @@ export class AgentService {
 
   private async dockerQuietly(args: string[]): Promise<void> {
     try {
-      await this.docker(args);
+      // The compose file insists on RUN_DIR even for `down`, which mounts nothing.
+      await this.docker(args, { RUN_DIR: requireNode().os.tmpdir() });
     } catch {
       // Cleaning up after a run that already ended; nothing to report.
     }

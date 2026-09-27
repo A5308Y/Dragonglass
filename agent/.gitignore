@@ -1,2 +1,4 @@
 # Runs hold copies of vault material, questions, answers and request logs.
 runs/
+# A ChatGPT sign-in for Codex runs started by hand; treat it like a password.
+codex-home/

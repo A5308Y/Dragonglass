@@ -144,3 +144,15 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   Actions board use it to show a drop before the host writes it and to recognise
   the confirming snapshot.
   Change both together, or dropped cards flicker until the next snapshot.
+
+## Agent runtimes
+
+- `AgentRuntime` is `claude` | `local` | `codex`; parse stored runs with
+  `agentRuntime()` so a new runtime isn't read back as Claude. The compose
+  service per runtime is chosen in `AgentService.launch`.
+- Local and Codex runs are lanes of one run each (`laneBusy`); more wait queued.
+- Only Claude runs have a budget; only local runs may read the whole vault, and
+  then offline.
+- The Codex container holds the user's ChatGPT sign-in (`codexHome()`, mounted
+  as `/codex`). The user accepted that risk; keep it out of settings and logs,
+  and never mount the user's own `~/.codex`.

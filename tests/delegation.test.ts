@@ -9,6 +9,7 @@ import {
   agentRunStatusText,
   briefInstructions,
   withoutEntityFrontmatter,
+  agentRuntime,
   localHarness,
   localHarnessService,
   runReportInboxItem,
@@ -242,6 +243,15 @@ describe("Local harnesses", () => {
     expect(localHarnessService(localHarness("qwen-agent"))).toBe("agent-qwen");
     expect(localHarnessService(localHarness("loop"))).toBe("agent-local");
     expect(localHarnessService(localHarness(undefined))).toBe("agent-local");
+  });
+});
+
+describe("Agent runtimes", () => {
+  it("reads Codex and local runs back, and older runs without a runtime as Claude", () => {
+    expect(agentRuntime("codex")).toBe("codex");
+    expect(agentRuntime("local")).toBe("local");
+    expect(agentRuntime(undefined)).toBe("claude");
+    expect(agentRuntime("gpt")).toBe("claude");
   });
 });
 

@@ -2588,3 +2588,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   box-shadow: 0 0 0 2px var(--background-secondary);
   pointer-events: none;
 }
+
+.dg-codex-login-output {
+  max-height: 16em;
+  overflow: auto;
+  font-size: var(--font-ui-smaller);
+  white-space: pre-wrap;
+}
