@@ -8,7 +8,6 @@ import type { Action, InboxItem } from "../domain/types";
 import type { GtdServices } from "../ui/services";
 import { localDate, parseDateOnly } from "../utils/date";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
-import { registerObsidianMarkdown } from "./obsidian-markdown";
 import { elmSnapshot, parseInboxCommand, type ElmInboxCommand, type ElmInboxEvent, type ElmScheduleInput } from "./protocol";
 
 interface ElmApp {
@@ -25,7 +24,6 @@ export class ElmInboxHost {
   private closed = false;
 
   constructor(node: HTMLElement, private readonly services: GtdServices, initialProcessing: boolean) {
-    registerObsidianMarkdown(services.app);
     const module = Elm.Inbox;
     if (!module) throw new Error("The Elm Inbox module was not compiled.");
     this.app = module.init({

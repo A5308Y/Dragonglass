@@ -1,10 +1,17 @@
 import { Component, Keymap, MarkdownRenderer, type App } from "obsidian";
+import { parseViewLink } from "../domain/view-links";
 
 let currentApp: App | null = null;
+let currentOpenView: ((view: string) => void) | null = null;
 
-/** Registers the small DOM boundary Elm uses for Obsidian-native Markdown rendering. */
-export function registerObsidianMarkdown(app: App): void {
+/**
+ * Registers the small DOM boundary Elm uses for Obsidian-native Markdown rendering.
+ * The plugin does this once on load, so every view can render Markdown whichever opens
+ * first. `openView` opens the view a Dragonglass link names (see `src/domain/view-links.ts`).
+ */
+export function registerObsidianMarkdown(app: App, openView: (view: string) => void): void {
   currentApp = app;
+  currentOpenView = openView;
   if (customElements.get("dg-markdown")) return;
 
   customElements.define("dg-markdown", class extends HTMLElement {
@@ -31,7 +38,11 @@ export function registerObsidianMarkdown(app: App): void {
         const target = event.target as Element | null;
         const anchor = target?.closest("a") as HTMLAnchorElement | null;
         if (!anchor || !this.contains(anchor)) return;
-        if (anchor.hasClass("internal-link")) {
+        const viewLink = parseViewLink(anchor.getAttr("href") ?? "");
+        if (viewLink && currentOpenView) {
+          event.preventDefault();
+          currentOpenView(viewLink.view);
+        } else if (anchor.hasClass("internal-link")) {
           const linktext = anchor.dataset.href ?? anchor.getAttr("href");
           if (!linktext) return;
           event.preventDefault();

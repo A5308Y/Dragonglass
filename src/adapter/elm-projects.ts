@@ -25,7 +25,6 @@ import {
   type ElmProjectDetailDto,
   type ElmProjectMetaDto,
 } from "./protocol";
-import { registerObsidianMarkdown } from "./obsidian-markdown";
 
 interface ElmApp {
   ports: {
@@ -54,7 +53,6 @@ export class ElmProjectsHost {
     initialProjectId: string | null,
     private readonly onProjectChange: (projectId: string | null) => void,
   ) {
-    registerObsidianMarkdown(services.app);
     const module = Elm.Projects;
     if (!module) throw new Error("The Elm Projects module was not compiled.");
     this.app = module.init({ node, flags: this.flags(initialProjectId) }) as ElmApp;

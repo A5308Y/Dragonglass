@@ -22,6 +22,8 @@ import { localDate } from "./utils/date";
 import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, CHECKLISTS_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdChecklistsView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
+import { registerObsidianMarkdown } from "./adapter/obsidian-markdown";
+import { VIEW_LINK_ACTION, VIEW_LINK_NAMES, viewLinkName, type ViewLinkName } from "./domain/view-links";
 import { PomodoroService } from "./pomodoro/pomodoro-service";
 import { ChecklistService } from "./checklists/checklist-service";
 import { MiteSync } from "./pomodoro/mite-sync";
@@ -32,6 +34,19 @@ import { AgentService } from "./agent/agent-service";
 import { delegateProject } from "./ui/delegate";
 import { confirmDeleteAgentRun } from "./ui/delete-agent-run";
 import type { PomodoroSession } from "./domain/pomodoro";
+
+/** The view each Dragonglass link name opens. */
+const LINKED_VIEWS: Record<ViewLinkName, string> = {
+  inbox: INBOX_VIEW_TYPE,
+  board: BOARD_VIEW_TYPE,
+  projects: PROJECTS_VIEW_TYPE,
+  review: REVIEW_VIEW_TYPE,
+  someday: SOMEDAY_VIEW_TYPE,
+  brainstorm: BRAINSTORM_VIEW_TYPE,
+  pomodoro: POMODORO_VIEW_TYPE,
+  feeds: FEEDS_VIEW_TYPE,
+  checklists: CHECKLISTS_VIEW_TYPE,
+};
 
 export default class DragonglassGtdPlugin extends Plugin {
   declare settings: GtdSettings;
@@ -116,6 +131,9 @@ export default class DragonglassGtdPlugin extends Plugin {
       },
     };
 
+    // `obsidian://dragonglass?view=inbox` opens a view, from a note, a checklist or outside Obsidian.
+    registerObsidianMarkdown(this.app, (view) => this.openViewLink(view));
+    this.registerObsidianProtocolHandler(VIEW_LINK_ACTION, (params) => this.openViewLink(params.view));
     this.registerView(BOARD_VIEW_TYPE, (leaf) => new ActionBoardView(leaf, this.services));
     this.registerView(BRAINSTORM_VIEW_TYPE, (leaf) => new GtdBrainstormView(leaf, this.services));
     this.registerView(FEEDS_VIEW_TYPE, (leaf) => new GtdFeedsView(leaf, this.services, this.feeds));
@@ -553,6 +571,16 @@ export default class DragonglassGtdPlugin extends Plugin {
   private async openPomodoro(projectId?: string): Promise<void> {
     const leaf = await this.activateView(POMODORO_VIEW_TYPE);
     if (projectId && leaf.view instanceof GtdPomodoroView) leaf.view.select({ kind: "project", projectId });
+  }
+
+  /** Opens the view a Dragonglass link names, or says which names there are. */
+  private openViewLink(view: unknown): void {
+    const name = viewLinkName(view);
+    if (!name) {
+      new Notice(`Dragonglass has no view called “${typeof view === "string" ? view : ""}”. Links can open: ${VIEW_LINK_NAMES.join(", ")}.`, 10_000);
+      return;
+    }
+    void this.activateView(LINKED_VIEWS[name]);
   }
 
   private async openChecklistPomodoro(path: string): Promise<void> {

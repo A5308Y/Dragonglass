@@ -121,6 +121,10 @@ parent_project: "[[GTD/Projects/Replace heating system|Replace heating system]]"
 
 Assign any command to an Obsidian hotkey. A plugin's default hotkey is only a suggestion: when it collides with a command that already owns that chord, Obsidian flags the conflict in Settings → Hotkeys and the binding does nothing. Check there after install if a default appears not to fire. Quick Capture asks only for a title and immediately creates an Inbox Item. New Action provides a lightweight Title, fuzzy Project, fuzzy Context, and Status form. It is also available from the Actions header, Projects header, each Project card menu, and Project detail; Project-specific entry points preselect that Project.
 
+## Links to views
+
+A link to `obsidian://dragonglass?view=<name>` opens a Dragonglass view, from any note, a checklist, or outside Obsidian (a calendar event, another app). The names are `inbox`, `board`, `projects`, `review`, `someday`, `brainstorm`, `pomodoro`, `feeds` and `checklists`. For example, a checklist item can read `- [ ] [Process the Inbox](obsidian://dragonglass?view=inbox)`.
+
 ## Ribbon dots
 
 A ribbon icon carries a dot while its view has something to do: the Inbox while it holds Items, the Action Board for overdue Actions, Waiting Actions due for follow-up and Calendar Actions dated today or earlier, Projects while an active Project has an issue, the Project Review while this week's review is due and unfinished, and RSS Feeds while there are unread Items. The dots follow every change to the vault or the feeds and are rechecked hourly for a new day. On the Action Board the same dot marks where the ribbon dot points: each card that needs attention, a count in each column header, and a header summary such as "3 need attention · 1 not in this view" when filters or hidden columns leave some out.
