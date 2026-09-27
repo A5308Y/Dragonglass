@@ -32,3 +32,8 @@ export function requestUrl(): never {
 }
 
 export const Platform = { isDesktopApp: true, isMobile: false };
+
+/** Only for `instanceof` checks on vault events; tests don't build a vault tree. */
+export class TFile {
+  constructor(public readonly path: string) {}
+}

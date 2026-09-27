@@ -17,6 +17,8 @@
  *    or two machines sync the same mailbox at once.
  */
 
+import { later, mergeKeyed, recordMap } from "./merge";
+
 export const MAIL_STORE_VERSION = 1;
 
 /** How many Message-IDs one mailbox remembers. `lastUid` does the real work. */
@@ -219,6 +221,37 @@ export function recordHandled(
     baselined: true,
     fetched: options.fetchedAt,
     error: "",
+  };
+}
+
+/**
+ * Merges this device's copy of the store with the file's (see `src/domain/merge.ts`),
+ * for two computers syncing mail. Message-IDs handled on either stay handled and the
+ * watermark takes the higher UID, unless this device reopened the backlog, which is the
+ * newer decision.
+ */
+export function mergeMailStores(base: MailStoreData, mine: MailStoreData, theirs: MailStoreData): MailStoreData {
+  const states = mergeKeyed(recordMap(base.states), recordMap(mine.states), recordMap(theirs.states), mergeMailboxState);
+  return { version: MAIL_STORE_VERSION, states: Object.fromEntries(states) };
+}
+
+function mergeMailboxState(base: MailboxState | undefined, mine: MailboxState, theirs: MailboxState): MailboxState {
+  const newer = later(mine, theirs);
+  const baselined = mine.baselined || theirs.baselined;
+  if (mine.uidValidity !== theirs.uidValidity) {
+    // The server renumbered; the UIDs of whoever synced last are the current ones.
+    return { ...newer, seen: capSeen([...theirs.seen, ...mine.seen]), baselined };
+  }
+  const reopened = base !== undefined && base.uidValidity === mine.uidValidity && mine.lastUid < base.lastUid;
+  const mineSeen = new Set(mine.seen);
+  const cleared = new Set(reopened ? base.seen.filter((id) => !mineSeen.has(id)) : []);
+  return {
+    uidValidity: mine.uidValidity,
+    lastUid: reopened ? mine.lastUid : Math.max(mine.lastUid, theirs.lastUid),
+    seen: capSeen([...theirs.seen, ...mine.seen].filter((id) => !cleared.has(id))),
+    baselined,
+    fetched: newer.fetched,
+    error: newer.error,
   };
 }
 

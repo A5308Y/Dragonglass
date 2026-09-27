@@ -1,6 +1,7 @@
-import { normalizePath, type App, type Vault } from "obsidian";
+import { normalizePath, type App } from "obsidian";
 import {
   emptyMailStore,
+  mergeMailStores,
   forgetAccount,
   mailboxState,
   parseMailStore,
@@ -19,6 +20,7 @@ import {
 } from "../domain/mail";
 import { appleMailLink, mailItemNote, mailItemTitle } from "../domain/mail-note";
 import type { GtdRepository } from "../repository/gtd-repository";
+import { SyncedJsonFile } from "../state/synced-json-file";
 import { ImapConnection, type ImapSocketFactory, type MessageSummary } from "./imap-client";
 import { mailTransportAvailable, MOBILE_EXPLANATION, openTlsSocket } from "./node-socket";
 
@@ -64,7 +66,8 @@ const NODE_TRANSPORT: MailTransport = { connect: openTlsSocket, available: mailT
 export class MailService {
   private store: MailStoreData = emptyMailStore();
   private loaded = false;
-  private writing: Promise<void> = Promise.resolve();
+  /** The store file, merged with other devices' changes on every write and on sync. */
+  private readonly file: SyncedJsonFile<MailStoreData>;
   private status: MailSyncStatus = { state: "disabled" };
   private listeners = new Set<() => void>();
   private timer: number | null = null;
@@ -76,9 +79,22 @@ export class MailService {
     private readonly getSettings: () => MailSettingsView,
     private readonly getPassword: (accountId: string) => string,
     private readonly transport: MailTransport = NODE_TRANSPORT,
-  ) {}
+  ) {
+    this.file = new SyncedJsonFile(app, {
+      path: () => this.storePath(),
+      parse: parseMailStore,
+      empty: emptyMailStore,
+      merge: mergeMailStores,
+      current: () => this.store,
+      replace: (next) => {
+        this.store = next;
+        this.notify();
+      },
+    });
+  }
 
   start(): () => void {
+    const watching = this.file.watch();
     void this.load().then(() => {
       this.status = { state: this.initialState() };
       this.notify();
@@ -87,6 +103,7 @@ export class MailService {
     return () => {
       if (this.timer !== null) window.clearTimeout(this.timer);
       this.timer = null;
+      for (const ref of watching) this.app.vault.offref(ref);
     };
   }
 
@@ -110,12 +127,8 @@ export class MailService {
   async load(): Promise<void> {
     if (this.loaded) return;
     this.loaded = true;
-    try {
-      this.store = parseMailStore(JSON.parse(await this.app.vault.adapter.read(this.storePath())));
-    } catch {
-      // No file yet, or one no longer readable. A fresh store re-baselines rather than floods.
-      this.store = emptyMailStore();
-    }
+    // No file yet, or one no longer readable, gives a fresh store, which re-baselines rather than floods.
+    this.store = await this.file.load();
     this.notify();
   }
 
@@ -338,16 +351,10 @@ export class MailService {
     return normalizePath(this.getSettings().storePath.trim() || "GTD/mail.json");
   }
 
-  /** Writes are serialised, so two mailboxes finishing together cannot interleave. */
+  /** Merged with the file first, so another computer's imports aren't forgotten. */
   private async persist(): Promise<void> {
     this.notify();
-    const write = this.writing.then(async () => {
-      const path = this.storePath();
-      await ensureParent(this.app.vault, path);
-      await this.app.vault.adapter.write(path, `${JSON.stringify(this.store, null, 2)}\n`);
-    });
-    this.writing = write.catch(() => undefined);
-    return write;
+    await this.file.write(this.store);
   }
 
   private initialState(): MailSyncStatus["state"] {
@@ -365,12 +372,5 @@ export class MailService {
   }
 }
 
-async function ensureParent(vault: Vault, path: string): Promise<void> {
-  const index = path.lastIndexOf("/");
-  if (index <= 0) return;
-  const folder = path.slice(0, index);
-  if (await vault.adapter.exists(folder)) return;
-  await vault.adapter.mkdir(folder);
-}
 
 export type { MailImportResult };

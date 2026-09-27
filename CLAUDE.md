@@ -75,6 +75,17 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   so a re-run updates rather than duplicates. `parsePomodoroStore` already keeps
   `external` links, and nothing else writes them.
 
+## JSON stores shared between devices
+
+- `GTD/feeds.json`, `GTD/mail.json` and `GTD/pomodoros.json` are written by every
+  device through `SyncedJsonFile` (`src/state/synced-json-file.ts`): each write is a
+  three-way merge of the file as last seen, this device's copy and the file now, and a
+  change from sync is merged into the copy in memory. Never write these files directly.
+- The merges are pure (`mergeFeedStores`, `mergeMailStores`, `mergePomodoroStores`,
+  tested in `tests/synced-stores.test.ts`): resolved and handled keys only grow, except
+  where this device deliberately took them back (Undo, reopening a mail backlog).
+  A new field in a store needs a rule there too, or one device's value silently wins.
+
 ## Building and deploying
 
 - `npm run build` type-checks, compiles Elm, bundles `main.js` and deploys to

@@ -1,7 +1,8 @@
-import { normalizePath, requestUrl, type App, type Vault } from "obsidian";
+import { normalizePath, requestUrl, type App } from "obsidian";
 import {
   emptyFeedState,
   emptyFeedStore,
+  mergeFeedStores,
   feedState,
   findSource,
   normalizeFeedUrl,
@@ -16,6 +17,7 @@ import {
   type FeedStoreData,
 } from "../domain/feed";
 import { parseFeed } from "../domain/feed-parse";
+import { SyncedJsonFile } from "../state/synced-json-file";
 import { createUlid } from "../utils/ulid";
 
 /** How long a single feed is given before the fetch is abandoned. */
@@ -51,7 +53,8 @@ export interface FeedSyncStatus {
 export class FeedService {
   private store: FeedStoreData = emptyFeedStore();
   private loaded = false;
-  private writing: Promise<void> = Promise.resolve();
+  /** The store file, merged with other devices' changes on every write and on sync. */
+  private readonly file: SyncedJsonFile<FeedStoreData>;
   private status: FeedSyncStatus = { state: "disabled" };
   private listeners = new Set<() => void>();
   private timer: number | null = null;
@@ -63,9 +66,22 @@ export class FeedService {
     private readonly app: App,
     private readonly getSettings: () => FeedSettingsView,
     private readonly request: FeedRequest = requestUrl,
-  ) {}
+  ) {
+    this.file = new SyncedJsonFile(app, {
+      path: () => this.storePath(),
+      parse: parseFeedStore,
+      empty: emptyFeedStore,
+      merge: mergeFeedStores,
+      current: () => this.store,
+      replace: (next) => {
+        this.store = next;
+        this.notify();
+      },
+    });
+  }
 
   start(): () => void {
+    const watching = this.file.watch();
     void this.load().then(() => {
       this.status = { state: this.getSettings().enabled ? "idle" : "disabled" };
       this.notify();
@@ -74,6 +90,7 @@ export class FeedService {
     return () => {
       if (this.timer !== null) window.clearTimeout(this.timer);
       this.timer = null;
+      for (const ref of watching) this.app.vault.offref(ref);
     };
   }
 
@@ -98,14 +115,8 @@ export class FeedService {
   async load(): Promise<void> {
     if (this.loaded) return;
     this.loaded = true;
-    const path = this.storePath();
-    try {
-      const raw = await this.app.vault.adapter.read(path);
-      this.store = parseFeedStore(JSON.parse(raw));
-    } catch {
-      // No file yet, or one that is no longer readable. Either way the next fetch rebuilds it.
-      this.store = emptyFeedStore();
-    }
+    // No file yet, or one that is no longer readable, gives an empty store: the next fetch rebuilds it.
+    this.store = await this.file.load();
     this.notify();
   }
 
@@ -337,16 +348,10 @@ export class FeedService {
     return normalizePath(configured || "GTD/feeds.json");
   }
 
-  /** Writes are serialised, so a sweep and a fetch landing together cannot interleave. */
+  /** Merged with the file first, so a sweep on another device isn't undone by this one's copy. */
   private async persist(): Promise<void> {
     this.notify();
-    const write = this.writing.then(async () => {
-      const path = this.storePath();
-      await ensureParent(this.app.vault, path);
-      await this.app.vault.adapter.write(path, `${JSON.stringify(this.store, null, 2)}\n`);
-    });
-    this.writing = write.catch(() => undefined);
-    return write;
+    await this.file.write(this.store);
   }
 
   private setStatus(status: FeedSyncStatus): void {
@@ -363,12 +368,4 @@ export interface FeedSettingsView {
   enabled: boolean;
   storePath: string;
   refreshMinutes: number;
-}
-
-async function ensureParent(vault: Vault, path: string): Promise<void> {
-  const index = path.lastIndexOf("/");
-  if (index <= 0) return;
-  const folder = path.slice(0, index);
-  if (await vault.adapter.exists(folder)) return;
-  await vault.adapter.mkdir(folder);
 }

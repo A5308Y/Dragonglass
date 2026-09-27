@@ -1,7 +1,8 @@
-import { Notice, normalizePath, type App, type Vault } from "obsidian";
+import { Notice, normalizePath, type App } from "obsidian";
 import {
   discardPomodoro,
   emptyPomodoroStore,
+  mergePomodoroStores,
   endsAt,
   finishPomodoro,
   parsePomodoroStore,
@@ -17,6 +18,7 @@ import {
   type PomodoroWrapUp,
 } from "../domain/pomodoro";
 import type { PomodoroSettings } from "../domain/types";
+import { SyncedJsonFile } from "../state/synced-json-file";
 import { showUndoNotice } from "../ui/undo";
 
 /**
@@ -29,7 +31,8 @@ import { showUndoNotice } from "../ui/undo";
 export class PomodoroService {
   private store: PomodoroStore = emptyPomodoroStore();
   private loaded = false;
-  private writing: Promise<void> = Promise.resolve();
+  /** The store file, merged with other devices' changes on every write and on sync. */
+  private readonly file: SyncedJsonFile<PomodoroStore>;
   private listeners = new Set<() => void>();
   private alarm: number | null = null;
   private ticker: number | null = null;
@@ -40,16 +43,32 @@ export class PomodoroService {
     private readonly getSettings: () => PomodoroSettings,
     private readonly onFinished: (session: PomodoroSession) => Promise<void>,
     private readonly onOpen: () => void,
-  ) {}
+  ) {
+    this.file = new SyncedJsonFile(app, {
+      path: () => this.storePath(),
+      parse: parsePomodoroStore,
+      empty: emptyPomodoroStore,
+      merge: mergePomodoroStores,
+      current: () => this.store,
+      replace: (next) => {
+        this.store = next;
+        this.arm();
+        this.notify();
+      },
+    });
+  }
 
   start(statusBar: HTMLElement): () => void {
     this.statusBar = statusBar;
     statusBar.addClass("dg-pomodoro-status", "mod-clickable");
     statusBar.addEventListener("click", () => this.onOpen());
+    // A session started, paused or finished on another device shows up here too.
+    const watching = this.file.watch();
     void this.load();
     return () => {
       this.clearTimers();
       this.statusBar = null;
+      for (const ref of watching) this.app.vault.offref(ref);
     };
   }
 
@@ -65,12 +84,8 @@ export class PomodoroService {
   async load(): Promise<void> {
     if (this.loaded) return;
     this.loaded = true;
-    try {
-      this.store = parsePomodoroStore(JSON.parse(await this.app.vault.adapter.read(this.storePath())));
-    } catch {
-      // No log yet, or one that is no longer readable: start a fresh one.
-      this.store = emptyPomodoroStore();
-    }
+    // No log yet, or one that is no longer readable, gives a fresh one.
+    this.store = await this.file.load();
     this.arm();
     this.notify();
   }
@@ -164,27 +179,12 @@ export class PomodoroService {
     return normalizePath(this.getSettings().storePath.trim() || "GTD/pomodoros.json");
   }
 
-  /** Writes are serialised, so a pause and an action landing together cannot interleave. */
+  /** Merged with the file first, so sessions filed on another device are kept. */
   private persist(): Promise<void> {
-    const snapshot = this.store;
-    const write = this.writing.then(async () => {
-      const path = this.storePath();
-      await ensureParent(this.app.vault, path);
-      await this.app.vault.adapter.write(path, `${JSON.stringify(snapshot, null, 2)}\n`);
-    });
-    this.writing = write.catch(() => undefined);
-    return write;
+    return this.file.write(this.store);
   }
 
   private notify(): void {
     for (const listener of this.listeners) listener();
   }
-}
-
-async function ensureParent(vault: Vault, path: string): Promise<void> {
-  const index = path.lastIndexOf("/");
-  if (index <= 0) return;
-  const folder = path.slice(0, index);
-  if (await vault.adapter.exists(folder)) return;
-  await vault.adapter.mkdir(folder);
 }

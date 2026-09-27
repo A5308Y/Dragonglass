@@ -7,6 +7,8 @@
  * cheap write that can be undone rather than a hundred files sent to the trash.
  */
 
+import { byKey, later, mergeKeyed, same } from "./merge";
+
 export const FEED_STORE_VERSION = 1;
 
 /** How many resolved keys a feed remembers, so discarded Items cannot come back. */
@@ -164,6 +166,44 @@ export function withFeedState(store: FeedStoreData, feedId: string, next: FeedSt
 
 export function withFetchError(state: FeedState, message: string, fetchedAt: string): FeedState {
   return { ...state, fetched: fetchedAt, error: message };
+}
+
+/**
+ * Merges this device's copy of the store with the file's (see `src/domain/merge.ts`).
+ *
+ * An Item resolved on either device stays resolved; one this device put back with Undo
+ * comes back even if the other device still lists it as resolved, since the Undo is the
+ * newer decision. Subscriptions merge by id, and a feed removed on either device is gone.
+ */
+export function mergeFeedStores(base: FeedStoreData, mine: FeedStoreData, theirs: FeedStoreData): FeedStoreData {
+  const id = (source: FeedSource) => source.id;
+  const sources = [...mergeKeyed(byKey(base.sources, id), byKey(mine.sources, id), byKey(theirs.sources, id), (_base, ours) => ours).values()];
+  const states: Record<string, FeedState> = {};
+  for (const source of sources) {
+    states[source.id] = mergeFeedState(feedState(base, source.id), feedState(mine, source.id), feedState(theirs, source.id));
+  }
+  return { version: FEED_STORE_VERSION, sources, states };
+}
+
+function mergeFeedState(base: FeedState, mine: FeedState, theirs: FeedState): FeedState {
+  if (same(mine, base)) return theirs;
+  if (same(theirs, base)) return mine;
+  const baseSeen = new Set(base.seen);
+  const mineSeen = new Set(mine.seen);
+  const mineUnread = new Set(mine.unread.map((item) => item.key));
+  // Put back here: resolved before, unread again now. (Keys the cap pushed out aren't unread.)
+  const restored = new Set(base.seen.filter((key) => !mineSeen.has(key) && mineUnread.has(key)));
+  const seen = capSeen([...theirs.seen, ...mine.seen.filter((key) => !baseSeen.has(key))].filter((key) => !restored.has(key)));
+  const resolved = new Set(seen);
+  const items = new Map<string, FeedItem>();
+  for (const item of [...theirs.unread, ...mine.unread]) items.set(item.key, item);
+  const newer = later(mine, theirs);
+  return {
+    unread: [...items.values()].filter((item) => !resolved.has(item.key)).sort(byNewestFirst).slice(0, UNREAD_ITEM_LIMIT),
+    seen,
+    fetched: newer.fetched,
+    error: newer.error,
+  };
 }
 
 /**

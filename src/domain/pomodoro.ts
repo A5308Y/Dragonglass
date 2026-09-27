@@ -9,6 +9,8 @@
  * has already sent. `toTimeEntry` is the one neutral shape such a sync consumes.
  */
 
+import { byKey, mergeKeyed, same } from "./merge";
+
 export const POMODORO_STORE_VERSION = 1;
 
 /** How many finished sessions the log keeps before the oldest are dropped. */
@@ -181,6 +183,33 @@ export function discardPomodoro(store: PomodoroStore): PomodoroStore {
 /** Puts a discarded session back, as Undo does. A session started since wins. */
 export function restorePomodoro(store: PomodoroStore, active: ActivePomodoro): PomodoroStore {
   return store.active ? store : { ...store, active };
+}
+
+/**
+ * Merges this device's copy of the log with the file's (see `src/domain/merge.ts`).
+ * Sessions filed on either device are kept, with the time-tracking links of both; the
+ * running session is whichever device changed it last, and none once it has been filed.
+ */
+export function mergePomodoroStores(base: PomodoroStore, mine: PomodoroStore, theirs: PomodoroStore): PomodoroStore {
+  const id = (session: PomodoroSession) => session.id;
+  const sessions = [...mergeKeyed(byKey(base.sessions, id), byKey(mine.sessions, id), byKey(theirs.sessions, id), (_base, ours, other) => ({
+    ...ours,
+    external: mergeExternal(ours.external, other.external),
+  })).values()]
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
+    .slice(0, SESSION_LIMIT);
+  const active = same(mine.active, base.active) ? theirs.active : mine.active;
+  const filed = active !== null && sessions.some((session) => session.id === active.id);
+  return { version: POMODORO_STORE_VERSION, active: filed ? null : active, sessions };
+}
+
+function mergeExternal(mine: Record<string, ExternalLink>, theirs: Record<string, ExternalLink>): Record<string, ExternalLink> {
+  const merged = { ...theirs };
+  for (const [integration, link] of Object.entries(mine)) {
+    const other = merged[integration];
+    if (!other || link.syncedAt >= other.syncedAt) merged[integration] = link;
+  }
+  return merged;
 }
 
 export function toTimeEntry(session: PomodoroSession): TimeEntry {
