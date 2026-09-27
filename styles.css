@@ -2082,9 +2082,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
     font-size: var(--font-ui-smaller);
     white-space: nowrap;
   }
-  .dg-feed-section-heading { flex: 1 1 100%; }
-  .dg-feed-section-controls { flex: 1 1 100%; justify-content: flex-end; }
-  .dg-feed-discard { flex: 1 1 auto; min-height: 38px; }
+  .dg-feed-discard { min-height: 38px; }
   .dg-feed-row { flex-direction: column; }
   .dg-feed-row-actions { width: 100%; flex-wrap: nowrap; gap: 4px; }
   .dg-feed-row-actions button {
@@ -2172,13 +2170,14 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
      sticky header below would then stick to nothing. */
   overflow: clip;
 }
-/* Each feed's header stays at the top while its items scroll by, until the next feed pushes it away. */
+/* Each feed's header stays at the top while its items scroll by, until the next feed pushes it away.
+   It is always one line: the feed's title is cut short so Discard stays on the right. */
 .dg-feed-section-header {
   position: sticky;
   top: 0;
   z-index: 2;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -2191,14 +2190,16 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0;
 }
 .dg-feed-section-controls {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 0 0 auto;
+  min-width: 0;
+  flex: 0 1 auto;
 }
+.dg-feed-section-controls .dg-feed-discard { flex: 0 0 auto; }
 .dg-feed-section-title {
   display: flex;
   align-items: center;
@@ -2218,7 +2219,14 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   padding: 0 6px;
   color: var(--text-muted);
 }
-.dg-feed-error { color: var(--text-error); font-size: var(--font-ui-smaller); white-space: nowrap; }
+.dg-feed-error {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
 
 .dg-feed-row {
   display: flex;
@@ -2234,6 +2242,13 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 }
 
 .dg-feed-main { min-width: 0; flex: 1 1 auto; }
+/* Obsidian gives buttons a fixed height, which on mobile cut long titles off after a few
+   lines; the whole title shows. Mobile's own button rules are more specific, hence !important. */
+.dg-feed-title.dg-flat-button {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
 .dg-feed-title {
   display: block;
   max-width: 100%;
