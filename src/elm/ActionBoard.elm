@@ -108,7 +108,8 @@ type alias Model =
     , filterOpen : Bool
     , viewMenuOpen : Bool
 
-    -- On a phone, whether search, filters and layout show; elsewhere they always do.
+    -- On a phone, whether everything beyond Quick Capture, the saved view and the
+    -- Actions shows; elsewhere it always does.
     , controlsOpen : Bool
     , draft : FilterDraft
     , dragged : Maybe ActionId
@@ -884,7 +885,7 @@ boardView model =
         needingShown =
             groups |> List.concatMap .actions |> List.filter (needsAttention model.snapshot.today) |> List.length
     in
-    div [ class "dg-view dg-board-view" ]
+    div [ classList [ ( "dg-view dg-board-view", True ), ( "is-controls-open", model.controlsOpen ) ] ]
         [ header [ class "dg-view-header" ]
             [ div []
                 [ h2 [] [ text "Actions" ]
@@ -926,13 +927,13 @@ boardView model =
                 ]
             , div [ class "dg-header-actions" ]
                 [ button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
-                , button [ onClick (Send IgnoreReply Command.QuickCapture) ] [ text "Quick Capture" ]
+                , button [ class "dg-quick-capture", onClick (Send IgnoreReply Command.QuickCapture) ] [ text "Quick Capture" ]
                 , button [ onClick (Send IgnoreReply Command.OpenInbox) ] [ text "Open Inbox" ]
                 ]
             ]
         , Ui.issuesView (\path -> Send IgnoreReply (Command.OpenFile path)) model.snapshot.issues
         , toolbar model
-        , div [ classList [ ( "dg-board-refinements", True ), ( "is-open", model.controlsOpen ) ] ]
+        , div [ class "dg-board-refinements" ]
             [ if model.filterOpen then
                 filterPanel model
 
@@ -952,10 +953,10 @@ boardView model =
         ]
 
 
-{-| The saved-view picker, then search, filters and layout. On a phone only the
-picker shows at first, so the Actions fill the screen; one toggle brings the rest
-(see `.dg-board-controls` in `styles.css`). Elsewhere the toggle is hidden and the
-wrapper takes no part in the layout.
+{-| The saved-view picker, then search, filters and layout. On a phone the board
+shows only Quick Capture, the picker and the Actions at first; More brings back
+everything else (see `.is-controls-open` in `styles.css`). Elsewhere More is hidden
+and the wrapper takes no part in the layout.
 -}
 toolbar : Model -> Html Msg
 toolbar model =
@@ -997,7 +998,7 @@ toolbar model =
             , onClick ToggleControls
             ]
             [ text
-                ("Search & filter"
+                ("More"
                     ++ (if refinements > 0 then
                             " (" ++ String.fromInt refinements ++ ")"
 
@@ -1006,7 +1007,7 @@ toolbar model =
                        )
                 )
             ]
-        , div [ classList [ ( "dg-board-controls", True ), ( "is-open", model.controlsOpen ) ] ] (boardControls model)
+        , div [ class "dg-board-controls" ] (boardControls model)
         ]
 
 

@@ -2710,13 +2710,24 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-checklist-removed ul { margin: 4px 0 0; padding-left: 20px; }
 .dg-checklist-removed li > * { display: inline; }
 
-/* On a phone the Action board opens on what can be done: only the saved view shows,
-   and search, filters and layout sit behind "Search & filter". Elsewhere the toggle
-   is hidden and the wrappers take no part in the layout. The toggle's selectors
-   outrank Obsidian's `button:not(.clickable-icon)`, which sets `display`. */
+/* On a phone the Action board opens on what can be done: Quick Capture across the
+   top, the saved view, and the Actions. More (`.is-controls-open`) brings back the
+   title and counts, the other header buttons, the saved-view menu, search, filters
+   and layout. Elsewhere More is hidden and the wrappers take no part in the layout.
+   The button selectors outrank Obsidian's `button:not(.clickable-icon)`, which sets
+   `display`. */
 .dg-board-controls,
 .dg-board-refinements { display: contents; }
 .dg-toolbar > .dg-board-controls-toggle { display: none; }
 body.is-phone .dg-toolbar > .dg-board-controls-toggle { display: inline-flex; }
-body.is-phone .dg-board-controls:not(.is-open),
-body.is-phone .dg-board-refinements:not(.is-open) { display: none; }
+body.is-phone .dg-board-view:not(.is-controls-open) :is(
+  .dg-view-header > :not(.dg-header-actions),
+  .dg-header-actions > button:not(.dg-quick-capture),
+  .dg-view-picker > button,
+  .dg-board-controls,
+  .dg-board-refinements
+) { display: none; }
+body.is-phone .dg-board-view:not(.is-controls-open) .dg-header-actions { flex: 1 1 100%; }
+body.is-phone .dg-board-view:not(.is-controls-open) .dg-quick-capture { flex: 1 1 auto; }
+body.is-phone .dg-view-picker { flex: 1 1 auto; }
+body.is-phone .dg-view-picker select { flex: 1 1 auto; min-width: 0; }
