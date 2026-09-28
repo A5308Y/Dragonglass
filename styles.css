@@ -2588,6 +2588,12 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   white-space: nowrap;
 }
 .dg-attention-summary { margin-left: 10px; }
+/* The header's count is a button: pressed, the board shows only what needs attention. */
+.dg-view-header .dg-attention-summary.is-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+.dg-attention-summary.is-active .dg-attention-dot { background: var(--text-on-accent); }
 
 /* A dot on a ribbon icon whose view has something to do (see `src/domain/attention.ts`). */
 .dg-ribbon-attention { position: relative; }
@@ -2721,13 +2727,16 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-toolbar > .dg-board-controls-toggle { display: none; }
 body.is-phone .dg-toolbar > .dg-board-controls-toggle { display: inline-flex; }
 body.is-phone .dg-board-view:not(.is-controls-open) :is(
-  .dg-view-header > :not(.dg-header-actions),
+  .dg-view-header > :not(.dg-header-actions):not(:has(.dg-attention-summary)),
+  .dg-view-header > :not(.dg-header-actions) > :not(.dg-attention-summary),
   .dg-header-actions > button:not(.dg-quick-capture),
   .dg-view-picker > button,
   .dg-board-controls,
   .dg-board-refinements
 ) { display: none; }
-body.is-phone .dg-board-view:not(.is-controls-open) .dg-header-actions { flex: 1 1 100%; }
+body.is-phone .dg-board-view:not(.is-controls-open) .dg-header-actions { flex: 1 1 100%; order: -1; }
+/* What needs attention stays in reach on a phone, below Quick Capture. */
+body.is-phone .dg-board-view:not(.is-controls-open) .dg-attention-summary { margin-left: 0; }
 body.is-phone .dg-board-view:not(.is-controls-open) .dg-quick-capture { flex: 1 1 auto; }
 body.is-phone .dg-view-picker { flex: 1 1 auto; }
 body.is-phone .dg-view-picker select { flex: 1 1 auto; min-width: 0; }

@@ -127,7 +127,7 @@ A link to `obsidian://dragonglass?view=<name>` opens a Dragonglass view, from an
 
 ## Ribbon dots
 
-A ribbon icon carries a dot while its view has something to do: the Inbox while it holds Items, the Action Board for overdue Actions, Waiting Actions due for follow-up and Calendar Actions dated today or earlier, Projects while an active Project has an issue, the Project Review while this week's review is due and unfinished, and RSS Feeds while there are unread Items. The dots follow every change to the vault or the feeds and are rechecked hourly for a new day. On the Action Board the same dot marks where the ribbon dot points: each card that needs attention, a count in each column header, and a header summary such as "3 need attention · 1 not in this view" when filters or hidden columns leave some out.
+A ribbon icon carries a dot while its view has something to do: the Inbox while it holds Items, the Action Board for overdue Actions, Waiting Actions due for follow-up and Calendar Actions dated today or earlier, Projects while an active Project has an issue, the Project Review while this week's review is due and unfinished, and RSS Feeds while there are unread Items. The dots follow every change to the vault or the feeds and are rechecked hourly for a new day. On the Action Board the same dot marks where the ribbon dot points: each card that needs attention, a count in each column header, and a header summary such as "3 need attention · 1 not in this view" when filters or hidden columns leave some out. The summary is a button: pressed, the board shows only the Actions that need attention, whatever the view filters or hides, and pressed again (or choosing another saved view) returns to the view.
 
 ## Board behavior
 

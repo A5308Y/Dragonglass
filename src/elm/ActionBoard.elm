@@ -111,6 +111,9 @@ type alias Model =
     -- On a phone, whether everything beyond Quick Capture, the saved view and the
     -- Actions shows; elsewhere it always does.
     , controlsOpen : Bool
+
+    -- Shows only the Actions that need attention, whatever the view filters or hides.
+    , attentionOnly : Bool
     , draft : FilterDraft
     , dragged : Maybe ActionId
     , priorityDropTarget : Maybe ActionId
@@ -128,6 +131,7 @@ type Msg
     | ToggleAllProjects Bool
     | ToggleFilters
     | ToggleControls
+    | ToggleAttentionOnly
     | ToggleViewMenu
     | SelectSavedView String
     | SetGroupBy GroupBy
@@ -202,6 +206,7 @@ initialModel snapshot active configuration =
     , filterOpen = False
     , viewMenuOpen = False
     , controlsOpen = False
+    , attentionOnly = False
     , draft = initialDraft snapshot.today
     , dragged = Nothing
     , priorityDropTarget = Nothing
@@ -241,6 +246,9 @@ update msg model =
         ToggleControls ->
             ( { model | controlsOpen = not model.controlsOpen }, Cmd.none )
 
+        ToggleAttentionOnly ->
+            ( { model | attentionOnly = not model.attentionOnly }, Cmd.none )
+
         ToggleViewMenu ->
             ( { model | viewMenuOpen = not model.viewMenuOpen }, Cmd.none )
 
@@ -261,7 +269,7 @@ update msg model =
             in
             send IgnoreReply
                 (Command.SetActiveSavedView nextId)
-                { model | activeViewId = nextId, configuration = configuration }
+                { model | activeViewId = nextId, configuration = configuration, attentionOnly = False }
 
         SetGroupBy groupBy ->
             ( { model
@@ -803,6 +811,17 @@ rankLanded actionId rank snapshot =
         |> Maybe.withDefault True
 
 
+{-| "1 needs", "3 need".
+-}
+verbEnding : Int -> String
+verbEnding count =
+    if count == 1 then
+        "s"
+
+    else
+        ""
+
+
 {-| An Action that needs attention today: overdue, a Waiting Action due for
 follow-up, or a Calendar Action dated today or earlier. This is the rule behind the
 Action Board's ribbon dot (`actionNeedsAttention` in `src/domain/attention.ts`);
@@ -900,25 +919,36 @@ boardView model =
                             ++ Ui.plural shown "Action"
                         )
                     ]
-                , if needing > 0 then
-                    span [ class "dg-attention-summary" ]
+                , if needing > 0 || model.attentionOnly then
+                    -- The way to the cards the ribbon dot is about: pressed, the board shows only them.
+                    button
+                        [ classList [ ( "dg-attention-summary", True ), ( "is-active", model.attentionOnly ) ]
+                        , attribute "aria-pressed" (Ui.boolAttribute model.attentionOnly)
+                        , onClick ToggleAttentionOnly
+                        ]
                         [ span [ class "dg-attention-dot", attribute "aria-hidden" "true" ] []
                         , text
-                            (String.fromInt needing
-                                ++ " need"
-                                ++ (if needing == 1 then
-                                        "s"
+                            (if model.attentionOnly then
+                                (if needing == 0 then
+                                    "Nothing needs attention now"
 
-                                    else
-                                        ""
-                                   )
-                                ++ " attention"
-                                ++ (if needingShown < needing then
-                                        " · " ++ String.fromInt (needing - needingShown) ++ " not in this view"
+                                 else
+                                    "Only the " ++ String.fromInt needing ++ " that need" ++ verbEnding needing ++ " attention"
+                                )
+                                    ++ " · Show all"
 
-                                    else
-                                        ""
-                                   )
+                             else
+                                String.fromInt needing
+                                    ++ " need"
+                                    ++ verbEnding needing
+                                    ++ " attention"
+                                    ++ (if needingShown < needing then
+                                            " · " ++ String.fromInt (needing - needingShown) ++ " not in this view"
+
+                                        else
+                                            ""
+                                       )
+                                    ++ " · Show them"
                             )
                         ]
 
@@ -945,7 +975,16 @@ boardView model =
             [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · C Calendar · D Done · E or Enter edit" ] ]
         , div [ classList [ ( "dg-board", True ), ( "is-single-column", List.length groups == 1 ) ], attribute "role" "list" ]
             (if List.isEmpty groups then
-                [ div [ class "dg-empty" ] [ text "No Actions match this view." ] ]
+                [ div [ class "dg-empty" ]
+                    [ text
+                        (if model.attentionOnly then
+                            "Nothing needs attention."
+
+                         else
+                            "No Actions match this view."
+                        )
+                    ]
+                ]
 
              else
                 List.map (groupView model) groups
@@ -1517,7 +1556,13 @@ buildGroups model =
         actions =
             model.snapshot.actions
                 |> List.map (effectiveAction model)
-                |> List.filter (matchesAll model)
+                |> List.filter
+                    (if model.attentionOnly then
+                        needsAttention model.snapshot.today
+
+                     else
+                        matchesAll model
+                    )
                 |> sortActions model
 
         grouped =
@@ -1536,21 +1581,36 @@ buildGroups model =
                 Dict.empty
                 actions
 
+        present key =
+            Dict.member (groupKeyString key) grouped
+
+        -- Showing what needs attention, no column is hidden and none is empty.
+        visible =
+            if model.attentionOnly then
+                AllColumns
+
+            else
+                model.configuration.visibleColumns
+
         keys =
             case model.configuration.groupBy of
                 GroupByStatus ->
-                    statusColumnKeys model |> List.map StatusGroup
+                    if model.attentionOnly then
+                        ActionStatus.all |> List.map StatusGroup |> List.filter present
+
+                    else
+                        statusColumnKeys model |> List.map StatusGroup
 
                 GroupByEnergy ->
                     -- Low, normal (no level), high, rather than alphabetically.
                     [ EnergyGroup (Just Energy.Low), EnergyGroup Nothing, EnergyGroup (Just Energy.High) ]
-                        |> List.filter (\key -> Dict.member (groupKeyString key) grouped)
-                        |> applyVisible model.configuration.visibleColumns
+                        |> List.filter present
+                        |> applyVisible visible
 
                 _ ->
                     Dict.values grouped
                         |> List.map Tuple.first
-                        |> applyVisible model.configuration.visibleColumns
+                        |> applyVisible visible
     in
     List.map
         (\key ->
