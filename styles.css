@@ -2731,3 +2731,12 @@ body.is-phone .dg-board-view:not(.is-controls-open) .dg-header-actions { flex: 1
 body.is-phone .dg-board-view:not(.is-controls-open) .dg-quick-capture { flex: 1 1 auto; }
 body.is-phone .dg-view-picker { flex: 1 1 auto; }
 body.is-phone .dg-view-picker select { flex: 1 1 auto; min-width: 0; }
+
+/* Stacked Action columns (phones, narrow panes) scroll as one list. Capped to the
+   board's height, as on desktop, each column would scroll its own cards under its
+   heading inside the board's scroll: two scroll areas under one finger. */
+@media (max-width: 600px) {
+  .dg-board-view .dg-column { max-height: none; }
+  .dg-board-view .dg-column .dg-card-list { overflow-y: visible; }
+  .dg-board-view .dg-column-header { position: static; }
+}
