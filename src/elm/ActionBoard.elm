@@ -365,7 +365,7 @@ update msg model =
         AddFilter ->
             case draftFilter model of
                 Just filter ->
-                    ( { model | configuration = withConfiguration model (\config -> { config | filters = config.filters ++ [ filter ] }) }, Cmd.none )
+                    ( { model | configuration = withConfiguration model (\config -> { config | filters = addFilter filter config.filters }) }, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -1953,6 +1953,66 @@ draftFilter model =
             Just (ByArea draft.operator [ draft.value ])
 
 
+{-| Adds a filter to the board's. A value filter on a field that already has one with
+the same operator widens that one instead: an Action has one context, so "Context is
+@Home" and "Context is @Laptop" as two filters, which must all match, would show
+nothing, while one "Context is @Home or @Laptop" shows what either allows.
+-}
+addFilter : Filter -> List Filter -> List Filter
+addFilter added filters =
+    if List.any (\existing -> widen existing added /= Nothing) filters then
+        List.map (\existing -> Maybe.withDefault existing (widen existing added)) filters
+
+    else
+        filters ++ [ added ]
+
+
+widen : Filter -> Filter -> Maybe Filter
+widen existing added =
+    let
+        union current extra =
+            current ++ List.filter (\value -> not (List.member value current)) extra
+    in
+    case ( existing, added ) of
+        ( ByStatus operator current, ByStatus other extra ) ->
+            if operator == other then
+                Just (ByStatus operator (union current extra))
+
+            else
+                Nothing
+
+        ( ByProject operator current, ByProject other extra ) ->
+            if operator == other then
+                Just (ByProject operator (union current extra))
+
+            else
+                Nothing
+
+        ( ByContext operator current, ByContext other extra ) ->
+            if operator == other then
+                Just (ByContext operator (union current extra))
+
+            else
+                Nothing
+
+        ( ByEnergy operator current, ByEnergy other extra ) ->
+            if operator == other then
+                Just (ByEnergy operator (union current extra))
+
+            else
+                Nothing
+
+        ( ByArea operator current, ByArea other extra ) ->
+            if operator == other then
+                Just (ByArea operator (union current extra))
+
+            else
+                Nothing
+
+        _ ->
+            Nothing
+
+
 dueRange : FilterDraft -> DueRange
 dueRange draft =
     case draft.dueOperator of
@@ -2024,7 +2084,7 @@ described field operator names =
                 IsNot ->
                     " is not "
            )
-        ++ String.join ", " names
+        ++ String.join " or " names
 
 
 describeDue : DueRange -> String
