@@ -2709,3 +2709,14 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-checklist-removed-label { font-weight: var(--font-semibold); }
 .dg-checklist-removed ul { margin: 4px 0 0; padding-left: 20px; }
 .dg-checklist-removed li > * { display: inline; }
+
+/* On a phone the Action board opens on what can be done: only the saved view shows,
+   and search, filters and layout sit behind "Search & filter". Elsewhere the toggle
+   is hidden and the wrappers take no part in the layout. The toggle's selectors
+   outrank Obsidian's `button:not(.clickable-icon)`, which sets `display`. */
+.dg-board-controls,
+.dg-board-refinements { display: contents; }
+.dg-toolbar > .dg-board-controls-toggle { display: none; }
+body.is-phone .dg-toolbar > .dg-board-controls-toggle { display: inline-flex; }
+body.is-phone .dg-board-controls:not(.is-open),
+body.is-phone .dg-board-refinements:not(.is-open) { display: none; }

@@ -107,6 +107,9 @@ type alias Model =
     , allProjects : Bool
     , filterOpen : Bool
     , viewMenuOpen : Bool
+
+    -- On a phone, whether search, filters and layout show; elsewhere they always do.
+    , controlsOpen : Bool
     , draft : FilterDraft
     , dragged : Maybe ActionId
     , priorityDropTarget : Maybe ActionId
@@ -123,6 +126,7 @@ type Msg
     | SearchChanged String
     | ToggleAllProjects Bool
     | ToggleFilters
+    | ToggleControls
     | ToggleViewMenu
     | SelectSavedView String
     | SetGroupBy GroupBy
@@ -196,6 +200,7 @@ initialModel snapshot active configuration =
     , allProjects = False
     , filterOpen = False
     , viewMenuOpen = False
+    , controlsOpen = False
     , draft = initialDraft snapshot.today
     , dragged = Nothing
     , priorityDropTarget = Nothing
@@ -231,6 +236,9 @@ update msg model =
 
         ToggleFilters ->
             ( { model | filterOpen = not model.filterOpen }, Cmd.none )
+
+        ToggleControls ->
+            ( { model | controlsOpen = not model.controlsOpen }, Cmd.none )
 
         ToggleViewMenu ->
             ( { model | viewMenuOpen = not model.viewMenuOpen }, Cmd.none )
@@ -924,12 +932,14 @@ boardView model =
             ]
         , Ui.issuesView (\path -> Send IgnoreReply (Command.OpenFile path)) model.snapshot.issues
         , toolbar model
-        , if model.filterOpen then
-            filterPanel model
+        , div [ classList [ ( "dg-board-refinements", True ), ( "is-open", model.controlsOpen ) ] ]
+            [ if model.filterOpen then
+                filterPanel model
 
-          else
-            text ""
-        , filterChips model
+              else
+                text ""
+            , filterChips model
+            ]
         , div [ class "dg-shortcut-bar" ]
             [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · C Calendar · D Done · E or Enter edit" ] ]
         , div [ classList [ ( "dg-board", True ), ( "is-single-column", List.length groups == 1 ) ], attribute "role" "list" ]
@@ -942,8 +952,23 @@ boardView model =
         ]
 
 
+{-| The saved-view picker, then search, filters and layout. On a phone only the
+picker shows at first, so the Actions fill the screen; one toggle brings the rest
+(see `.dg-board-controls` in `styles.css`). Elsewhere the toggle is hidden and the
+wrapper takes no part in the layout.
+-}
 toolbar : Model -> Html Msg
 toolbar model =
+    let
+        refinements =
+            activeRefinements model
+                + (if String.isEmpty (String.trim model.search) then
+                    0
+
+                   else
+                    1
+                  )
+    in
     div [ class "dg-toolbar" ]
         [ div [ class "dg-view-picker" ]
             [ Ui.labelled "Saved view"
@@ -966,63 +991,84 @@ toolbar model =
               else
                 text ""
             ]
-        , input [ type_ "search", placeholder "Search Actions or Projects", value model.search, onInput SearchChanged ] []
         , button
-            [ classList [ ( "is-active", model.filterOpen ) ]
-            , attribute "aria-expanded" (Ui.boolAttribute model.filterOpen)
-            , onClick ToggleFilters
+            [ classList [ ( "dg-board-controls-toggle", True ), ( "is-active", model.controlsOpen ) ]
+            , attribute "aria-expanded" (Ui.boolAttribute model.controlsOpen)
+            , onClick ToggleControls
             ]
             [ text
-                (case activeRefinements model of
-                    0 ->
-                        "Filter"
+                ("Search & filter"
+                    ++ (if refinements > 0 then
+                            " (" ++ String.fromInt refinements ++ ")"
 
-                    count ->
-                        "Filter (" ++ String.fromInt count ++ ")"
-                )
-            ]
-        , Ui.labelled "Columns"
-            (choices []
-                groupByKey
-                SetGroupBy
-                model.configuration.groupBy
-                (List.map (\groupBy -> ( groupBy, "Columns: " ++ Settings.groupByLabel groupBy ))
-                    [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
-                )
-            )
-        , Ui.labelled "Sections"
-            (choices []
-                (Maybe.map groupByKey >> Maybe.withDefault "none")
-                SetSections
-                model.configuration.sections
-                (( Nothing, "Sections: None" )
-                    :: ([ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
-                            |> List.filter ((/=) model.configuration.groupBy)
-                            |> List.map (\field -> ( Just field, "Sections: " ++ Settings.groupByLabel field ))
+                        else
+                            ""
                        )
                 )
-            )
-        , Ui.labelled "Sort by"
-            (choices []
-                sortFieldKey
-                SetSortField
-                model.configuration.sort.field
-                (List.map (\field -> ( field, "Sort: " ++ Settings.sortFieldLabel field ))
-                    [ SortByManual, SortByCreated, SortByDue, SortByTitle, SortByProject ]
-                )
-            )
-        , button [ onClick ReverseSort ]
-            (Ui.iconLabel
-                (case model.configuration.sort.direction of
-                    Ascending ->
-                        "↑"
+            ]
+        , div [ classList [ ( "dg-board-controls", True ), ( "is-open", model.controlsOpen ) ] ] (boardControls model)
+        ]
 
-                    Descending ->
-                        "↓"
-                )
-                "Reverse sort"
+
+boardControls : Model -> List (Html Msg)
+boardControls model =
+    [ input [ type_ "search", placeholder "Search Actions or Projects", value model.search, onInput SearchChanged ] []
+    , button
+        [ classList [ ( "is-active", model.filterOpen ) ]
+        , attribute "aria-expanded" (Ui.boolAttribute model.filterOpen)
+        , onClick ToggleFilters
+        ]
+        [ text
+            (case activeRefinements model of
+                0 ->
+                    "Filter"
+
+                count ->
+                    "Filter (" ++ String.fromInt count ++ ")"
             )
         ]
+    , Ui.labelled "Columns"
+        (choices []
+            groupByKey
+            SetGroupBy
+            model.configuration.groupBy
+            (List.map (\groupBy -> ( groupBy, "Columns: " ++ Settings.groupByLabel groupBy ))
+                [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+            )
+        )
+    , Ui.labelled "Sections"
+        (choices []
+            (Maybe.map groupByKey >> Maybe.withDefault "none")
+            SetSections
+            model.configuration.sections
+            (( Nothing, "Sections: None" )
+                :: ([ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+                        |> List.filter ((/=) model.configuration.groupBy)
+                        |> List.map (\field -> ( Just field, "Sections: " ++ Settings.groupByLabel field ))
+                   )
+            )
+        )
+    , Ui.labelled "Sort by"
+        (choices []
+            sortFieldKey
+            SetSortField
+            model.configuration.sort.field
+            (List.map (\field -> ( field, "Sort: " ++ Settings.sortFieldLabel field ))
+                [ SortByManual, SortByCreated, SortByDue, SortByTitle, SortByProject ]
+            )
+        )
+    , button [ onClick ReverseSort ]
+        (Ui.iconLabel
+            (case model.configuration.sort.direction of
+                Ascending ->
+                    "↑"
+
+                Descending ->
+                    "↓"
+            )
+            "Reverse sort"
+        )
+    ]
 
 
 {-| Managing a saved view is occasional, so it sits behind the picker's menu.
