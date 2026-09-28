@@ -5,6 +5,11 @@ export function localDate(date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/** The local day and wall-clock time, e.g. `2026-09-14 08:30`. */
+export function localDateTime(date: Date): string {
+  return `${localDate(date)} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
 export function addLocalDays(value: string, amount: number): string {
   const parsed = parseDateOnly(value);
   if (!parsed) return value;

@@ -8,6 +8,7 @@
 import { addressLabel, parseAddress } from "./mime";
 import { htmlToMarkdown } from "./html-markdown";
 import { escapeVaultText } from "./text";
+import { localDateTime } from "../utils/date";
 
 export interface MailMessage {
   /** The `Message-ID`, or `""` when the sender omitted one. */
@@ -54,7 +55,8 @@ export function mailItemTitle(message: Pick<MailMessage, "subject">): string {
  * The note body an imported message becomes.
  *
  * The sender comes first, because who it is from decides what to do with it more
- * often than what it says does. The `Message-ID` stays in frontmatter so the
+ * often than what it says does. The date is when it was sent, in local time on the
+ * device that imported it: the time matters for a message to answer the same day. The `Message-ID` stays in frontmatter so the
  * processor can open the original message without displaying its raw identifier.
  *
  * Everything a sender wrote is escaped. Mail is an adversarial channel: left alone,
@@ -64,7 +66,7 @@ export function mailItemNote(message: MailMessage, accountLabel: string, mailLin
   const lines: string[] = [];
   const sender = formatSender(message.from);
   if (sender) lines.push(`From: ${escapeVaultText(sender)}`);
-  if (message.date) lines.push(`Date: ${message.date.slice(0, 10)}`);
+  if (message.date) lines.push(`Date: ${localDateTime(new Date(message.date))}`);
 
   const location = [accountLabel.trim(), message.mailbox.trim()].filter(Boolean).join(" · ");
   if (location) lines.push(`Mailbox: ${escapeVaultText(location)}`);

@@ -270,7 +270,8 @@ describe("What an imported message becomes", () => {
     uid: 42,
     subject: "Heat pump quote",
     from: "Ada Lovelace <ada@example.com>",
-    date: "2026-09-14T08:30:00.000Z",
+    // Local time, so the expected text holds in any time zone.
+    date: new Date(2026, 8, 14, 8, 30).toISOString(),
     body: "Attached is the quote you asked for.",
     hasAttachment: true,
     ...changes,
@@ -279,12 +280,17 @@ describe("What an imported message becomes", () => {
   it("leads with the sender and records the way back to the original", () => {
     expect(mailItemNote(message(), "Work")).toBe(
       "From: Ada Lovelace <ada@example.com>\n"
-      + "Date: 2026-09-14\n"
+      + "Date: 2026-09-14 08:30\n"
       + "Mailbox: Work · INBOX\n"
       + "Attachments: yes\n"
       + "\n"
       + "> Attached is the quote you asked for.",
     );
+  });
+
+  it("dates a message by the local day it was sent, not the UTC one", () => {
+    expect(mailItemNote(message({ date: new Date(2026, 8, 14, 0, 30).toISOString() }), "Work")).toContain("Date: 2026-09-14 00:30\n");
+    expect(mailItemNote(message({ date: "" }), "Work")).not.toContain("Date:");
   });
 
   it("links to the message in Apple Mail when asked, encoding what the sender wrote", () => {
