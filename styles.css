@@ -2740,3 +2740,10 @@ body.is-phone .dg-view-picker select { flex: 1 1 auto; min-width: 0; }
   .dg-board-view .dg-column .dg-card-list { overflow-y: visible; }
   .dg-board-view .dg-column-header { position: static; }
 }
+
+/* On a phone Obsidian's navigation bar floats over the bottom of the view, and the
+   offset it publishes (see the top of this file) doesn't always clear it. The board's
+   list ends with room to spare, so its last card can be scrolled above the bar. */
+body.is-phone .dg-board-view .dg-board {
+  padding-bottom: calc(var(--safe-area-inset-bottom, 0px) + 80px);
+}
