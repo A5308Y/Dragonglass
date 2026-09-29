@@ -223,6 +223,8 @@ Two checkboxes shape the disposition, and a single primary button follows them, 
 
 **Brainstorm** chooses among open Actions whose title contains `brainstorm`, provides a five-minute timer and an offline random-word prompt bank, and edits the related Project's Desired outcome. Saving completes the source Action and writes a normal Markdown note into the Project's support folder. If the Action has no Project, the result becomes a new Inbox Item. When no matching Action exists, a standalone session can be started from a typed topic and its result is captured to the Inbox. The workflow deliberately makes no network requests for inspiration images.
 
+On the desktop, **Start local partner** brings in the local model from the agent settings (Agent delegation → Local model) as a brainstorming partner. While the five minutes run it is asked whenever you pause after writing something new, and at least every 45 seconds; **More** asks at once and **Stop** ends it. Its new ideas and its things to consider (other perspectives, questions, assumptions, risks) wait below your ideas, newest first; **+ Add** puts one into your ideas and × dismisses it. Only what you add is saved. It is not an agent run: the plugin asks the model server directly and sends it only the topic, the desired outcome and your ideas, and only to a server on this Mac. A server address in the settings that points anywhere else is refused.
+
 Actions captured during Project Review pass through the same Inbox Item-to-Action transformation as normal processing and retain a `captured` date; the plugin has no separate “floating actions” store.
 
 ## Bases

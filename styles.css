@@ -2932,3 +2932,40 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
   font-weight: var(--font-bold);
 }
 .dg-inbox-zero p { margin: 6px 0 0; color: var(--text-muted); }
+
+/* The brainstorm's local partner, below the ideas: what it offers waits here, newest
+   first, until it is added to the ideas or dismissed. */
+.dg-brainstorm-partner {
+  padding: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.dg-brainstorm-partner h3 { margin: 0; font-size: var(--font-ui-medium); }
+.dg-brainstorm-partner > p { margin: 8px 0 0; font-size: var(--font-ui-small); }
+.dg-partner-controls { display: flex; gap: 6px; }
+.dg-partner-status { color: var(--text-muted); }
+.dg-partner-problem { color: var(--text-error); }
+.dg-partner-list { margin-top: 12px; }
+.dg-partner-list h4 {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.dg-partner-list ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.dg-partner-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+}
+.dg-partner-item > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.dg-partner-add { flex: 0 0 auto; min-height: 26px; font-size: var(--font-ui-smaller); }
+.dg-partner-dismiss { flex: 0 0 auto; height: auto; padding: 0 6px; color: var(--text-faint); }
+.dg-partner-dismiss:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }

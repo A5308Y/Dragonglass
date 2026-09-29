@@ -163,6 +163,11 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - Deleting a run removes its folder (after asking; it has no trash) but appends it to
   `deleted-runs.jsonl` in the runs folder, so its cost still counts and its Waiting
   Action stays out of later runs' material.
+- The Brainstorm view's local partner is not a run: `src/brainstorm/local-partner.ts` asks
+  the local model server directly (rules in `src/domain/brainstorm-partner.ts`), with only
+  the session's topic, desired outcome and ideas, and only a server on this Mac
+  (`localChatEndpoint` refuses other hosts). Give it more to read, or a remote server, and
+  it needs the sandbox like the runs do.
 - Local runs have three harnesses behind the same contract: our loop (`agent/runner-local`),
   smolagents' CodeAgent (`agent/runner-smol`) and Qwen-Agent (`agent/runner-qwen`), both
   pinned. `run.json` records `harness`; `localHarnessService` picks the compose service.

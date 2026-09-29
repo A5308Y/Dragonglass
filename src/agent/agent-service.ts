@@ -960,6 +960,16 @@ export class AgentService {
     throw new Error(configured ? `Docker was not found at ${configured}.` : "Docker was not found. Install Docker Desktop, or set its path in the settings.");
   }
 
+  /**
+   * The local model server's API key, when the settings name a Keychain item for one,
+   * for the brainstorm partner, which asks the server directly. Read on each use and
+   * never stored, like the keys runs get.
+   */
+  async localModelKey(): Promise<string> {
+    const service = this.getSettings().localKeychainService;
+    return service ? this.keychainSecret(service) : "";
+  }
+
   /** An API key from the macOS Keychain, read only when a run starts and never stored. */
   private async keychainSecret(service: string): Promise<string> {
     try {

@@ -126,6 +126,7 @@ type Command
     | SaveStandaloneBrainstorm String String
     | ShuffleBrainstormWords
     | FocusBrainstormIdeas Int Int
+    | SuggestBrainstormIdeas { topic : String, desiredOutcome : String, ideas : String, offered : List String }
       -- Feeds
     | RefreshFeeds
     | AddFeed
@@ -629,6 +630,14 @@ encode command =
 
         FocusBrainstormIdeas start end ->
             object "focus-brainstorm-ideas" [ ( "start", Encode.int start ), ( "end", Encode.int end ) ]
+
+        SuggestBrainstormIdeas fields ->
+            object "suggest-brainstorm-ideas"
+                [ ( "topic", Encode.string fields.topic )
+                , ( "desiredOutcome", Encode.string fields.desiredOutcome )
+                , ( "ideas", Encode.string fields.ideas )
+                , ( "offered", Encode.list Encode.string fields.offered )
+                ]
 
         RefreshFeeds ->
             object "refresh-feeds" []

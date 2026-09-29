@@ -7,7 +7,7 @@ import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Host as Host exposing (RequestId, Requests)
 import Gtd.Id exposing (ActionId)
 import Gtd.Ui as Ui
-import Html exposing (Html, button, div, h2, h3, header, input, label, p, section, small, span, text, textarea)
+import Html exposing (Html, button, div, h2, h3, h4, header, input, label, li, p, section, small, span, text, textarea, ul)
 import Html.Attributes exposing (attribute, autofocus, class, classList, disabled, for, id, placeholder, title, value)
 import Html.Events exposing (on, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
@@ -43,6 +43,67 @@ type Pending
     = IgnoreReply
     | ApplyWords
     | FinishSave
+      -- The partner's answer, for the partner generation that asked.
+    | PartnerReply Int
+
+
+{-| The local model as a brainstorming partner (see `src/domain/brainstorm-partner.ts`).
+It is asked when the person pauses after writing something new, and at least every
+`partnerEvery` seconds, while the five minutes run. What it offers waits beside the
+ideas until it is added or dismissed; only what is added is saved.
+-}
+type alias Partner =
+    { on : Bool
+    , asking : Bool
+
+    -- Bumped when the session changes or the partner stops, so a late answer is dropped.
+    , generation : Int
+    , ideas : List String
+    , considerations : List String
+
+    -- Everything offered this session, so it isn't offered again.
+    , offered : List String
+
+    -- The ideas as they were when last asked.
+    , askedWith : String
+    , sinceReply : Int
+    , quietFor : Int
+    , problem : Maybe String
+    }
+
+
+idlePartner : Int -> Partner
+idlePartner generation =
+    { on = False
+    , asking = False
+    , generation = generation
+    , ideas = []
+    , considerations = []
+    , offered = []
+    , askedWith = ""
+    , sinceReply = 0
+    , quietFor = 0
+    , problem = Nothing
+    }
+
+
+{-| Seconds of calm after writing before the partner is asked again.
+-}
+partnerPause : Int
+partnerPause =
+    4
+
+
+{-| The fewest seconds between answers, and the most while nothing new is written.
+-}
+partnerSoonest : Int
+partnerSoonest =
+    15
+
+
+partnerEvery : Int
+partnerEvery =
+    45
 
 
 {-| What Shuffle or Change topic set aside, so one slip does not cost a session.
@@ -70,6 +131,8 @@ type alias Model =
     , requests : Requests Pending
     , saving : Bool
     , error : Maybe String
+    , partnerAvailable : Bool
+    , partner : Partner
     }
 
 
@@ -88,6 +151,11 @@ type Msg
     | IdeasSelected Int Int
     | InsertWord String
     | Save
+    | StartPartner
+    | StopPartner
+    | AskPartner
+    | AddSuggestion String
+    | DismissSuggestion String
     | Send Pending Command
     | NoOp
 
@@ -103,7 +171,7 @@ main =
 
 
 type alias Flags =
-    { snapshot : Snapshot, words : List String, randomIndex : Int }
+    { snapshot : Snapshot, words : List String, randomIndex : Int, partner : Bool }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -122,7 +190,7 @@ init flags =
                         itemAt (modBy (List.length available) decoded.randomIndex) available
                             |> Maybe.map (.id >> TaskSession)
             in
-            loadOutcome (emptyModel decoded.snapshot decoded.words session)
+            loadOutcome (emptyModel decoded.snapshot decoded.words session |> (\model -> { model | partnerAvailable = decoded.partner }))
 
         Err error ->
             ( { blankModel | error = Just (Decode.errorToString error) }, Cmd.none )
@@ -143,6 +211,8 @@ emptyModel snapshot words session =
     , requests = Host.noRequests
     , saving = False
     , error = Nothing
+    , partnerAvailable = False
+    , partner = idlePartner 0
     }
 
 
@@ -162,7 +232,7 @@ update msg model =
                 ( model, Cmd.none )
 
             else
-                ( { model | seconds = max 0 (model.seconds - 1) }, Cmd.none )
+                partnerTick { model | seconds = max 0 (model.seconds - 1) }
 
         TopicChanged topic ->
             ( { model | topicDraft = topic }, Cmd.none )
@@ -197,6 +267,7 @@ update msg model =
             in
             ( { model
                 | session = Maybe.map TaskSession resumed
+                , partner = idlePartner (model.partner.generation + 1)
                 , setAside = setAside model
                 , topicDraft = ""
                 , ideas = ""
@@ -250,7 +321,18 @@ update msg model =
             ( { model | desiredOutcome = outcome }, Cmd.none )
 
         IdeasChanged ideas ->
-            ( { model | ideas = ideas, selectionStart = String.length ideas, selectionEnd = String.length ideas }, Cmd.none )
+            let
+                partner =
+                    model.partner
+            in
+            ( { model
+                | ideas = ideas
+                , selectionStart = String.length ideas
+                , selectionEnd = String.length ideas
+                , partner = { partner | quietFor = 0 }
+              }
+            , Cmd.none
+            )
 
         IdeasSelected start end ->
             ( { model | selectionStart = start, selectionEnd = end }, Cmd.none )
@@ -260,6 +342,51 @@ update msg model =
 
         Save ->
             save model
+
+        StartPartner ->
+            let
+                partner =
+                    model.partner
+            in
+            askPartner { model | partner = { partner | on = True, problem = Nothing } }
+
+        StopPartner ->
+            let
+                partner =
+                    model.partner
+            in
+            -- What it offered stays to be added; a question still out is dropped.
+            ( { model | partner = { partner | on = False, asking = False, generation = partner.generation + 1 } }, Cmd.none )
+
+        AskPartner ->
+            askPartner model
+
+        AddSuggestion suggestion ->
+            let
+                partner =
+                    model.partner
+
+                separator =
+                    if String.isEmpty model.ideas || String.endsWith "\n" model.ideas then
+                        ""
+
+                    else
+                        "\n"
+
+                ideas =
+                    model.ideas ++ separator ++ suggestion
+            in
+            ( { model
+                | ideas = ideas
+                , selectionStart = String.length ideas
+                , selectionEnd = String.length ideas
+                , partner = withoutSuggestion suggestion partner
+              }
+            , Cmd.none
+            )
+
+        DismissSuggestion suggestion ->
+            ( { model | partner = withoutSuggestion suggestion model.partner }, Cmd.none )
 
         Send pending command ->
             send pending command model
@@ -306,6 +433,76 @@ insertWord word model =
     send IgnoreReply
         (Command.FocusBrainstormIdeas cursor cursor)
         { model | ideas = before ++ insertion ++ after, selectionStart = cursor, selectionEnd = cursor }
+
+
+partnerTick : Model -> ( Model, Cmd Msg )
+partnerTick model =
+    let
+        partner =
+            model.partner
+
+        counted =
+            { partner | sinceReply = partner.sinceReply + 1, quietFor = partner.quietFor + 1 }
+
+        wroteSince =
+            model.ideas /= partner.askedWith
+
+        due =
+            (wroteSince && counted.sinceReply >= partnerSoonest && counted.quietFor >= partnerPause)
+                || counted.sinceReply >= partnerEvery
+    in
+    if not partner.on || partner.asking then
+        ( model, Cmd.none )
+
+    else if due && model.seconds > 0 then
+        askPartner { model | partner = counted }
+
+    else
+        ( { model | partner = counted }, Cmd.none )
+
+
+askPartner : Model -> ( Model, Cmd Msg )
+askPartner model =
+    let
+        partner =
+            model.partner
+    in
+    if partner.asking || model.session == Nothing then
+        ( model, Cmd.none )
+
+    else
+        send (PartnerReply partner.generation)
+            (Command.SuggestIdeas
+                { topic = sessionTopic model
+                , desiredOutcome = model.desiredOutcome
+                , ideas = model.ideas
+                , offered = partner.offered
+                }
+            )
+            { model | partner = { partner | asking = True, askedWith = model.ideas } }
+
+
+withoutSuggestion : String -> Partner -> Partner
+withoutSuggestion suggestion partner =
+    { partner
+        | ideas = List.filter ((/=) suggestion) partner.ideas
+        , considerations = List.filter ((/=) suggestion) partner.considerations
+    }
+
+
+{-| What the session is about, as the partner is told.
+-}
+sessionTopic : Model -> String
+sessionTopic model =
+    case model.session of
+        Just (TopicSession fields) ->
+            fields.topic
+
+        Just (TaskSession _) ->
+            currentAction model |> Maybe.map .title |> Maybe.withDefault ""
+
+        Nothing ->
+            ""
 
 
 save : Model -> ( Model, Cmd Msg )
@@ -356,7 +553,15 @@ newSession : Model -> ( Model, Cmd Msg )
 newSession model =
     let
         reset =
-            { model | desiredOutcome = "", ideas = "", seconds = sessionSeconds, selectionStart = 0, selectionEnd = 0, error = Nothing }
+            { model
+                | desiredOutcome = ""
+                , ideas = ""
+                , seconds = sessionSeconds
+                , selectionStart = 0
+                , selectionEnd = 0
+                , error = Nothing
+                , partner = idlePartner (model.partner.generation + 1)
+            }
 
         ( shuffled, shuffleCmd ) =
             send ApplyWords Command.ShuffleBrainstormWords reset
@@ -402,6 +607,9 @@ hasSavingRequest requests =
 
                     IgnoreReply ->
                         False
+
+                    PartnerReply _ ->
+                        False
             )
 
 
@@ -445,11 +653,23 @@ receiveHost value model =
                 next =
                     { model | requests = requests, saving = hasSavingRequest requests }
             in
-            case outcome.result of
-                Err message ->
+            case ( outcome.result, pending ) of
+                ( Err message, Just (PartnerReply generation) ) ->
+                    if generation == next.partner.generation then
+                        let
+                            partner =
+                                next.partner
+                        in
+                        -- Waits a while before trying again, and says why in its own panel.
+                        ( { next | partner = { partner | asking = False, sinceReply = -60, problem = Just message } }, Cmd.none )
+
+                    else
+                        ( next, Cmd.none )
+
+                ( Err message, _ ) ->
                     ( { next | error = Just message }, Cmd.none )
 
-                Ok resultValue ->
+                ( Ok resultValue, _ ) ->
                     finish (Maybe.withDefault IgnoreReply pending)
                         resultValue
                         { next | error = Nothing }
@@ -496,12 +716,51 @@ finish pending resultValue model =
                     ( model, Cmd.none )
 
         FinishSave ->
+            let
+                closed =
+                    { model | partner = idlePartner (model.partner.generation + 1) }
+            in
             case model.session of
                 Just (TopicSession _) ->
-                    ( { model | session = Nothing, topicDraft = "", ideas = "", desiredOutcome = "", seconds = sessionSeconds }, Cmd.none )
+                    ( { closed | session = Nothing, topicDraft = "", ideas = "", desiredOutcome = "", seconds = sessionSeconds }, Cmd.none )
 
                 _ ->
-                    ( { model | ideas = "" }, Cmd.none )
+                    ( { closed | ideas = "" }, Cmd.none )
+
+        PartnerReply generation ->
+            if generation /= model.partner.generation then
+                ( model, Cmd.none )
+
+            else
+                let
+                    partner =
+                        model.partner
+
+                    decoded =
+                        Decode.decodeValue
+                            (Decode.map2 Tuple.pair
+                                (Decode.field "ideas" (Decode.list Decode.string))
+                                (Decode.field "considerations" (Decode.list Decode.string))
+                            )
+                            resultValue
+                            |> Result.withDefault ( [], [] )
+
+                    ( ideas, considerations ) =
+                        decoded
+                in
+                ( { model
+                    | partner =
+                        { partner
+                            | asking = False
+                            , sinceReply = 0
+                            , problem = Nothing
+                            , ideas = ideas ++ partner.ideas
+                            , considerations = considerations ++ partner.considerations
+                            , offered = partner.offered ++ ideas ++ considerations
+                        }
+                  }
+                , Cmd.none
+                )
 
         IgnoreReply ->
             ( model, Cmd.none )
@@ -673,6 +932,11 @@ viewSession model session =
                 ]
                 []
             ]
+        , if model.partnerAvailable then
+            partnerView model
+
+          else
+            text ""
         , div [ class "dg-workflow-footer" ]
             [ span []
                 [ text
@@ -697,6 +961,65 @@ viewSession model session =
                     )
                 ]
             ]
+        ]
+
+
+{-| The partner's panel: how to start it, what it is doing, and what it offers.
+-}
+partnerView : Model -> Html Msg
+partnerView model =
+    let
+        partner =
+            model.partner
+
+        status =
+            if partner.asking then
+                "Thinking…"
+
+            else if not partner.on then
+                "Stopped."
+
+            else if model.seconds == 0 then
+                "The five minutes are up; More asks again."
+
+            else
+                "Listening: it adds more when you pause."
+
+        suggestion item =
+            li [ class "dg-partner-item" ]
+                [ span [] [ text item ]
+                , button [ class "dg-partner-add", onClick (AddSuggestion item) ] [ text "+ Add" ]
+                , button [ class "dg-flat-button dg-partner-dismiss", onClick (DismissSuggestion item) ] (Ui.iconLabel "×" ("Dismiss " ++ item))
+                ]
+
+        list heading items =
+            if List.isEmpty items then
+                text ""
+
+            else
+                div [ class "dg-partner-list" ] [ h4 [] [ text heading ], ul [] (List.map suggestion items) ]
+    in
+    section [ class "dg-brainstorm-partner" ]
+        [ div [ class "dg-section-heading" ]
+            [ h3 [] [ text "Local partner" ]
+            , if partner.on || partner.asking then
+                div [ class "dg-partner-controls" ]
+                    [ button [ disabled partner.asking, onClick AskPartner ] [ text "More" ]
+                    , button [ onClick StopPartner ] [ text "Stop" ]
+                    ]
+
+              else
+                button [ class "mod-cta", onClick StartPartner ] [ text "Start local partner" ]
+            ]
+        , if partner.on || partner.asking || not (List.isEmpty partner.offered) then
+            p [ class "dg-partner-status", attribute "aria-live" "polite" ] [ text status ]
+
+          else
+            p [ class "dg-muted" ]
+                [ text "The local model from the agent settings adds ideas and things to consider while you write: when you pause, and at least every 45 seconds. It sees only this brainstorm, and nothing leaves this Mac." ]
+        , Ui.maybeView partner.problem (\problem -> p [ class "dg-partner-problem" ] [ text ("⚠ " ++ problem) ])
+        , list "Ideas" partner.ideas
+        , list "To consider" partner.considerations
         ]
 
 
@@ -767,10 +1090,11 @@ indexOf actionId actions =
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map3 Flags
+    Decode.map4 Flags
         (Decode.field "snapshot" Data.snapshotDecoder)
         (Decode.field "words" (Decode.list Decode.string))
         (Decode.field "randomIndex" Decode.int)
+        (Decode.oneOf [ Decode.field "partner" Decode.bool, Decode.succeed False ])
 
 
 hostEventDecoder : Decoder HostEvent

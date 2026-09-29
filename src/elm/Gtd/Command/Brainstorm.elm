@@ -15,6 +15,8 @@ type Command
     | ShuffleBrainstormWords
     | FocusBrainstormIdeas Int Int
     | ShowProject ProjectId
+      -- Asks the local model for more ideas and things to consider.
+    | SuggestIdeas { topic : String, desiredOutcome : String, ideas : String, offered : List String }
 
 
 encode : Command -> Encode.Value
@@ -38,4 +40,7 @@ encode command =
 
             ShowProject projectId ->
                 Base.ShowProject projectId
+
+            SuggestIdeas fields ->
+                Base.SuggestBrainstormIdeas fields
         )

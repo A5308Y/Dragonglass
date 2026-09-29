@@ -645,6 +645,7 @@ type ElmNonMenuCommand =
   | { type: "save-standalone-brainstorm"; topic: string; ideas: string }
   | { type: "shuffle-brainstorm-words" }
   | { type: "focus-brainstorm-ideas"; start: number; end: number }
+  | { type: "suggest-brainstorm-ideas"; topic: string; desiredOutcome: string; ideas: string; offered: string[] }
   | { type: "open-file"; path: string }
   | { type: "read-inbox-body"; itemId: string }
   | { type: "trash-inbox-item"; itemId: string }
@@ -734,7 +735,7 @@ export const SURFACE_COMMANDS = {
   ],
   brainstorm: [
     "load-brainstorm-outcome", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
-    "focus-brainstorm-ideas", "show-project",
+    "focus-brainstorm-ideas", "show-project", "suggest-brainstorm-ideas",
   ],
   somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project"],
   pomodoro: [
@@ -1006,6 +1007,11 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.topic === "string" && typeof value.ideas === "string";
     case "shuffle-brainstorm-words":
       return true;
+    case "suggest-brainstorm-ideas":
+      return typeof value.topic === "string"
+        && typeof value.desiredOutcome === "string"
+        && typeof value.ideas === "string"
+        && isStringArray(value.offered);
     case "focus-brainstorm-ideas":
       return Number.isInteger(value.start)
         && Number.isInteger(value.end)
