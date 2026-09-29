@@ -2763,22 +2763,21 @@ body.is-phone .dg-board-view .dg-board {
   padding-bottom: calc(var(--safe-area-inset-bottom, 0px) + 80px);
 }
 
-/* Today's Calendar Actions, above the columns whatever the view filters: one line
-   each, across the board, on a lightly shaded strip. What starts within the hour or
-   is on now says so in words and gets a calm accent, never a warning colour; what
-   is over is quieter. */
+/* Today's Calendar Actions, above the columns whatever the view filters: the label,
+   then one line each across the board, lined up with the columns' left edge, on a
+   lightly shaded strip. What starts within the hour or is on now says so in words
+   and gets a calm accent, never a warning colour; what is over is quieter. */
 .dg-today {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   padding: 8px var(--dg-bar-inset, 12px);
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-secondary);
 }
 .dg-today-label {
   flex: 0 0 auto;
-  padding-top: 7px;
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
   font-weight: var(--font-semibold);
@@ -2816,8 +2815,11 @@ body.is-phone .dg-board-view .dg-board {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* Obsidian centres a button's content with flexbox, so `text-align` alone leaves the
+   title in the middle of the line; it takes only its own width instead. */
 .dg-today-title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  justify-content: flex-start;
   min-width: 0;
   height: auto;
   padding: 0;
@@ -2831,6 +2833,7 @@ body.is-phone .dg-board-view .dg-board {
 .dg-today-title:hover { text-decoration: underline; }
 .dg-today-project {
   flex: 0 1 auto;
+  min-width: 0;
   max-width: 40%;
   overflow: hidden;
   color: var(--text-faint);
@@ -2850,11 +2853,9 @@ body.is-phone .dg-board-view .dg-board {
   font-weight: var(--font-semibold);
 }
 .dg-today-item.is-earlier .dg-today-title { color: var(--text-muted); font-weight: normal; }
-/* Narrow: the label goes above the list, and the Project to a line of its own. */
+/* Narrow: the Project goes to a line of its own. */
 @media (max-width: 600px) {
-  .dg-today { flex-direction: column; gap: 4px; padding-block: 6px; }
-  .dg-today-label { padding-top: 0; }
-  .dg-today-list { width: 100%; }
+  .dg-today { padding-block: 6px; }
   .dg-today-item { flex-wrap: wrap; }
   .dg-today-time { min-width: 0; }
   .dg-today-project { flex-basis: 100%; max-width: none; }
