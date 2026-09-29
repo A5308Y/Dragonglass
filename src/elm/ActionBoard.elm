@@ -994,9 +994,9 @@ boardView model =
                 text ""
             , filterChips model
             ]
+        , todayView model today
         , div [ class "dg-shortcut-bar" ]
             [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · C Calendar · D Done · E or Enter edit" ] ]
-        , todayView model today
         , div [ classList [ ( "dg-board", True ), ( "is-single-column", List.length groups == 1 ) ], attribute "role" "list" ]
             (if List.isEmpty groups then
                 [ div [ class "dg-empty" ]
