@@ -251,6 +251,7 @@ export interface GtdSettings {
   mail: MailSettings;
   pomodoro: PomodoroSettings;
   checklists: ChecklistSettings;
+  brainstorm: BrainstormSettings;
   agent: AgentSettings;
   /** The weekday the Weekly Review falls due, as `Date.getDay()` counts: 0 is Sunday. */
   weeklyReviewDay: number;
@@ -310,6 +311,11 @@ export interface PomodoroSettings {
   logToDiary: boolean;
   /** Sending finished sessions to mite as time entries. */
   mite: MiteSettings;
+}
+
+export interface BrainstormSettings {
+  /** The vault folder whose images the Brainstorm view shows, one at a time, as inspiration. */
+  imagesDirectory: string;
 }
 
 /** Checklist notes and their runs; see `src/domain/checklist.ts`. */

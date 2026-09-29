@@ -7,8 +7,8 @@ import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Host as Host exposing (RequestId, Requests)
 import Gtd.Id exposing (ActionId)
 import Gtd.Ui as Ui
-import Html exposing (Html, button, div, h2, h3, h4, header, input, label, li, p, section, small, span, text, textarea, ul)
-import Html.Attributes exposing (attribute, autofocus, class, classList, disabled, for, id, placeholder, title, value)
+import Html exposing (Html, button, div, h2, h3, h4, header, img, input, label, li, p, section, small, span, text, textarea, ul)
+import Html.Attributes exposing (alt, attribute, autofocus, class, classList, disabled, for, id, placeholder, src, title, value)
 import Html.Events exposing (on, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -133,6 +133,11 @@ type alias Model =
     , error : Maybe String
     , partnerAvailable : Bool
     , partner : Partner
+
+    -- Images from the inspiration folder, one shown at a time and cycled every three minutes.
+    , inspirations : List String
+    , inspiration : Int
+    , inspirationShown : Int
     }
 
 
@@ -156,6 +161,7 @@ type Msg
     | AskPartner
     | AddSuggestion String
     | DismissSuggestion String
+    | NextInspiration
     | Send Pending Command
     | NoOp
 
@@ -171,7 +177,7 @@ main =
 
 
 type alias Flags =
-    { snapshot : Snapshot, words : List String, randomIndex : Int, partner : Bool }
+    { snapshot : Snapshot, words : List String, randomIndex : Int, partner : Bool, inspirations : List String }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -190,7 +196,18 @@ init flags =
                         itemAt (modBy (List.length available) decoded.randomIndex) available
                             |> Maybe.map (.id >> TaskSession)
             in
-            loadOutcome (emptyModel decoded.snapshot decoded.words session |> (\model -> { model | partnerAvailable = decoded.partner }))
+            loadOutcome
+                (emptyModel decoded.snapshot decoded.words session
+                    |> (\model ->
+                            { model
+                                | partnerAvailable = decoded.partner
+                                , inspirations = decoded.inspirations
+
+                                -- A different image to start with each time the view opens.
+                                , inspiration = modBy (max 1 (List.length decoded.inspirations)) decoded.randomIndex
+                            }
+                       )
+                )
 
         Err error ->
             ( { blankModel | error = Just (Decode.errorToString error) }, Cmd.none )
@@ -213,6 +230,9 @@ emptyModel snapshot words session =
     , error = Nothing
     , partnerAvailable = False
     , partner = idlePartner 0
+    , inspirations = []
+    , inspiration = 0
+    , inspirationShown = 0
     }
 
 
@@ -232,7 +252,7 @@ update msg model =
                 ( model, Cmd.none )
 
             else
-                partnerTick { model | seconds = max 0 (model.seconds - 1) }
+                partnerTick (inspirationTick { model | seconds = max 0 (model.seconds - 1) })
 
         TopicChanged topic ->
             ( { model | topicDraft = topic }, Cmd.none )
@@ -388,6 +408,9 @@ update msg model =
         DismissSuggestion suggestion ->
             ( { model | partner = withoutSuggestion suggestion model.partner }, Cmd.none )
 
+        NextInspiration ->
+            ( { model | inspiration = model.inspiration + 1, inspirationShown = 0 }, Cmd.none )
+
         Send pending command ->
             send pending command model
 
@@ -433,6 +456,25 @@ insertWord word model =
     send IgnoreReply
         (Command.FocusBrainstormIdeas cursor cursor)
         { model | ideas = before ++ insertion ++ after, selectionStart = cursor, selectionEnd = cursor }
+
+
+inspirationTick : Model -> Model
+inspirationTick model =
+    if model.inspirationShown + 1 >= inspirationSeconds then
+        { model | inspiration = model.inspiration + 1, inspirationShown = 0 }
+
+    else
+        { model | inspirationShown = model.inspirationShown + 1 }
+
+
+currentInspiration : Model -> Maybe String
+currentInspiration model =
+    case model.inspirations of
+        [] ->
+            Nothing
+
+        images ->
+            itemAt (modBy (List.length images) model.inspiration) images
 
 
 partnerTick : Model -> ( Model, Cmd Msg )
@@ -488,6 +530,13 @@ withoutSuggestion suggestion partner =
         | ideas = List.filter ((/=) suggestion) partner.ideas
         , considerations = List.filter ((/=) suggestion) partner.considerations
     }
+
+
+{-| How long one inspiration image stays before the next.
+-}
+inspirationSeconds : Int
+inspirationSeconds =
+    180
 
 
 {-| What the session is about, as the partner is told.
@@ -620,6 +669,7 @@ hasSavingRequest requests =
 type HostEvent
     = SnapshotEvent Snapshot
     | OutcomeEvent String String
+    | InspirationsEvent (List String)
     | Replied Host.Outcome
 
 
@@ -631,6 +681,14 @@ receiveHost value model =
 
         Ok (SnapshotEvent snapshot) ->
             applySnapshot snapshot model
+
+        Ok (InspirationsEvent images) ->
+            -- The same list comes with every refresh; only a changed one is taken, keeping the image shown.
+            if images == model.inspirations then
+                ( model, Cmd.none )
+
+            else
+                ( { model | inspirations = images }, Cmd.none )
 
         Ok (OutcomeEvent projectId outcome) ->
             case currentProject model of
@@ -908,6 +966,7 @@ viewSession model session =
                     )
                 ]
             ]
+        , Ui.maybeView (currentInspiration model) inspirationView
         , section [ class "dg-word-bank" ]
             [ div [ class "dg-section-heading" ] [ h3 [] [ text "Random prompts" ], button [ onClick ShufflePrompts ] [ text "Shuffle words" ] ]
             , div [] (List.map (\word -> button [ onClick (InsertWord word) ] [ text word ]) model.words)
@@ -960,6 +1019,20 @@ viewSession model session =
                         "Save ideas and complete Action"
                     )
                 ]
+            ]
+        ]
+
+
+{-| One image from the inspiration folder, changed every three minutes. It is there
+to look at, not to read, so screen readers skip it.
+-}
+inspirationView : String -> Html Msg
+inspirationView url =
+    section [ class "dg-brainstorm-inspiration" ]
+        [ img [ src url, alt "", attribute "aria-hidden" "true" ] []
+        , div [ class "dg-brainstorm-inspiration-bar" ]
+            [ small [] [ text "Inspiration · a new one every three minutes" ]
+            , button [ class "dg-flat-button", onClick NextInspiration ] [ text "Next image" ]
             ]
         ]
 
@@ -1090,11 +1163,12 @@ indexOf actionId actions =
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map4 Flags
+    Decode.map5 Flags
         (Decode.field "snapshot" Data.snapshotDecoder)
         (Decode.field "words" (Decode.list Decode.string))
         (Decode.field "randomIndex" Decode.int)
         (Decode.oneOf [ Decode.field "partner" Decode.bool, Decode.succeed False ])
+        (Decode.oneOf [ Decode.field "inspirations" (Decode.list Decode.string), Decode.succeed [] ])
 
 
 hostEventDecoder : Decoder HostEvent
@@ -1105,6 +1179,9 @@ hostEventDecoder =
                 case kind of
                     "snapshot" ->
                         Decode.map SnapshotEvent (Decode.field "snapshot" Data.snapshotDecoder)
+
+                    "inspirations" ->
+                        Decode.map InspirationsEvent (Decode.field "urls" (Decode.list Decode.string))
 
                     "brainstorm-outcome" ->
                         Decode.map2 OutcomeEvent

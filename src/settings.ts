@@ -126,6 +126,14 @@ export class GtdSettingTab extends PluginSettingTab {
         });
       });
 
+    new Setting(containerEl)
+      .setName("Brainstorm inspiration folder")
+      .setDesc("Vault-relative folder of images. A brainstorm shows one of them and moves to the next every three minutes. Empty or missing shows none.")
+      .addText((text) => text.setValue(this.plugin.settings.brainstorm.imagesDirectory).onChange(async (value) => {
+        this.plugin.settings.brainstorm.imagesDirectory = normalizeVaultPath(value) || "GTD/Brainstorm Inspiration";
+        await this.plugin.saveSettings();
+      }));
+
     this.displayPomodoro(containerEl);
     this.displayChecklists(containerEl);
     this.displayFeeds(containerEl);

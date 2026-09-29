@@ -231,6 +231,9 @@ export default class DragonglassGtdPlugin extends Plugin {
         logToDiary: saved?.pomodoro?.logToDiary === true,
         mite: parseMiteSettings(saved?.pomodoro?.mite, localDate()),
       },
+      brainstorm: {
+        imagesDirectory: normalizeVaultPath(saved?.brainstorm?.imagesDirectory ?? "") || defaults.brainstorm.imagesDirectory,
+      },
       checklists: {
         directory: normalizeVaultPath(saved?.checklists?.directory ?? "") || defaults.checklists.directory,
         storePath: normalizeVaultPath(saved?.checklists?.storePath ?? "") || defaults.checklists.storePath,

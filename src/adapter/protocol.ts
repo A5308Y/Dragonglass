@@ -1246,6 +1246,7 @@ export type ElmProjectReviewEvent =
 export type ElmBrainstormEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "brainstorm-outcome"; projectId: string; desiredOutcome: string }
+  | { type: "inspirations"; urls: string[] }
   | ElmCommandResultEvent;
 export type ElmFeedsEvent = { type: "feeds"; feeds: ElmFeedsDto } | ElmCommandResultEvent;
 export type ElmModalEvent = ElmCommandResultEvent;

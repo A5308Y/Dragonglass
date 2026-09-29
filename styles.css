@@ -2969,3 +2969,29 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-partner-add { flex: 0 0 auto; min-height: 26px; font-size: var(--font-ui-smaller); }
 .dg-partner-dismiss { flex: 0 0 auto; height: auto; padding: 0 6px; color: var(--text-faint); }
 .dg-partner-dismiss:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
+
+/* One inspiration image in a brainstorm, shown whole in a frame of fixed height so the
+   page doesn't jump when it changes every three minutes. */
+.dg-brainstorm-inspiration {
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.dg-brainstorm-inspiration > img {
+  display: block;
+  width: 100%;
+  height: min(260px, 38vh);
+  object-fit: contain;
+  background: var(--background-primary-alt);
+}
+.dg-brainstorm-inspiration-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  color: var(--text-muted);
+}
+.dg-brainstorm-inspiration-bar button { height: auto; padding: 2px 6px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-brainstorm-inspiration-bar button:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }

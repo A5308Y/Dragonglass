@@ -78,6 +78,9 @@ export function defaultSettings(): GtdSettings {
       logToDiary: false,
       mite: parseMiteSettings({}, localDate()),
     },
+    brainstorm: {
+      imagesDirectory: "GTD/Brainstorm Inspiration",
+    },
     checklists: {
       directory: "GTD/Checklists",
       storePath: "GTD/checklists.json",
