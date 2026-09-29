@@ -11,6 +11,7 @@ import Gtd.Energy as Energy exposing (Energy)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ActionId, ProjectId)
+import Gtd.Links as Links
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ranking as Ranking
 import Gtd.Settings as Settings
@@ -1518,7 +1519,7 @@ cardView model action =
 
               else
                 text ""
-            , span [ class "dg-card-title dg-action-card-title" ] [ text action.title ]
+            , span [ class "dg-card-title dg-action-card-title" ] (titleLinks action)
             , button
                 [ class "dg-icon-button dg-flat-button"
                 , Ui.onPointer (\x y -> Send IgnoreReply (actionMenu x y model action))
@@ -1634,10 +1635,27 @@ todayItem model action =
         [ Ui.labelled ("Mark done: " ++ action.title)
             (input [ type_ "checkbox", class "dg-card-done", checked False, onCheck (ToggleDone action.id) ] [])
         , span [ class "dg-today-time" ] [ text when ]
-        , button [ class "dg-flat-button dg-today-title", onClick (Send IgnoreReply (Command.EditActionModal action.id)) ]
-            [ text action.title ]
+        , span [ class "dg-today-title" ] (titleLinks action)
         , Ui.maybeView project (\owner -> span [ class "dg-today-project" ] [ text owner.title ])
+
+        -- The same menu as a card's: edit, and the moves a card offers.
+        , button
+            [ class "dg-icon-button dg-flat-button dg-today-menu"
+            , Ui.onPointer (\x y -> Send IgnoreReply (actionMenu x y model action))
+            ]
+            (Ui.iconLabel "•••" ("Actions for " ++ action.title))
         ]
+
+
+{-| An Action's title with the links written in it clickable.
+-}
+titleLinks : Action -> List (Html Msg)
+titleLinks action =
+    Links.view
+        { openUrl = \url -> Send IgnoreReply (Command.OpenLink url)
+        , openNote = \link -> Send IgnoreReply (Command.OpenNoteLink link action.file.path)
+        }
+        action.title
 
 
 {-| Keys pressed on the card itself; a key on its menu or Project link is theirs.

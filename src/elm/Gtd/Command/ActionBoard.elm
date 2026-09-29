@@ -15,6 +15,8 @@ type Command
     | QuickCapture
     | OpenInbox
     | OpenFile String
+    | OpenLink String
+    | OpenNoteLink String String
     | ShowProject ProjectId
     | EditActionModal ActionId
     | SetActionStatus ActionId ActionStatus
@@ -49,6 +51,12 @@ toBase command =
 
         OpenFile path ->
             Base.OpenFile path
+
+        OpenLink url ->
+            Base.OpenLink url
+
+        OpenNoteLink link sourcePath ->
+            Base.OpenNoteLink link sourcePath
 
         OpenInbox ->
             Base.OpenInbox

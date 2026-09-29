@@ -271,6 +271,8 @@ export class ElmProjectsHost {
       case "open-link":
         openWebLink(command.url);
         return;
+      case "open-note-link":
+        return this.services.app.workspace.openLinkText(command.link, command.sourcePath, false);
       case "create-support-folder":
         return this.services.repository.createProjectSupportFolder(command.projectId, command.path);
       case "read-support-note":

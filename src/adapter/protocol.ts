@@ -674,7 +674,8 @@ type ElmNonMenuCommand =
   | { type: "keep-feed-items"; keys: string[] }
   | { type: "discard-feed-items"; keys: string[] }
   | { type: "undo-feed-discard" }
-  | { type: "open-link"; url: string };
+  | { type: "open-link"; url: string }
+  | { type: "open-note-link"; link: string; sourcePath: string };
 
 export type ElmImportKind = "actions" | "subprojects";
 
@@ -707,7 +708,7 @@ export const SURFACE_COMMANDS = {
   actionBoard: [
     "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
     "set-action-priorities", "trash-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt",
-    "show-menu", "open-file",
+    "show-menu", "open-file", "open-link", "open-note-link",
   ],
   projects: [
     "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",
@@ -717,6 +718,7 @@ export const SURFACE_COMMANDS = {
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
     "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "delete-agent-run",
+    "open-note-link",
   ],
   inbox: ["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail"],
   feeds: ["refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard", "open-link", "open-inbox"],
@@ -1072,6 +1074,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return isStringArray(value.keys);
     case "open-link":
       return typeof value.url === "string";
+    case "open-note-link":
+      return typeof value.link === "string" && typeof value.sourcePath === "string";
     default:
       return false;
   }

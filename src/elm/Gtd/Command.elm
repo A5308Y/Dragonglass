@@ -133,6 +133,7 @@ type Command
     | DiscardFeedItems (List FeedItemKey)
     | UndoFeedDiscard
     | OpenLink String
+    | OpenNoteLink String String
       -- Inbox
     | ReadInboxBody InboxItemId
     | TrashInboxItem InboxItemId
@@ -644,6 +645,9 @@ encode command =
 
         OpenLink url ->
             object "open-link" [ ( "url", Encode.string url ) ]
+
+        OpenNoteLink link sourcePath ->
+            object "open-note-link" [ ( "link", Encode.string link ), ( "sourcePath", Encode.string sourcePath ) ]
 
         ReadInboxBody itemId ->
             object "read-inbox-body" [ ( "itemId", Encode.string itemId ) ]

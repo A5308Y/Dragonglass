@@ -39,6 +39,7 @@ type Command
     | AddProjectLink ProjectId String String
     | RemoveProjectLink ProjectId String
     | OpenLink String
+    | OpenNoteLink String String
     | ReadSupportNote ProjectId String
     | UpdateSupportNote ProjectId String String
     | SaveProjectPreferences
@@ -151,6 +152,9 @@ toBase command =
 
         OpenLink url ->
             Base.OpenLink url
+
+        OpenNoteLink link sourcePath ->
+            Base.OpenNoteLink link sourcePath
 
         ReadSupportNote projectId path ->
             Base.ReadSupportNote projectId path

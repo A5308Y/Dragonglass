@@ -2410,6 +2410,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
    removes the box-shadow Obsidian draws its own button ring with), and only show
    for keyboard focus, not clicks. */
 .dg-flat-button:focus-visible,
+.dg-title-link:focus-visible,
 .dg-card:focus-visible,
 .dg-someday-item :focus-visible,
 .dg-detail-tab:focus-visible {
@@ -2818,22 +2819,16 @@ body.is-phone .dg-board-view .dg-board {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* Obsidian centres a button's content with flexbox, so `text-align` alone leaves the
-   title in the middle of the line; it takes only its own width instead. */
 .dg-today-title {
   flex: 0 1 auto;
-  justify-content: flex-start;
   min-width: 0;
-  height: auto;
-  padding: 0;
   overflow: hidden;
   color: var(--text-normal);
   font-weight: var(--font-semibold);
-  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dg-today-title:hover { text-decoration: underline; }
+.dg-today-menu { flex: 0 0 auto; margin-left: auto; align-self: center; }
 .dg-today-project {
   flex: 0 1 auto;
   min-width: 0;
@@ -2863,3 +2858,16 @@ body.is-phone .dg-board-view .dg-board {
 }
 /* On a phone the strip stays above the scrolling list, so a busy day scrolls within it. */
 body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
+
+/* Links written in an Action's title (see `Gtd/Links.elm`). A Markdown link is
+   followed by where it goes, in muted text. */
+.dg-title-link {
+  color: var(--link-color, var(--text-accent));
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.dg-title-link:hover { text-decoration-color: currentColor; }
+.dg-title-link-host { color: var(--text-muted); font-size: var(--font-ui-smaller); font-weight: normal; }

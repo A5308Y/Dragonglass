@@ -9,6 +9,7 @@ import Gtd.Energy as Energy
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ProjectId)
+import Gtd.Links as Links
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ranking as Ranking
 import Gtd.Settings exposing (ProjectColumnsBy(..), ProjectSections(..))
@@ -1987,6 +1988,17 @@ viewActionRows today actions =
         div [ class "dg-action-rows" ] (List.map (viewActionRow today) actions)
 
 
+{-| An Action's title with the links written in it clickable.
+-}
+titleLinks : Action -> List (Html Msg)
+titleLinks action =
+    Links.view
+        { openUrl = \url -> Send IgnoreReply (Command.OpenLink url)
+        , openNote = \link -> Send IgnoreReply (Command.OpenNoteLink link action.file.path)
+        }
+        action.title
+
+
 viewActionRow : String -> Action -> Html Msg
 viewActionRow today action =
     let
@@ -2012,7 +2024,7 @@ viewActionRow today action =
                 []
             )
         , div [ class "dg-action-row-main" ]
-            [ span [ class "dg-action-row-title" ] [ text action.title ]
+            [ span [ class "dg-action-row-title" ] (titleLinks action)
             , div [ class "dg-action-row-meta" ]
                 ((if action.status == ActionStatus.Next then
                     []
