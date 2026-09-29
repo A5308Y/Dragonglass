@@ -39,13 +39,15 @@ describe("attention dots", () => {
     expect(result.projects).toBe(true);
   });
 
-  it("marks the board for overdue work, due follow-ups and today's Calendar Actions", () => {
+  it("marks the board for overdue work, due follow-ups and Calendar Actions left from earlier days", () => {
     const board = (changes: Partial<Action>) => attention(snapshot([project()], [action(changes)]), 0, weekly, today).board;
     expect(board({ due: "2026-09-23" })).toBe(true);
     expect(board({ due: today })).toBe(false);
     expect(board({ status: "waiting", followUp: today })).toBe(true);
     expect(board({ status: "waiting", followUp: "2026-09-25" })).toBe(false);
-    expect(board({ status: "scheduled", scheduledStart: today })).toBe(true);
+    expect(board({ status: "scheduled", scheduledStart: "2026-09-23" })).toBe(true);
+    // Today's are listed above the board's columns; they aren't late.
+    expect(board({ status: "scheduled", scheduledStart: today })).toBe(false);
     expect(board({ status: "scheduled", scheduledStart: "2026-09-30" })).toBe(false);
     expect(board({ status: "done", due: "2026-09-01" })).toBe(false);
   });

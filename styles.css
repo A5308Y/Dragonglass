@@ -2763,10 +2763,10 @@ body.is-phone .dg-board-view .dg-board {
   padding-bottom: calc(var(--safe-area-inset-bottom, 0px) + 80px);
 }
 
-/* Today's Calendar Actions, above the columns whatever the view filters. On desktop
-   they sit side by side; on a narrow screen, one per line. What starts within the
-   hour or is on now says so in words and gets a calm accent, never a warning colour;
-   what is over is quieter. */
+/* Today's Calendar Actions, above the columns whatever the view filters: one line
+   each, across the board, on a lightly shaded strip. What starts within the hour or
+   is on now says so in words and gets a calm accent, never a warning colour; what
+   is over is quieter. */
 .dg-today {
   flex: 0 0 auto;
   display: flex;
@@ -2774,6 +2774,7 @@ body.is-phone .dg-board-view .dg-board {
   gap: 10px;
   padding: 8px var(--dg-bar-inset, 12px);
   border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
 }
 .dg-today-label {
   flex: 0 0 auto;
@@ -2787,8 +2788,8 @@ body.is-phone .dg-board-view .dg-board {
 .dg-today-list {
   display: flex;
   flex: 1 1 auto;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -2796,12 +2797,10 @@ body.is-phone .dg-board-view .dg-board {
 }
 .dg-today-item {
   display: flex;
-  flex: 0 1 var(--dg-card-width);
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px 8px;
+  gap: 2px 10px;
   min-width: 0;
-  padding: 6px 9px;
+  padding: 5px 9px;
   border: 1px solid var(--background-modifier-border);
   border-left: 3px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
@@ -2810,6 +2809,8 @@ body.is-phone .dg-board-view .dg-board {
 .dg-today-item > .dg-labelled > input,
 .dg-today-item > input { flex: 0 0 auto; margin: 0; align-self: center; }
 .dg-today-time {
+  flex: 0 0 auto;
+  min-width: 8.5em;
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
   font-variant-numeric: tabular-nums;
@@ -2829,7 +2830,8 @@ body.is-phone .dg-board-view .dg-board {
 }
 .dg-today-title:hover { text-decoration: underline; }
 .dg-today-project {
-  flex: 1 0 100%;
+  flex: 0 1 auto;
+  max-width: 40%;
   overflow: hidden;
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);
@@ -2848,11 +2850,14 @@ body.is-phone .dg-board-view .dg-board {
   font-weight: var(--font-semibold);
 }
 .dg-today-item.is-earlier .dg-today-title { color: var(--text-muted); font-weight: normal; }
+/* Narrow: the label goes above the list, and the Project to a line of its own. */
 @media (max-width: 600px) {
   .dg-today { flex-direction: column; gap: 4px; padding-block: 6px; }
   .dg-today-label { padding-top: 0; }
-  .dg-today-list { width: 100%; flex-direction: column; }
-  .dg-today-item { flex-basis: auto; }
+  .dg-today-list { width: 100%; }
+  .dg-today-item { flex-wrap: wrap; }
+  .dg-today-time { min-width: 0; }
+  .dg-today-project { flex-basis: 100%; max-width: none; }
 }
 /* On a phone the strip stays above the scrolling list, so a busy day scrolls within it. */
 body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }

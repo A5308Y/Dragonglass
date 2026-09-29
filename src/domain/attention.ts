@@ -8,7 +8,7 @@ import { weeklyReviewDue, type WeeklyReviewSettings } from "./weekly-review";
 export interface Attention {
   /** Inbox Items still to process. */
   inbox: boolean;
-  /** Overdue Actions, Waiting Actions due for follow-up, and Calendar Actions dated today or earlier. */
+  /** Overdue Actions, Waiting Actions due for follow-up, and Calendar Actions left open from an earlier day. */
   board: boolean;
   /** Active Projects with an issue, such as no open Action. */
   projects: boolean;
@@ -40,14 +40,16 @@ export function attention(
 
 /**
  * An Action that needs attention today: overdue, a Waiting Action due for follow-up,
- * or a Calendar Action dated today or earlier. `needsAttention` in `ActionBoard.elm`
- * marks cards and counts columns by the same rule; change both together.
+ * or a Calendar Action from an earlier day that was never ticked off. Today's Calendar
+ * Actions don't count: the board lists them above its columns anyway, and they are
+ * not late. `needsAttention` in `ActionBoard.elm` marks cards and counts columns by
+ * the same rule; change both together.
  */
 export function actionNeedsAttention(action: Action, today = localDate()): boolean {
   if (action.status === "done" || action.status === "cancelled") return false;
   if (action.due && action.due < today) return true;
   if (action.status === "waiting" && action.followUp && action.followUp <= today) return true;
-  if (action.status === "scheduled" && action.scheduledStart) return scheduledDay(action.scheduledStart) <= today;
+  if (action.status === "scheduled" && action.scheduledStart) return scheduledDay(action.scheduledStart) < today;
   return false;
 }
 

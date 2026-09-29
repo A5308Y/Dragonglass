@@ -842,7 +842,8 @@ verbEnding count =
 
 
 {-| An Action that needs attention today: overdue, a Waiting Action due for
-follow-up, or a Calendar Action dated today or earlier. This is the rule behind the
+follow-up, or a Calendar Action from an earlier day that was never ticked off.
+Today's are listed above the columns instead. This is the rule behind the
 Action Board's ribbon dot (`actionNeedsAttention` in `src/domain/attention.ts`);
 change both together, or the dot points at cards the board does not mark.
 -}
@@ -871,7 +872,7 @@ needsAttention today action =
                 |> Maybe.map (String.left 10)
 
         calendarDue =
-            action.status == ActionStatus.Scheduled && (Maybe.map (\date -> date <= today) calendarDay |> Maybe.withDefault False)
+            action.status == ActionStatus.Scheduled && (Maybe.map (\date -> date < today) calendarDay |> Maybe.withDefault False)
     in
     open && (overdue || followUpDue || calendarDue)
 
