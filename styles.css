@@ -2800,9 +2800,11 @@ body.is-phone .dg-board-view .dg-board {
   padding: 0;
   list-style: none;
 }
+/* Centred, not on the text baseline: the tick box and the menu button are taller than
+   the text and would otherwise leave it riding high. */
 .dg-today-item {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 2px 10px;
   min-width: 0;
   padding: 5px 9px;
@@ -2812,7 +2814,7 @@ body.is-phone .dg-board-view .dg-board {
   background: var(--background-primary);
 }
 .dg-today-item > .dg-labelled > input,
-.dg-today-item > input { flex: 0 0 auto; margin: 0; align-self: center; }
+.dg-today-item > input { flex: 0 0 auto; margin: 0; }
 .dg-today-time {
   flex: 0 0 auto;
   min-width: 8.5em;
@@ -2830,7 +2832,7 @@ body.is-phone .dg-board-view .dg-board {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dg-today-menu { flex: 0 0 auto; margin-left: auto; align-self: center; }
+.dg-today-menu { flex: 0 0 auto; height: 22px; min-height: 0; margin-left: auto; padding-block: 0; }
 .dg-today-project {
   flex: 0 1 auto;
   min-width: 0;
@@ -2856,7 +2858,9 @@ body.is-phone .dg-board-view .dg-board {
   .dg-today { padding-block: 6px; }
   .dg-today-item { flex-wrap: wrap; }
   .dg-today-time { min-width: 0; }
-  .dg-today-project { flex-basis: 100%; max-width: none; }
+  /* The Project goes below; the menu stays at the end of the title's line. */
+  .dg-today-project { order: 1; flex-basis: 100%; max-width: none; }
+  .dg-today-menu { height: 32px; }
 }
 /* On a phone the strip stays above the scrolling list, so a busy day scrolls within it. */
 body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
