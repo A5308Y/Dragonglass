@@ -1569,9 +1569,10 @@ todayActions model =
     Agenda.todayActions (agendaClock model) (List.map (effectiveAction model) model.snapshot.actions)
 
 
-{-| A strip above the columns, one line per Action. What starts within the hour,
-or is on now, stands out by its wording ("In 25 min", "Now") and a calm accent,
-not a warning colour: it is a reminder, not a problem.
+{-| A strip above the columns, one line per Action. From an hour before its start
+an Action stands out by its wording ("In 25 min", "Now", "Earlier") and a calm
+accent, not a warning colour: it is a reminder, not a problem. It stays marked once
+it is over, until it is ticked off or moved.
 -}
 todayView : Model -> List Action -> Html Msg
 todayView model actions =

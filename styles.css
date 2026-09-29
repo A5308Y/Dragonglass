@@ -2765,8 +2765,9 @@ body.is-phone .dg-board-view .dg-board {
 
 /* Today's Calendar Actions, above the columns whatever the view filters: the label,
    then one line each across the board, lined up with the columns' left edge, on a
-   lightly shaded strip. What starts within the hour or is on now says so in words
-   and gets a calm accent, never a warning colour; what is over is quieter. */
+   lightly shaded strip. From an hour before its start, an Action says so in words
+   and gets a calm accent, never a warning colour, and keeps it once it is over,
+   until it is ticked off or moved. */
 .dg-today {
   flex: 0 0 auto;
   display: flex;
@@ -2841,18 +2842,16 @@ body.is-phone .dg-board-view .dg-board {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dg-today-item.is-soon,
-.dg-today-item.is-now {
+.dg-today-item:is(.is-soon, .is-now, .is-earlier) {
   border-color: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-modifier-border));
   border-left-color: var(--interactive-accent);
   background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
 }
 .dg-today-item.is-now { background: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary)); }
-.dg-today-item:is(.is-soon, .is-now) .dg-today-time {
+.dg-today-item:is(.is-soon, .is-now, .is-earlier) .dg-today-time {
   color: var(--text-accent);
   font-weight: var(--font-semibold);
 }
-.dg-today-item.is-earlier .dg-today-title { color: var(--text-muted); font-weight: normal; }
 /* Narrow: the Project goes to a line of its own. */
 @media (max-width: 600px) {
   .dg-today { padding-block: 6px; }
