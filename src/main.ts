@@ -232,7 +232,13 @@ export default class DragonglassGtdPlugin extends Plugin {
         mite: parseMiteSettings(saved?.pomodoro?.mite, localDate()),
       },
       brainstorm: {
-        imagesDirectory: normalizeVaultPath(saved?.brainstorm?.imagesDirectory ?? "") || defaults.brainstorm.imagesDirectory,
+        // The first default, `GTD/Brainstorm Inspiration`, lasted a day; a copy saved with it moves to the new one.
+        imagesDirectory: [
+          "",
+          "GTD/Brainstorm Inspiration",
+        ].includes(normalizeVaultPath(saved?.brainstorm?.imagesDirectory ?? ""))
+          ? defaults.brainstorm.imagesDirectory
+          : normalizeVaultPath(saved!.brainstorm!.imagesDirectory),
       },
       checklists: {
         directory: normalizeVaultPath(saved?.checklists?.directory ?? "") || defaults.checklists.directory,

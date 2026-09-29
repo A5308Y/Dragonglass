@@ -79,7 +79,7 @@ export function defaultSettings(): GtdSettings {
       mite: parseMiteSettings({}, localDate()),
     },
     brainstorm: {
-      imagesDirectory: "GTD/Brainstorm Inspiration",
+      imagesDirectory: "Dragonglass/Brainstorm Inspiration",
     },
     checklists: {
       directory: "GTD/Checklists",
