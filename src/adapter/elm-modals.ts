@@ -87,7 +87,8 @@ export class ElmModal extends Modal {
       node: this.contentEl.createDiv(),
       flags: {
         snapshot: elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate()),
-        images: this.vaultImages(),
+        // Only the Project forms pick an image; listing them costs a walk over the whole vault.
+        images: this.form.kind === "new-project" || this.form.kind === "edit-project" ? this.vaultImages() : [],
         form: this.form,
       },
     }) as ElmApp;
@@ -135,7 +136,9 @@ export class ElmModal extends Modal {
         new Notice("Captured to Inbox.");
         return;
       case "save-new-action":
-        await this.services.repository.createClarifiedAction(actionInput(command.input));
+        // One file written straight into the Actions folder: going through an Inbox Item
+        // first cost four writes, and every open view redrew after each of them.
+        await this.services.repository.createAction(actionInput(command.input));
         new Notice("Action created.");
         return;
       case "save-action":

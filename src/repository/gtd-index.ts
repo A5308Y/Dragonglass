@@ -8,12 +8,22 @@ import { isPathInDirectory, rawInboxId } from "../utils/path";
 
 type Listener = () => void;
 
+/**
+ * How long after a change the views are told, and the longest they wait while changes
+ * keep coming. One write is several vault events (created, then its metadata read), and
+ * sync delivers files in bursts; each event used to make every open view redraw.
+ */
+const NOTIFY_DELAY_MS = 40;
+const NOTIFY_MAX_WAIT_MS = 250;
+
 export class GtdIndex {
   private inboxItemsByPath = new Map<string, InboxItem>();
   private actionsByPath = new Map<string, Action>();
   private projectsByPath = new Map<string, Project>();
   private parseIssues = new Map<string, IndexIssue>();
   private listeners = new Set<Listener>();
+  private notifyTimer: number | null = null;
+  private pendingSince = 0;
   private current: GtdSnapshot = {
     revision: 0,
     inboxItems: [],
@@ -160,7 +170,21 @@ export class GtdIndex {
       projectsById,
       issues,
     };
-    for (const listener of this.listeners) listener();
+    this.scheduleNotify();
+  }
+
+  /** `getSnapshot` is current at once; the listeners hear of a burst of changes once. */
+  private scheduleNotify(): void {
+    if (this.notifyTimer !== null) {
+      if (Date.now() - this.pendingSince >= NOTIFY_MAX_WAIT_MS) return;
+      window.clearTimeout(this.notifyTimer);
+    } else {
+      this.pendingSince = Date.now();
+    }
+    this.notifyTimer = window.setTimeout(() => {
+      this.notifyTimer = null;
+      for (const listener of this.listeners) listener();
+    }, NOTIFY_DELAY_MS);
   }
 }
 

@@ -240,16 +240,26 @@ export function projectSupportFileCounts(
   filePaths: Iterable<string>,
 ): Map<string, number> {
   const counts = new Map(folders.map((folder) => [folder.id, 0]));
-  const owners = [...folders].sort((left, right) => right.path.length - left.path.length);
-  if (!owners.length) return counts;
+  // Folder → the Projects that own it. Each file then climbs its own folders to the first
+  // one owned, so the cost follows the vault's depth rather than its Projects: this runs
+  // on every change to the vault.
+  const owners = new Map<string, string[]>();
+  for (const folder of folders) {
+    if (folder.path) owners.set(folder.path, [...(owners.get(folder.path) ?? []), folder.id]);
+  }
+  if (!owners.size) return counts;
 
   for (const filePath of filePaths) {
-    let deepest = 0;
-    for (const owner of owners) {
-      if (deepest && owner.path.length < deepest) break;
-      if (filePath !== owner.path && !filePath.startsWith(`${owner.path}/`)) continue;
-      deepest = owner.path.length;
-      counts.set(owner.id, counts.get(owner.id)! + 1);
+    let path = filePath;
+    for (;;) {
+      const ids = owners.get(path);
+      if (ids) {
+        for (const id of ids) counts.set(id, counts.get(id)! + 1);
+        break;
+      }
+      const slash = path.lastIndexOf("/");
+      if (slash <= 0) break;
+      path = path.slice(0, slash);
     }
   }
   return counts;

@@ -127,6 +127,17 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   and `styles.css`; it does not build.
 - `npm test` runs the vitest suite.
 
+## Index updates and speed
+
+- `GtdIndex.getSnapshot()` is current as soon as a vault event is read, but listeners are
+  told once per burst (40 ms after the last change, at most 250 ms late). Code that has
+  to see its own write must read `getSnapshot()` or wait for a listener; don't assume a
+  listener call per event.
+- Every listener run redraws every open view, so work done per change must stay cheap
+  (e.g. `projectSupportFileCounts` walks each file's folders, not every Project), and a
+  write should be one file operation where it can: new Actions are written directly
+  (`createAction`), not as an Inbox Item that is then converted.
+
 ## Project trees
 
 - An Active Project's parent, and every Project above it, is Active too. The rule

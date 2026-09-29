@@ -67,13 +67,6 @@ export class GtdRepository {
     return this.createInboxRecord(title, details, messageId);
   }
 
-  async createClarifiedAction(input: ActionInput): Promise<void> {
-    if (actionRequiresContext(input.status) && !input.context.trim()) throw new Error("A context is required.");
-    validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
-    const item = await this.createInboxRecord(input.title);
-    await this.convertInboxItemToAction(item, input);
-  }
-
   /** Creates one Action file directly, without an Inbox Item, and returns its id. */
   async createAction(input: ActionInput): Promise<string> {
     const project = input.projectId ? this.requireProject(input.projectId) : undefined;

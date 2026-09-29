@@ -113,13 +113,13 @@ export class ElmProjectReviewHost {
         return;
       }
       case "create-review-action":
-        await this.services.repository.createClarifiedAction({
+        await this.services.repository.createAction({
           title: command.title.trim(),
           status: "next",
           projectId: command.projectId,
           context: command.context.trim(),
         });
-        new Notice("Next Action created from a captured Inbox Item.");
+        new Notice("Next Action created.");
         return;
       case "add-diary-entry":
         return this.services.repository.addProjectDiaryEntry(command.projectId, command.body);
