@@ -2981,9 +2981,13 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-brainstorm-inspiration > img {
   display: block;
   width: 100%;
-  height: min(260px, 38vh);
+  height: min(520px, 55vh);
   object-fit: contain;
   background: var(--background-primary-alt);
+}
+/* On a phone it leaves room for the ideas below it. */
+@media (max-width: 600px) {
+  .dg-brainstorm-inspiration > img { height: min(360px, 42vh); }
 }
 .dg-brainstorm-inspiration-bar {
   display: flex;
