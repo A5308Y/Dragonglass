@@ -16,6 +16,8 @@ type Command
     | ReadInboxBody InboxItemId
     | TrashInboxItem InboxItemId
     | OpenMail InboxItemId
+      -- A Next Action to review the pull request the Item links, then the Item is deleted.
+    | ReviewPullRequest InboxItemId
     | ProcessInbox InboxItemId Disposition InboxInput
 
 
@@ -59,6 +61,9 @@ encode command =
 
             OpenMail itemId ->
                 Base.OpenMail itemId
+
+            ReviewPullRequest itemId ->
+                Base.ReviewPullRequest itemId
 
             ProcessInbox itemId disposition input ->
                 Base.ProcessInbox itemId (dispositionToBase disposition) input

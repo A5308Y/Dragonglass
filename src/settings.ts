@@ -977,6 +977,14 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     new Setting(sectionEl)
+      .setName("Context for pull request reviews")
+      .setDesc("While processing an Inbox Item that links a GitHub pull request, + Review makes a Next Action with this context, without a Project.")
+      .addText((text) => text.setValue(this.plugin.settings.mail.reviewContext).onChange(async (value) => {
+        this.plugin.settings.mail.reviewContext = value.trim() || "Laptop";
+        await this.plugin.saveSettings(false);
+      }));
+
+    new Setting(sectionEl)
       .setName("Refresh interval")
       .setDesc("Minutes between automatic imports. Five is the minimum.")
       .addText((text) => {

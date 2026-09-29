@@ -114,6 +114,7 @@ export function defaultSettings(): GtdSettings {
       storePath: "GTD/mail.json",
       refreshMinutes: 30,
       importCap: 50,
+      reviewContext: "Laptop",
       accounts: [],
       passwords: {},
     },

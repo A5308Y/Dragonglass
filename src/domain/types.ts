@@ -340,6 +340,8 @@ export interface MailSettings {
   refreshMinutes: number;
   /** How many messages one import turns into Inbox Items before deferring the rest. */
   importCap: number;
+  /** The context of review Actions made from a pull request while processing. */
+  reviewContext: string;
   accounts: MailAccountSettings[];
   /**
    * Old copies of app passwords by account id, from before they moved to Obsidian's

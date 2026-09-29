@@ -1535,6 +1535,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: 8px;
 }
+/* With + Review for a linked pull request between them, Process stays the widest. */
+.dg-processor-buttons:has(> :nth-child(3)) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr);
+}
 .dg-processor-action button {
   width: 100%;
   min-width: 0;

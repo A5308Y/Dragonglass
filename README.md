@@ -189,6 +189,8 @@ Everything a sender wrote is treated as hostile. Bodies are flattened to text an
 
 Importing needs the desktop app: Obsidian on mobile cannot open an IMAP connection at all. That costs less than it sounds like — imported messages are ordinary Inbox Items, so they reach your phone through vault sync, and the sync watermarks travel with them so no device re-imports what another already took.
 
+
+While processing, an Item that links a GitHub pull request (`github.com/owner/repo/pull/123`, as GitHub's notification emails do) offers **+ Review repo#123** next to **Delete & Next**. It makes a Next Action "Review [repo#123: title](link)" without a Project, titled from the email subject without GitHub's decoration, with the context set in the Email settings (**Context for pull request reviews**, "Laptop" by default), and deletes the Item with Undo. GitHub sends an email for every review request, comment and push; when an open Action already links the pull request, no second one is made and only the email goes. Undo brings the Item back but leaves a review Action it made.
 ## Google Calendar
 
 Google Calendar integration is an optional one-way mirror for Calendar Actions and scheduled Project activations. It uses a user-owned Apps Script bridge and a dedicated calendar, so Dragonglass never stores a Google OAuth refresh token. Configure the bridge using [the setup guide](integrations/google-calendar/README.md), then enter its deployment URL and shared secret in plugin settings.

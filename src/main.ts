@@ -214,6 +214,9 @@ export default class DragonglassGtdPlugin extends Plugin {
         importCap: Number.isInteger(saved?.mail?.importCap) && saved!.mail!.importCap > 0
           ? saved!.mail!.importCap
           : defaults.mail.importCap,
+        reviewContext: typeof saved?.mail?.reviewContext === "string" && saved.mail.reviewContext.trim()
+          ? saved.mail.reviewContext.trim()
+          : defaults.mail.reviewContext,
         accounts: Array.isArray(saved?.mail?.accounts) ? saved.mail.accounts.map(migrateMailAccount) : [],
         passwords: isStringMap(saved?.mail?.passwords) ? saved.mail.passwords : {},
       },

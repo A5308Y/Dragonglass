@@ -59,9 +59,9 @@ type alias Model =
     , requested : Maybe InboxItemId
     , sessionTotal : Int
     , seconds : Int
-    , body : Maybe { itemId : InboxItemId, text : String }
+    , body : Maybe LoadedBody
     , selected : Maybe InboxItemId
-    , preview : Maybe { itemId : InboxItemId, text : String }
+    , preview : Maybe LoadedBody
     , previewRequested : Maybe InboxItemId
     , project : Picker Project
     , context : Picker String
@@ -101,6 +101,7 @@ type Msg
     | SetBacklog Bool
     | SetFileOriginal Bool
     | DeleteItem InboxItemId
+    | ReviewPullRequest InboxItemId
     | ProcessItem
     | RowKey InboxItemId Key
     | SelectRow InboxItemId
@@ -285,6 +286,9 @@ update msg model =
 
         SetFileOriginal fileOriginal ->
             ( { model | fileOriginal = fileOriginal }, Cmd.none )
+
+        ReviewPullRequest itemId ->
+            sendForItem itemId (Command.ReviewPullRequest itemId) model
 
         DeleteItem itemId ->
             let
@@ -812,14 +816,14 @@ receiveHost value model =
 
                 ( Ok resultValue, LoadBody itemId ) ->
                     if (currentItem model |> Maybe.map .id) == Just itemId then
-                        ( { next | body = Just { itemId = itemId, text = decodedString resultValue } }, Cmd.none )
+                        ( { next | body = Just (loadedBody itemId resultValue) }, Cmd.none )
 
                     else
                         ( next, Cmd.none )
 
                 ( Ok resultValue, LoadPreview itemId ) ->
                     if next.previewRequested == Just itemId then
-                        ( { next | preview = Just { itemId = itemId, text = decodedString resultValue } }, Cmd.none )
+                        ( { next | preview = Just (loadedBody itemId resultValue) }, Cmd.none )
 
                     else
                         ( next, Cmd.none )
@@ -831,9 +835,22 @@ receiveHost value model =
             ( { model | error = Just (Decode.errorToString error) }, Cmd.none )
 
 
-decodedString : Decode.Value -> String
-decodedString value =
-    Decode.decodeValue Decode.string value |> Result.withDefault ""
+{-| An Item's text as the host read it, and the GitHub pull request it links, named
+like `dragonglass#123`, which offers + Review while processing.
+-}
+type alias LoadedBody =
+    { itemId : InboxItemId, text : String, pullRequest : Maybe String }
+
+
+loadedBody : InboxItemId -> Decode.Value -> LoadedBody
+loadedBody itemId value =
+    Decode.decodeValue
+        (Decode.map2 (LoadedBody itemId)
+            (Decode.field "text" Decode.string)
+            (Decode.field "pullRequest" (Decode.nullable Decode.string))
+        )
+        value
+        |> Result.withDefault { itemId = itemId, text = "", pullRequest = Nothing }
 
 
 
@@ -1039,6 +1056,18 @@ processorView model =
                 busy =
                     Set.member item.id (busyItems model)
 
+                -- The GitHub pull request the Item links, once its text has loaded.
+                pullRequest =
+                    model.body
+                        |> Maybe.andThen
+                            (\loaded ->
+                                if loaded.itemId == item.id then
+                                    loaded.pullRequest
+
+                                else
+                                    Nothing
+                            )
+
                 progress =
                     if model.sessionTotal == 0 then
                         0
@@ -1065,6 +1094,11 @@ processorView model =
                             , onClick (DeleteItem item.id)
                             ]
                             [ text "Delete & Next" ]
+                        , Ui.maybeView pullRequest
+                            (\label ->
+                                button [ Html.Attributes.disabled busy, onClick (ReviewPullRequest item.id) ]
+                                    [ text ("+ Review " ++ label) ]
+                            )
                         , button
                             [ class "mod-cta"
 
