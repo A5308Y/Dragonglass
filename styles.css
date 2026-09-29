@@ -2906,3 +2906,29 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 }
 .dg-title-link:hover { text-decoration-color: currentColor; }
 .dg-title-link-host { color: var(--text-muted); font-size: var(--font-ui-smaller); font-weight: normal; }
+
+/* Inbox zero, in the list and at the end of processing. The picture is one shape
+   used as a mask, so it takes the theme's accent colour in light and dark themes;
+   its shades come from the drawing's own transparency. */
+.dg-inbox-zero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: auto;
+  padding: 40px 24px;
+  text-align: center;
+}
+.dg-inbox-zero-art {
+  width: 180px;
+  height: 135px;
+  background-color: var(--interactive-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 150'%3E%3Ccircle cx='100' cy='66' r='50' fill='%23000' fill-opacity='.14'/%3E%3Ccircle cx='100' cy='66' r='34' fill='%23000' fill-opacity='.12'/%3E%3Cpath d='M38 30 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3z' fill='%23000' fill-opacity='.55'/%3E%3Cpath d='M166 22 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2z' fill='%23000' fill-opacity='.45'/%3E%3Cpath d='M170 84 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z' fill='%23000' fill-opacity='.35'/%3E%3Cpath d='M80 46 l14 14 26 -28' fill='none' stroke='%23000' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M40 96 L60 70 H140 L160 96 V124 a10 10 0 0 1 -10 10 H50 a10 10 0 0 1 -10 -10 Z' fill='%23000' fill-opacity='.4'/%3E%3Cpath d='M40 96 H76 a24 24 0 0 0 48 0 H160 V124 a10 10 0 0 1 -10 10 H50 a10 10 0 0 1 -10 -10 Z' fill='%23000'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 150'%3E%3Ccircle cx='100' cy='66' r='50' fill='%23000' fill-opacity='.14'/%3E%3Ccircle cx='100' cy='66' r='34' fill='%23000' fill-opacity='.12'/%3E%3Cpath d='M38 30 l3 9 9 3 -9 3 -3 9 -3 -9 -9 -3 9 -3z' fill='%23000' fill-opacity='.55'/%3E%3Cpath d='M166 22 l2 6 6 2 -6 2 -2 6 -2 -6 -6 -2 6 -2z' fill='%23000' fill-opacity='.45'/%3E%3Cpath d='M170 84 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z' fill='%23000' fill-opacity='.35'/%3E%3Cpath d='M80 46 l14 14 26 -28' fill='none' stroke='%23000' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M40 96 L60 70 H140 L160 96 V124 a10 10 0 0 1 -10 10 H50 a10 10 0 0 1 -10 -10 Z' fill='%23000' fill-opacity='.4'/%3E%3Cpath d='M40 96 H76 a24 24 0 0 0 48 0 H160 V124 a10 10 0 0 1 -10 10 H50 a10 10 0 0 1 -10 -10 Z' fill='%23000'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.dg-inbox-zero h3 {
+  margin: 18px 0 0;
+  color: var(--text-normal);
+  font-size: var(--font-ui-large, 1.25em);
+  font-weight: var(--font-bold);
+}
+.dg-inbox-zero p { margin: 6px 0 0; color: var(--text-muted); }

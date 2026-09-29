@@ -892,6 +892,18 @@ view model =
         ]
 
 
+{-| The empty Inbox, in the list and at the end of processing: a quiet moment worth
+marking, so it gets a picture (drawn in `styles.css`) rather than a line of text.
+-}
+inboxZero : Html msg
+inboxZero =
+    div [ class "dg-inbox-zero" ]
+        [ div [ class "dg-inbox-zero-art", attribute "aria-hidden" "true" ] []
+        , h3 [] [ text "Inbox zero" ]
+        , p [] [ text "Everything captured has been clarified." ]
+        ]
+
+
 listView : Model -> Html Msg
 listView model =
     let
@@ -903,22 +915,17 @@ listView model =
             [ input [ type_ "search", placeholder "Search Inbox", value model.search, onInput SearchChanged ] []
             , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · ⌫ delete · Enter process · O open" ]
             ]
-        , div [ class "dg-inbox-list", id listId, attribute "role" "list" ]
-            (if List.isEmpty items then
-                [ div [ class "dg-empty-row" ]
-                    [ text
-                        (if String.isEmpty model.search then
-                            "Inbox zero."
+        , if List.isEmpty model.snapshot.inboxItems then
+            inboxZero
 
-                         else
-                            "No Inbox Items match this search."
-                        )
-                    ]
-                ]
+          else
+            div [ class "dg-inbox-list", id listId, attribute "role" "list" ]
+                (if List.isEmpty items then
+                    [ div [ class "dg-empty-row" ] [ text "No Inbox Items match this search." ] ]
 
-             else
-                List.map (inboxRow (selectedItem model |> Maybe.map .id)) items
-            )
+                 else
+                    List.map (inboxRow (selectedItem model |> Maybe.map .id)) items
+                )
         , Ui.maybeView (selectedItem model) (readingPane model)
         ]
 
@@ -1042,8 +1049,7 @@ processorView : Model -> Html Msg
 processorView model =
     case currentItem model of
         Nothing ->
-            div [ class "dg-workflow-complete" ]
-                [ span [] [ text "🎉" ], h3 [] [ text "Inbox zero" ], p [] [ text "Everything captured has been clarified." ] ]
+            inboxZero
 
         Just item ->
             let
