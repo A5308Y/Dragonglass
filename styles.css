@@ -476,6 +476,17 @@ body.is-phone .workspace-leaf-content:is(
   white-space: normal;
 }
 
+/* Action titles wrap over as many lines as they need, like Project titles. The tick
+   box, attention dot and menu then line up with the title's first line rather than
+   its middle. */
+.dg-card-title.dg-action-card-title {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+.dg-card-title-row:has(> .dg-action-card-title) { align-items: baseline; }
+
 .dg-card-title:hover,
 .dg-project-title:hover { color: var(--text-accent); }
 .dg-card-title.dg-action-card-title:hover { color: var(--text-normal); }
