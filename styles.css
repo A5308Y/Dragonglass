@@ -477,15 +477,28 @@ body.is-phone .workspace-leaf-content:is(
 }
 
 /* Action titles wrap over as many lines as they need, like Project titles. The tick
-   box, attention dot and menu then line up with the title's first line rather than
-   its middle. */
+   box and attention dot are centred on the title's first line (`1lh` is one line of
+   the title, since both inherit its font), and the Project and context lines below
+   start where the title does. */
+.dg-card { --dg-check-size: 15px; }
 .dg-card-title.dg-action-card-title {
   overflow: visible;
   overflow-wrap: anywhere;
   text-overflow: clip;
   white-space: normal;
 }
-.dg-card-title-row:has(> .dg-action-card-title) { align-items: baseline; }
+.dg-card-title-row:has(> .dg-action-card-title) { align-items: flex-start; }
+.dg-card-title-row:has(> .dg-action-card-title) input.dg-card-done {
+  font: inherit;
+  line-height: inherit;
+  margin-top: calc((1lh - var(--dg-check-size)) / 2);
+}
+.dg-card-title-row:has(> .dg-action-card-title) > .dg-attention-dot { margin-top: calc((1lh - 8px) / 2); }
+.dg-card:has(.dg-action-card-title) > :is(.dg-project-link, .dg-missing, .dg-card-meta) {
+  /* The tick box, and the row's 8px gap less the box's -2px margin. */
+  margin-left: calc(var(--dg-check-size) + 6px);
+  max-width: calc(100% - var(--dg-check-size) - 6px);
+}
 
 .dg-card-title:hover,
 .dg-project-title:hover { color: var(--text-accent); }
@@ -493,8 +506,8 @@ body.is-phone .workspace-leaf-content:is(
 /* The done checkbox leads the title row, sized to the title's line so the row keeps its height. */
 .dg-card-title-row input.dg-card-done {
   flex: 0 0 auto;
-  width: 15px;
-  height: 15px;
+  width: var(--dg-check-size, 15px);
+  height: var(--dg-check-size, 15px);
   margin: 0 -2px 0 0;
   cursor: pointer;
 }
@@ -2372,8 +2385,9 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-toolbar .dg-shortcut-hint { margin-left: auto; }
 .dg-shortcut-bar { padding: 4px var(--dg-bar-inset, 12px) 0; }
 @media (hover: none), (max-width: 600px) {
-  /* A fingertip needs a bigger done checkbox than a mouse pointer. */
-  .dg-card-title-row input.dg-card-done,
+  /* A fingertip needs a bigger done checkbox than a mouse pointer. The card's size
+     also sets how the box is centred and how far the lines below it are indented. */
+  .dg-card { --dg-check-size: 20px; }
   .dg-subproject-card-heading input.dg-subproject-done { width: 20px; height: 20px; }
   .dg-shortcut-hint, .dg-shortcut-bar { display: none; }
 }
