@@ -280,6 +280,9 @@ export default class DragonglassGtdPlugin extends Plugin {
         refreshMinutes: Number.isInteger(saved?.feeds?.refreshMinutes) && saved!.feeds!.refreshMinutes >= 5
           ? saved!.feeds!.refreshMinutes
           : defaults.feeds.refreshMinutes,
+        readingContext: typeof saved?.feeds?.readingContext === "string" && saved.feeds.readingContext.trim()
+          ? saved.feeds.readingContext.trim()
+          : defaults.feeds.readingContext,
       },
       googleCalendar: {
         ...defaults.googleCalendar,

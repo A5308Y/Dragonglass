@@ -130,6 +130,7 @@ type Command
     | RefreshFeeds
     | AddFeed
     | KeepFeedItems (List FeedItemKey)
+    | ReadFeedItem FeedItemKey Bool
     | DiscardFeedItems (List FeedItemKey)
     | UndoFeedDiscard
     | OpenLink String
@@ -636,6 +637,9 @@ encode command =
 
         KeepFeedItems keys ->
             object "keep-feed-items" [ ( "keys", Encode.list Encode.string keys ) ]
+
+        ReadFeedItem key comments ->
+            object "read-feed-item" [ ( "key", Encode.string key ), ( "comments", Encode.bool comments ) ]
 
         DiscardFeedItems keys ->
             object "discard-feed-items" [ ( "keys", Encode.list Encode.string keys ) ]

@@ -328,6 +328,8 @@ export interface FeedSettings {
   storePath: string;
   /** Minutes between automatic fetches. Five is the floor. */
   refreshMinutes: number;
+  /** The context of reading Actions made straight from a feed Item. */
+  readingContext: string;
 }
 
 export interface MailSettings {

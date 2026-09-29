@@ -88,6 +88,18 @@ export function summaryOf(raw: string): string {
  * your Projects simply by publishing or emailing it. Escaping happens on the way
  * into the vault, so what the surface showed is what the note says.
  */
+/**
+ * A title's text without its link syntax: `[text](url)` gives "text", `[[Note|shown]]`
+ * gives "shown" and `[[Note]]` gives "Note". File names are made from this, so a title
+ * with a link doesn't name its file after the address.
+ */
+export function plainTitle(title: string): string {
+  return title
+    .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, "$2")
+    .replace(/\[\[([^\]]*)\]\]/g, "$1")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1");
+}
+
 export function escapeVaultText(value: string): string {
   return value
     .replace(/!\[\[/g, "!\\[\\[")

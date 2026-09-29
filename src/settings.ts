@@ -838,6 +838,14 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     new Setting(sectionEl)
+      .setName("Context for reading Actions")
+      .setDesc("Read and Read comments in the Feeds view make a Next Action with this context, without a Project.")
+      .addText((text) => text.setValue(this.plugin.settings.feeds.readingContext).onChange(async (value) => {
+        this.plugin.settings.feeds.readingContext = value.trim() || "Read/Review";
+        await this.plugin.saveSettings(false);
+      }));
+
+    new Setting(sectionEl)
       .setName("Refresh interval")
       .setDesc("Minutes between automatic fetches. Five is the minimum.")
       .addText((text) => {

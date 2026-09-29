@@ -65,6 +65,7 @@ type Msg
     | RowKey Int FeedItemKey Key
     | CollapseAll Bool
     | KeepOne FeedItemKey
+    | ReadOne FeedItemKey Bool
     | DiscardOne FeedItemKey
     | DiscardSection FeedId
     | DiscardAll
@@ -139,6 +140,9 @@ update msg model =
             , Cmd.none
             )
 
+        ReadOne key comments ->
+            readOne key comments model
+
         KeepOne key ->
             keepOne key model
 
@@ -172,6 +176,18 @@ keepOne key model =
         send Working (Command.KeepItems [ key ]) model
 
 
+{-| A reading Action for the Item's article, or with `True` for its comments, made
+straight away: deciding to read it is the clarifying, so it skips the Inbox.
+-}
+readOne : FeedItemKey -> Bool -> Model -> ( Model, Cmd Msg )
+readOne key comments model =
+    if busy model then
+        ( model, Cmd.none )
+
+    else
+        send Working (Command.ReadItem key comments) model
+
+
 discardKeys : List FeedItemKey -> Model -> ( Model, Cmd Msg )
 discardKeys keys model =
     if busy model || List.isEmpty keys then
@@ -195,6 +211,14 @@ rowKey index key pressed model =
 
         Character "k" ->
             keepOne key model
+
+        Character "r" ->
+            case itemUrl .link key model of
+                Just _ ->
+                    readOne key False model
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         Character "d" ->
             discardKeys [ key ] model
@@ -420,7 +444,7 @@ toolbar model openCount sections =
             , onClick DiscardAll
             ]
             [ text ("Discard all (" ++ String.fromInt openCount ++ ")") ]
-        , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · Enter expand · K keep · D discard · O open · C comments · S discard feed" ]
+        , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · Enter expand · K keep · R read later · D discard · O open · C comments · S discard feed" ]
         ]
 
 
@@ -518,6 +542,16 @@ rowView model indexes item =
                 ]
                 [ text "Keep" ]
             , button
+                [ disabled (busy model || not (isWeb item.link))
+                , onClick (ReadOne item.key False)
+                ]
+                [ text "+ Read" ]
+            , if isWeb item.commentsUrl then
+                button [ disabled (busy model), onClick (ReadOne item.key True) ] [ text "+ Read comments" ]
+
+              else
+                text ""
+            , button
                 [ class "mod-warning"
 
                 , disabled (busy model)
@@ -526,6 +560,13 @@ rowView model indexes item =
                 [ text "Discard" ]
             ]
         ]
+
+
+{-| Whether a reading Action can link to this address; the host checks it again.
+-}
+isWeb : String -> Bool
+isWeb url =
+    String.startsWith "https://" url || String.startsWith "http://" url
 
 
 footerView : Model -> Html Msg

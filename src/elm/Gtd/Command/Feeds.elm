@@ -12,6 +12,8 @@ type Command
     = RefreshFeeds
     | AddFeed
     | KeepItems (List FeedItemKey)
+      -- A reading Action for the Item's article, or for its comments with `True`.
+    | ReadItem FeedItemKey Bool
     | DiscardItems (List FeedItemKey)
     | UndoDiscard
     | OpenLink String
@@ -30,6 +32,9 @@ encode command =
 
             KeepItems keys ->
                 Base.KeepFeedItems keys
+
+            ReadItem key comments ->
+                Base.ReadFeedItem key comments
 
             DiscardItems keys ->
                 Base.DiscardFeedItems keys

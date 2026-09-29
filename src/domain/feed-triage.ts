@@ -8,6 +8,21 @@
 import type { FeedItem } from "./feed";
 import { escapeVaultText } from "./text";
 
+/**
+ * The title of a reading Action made straight from a feed Item: "Read" and the Item's
+ * title as a Markdown link to the article or its comments, which the board shows as a
+ * link. `null` when that address isn't a web address.
+ *
+ * The title comes from the web, so the characters that would end or nest the link are
+ * taken out of it; the board also shows the link's site next to it.
+ */
+export function readingActionTitle(item: Pick<FeedItem, "title" | "link" | "commentsUrl">, comments: boolean): string | null {
+  const url = (comments ? item.commentsUrl : item.link).trim();
+  if (!/^https?:\/\/\S+$/i.test(url)) return null;
+  const label = feedItemTitle(item).replace(/[[\]()]/g, "").replace(/\s+/g, " ").trim() || "Untitled Feed Item";
+  return comments ? `Read the comments on [${label}](${url})` : `Read [${label}](${url})`;
+}
+
 /** The Inbox Item title a kept Feed Item takes. */
 export function feedItemTitle(item: Pick<FeedItem, "title">): string {
   return item.title.trim() || "Untitled Feed Item";

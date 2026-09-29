@@ -107,6 +107,7 @@ export function defaultSettings(): GtdSettings {
       enabled: false,
       storePath: "GTD/feeds.json",
       refreshMinutes: 30,
+      readingContext: "Read/Review",
     },
     mail: {
       enabled: false,

@@ -2086,10 +2086,12 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   }
   .dg-feed-discard { min-height: 38px; }
   .dg-feed-row { flex-direction: column; }
-  .dg-feed-row-actions { width: 100%; flex-wrap: nowrap; gap: 4px; }
+  /* Up to six buttons (Open, Comments, Keep, + Read, + Read comments, Discard): three
+     to a row, so none is squeezed below its label. */
+  .dg-feed-row-actions { width: 100%; flex-wrap: wrap; gap: 4px; }
   .dg-feed-row-actions button {
     min-width: 0;
-    flex: 1 1 0;
+    flex: 1 1 30%;
     min-height: 40px;
     padding-inline: 6px;
     font-size: var(--font-ui-smaller);

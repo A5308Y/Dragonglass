@@ -5,7 +5,8 @@ import { openWebLink } from "../ui/open-link";
 // @ts-expect-error The generated module does not exist in a clean checkout.
 import { Elm } from "../../.generated/elm-runtime.js";
 import { findSource, type FeedItem } from "../domain/feed";
-import { feedItemNote, feedItemTitle } from "../domain/feed-triage";
+import { feedItemNote, feedItemTitle, readingActionTitle } from "../domain/feed-triage";
+import { plainTitle } from "../domain/text";
 import type { FeedService } from "../feeds/feed-service";
 import type { GtdServices } from "../ui/services";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
@@ -76,6 +77,8 @@ export class ElmFeedsHost {
         new Notice(`Subscribed to “${source.title}”.`);
         return;
       }
+      case "read-feed-item":
+        return this.addReadingAction(command.key, command.comments);
       case "keep-feed-items": {
         const kept = await this.keep(command.keys);
         new Notice(`Kept ${kept} Feed Item${kept === 1 ? "" : "s"} in the Inbox.`);
@@ -124,6 +127,21 @@ export class ElmFeedsHost {
       if (consumed.length) await this.feeds.consume(consumed);
     }
     return consumed.length;
+  }
+
+  /**
+   * Makes a Next Action to read the Item's article or its comments, skipping the Inbox:
+   * deciding to read it is the clarifying. The Item leaves the list, as when kept.
+   */
+  private async addReadingAction(key: string, comments: boolean): Promise<void> {
+    const item = this.feeds.findItem(key);
+    if (!item) throw new Error("This Feed Item is no longer on the list.");
+    const title = readingActionTitle(item, comments);
+    if (!title) throw new Error(comments ? "This Item has no comments link." : "This Item has no web link.");
+    const context = this.services.getSettings().feeds.readingContext.trim() || "Read/Review";
+    await this.services.repository.createAction({ title, status: "next", context });
+    await this.feeds.consume([item.key]);
+    new Notice(`Added the Next Action “${plainTitle(title)}” (@${context}).`);
   }
 
   /** Returns the new Inbox Item's ID. */

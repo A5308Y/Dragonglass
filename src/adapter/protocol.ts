@@ -675,7 +675,8 @@ type ElmNonMenuCommand =
   | { type: "discard-feed-items"; keys: string[] }
   | { type: "undo-feed-discard" }
   | { type: "open-link"; url: string }
-  | { type: "open-note-link"; link: string; sourcePath: string };
+  | { type: "open-note-link"; link: string; sourcePath: string }
+  | { type: "read-feed-item"; key: string; comments: boolean };
 
 export type ElmImportKind = "actions" | "subprojects";
 
@@ -721,7 +722,10 @@ export const SURFACE_COMMANDS = {
     "open-note-link",
   ],
   inbox: ["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail"],
-  feeds: ["refresh-feeds", "add-feed", "keep-feed-items", "discard-feed-items", "undo-feed-discard", "open-link", "open-inbox"],
+  feeds: [
+    "refresh-feeds", "add-feed", "keep-feed-items", "read-feed-item", "discard-feed-items", "undo-feed-discard", "open-link",
+    "open-inbox",
+  ],
   projectReview: [
     "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
     "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action", "set-project-status",
@@ -1076,6 +1080,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.url === "string";
     case "open-note-link":
       return typeof value.link === "string" && typeof value.sourcePath === "string";
+    case "read-feed-item":
+      return typeof value.key === "string" && typeof value.comments === "boolean";
     default:
       return false;
   }

@@ -27,6 +27,7 @@ import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreate
 import { ancestorsToActivate, projectStatusLabel, statusChangeProblem } from "../domain/project-tree";
 import { linkedFileEntry, normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
+import { plainTitle } from "../domain/text";
 import { localDate, parseDateOnly } from "../utils/date";
 import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
 import { baseName, generatedFolderNames, normalizeVaultPath, parentPath, safeName } from "../utils/path";
@@ -1078,7 +1079,7 @@ export class GtdRepository {
   }
 
   private uniqueMarkdownPath(directory: string, title: string, id: string, currentPath?: string): string {
-    const clean = safeName(title);
+    const clean = safeName(plainTitle(title));
     const first = normalizePath(`${directory}/${clean}.md`);
     if (first === currentPath || !this.app.vault.getAbstractFileByPath(first)) return first;
     const suffixed = normalizePath(`${directory}/${clean} - ${id.slice(-4)}.md`);

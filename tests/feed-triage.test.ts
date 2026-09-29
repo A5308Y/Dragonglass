@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { feedItemAge, feedItemNote, feedItemTitle } from "../src/domain/feed-triage";
+import { feedItemAge, feedItemNote, feedItemTitle, readingActionTitle } from "../src/domain/feed-triage";
+import { plainTitle } from "../src/domain/text";
 import { escapeVaultText } from "../src/domain/text";
 import type { FeedItem } from "../src/domain/feed";
 
@@ -94,5 +95,25 @@ describe("How old an Item reads", () => {
 
   it("does not report a future Item as aged", () => {
     expect(feedItemAge("2026-09-22T12:00:00.000Z", now)).toBe("scheduled");
+  });
+});
+
+describe("A reading Action made from an Item", () => {
+  const source = { title: "Why [brackets] (and parens) matter", link: "https://example.com/post", commentsUrl: "https://news.example.com/item?id=1" };
+
+  it("links the article, or its comments, from a title the board shows as a link", () => {
+    expect(readingActionTitle(source, false)).toBe("Read [Why brackets and parens matter](https://example.com/post)");
+    expect(readingActionTitle(source, true)).toBe("Read the comments on [Why brackets and parens matter](https://news.example.com/item?id=1)");
+  });
+
+  it("makes none without a web address", () => {
+    expect(readingActionTitle({ ...source, commentsUrl: "" }, true)).toBeNull();
+    expect(readingActionTitle({ ...source, link: "javascript:alert(1)" }, false)).toBeNull();
+  });
+
+  it("names the Action's file after the text, not the address", () => {
+    expect(plainTitle("Read [Why it matters](https://example.com/post)")).toBe("Read Why it matters");
+    expect(plainTitle("Call [[People/Mar|Mar]] about [[Quotes]]")).toBe("Call Mar about Quotes");
+    expect(plainTitle("Plain title")).toBe("Plain title");
   });
 });
