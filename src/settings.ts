@@ -3,7 +3,8 @@ import { confirmDialog } from "./ui/confirm";
 import { miteAccount } from "./domain/mite";
 import { projectBreadcrumbs } from "./domain/project-hierarchy";
 import type { MiteChoice } from "./pomodoro/mite-sync";
-import { localDate } from "./utils/date";
+import { localDate, localDateTime } from "./utils/date";
+import { BUILD_TIME } from "./build-info";
 import { CodexLoginModal } from "./ui/codex-login";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
@@ -40,6 +41,12 @@ export class GtdSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("dg-settings");
     containerEl.createEl("h2", { text: "Dragonglass GTD" });
+    if (BUILD_TIME) {
+      containerEl.createEl("p", {
+        text: `Build ${localDateTime(new Date(BUILD_TIME))}. Devices that sync the plugin through the vault can run `
+          + "different builds for a while: if two devices disagree, compare this first.",
+      });
+    }
     containerEl.createEl("p", { text: "Directories are creation destinations. Existing GTD files are discovered by their type property anywhere in the vault." });
 
     new Setting(containerEl)

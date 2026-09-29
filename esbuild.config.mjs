@@ -16,6 +16,8 @@ const context = await esbuild.context({
   sourcemap: production ? false : "inline",
   treeShaking: true,
   outfile: "main.js",
+  // When this build was made, shown in the settings so two devices can be compared.
+  define: { __DRAGONGLASS_BUILD__: JSON.stringify(new Date().toISOString()) },
 });
 
 if (production) {

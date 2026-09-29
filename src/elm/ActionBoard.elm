@@ -94,6 +94,14 @@ type Pending
     | RankActions (List ActionId)
 
 
+{-| A status already shown on the board while the host writes it. As with ranks,
+`confirmed` means the host has answered, so the next snapshot is the truth either
+way: a file that sync changed again must not keep showing this board's guess.
+-}
+type alias PendingMove =
+    { status : ActionStatus, confirmed : Bool }
+
+
 {-| A priority already shown on the board while the host writes it. `confirmed`
 means the host has answered, so the next snapshot is authoritative either way.
 -}
@@ -123,7 +131,7 @@ type alias Model =
     , draft : FilterDraft
     , dragged : Maybe ActionId
     , priorityDropTarget : Maybe ActionId
-    , optimistic : Dict ActionId ActionStatus
+    , optimistic : Dict ActionId PendingMove
     , optimisticRanks : Dict ActionId PendingRank
     , savedViewSeed : Int
     , requests : Requests Pending
@@ -266,7 +274,16 @@ update msg model =
             ( { model | zone = zone }, Task.perform Tick Time.now )
 
         Tick now ->
-            ( { model | now = Just now }, Cmd.none )
+            let
+                snapshot =
+                    model.snapshot
+
+                -- The host dates each snapshot, but none may come overnight: a board left
+                -- open would go on judging overdue and follow-ups by yesterday.
+                day =
+                    Agenda.clock model.zone now |> .day
+            in
+            ( { model | now = Just now, snapshot = { snapshot | today = day } }, Cmd.none )
 
         ToggleViewMenu ->
             ( { model | viewMenuOpen = not model.viewMenuOpen }, Cmd.none )
@@ -571,7 +588,7 @@ send pending command model =
         optimistic =
             case pending of
                 MoveAction actionId status ->
-                    Dict.insert actionId status model.optimistic
+                    Dict.insert actionId { status = status, confirmed = False } model.optimistic
 
                 _ ->
                     model.optimistic
@@ -620,7 +637,7 @@ crossColumnStatus model actionId targetId =
     let
         statusOf id =
             Data.findAction id model.snapshot.actions
-                |> Maybe.map (\action -> Dict.get action.id model.optimistic |> Maybe.withDefault action.status)
+                |> Maybe.map (\action -> Dict.get action.id model.optimistic |> Maybe.map .status |> Maybe.withDefault action.status)
     in
     case ( model.configuration.groupBy, statusOf actionId, statusOf targetId ) of
         ( GroupByStatus, Just own, Just target ) ->
@@ -754,7 +771,7 @@ receiveHost value model =
         Ok (SnapshotEvent snapshot) ->
             ( { model
                 | snapshot = snapshot
-                , optimistic = Dict.filter (\actionId status -> not (converged actionId status snapshot)) model.optimistic
+                , optimistic = Dict.filter (\actionId move -> not move.confirmed && not (converged actionId move.status snapshot)) model.optimistic
                 , optimisticRanks =
                     Dict.filter (\actionId rank -> not rank.confirmed && not (rankLanded actionId rank snapshot)) model.optimisticRanks
                 , fatalError = Nothing
@@ -790,6 +807,10 @@ receiveHost value model =
                     , Cmd.none
                     )
 
+                ( Ok _, MoveAction actionId _ ) ->
+                    -- Written. The snapshot that follows is the truth, even if it differs from what was shown.
+                    ( { next | optimistic = Dict.update actionId (Maybe.map (\move -> { move | confirmed = True })) next.optimistic }, Cmd.none )
+
                 ( Ok _, _ ) ->
                     ( next, Cmd.none )
 
@@ -812,7 +833,7 @@ host has not written yet.
 effectiveAction : Model -> Action -> Action
 effectiveAction model action =
     { action
-        | status = Dict.get action.id model.optimistic |> Maybe.withDefault action.status
+        | status = Dict.get action.id model.optimistic |> Maybe.map .status |> Maybe.withDefault action.status
         , priority =
             case Dict.get action.id model.optimisticRanks of
                 Just rank ->
