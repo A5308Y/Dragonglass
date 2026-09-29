@@ -2070,8 +2070,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   .dg-project-groups { grid-template-columns: 1fr; padding: 8px; }
   .dg-project-row { grid-template-columns: 1fr; }
   .dg-inbox-row { grid-template-columns: 1fr; }
-  .dg-inbox-row-actions { width: 100%; }
-  .dg-inbox-row-actions button { flex: 1; min-height: 40px; }
+  /* Two per row: four buttons (an email's) don't fit side by side, and the last,
+     Delete, would be cut off at the pane's edge. An odd one out takes the full row. */
+  .dg-inbox-row-actions { width: 100%; flex-wrap: wrap; }
+  .dg-inbox-row-actions button { flex: 1 1 40%; min-height: 40px; }
   .dg-feeds-view { --dg-bar-inset: 8px; }
   .dg-feed-sections { padding: 8px; gap: 8px; }
   .dg-feeds-toolbar { overflow-x: hidden; }
