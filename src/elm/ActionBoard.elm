@@ -4,6 +4,7 @@ import Browser
 import Browser.Dom
 import Dict exposing (Dict)
 import Gtd.ActionStatus as ActionStatus exposing (ActionStatus)
+import Gtd.Agenda as Agenda
 import Gtd.Command.ActionBoard as Command exposing (Command, MenuEntry(..))
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Energy as Energy exposing (Energy)
@@ -24,12 +25,13 @@ import Gtd.Settings as Settings
         , VisibleColumns(..)
         )
 import Gtd.Ui as Ui exposing (Key(..))
-import Html exposing (Html, article, button, div, h2, header, input, label, option, section, select, span, text)
+import Html exposing (Html, article, button, div, h2, header, input, label, li, option, section, select, span, text, ul)
 import Html.Attributes exposing (attribute, checked, class, classList, disabled, draggable, id, placeholder, selected, tabindex, title, type_, value)
 import Html.Events exposing (custom, on, onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Task
+import Time
 
 
 port toHost : Encode.Value -> Cmd msg
@@ -114,6 +116,10 @@ type alias Model =
 
     -- Shows only the Actions that need attention, whatever the view filters or hides.
     , attentionOnly : Bool
+
+    -- The local day and minute, for today's Calendar Actions; `Nothing` until first read.
+    , zone : Time.Zone
+    , now : Maybe Time.Posix
     , draft : FilterDraft
     , dragged : Maybe ActionId
     , priorityDropTarget : Maybe ActionId
@@ -132,6 +138,8 @@ type Msg
     | ToggleFilters
     | ToggleControls
     | ToggleAttentionOnly
+    | GotZone Time.Zone
+    | Tick Time.Posix
     | ToggleViewMenu
     | SelectSavedView String
     | SetGroupBy GroupBy
@@ -167,7 +175,10 @@ main =
     Browser.element
         { init = init
         , update = update
-        , subscriptions = \_ -> fromHost GotHost
+        , subscriptions =
+            \_ ->
+                -- Twice a minute is enough for "In 25 min" and for noticing a new day.
+                Sub.batch [ fromHost GotHost, Time.every 30000 Tick ]
         , view = view
         }
 
@@ -186,7 +197,7 @@ init flags =
                         |> Maybe.map .configuration
                         |> Maybe.withDefault (Settings.defaultConfiguration snapshot.settings)
             in
-            ( initialModel snapshot active configuration, Cmd.none )
+            ( initialModel snapshot active configuration, Task.perform GotZone Time.here )
 
         Err error ->
             let
@@ -207,6 +218,8 @@ initialModel snapshot active configuration =
     , viewMenuOpen = False
     , controlsOpen = False
     , attentionOnly = False
+    , zone = Time.utc
+    , now = Nothing
     , draft = initialDraft snapshot.today
     , dragged = Nothing
     , priorityDropTarget = Nothing
@@ -248,6 +261,12 @@ update msg model =
 
         ToggleAttentionOnly ->
             ( { model | attentionOnly = not model.attentionOnly }, Cmd.none )
+
+        GotZone zone ->
+            ( { model | zone = zone }, Task.perform Tick Time.now )
+
+        Tick now ->
+            ( { model | now = Just now }, Cmd.none )
 
         ToggleViewMenu ->
             ( { model | viewMenuOpen = not model.viewMenuOpen }, Cmd.none )
@@ -889,9 +908,12 @@ boardView model =
         groups =
             buildGroups model
 
+        today =
+            todayActions model
+
         -- The count describes the cards on screen, not every Action in the vault.
         shown =
-            groups |> List.map (.actions >> List.length) |> List.sum
+            (groups |> List.map (.actions >> List.length) |> List.sum) + List.length today
 
         -- Few enough to choose from at a glance; the pill turns green to reward filtering down.
         focused =
@@ -902,7 +924,7 @@ boardView model =
             model.snapshot.actions |> List.map (effectiveAction model) |> List.filter (needsAttention model.snapshot.today) |> List.length
 
         needingShown =
-            groups |> List.concatMap .actions |> List.filter (needsAttention model.snapshot.today) |> List.length
+            (groups |> List.concatMap .actions) ++ today |> List.filter (needsAttention model.snapshot.today) |> List.length
     in
     div [ classList [ ( "dg-view dg-board-view", True ), ( "is-controls-open", model.controlsOpen ) ] ]
         [ header [ class "dg-view-header" ]
@@ -973,6 +995,7 @@ boardView model =
             ]
         , div [ class "dg-shortcut-bar" ]
             [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · C Calendar · D Done · E or Enter edit" ] ]
+        , todayView model today
         , div [ classList [ ( "dg-board", True ), ( "is-single-column", List.length groups == 1 ) ], attribute "role" "list" ]
             (if List.isEmpty groups then
                 [ div [ class "dg-empty" ]
@@ -1524,6 +1547,76 @@ cardView model action =
         ]
 
 
+-- TODAY
+
+
+agendaClock : Model -> Agenda.Clock
+agendaClock model =
+    case model.now of
+        Just now ->
+            Agenda.clock model.zone now
+
+        Nothing ->
+            { day = model.snapshot.today, minute = Nothing }
+
+
+{-| Today's Calendar Actions, whatever the view filters, hides or searches for:
+what has to happen today is in view whenever the board is.
+-}
+todayActions : Model -> List Action
+todayActions model =
+    Agenda.todayActions (agendaClock model) (List.map (effectiveAction model) model.snapshot.actions)
+
+
+{-| A strip above the columns, one line per Action. What starts within the hour,
+or is on now, stands out by its wording ("In 25 min", "Now") and a calm accent,
+not a warning colour: it is a reminder, not a problem.
+-}
+todayView : Model -> List Action -> Html Msg
+todayView model actions =
+    if List.isEmpty actions then
+        text ""
+
+    else
+        section [ class "dg-today", attribute "aria-labelledby" "dg-today-label" ]
+            [ span [ id "dg-today-label", class "dg-today-label" ] [ text "Today" ]
+            , ul [ class "dg-today-list" ] (List.map (todayItem model) actions)
+            ]
+
+
+todayItem : Model -> Action -> Html Msg
+todayItem model action =
+    let
+        ( state, when ) =
+            case Agenda.moment (agendaClock model) action of
+                Agenda.AllDay ->
+                    ( "", "All day" )
+
+                Agenda.Later from until ->
+                    ( "", from ++ "–" ++ until )
+
+                Agenda.Soon minutes from until ->
+                    ( "is-soon", "In " ++ String.fromInt minutes ++ " min · " ++ from ++ "–" ++ until )
+
+                Agenda.Now until ->
+                    ( "is-now", "Now · until " ++ until )
+
+                Agenda.Earlier from until ->
+                    ( "is-earlier", "Earlier · " ++ from ++ "–" ++ until )
+
+        project =
+            action.projectId |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects)
+    in
+    li [ classList [ ( "dg-today-item", True ), ( state, state /= "" ) ] ]
+        [ Ui.labelled ("Mark done: " ++ action.title)
+            (input [ type_ "checkbox", class "dg-card-done", checked False, onCheck (ToggleDone action.id) ] [])
+        , span [ class "dg-today-time" ] [ text when ]
+        , button [ class "dg-flat-button dg-today-title", onClick (Send IgnoreReply (Command.EditActionModal action.id)) ]
+            [ text action.title ]
+        , Ui.maybeView project (\owner -> span [ class "dg-today-project" ] [ text owner.title ])
+        ]
+
+
 {-| Keys pressed on the card itself; a key on its menu or Project link is theirs.
 -}
 onCardKey : ActionId -> Html.Attribute Msg
@@ -1563,6 +1656,8 @@ buildGroups model =
                      else
                         matchesAll model
                     )
+                -- Today's Calendar Actions are shown above the columns instead.
+                |> List.filter (not << Agenda.isToday (agendaClock model))
                 |> sortActions model
 
         grouped =
