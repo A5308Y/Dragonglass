@@ -84,7 +84,8 @@ type alias PomodoroState =
     , weekStart : String
     , checklists : List ChecklistChoice
     , checklistRun : Maybe Checklist.Run
-    , ticking : Bool
+    , sound : String
+    , soundFolder : String
     }
 
 
@@ -221,7 +222,7 @@ initialModel snapshot state nowMs =
 
 emptyState : PomodoroState
 emptyState =
-    { focusMinutes = 25, active = Nothing, sessions = [], today = "", weekStart = "", checklists = [], checklistRun = Nothing, ticking = False }
+    { focusMinutes = 25, active = Nothing, sessions = [], today = "", weekStart = "", checklists = [], checklistRun = Nothing, sound = "off", soundFolder = "" }
 
 
 selectProject : Maybe ProjectId -> Model -> Model
@@ -812,19 +813,7 @@ runningView model active =
               else
                 button [ onClick Pause ] [ text "Pause" ]
             , button [ onClick FinishEarly ] [ text "Finish early" ]
-            , button
-                [ classList [ ( "is-active", model.state.ticking ) ]
-                , attribute "aria-pressed" (Ui.boolAttribute model.state.ticking)
-                , onClick (Send Command.ToggleTicking)
-                ]
-                [ text
-                    (if model.state.ticking then
-                        "🔊 Ticking"
-
-                     else
-                        "🔇 Ticking"
-                    )
-                ]
+            , soundChoice model
             , button [ class "mod-warning", onClick Discard ] [ text "Discard" ]
             ]
         ]
@@ -840,6 +829,30 @@ subjectLink active =
         Nothing ->
             button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject active.projectId)) ]
                 [ text active.projectTitle ]
+
+
+{-| What plays while the timer runs: nothing, a ticking clock, or the sound folder.
+-}
+soundChoice : Model -> Html Msg
+soundChoice model =
+    Ui.labelled "Sound while focusing"
+        (Html.select [ class "dropdown dg-pomodoro-sound", onInput (Command.SetSound >> Send) ]
+            (List.map
+                (\( key, name ) -> Html.option [ value key, Html.Attributes.selected (model.state.sound == key) ] [ text name ])
+                [ ( "off", "🔇 No sound" )
+                , ( "ticking", "⏱ Ticking" )
+                , ( "folder"
+                  , "🎧 "
+                        ++ (if String.isEmpty model.state.soundFolder then
+                                "Sound folder"
+
+                            else
+                                model.state.soundFolder
+                           )
+                  )
+                ]
+            )
+        )
 
 
 {-| What can be ticked off without leaving the timer: the checklist's items, or the
@@ -1201,23 +1214,25 @@ flagsDecoder =
 
 stateDecoder : Decoder PomodoroState
 stateDecoder =
-    Decode.map8 PomodoroState
-        (Decode.field "focusMinutes" Decode.int)
-        (Decode.field "active" (Decode.nullable activeDecoder))
-        (Decode.field "sessions" (Decode.list sessionDecoder))
-        (Decode.field "today" Decode.string)
-        (Decode.field "weekStart" Decode.string)
-        (Decode.field "checklists"
-            (Decode.list
-                (Decode.map3 ChecklistChoice
-                    (Decode.field "path" Decode.string)
-                    (Decode.field "title" Decode.string)
-                    (Decode.field "itemCount" Decode.int)
+    Decode.succeed PomodoroState
+        |> andMap (Decode.field "focusMinutes" Decode.int)
+        |> andMap (Decode.field "active" (Decode.nullable activeDecoder))
+        |> andMap (Decode.field "sessions" (Decode.list sessionDecoder))
+        |> andMap (Decode.field "today" Decode.string)
+        |> andMap (Decode.field "weekStart" Decode.string)
+        |> andMap
+            (Decode.field "checklists"
+                (Decode.list
+                    (Decode.map3 ChecklistChoice
+                        (Decode.field "path" Decode.string)
+                        (Decode.field "title" Decode.string)
+                        (Decode.field "itemCount" Decode.int)
+                    )
                 )
             )
-        )
-        (Decode.field "checklistRun" (Decode.nullable Checklist.runDecoder))
-        (Decode.oneOf [ Decode.field "ticking" Decode.bool, Decode.succeed False ])
+        |> andMap (Decode.field "checklistRun" (Decode.nullable Checklist.runDecoder))
+        |> andMap (Decode.oneOf [ Decode.field "sound" Decode.string, Decode.succeed "off" ])
+        |> andMap (Decode.oneOf [ Decode.field "soundFolder" Decode.string, Decode.succeed "" ])
 
 
 activeDecoder : Decoder Active

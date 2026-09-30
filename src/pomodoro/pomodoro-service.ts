@@ -22,6 +22,8 @@ import { withExternalLink } from "../domain/mite";
 import { SyncedJsonFile } from "../state/synced-json-file";
 import { showUndoNotice } from "../ui/undo";
 import { TickSound } from "./tick-sound";
+import { FolderSound } from "./folder-sound";
+import { isPathInDirectory } from "../utils/path";
 
 /**
  * Owns the running Pomodoro and the session log.
@@ -30,6 +32,8 @@ import { TickSound } from "./tick-sound";
  * Pomodoro view is closed and survives a restart: the store file records when the
  * current stretch began, and time is always derived from that, never counted.
  */
+const SOUND_EXTENSIONS = new Set(["mp3", "m4a", "aac", "wav", "ogg", "oga", "flac"]);
+
 export class PomodoroService {
   private store: PomodoroStore = emptyPomodoroStore();
   private loaded = false;
@@ -40,6 +44,7 @@ export class PomodoroService {
   private ticker: number | null = null;
   private statusBar: HTMLElement | null = null;
   private readonly tick = new TickSound();
+  private readonly folder = new FolderSound(() => this.soundFiles());
 
   constructor(
     private readonly app: App,
@@ -71,6 +76,7 @@ export class PomodoroService {
     return () => {
       this.clearTimers();
       this.tick.close();
+      this.folder.close();
       this.statusBar = null;
       for (const ref of watching) this.app.vault.offref(ref);
     };
@@ -96,7 +102,7 @@ export class PomodoroService {
 
   async begin(start: PomodoroStart): Promise<void> {
     // Sound may only start from something the person did: starting a session is that.
-    if (this.getSettings().tickSound) this.tick.prepare();
+    this.prepareSound();
     await this.load();
     await this.update(startPomodoro(this.store, start, new Date()));
   }
@@ -106,7 +112,7 @@ export class PomodoroService {
   }
 
   async resume(): Promise<void> {
-    if (this.getSettings().tickSound) this.tick.prepare();
+    this.prepareSound();
     await this.update(resumePomodoro(this.store, new Date()));
   }
 
@@ -151,6 +157,7 @@ export class PomodoroService {
         this.alarm = window.setTimeout(() => {
           this.alarm = null;
           new Notice(`Pomodoro finished: “${active.intention}”. Time to wrap up.`, 10_000);
+          this.syncSound();
           this.renderStatus();
           this.notify();
         }, delay);
@@ -160,19 +167,50 @@ export class PomodoroService {
         this.playTick();
       }, 1_000);
     }
+    this.syncSound();
     this.renderStatus();
   }
 
-  /** Readies the sound when ticking is switched on, which is something the person did. */
-  prepareTicking(): void {
-    this.tick.prepare();
+  /**
+   * The sound setting changed: the new one starts, or the old one stops, at once. Called
+   * from what the person did (the timer's selector, the settings), so sound may start.
+   */
+  soundChanged(): void {
+    this.prepareSound();
+    this.syncSound();
+  }
+
+  private prepareSound(): void {
+    if (this.getSettings().sound === "ticking") this.tick.prepare();
+  }
+
+  /** Whether the session is running right now, not paused and not past its time. */
+  private running(): boolean {
+    const active = this.store.active;
+    return Boolean(active?.resumedAt) && remainingSeconds(active!, new Date()) > 0;
   }
 
   private playTick(): void {
     const settings = this.getSettings();
-    const active = this.store.active;
-    if (!settings.tickSound || !active?.resumedAt || remainingSeconds(active, new Date()) <= 0) return;
-    this.tick.play(settings.tickVolume / 100);
+    if (settings.sound === "ticking" && this.running()) this.tick.play(settings.soundVolume / 100);
+  }
+
+  /** The folder's sound plays while the session runs, pauses with it, and stops at its end. */
+  private syncSound(): void {
+    const settings = this.getSettings();
+    const paused = Boolean(this.store.active) && !this.store.active!.resumedAt;
+    if (settings.sound === "folder" && this.running()) this.folder.play(settings.soundVolume / 100);
+    // Paused keeps the place in the file; anything else (finished, time up, another sound) ends it.
+    else if (settings.sound === "folder" && paused) this.folder.pause();
+    else this.folder.stop();
+  }
+
+  /** The sound folder's audio files, as addresses the player can load. */
+  private soundFiles(): string[] {
+    const folder = this.getSettings().soundFolder;
+    return this.app.vault.getFiles()
+      .filter((file) => SOUND_EXTENSIONS.has(file.extension.toLowerCase()) && isPathInDirectory(file.path, folder))
+      .map((file) => this.app.vault.getResourcePath(file));
   }
 
   private renderStatus(): void {

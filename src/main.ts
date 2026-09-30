@@ -10,7 +10,7 @@ import { weeklyReviewFinished } from "./domain/weekly-review";
 import { unreadItems } from "./domain/feed";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { describeImport, normalizeMailPort } from "./domain/mail";
-import type { ActionStatus, GtdSettings, MailAccountSettings, Project, ProjectStatus, SavedView } from "./domain/types";
+import { POMODORO_SOUNDS, type ActionStatus, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
@@ -230,10 +230,7 @@ export default class DragonglassGtdPlugin extends Plugin {
           ? saved!.pomodoro!.focusMinutes
           : defaults.pomodoro.focusMinutes,
         logToDiary: saved?.pomodoro?.logToDiary === true,
-        tickSound: saved?.pomodoro?.tickSound === true,
-        tickVolume: Number.isInteger(saved?.pomodoro?.tickVolume) && saved!.pomodoro!.tickVolume >= 0 && saved!.pomodoro!.tickVolume <= 100
-          ? saved!.pomodoro!.tickVolume
-          : defaults.pomodoro.tickVolume,
+        ...pomodoroSound(saved?.pomodoro, defaults.pomodoro),
         mite: parseMiteSettings(saved?.pomodoro?.mite, localDate()),
       },
       brainstorm: {
@@ -637,6 +634,11 @@ export default class DragonglassGtdPlugin extends Plugin {
     void this.sendToMite(false);
   }
 
+  /** The settings changed the Pomodoro sound; a running session hears the change at once. */
+  pomodoroSoundChanged(): void {
+    this.pomodoro.soundChanged();
+  }
+
   /** Every Project, for the settings' mite mapping. */
   projectList(): readonly Project[] {
     return this.index.getSnapshot().projects;
@@ -765,6 +767,24 @@ export default class DragonglassGtdPlugin extends Plugin {
     const leaf = await this.activateView(PROJECTS_VIEW_TYPE);
     if (leaf.view instanceof GtdProjectsView) leaf.view.showProject(id);
   }
+}
+
+/**
+ * The Pomodoro sound settings as saved, or as the first ticking switch saved them
+ * (`tickSound`, `tickVolume`), which ticking-on carries over from.
+ */
+function pomodoroSound(saved: unknown, defaults: PomodoroSettings): Pick<PomodoroSettings, "sound" | "soundFolder" | "soundVolume"> {
+  const value = (saved && typeof saved === "object" ? saved : {}) as Record<string, unknown>;
+  const volume = Number.isInteger(value.soundVolume) ? value.soundVolume : value.tickVolume;
+  return {
+    sound: (POMODORO_SOUNDS as readonly unknown[]).includes(value.sound)
+      ? value.sound as PomodoroSound
+      : value.tickSound === true ? "ticking" : defaults.sound,
+    soundFolder: typeof value.soundFolder === "string" && normalizeVaultPath(value.soundFolder)
+      ? normalizeVaultPath(value.soundFolder)
+      : defaults.soundFolder,
+    soundVolume: Number.isInteger(volume) && (volume as number) >= 0 && (volume as number) <= 100 ? volume as number : defaults.soundVolume,
+  };
 }
 
 /** Repairs an account read back from the data file, so one bad field cannot break start-up. */

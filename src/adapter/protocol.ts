@@ -15,7 +15,7 @@ import {
 import { addLocalDays, localDate } from "../utils/date";
 import { feedItemAge } from "../domain/feed-triage";
 import { isAllDaySchedule } from "../domain/schedule";
-import { ACTION_STATUSES, BOARD_PROJECT_STATUSES, ENERGY_LEVELS, PROJECT_STATUSES, type Energy } from "../domain/types";
+import { ACTION_STATUSES, BOARD_PROJECT_STATUSES, ENERGY_LEVELS, POMODORO_SOUNDS, PROJECT_STATUSES, type Energy, type PomodoroSound } from "../domain/types";
 import type { ProjectReviewHealth } from "../domain/project-review";
 import type {
   Action,
@@ -216,8 +216,10 @@ export interface ElmPomodoroDto {
   checklists: ElmChecklistChoiceDto[];
   /** The run the running session is spent on, if it is a checklist session. */
   checklistRun: ElmChecklistRunDto | null;
-  /** Whether a running session ticks (setting `pomodoro.tickSound`). */
-  ticking: boolean;
+  /** What plays while a session runs (setting `pomodoro.sound`). */
+  sound: PomodoroSound;
+  /** The sound folder's name, for the timer's choice. */
+  soundFolder: string;
 }
 
 export interface ElmChecklistChoiceDto {
@@ -240,7 +242,7 @@ export function elmPomodoro(
   focusMinutes: number,
   now = new Date(),
   checklists: ElmPomodoroChecklists = { choices: [], run: null },
-  ticking = false,
+  sound: { sound: PomodoroSound; folder: string } = { sound: "off", folder: "" },
 ): ElmPomodoroDto {
   const today = localDate(now);
   const active = store.active;
@@ -281,7 +283,8 @@ export function elmPomodoro(
     weekStart: addLocalDays(today, -((now.getDay() + 6) % 7)),
     checklists: checklists.choices,
     checklistRun: checklists.run,
-    ticking,
+    sound: sound.sound,
+    soundFolder: sound.folder.slice(sound.folder.lastIndexOf("/") + 1),
   };
 }
 
@@ -630,7 +633,7 @@ type ElmNonMenuCommand =
   | { type: "resume-pomodoro" }
   | { type: "finish-pomodoro"; outcome: PomodoroOutcome | null; reflection: string }
   | { type: "discard-pomodoro" }
-  | { type: "toggle-pomodoro-ticking" }
+  | { type: "set-pomodoro-sound"; sound: PomodoroSound }
   | { type: "complete-pomodoro-action"; actionId: string }
   | { type: "start-checklist-pomodoro"; path: string; intention: string; minutes: number }
   | { type: "open-checklist-pomodoro"; path: string }
@@ -751,7 +754,7 @@ export const SURFACE_COMMANDS = {
   pomodoro: [
     "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro",
     "complete-pomodoro-action", "show-project", "start-checklist-pomodoro", "mark-checklist-item", "open-checklist-run",
-    "toggle-pomodoro-ticking",
+    "set-pomodoro-sound",
   ],
   checklists: [
     "start-checklist-run", "show-checklist-run", "mark-checklist-item", "finish-checklist-run", "discard-checklist-run",
@@ -906,8 +909,9 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "pause-pomodoro":
     case "resume-pomodoro":
     case "discard-pomodoro":
-    case "toggle-pomodoro-ticking":
       return true;
+    case "set-pomodoro-sound":
+      return isOneOf(POMODORO_SOUNDS, value.sound);
     case "open-pomodoro":
     case "delegate-project":
       return typeof value.projectId === "string";

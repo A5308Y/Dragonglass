@@ -76,8 +76,9 @@ export function defaultSettings(): GtdSettings {
       storePath: "GTD/pomodoros.json",
       focusMinutes: 25,
       logToDiary: false,
-      tickSound: false,
-      tickVolume: 30,
+      sound: "off",
+      soundFolder: "Dragonglass/Focus Sounds",
+      soundVolume: 30,
       mite: parseMiteSettings({}, localDate()),
     },
     brainstorm: {

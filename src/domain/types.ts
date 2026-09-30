@@ -302,6 +302,9 @@ export interface AgentSettings {
   localMaxReplyTokens: number;
 }
 
+export const POMODORO_SOUNDS = ["off", "ticking", "folder"] as const;
+export type PomodoroSound = (typeof POMODORO_SOUNDS)[number];
+
 export interface PomodoroSettings {
   /** The vault-relative JSON file holding the running session and the session log. */
   storePath: string;
@@ -309,10 +312,12 @@ export interface PomodoroSettings {
   focusMinutes: number;
   /** Also add one line per finished session to the Project's Diary. */
   logToDiary: boolean;
-  /** A soft clock tick every second while a session runs. */
-  tickSound: boolean;
-  /** Its volume, 0 to 100. */
-  tickVolume: number;
+  /** What plays while a session runs: nothing, a clock tick, or the sound folder's files. */
+  sound: PomodoroSound;
+  /** Vault folder whose audio files play, one after another at random, for `sound: "folder"`. */
+  soundFolder: string;
+  /** Volume of either sound, 0 to 100. */
+  soundVolume: number;
   /** Sending finished sessions to mite as time entries. */
   mite: MiteSettings;
 }

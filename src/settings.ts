@@ -325,20 +325,40 @@ export class GtdSettingTab extends PluginSettingTab {
         });
       });
 
+    const pomodoro = this.plugin.settings.pomodoro;
+    const soundChanged = async () => {
+      await this.plugin.saveSettings(false);
+      this.plugin.pomodoroSoundChanged();
+    };
     new Setting(sectionEl)
-      .setName("Ticking")
-      .setDesc("A soft clock tick every second while a session runs, not while it is paused. The timer's Ticking button switches it too.")
-      .addToggle((toggle) => toggle.setValue(this.plugin.settings.pomodoro.tickSound).onChange(async (value) => {
-        this.plugin.settings.pomodoro.tickSound = value;
-        await this.plugin.saveSettings(false);
-      }))
+      .setName("Sound while focusing")
+      .setDesc("Plays while a session runs, not while it is paused. The timer has the same choice.")
+      .addDropdown((dropdown) => dropdown
+        .addOption("off", "Off")
+        .addOption("ticking", "Ticking clock")
+        .addOption("folder", "Sound folder")
+        .setValue(pomodoro.sound)
+        .onChange(async (value) => {
+          pomodoro.sound = value === "ticking" || value === "folder" ? value : "off";
+          await soundChanged();
+        }));
+
+    new Setting(sectionEl)
+      .setName("Sound folder")
+      .setDesc("Vault folder of audio files (mp3, m4a, wav, ogg, flac). They play one after another, each next one chosen at random.")
+      .addText((text) => text.setValue(pomodoro.soundFolder).onChange(async (value) => {
+        pomodoro.soundFolder = normalizeVaultPath(value) || "Dragonglass/Focus Sounds";
+        await soundChanged();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Sound volume")
       .addSlider((slider) => slider
         .setLimits(5, 100, 5)
-        .setValue(this.plugin.settings.pomodoro.tickVolume)
-        .setDynamicTooltip()
+        .setValue(pomodoro.soundVolume)
         .onChange(async (value) => {
-          this.plugin.settings.pomodoro.tickVolume = value;
-          await this.plugin.saveSettings(false);
+          pomodoro.soundVolume = value;
+          await soundChanged();
         }));
 
     new Setting(sectionEl)
