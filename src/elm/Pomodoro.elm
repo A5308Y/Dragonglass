@@ -146,6 +146,9 @@ type alias Model =
     , historyLimit : Int
     , requests : Requests ()
     , error : Maybe String
+
+    -- The tab was closed: timers off (see `Host.isClosing`).
+    , closed : Bool
     }
 
 
@@ -223,6 +226,7 @@ initialModel snapshot state nowMs =
     , historyLimit = 20
     , requests = Host.noRequests
     , error = Nothing
+    , closed = False
     }
 
 
@@ -270,6 +274,15 @@ selectChecklist maybePath model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
+    if model.closed then
+        Sub.none
+
+    else
+        subscriptionsWhileOpen model
+
+
+subscriptionsWhileOpen : Model -> Sub Msg
+subscriptionsWhileOpen model =
     Sub.batch
         [ pomodoroFromHost GotHost
         , if model.state.active /= Nothing then
@@ -288,7 +301,11 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotHost value ->
-            receiveHost value model
+            if Host.isClosing value then
+                ( { model | closed = True }, Cmd.none )
+
+            else
+                receiveHost value model
 
         Tick now ->
             ( { model | nowMs = Time.posixToMillis now }, Cmd.none )

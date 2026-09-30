@@ -137,6 +137,9 @@ type alias Model =
     , savedViewSeed : Int
     , requests : Requests Pending
     , fatalError : Maybe String
+
+    -- The tab was closed: timers off (see `Host.isClosing`).
+    , closed : Bool
     }
 
 
@@ -185,9 +188,13 @@ main =
         { init = init
         , update = update
         , subscriptions =
-            \_ ->
-                -- Twice a minute is enough for "In 25 min" and for noticing a new day.
-                Sub.batch [ fromHost GotHost, Time.every 30000 Tick ]
+            \model ->
+                if model.closed then
+                    Sub.none
+
+                else
+                    -- Twice a minute is enough for "In 25 min" and for noticing a new day.
+                    Sub.batch [ fromHost GotHost, Time.every 30000 Tick ]
         , view = view
         }
 
@@ -237,6 +244,7 @@ initialModel snapshot active configuration =
     , savedViewSeed = 1
     , requests = Host.noRequests
     , fatalError = Nothing
+    , closed = False
     }
 
 
@@ -254,7 +262,11 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotHost value ->
-            receiveHost value model
+            if Host.isClosing value then
+                ( { model | closed = True }, Cmd.none )
+
+            else
+                receiveHost value model
 
         SearchChanged query ->
             ( { model | search = query }, Cmd.none )

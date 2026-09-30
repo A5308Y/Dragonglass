@@ -51,6 +51,8 @@ export class ElmActionBoardHost {
   }
 
   destroy(): void {
+    // Elm can't stop a program; told the tab closed, it switches off its timers.
+    this.reply({ type: "closed" });
     this.closed = true;
     this.unsubscribePort();
     this.unsubscribe();

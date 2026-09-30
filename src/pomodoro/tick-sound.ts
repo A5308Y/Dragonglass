@@ -42,6 +42,14 @@ export class TickSound {
     this.tock = !this.tock;
   }
 
+  /**
+   * Lets the audio output rest while nothing ticks: a running output keeps an audio
+   * thread busy, silent or not. The next tick wakes it again.
+   */
+  suspend(): void {
+    if (this.context?.state === "running") void this.context.suspend().catch(() => undefined);
+  }
+
   close(): void {
     void this.context?.close().catch(() => undefined);
     this.context = null;

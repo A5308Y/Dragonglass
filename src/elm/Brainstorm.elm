@@ -131,6 +131,9 @@ type alias Model =
     , requests : Requests Pending
     , saving : Bool
     , error : Maybe String
+
+    -- The tab was closed: timers off (see `Host.isClosing`).
+    , closed : Bool
     , partnerAvailable : Bool
     , partner : Partner
 
@@ -171,7 +174,13 @@ main =
     Browser.element
         { init = init
         , update = update
-        , subscriptions = \_ -> Sub.batch [ brainstormFromHost GotHost, Time.every 1000 Tick ]
+        , subscriptions =
+            \model ->
+                if model.closed then
+                    Sub.none
+
+                else
+                    Sub.batch [ brainstormFromHost GotHost, Time.every 1000 Tick ]
         , view = view
         }
 
@@ -228,6 +237,7 @@ emptyModel snapshot words session =
     , requests = Host.noRequests
     , saving = False
     , error = Nothing
+    , closed = False
     , partnerAvailable = False
     , partner = idlePartner 0
     , inspirations = []
@@ -245,7 +255,11 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotHost value ->
-            receiveHost value model
+            if Host.isClosing value then
+                ( { model | closed = True }, Cmd.none )
+
+            else
+                receiveHost value model
 
         Tick _ ->
             if model.session == Nothing then

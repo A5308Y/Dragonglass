@@ -203,6 +203,7 @@ export class PomodoroService {
     // Paused keeps the place in the file; anything else (finished, time up, another sound) ends it.
     else if (settings.sound === "folder" && paused) this.folder.pause();
     else this.folder.stop();
+    if (!(settings.sound === "ticking" && this.running())) this.tick.suspend();
   }
 
   /** The sound folder's audio files, as addresses the player can load. */

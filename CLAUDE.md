@@ -127,6 +127,14 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   and `styles.css`; it does not build.
 - `npm test` runs the vitest suite.
 
+## Elm views that keep time
+
+- Elm can't stop a program: when a view's tab closes, its program keeps running unseen,
+  and any `Time.every` goes on ticking and redrawing until Obsidian quits. So each host
+  sends `{ type: "closed" }` in `destroy()`, and each view with a timer checks
+  `Host.isClosing` in its `GotHost` branch, sets `closed`, and returns `Sub.none` from
+  `subscriptions` once closed. A new view with a timer must do the same.
+
 ## Index updates and speed
 
 - `GtdIndex.getSnapshot()` is current as soon as a vault event is read, but listeners are

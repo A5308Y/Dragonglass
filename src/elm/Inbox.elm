@@ -84,6 +84,9 @@ type alias Model =
     , fileOriginal : Bool
     , requests : Requests Pending
     , error : Maybe String
+
+    -- The tab was closed: timers off (see `Host.isClosing`).
+    , closed : Bool
     }
 
 
@@ -180,6 +183,7 @@ initialModel snapshot =
     , fileOriginal = False
     , requests = Host.noRequests
     , error = Nothing
+    , closed = False
     }
 
 
@@ -190,6 +194,15 @@ blank =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
+    if model.closed then
+        Sub.none
+
+    else
+        subscriptionsWhileOpen model
+
+
+subscriptionsWhileOpen : Model -> Sub Msg
+subscriptionsWhileOpen model =
     Sub.batch
         [ inboxFromHost GotHost
         , if model.processing then
@@ -204,7 +217,11 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotHost value ->
-            receiveHost value model
+            if Host.isClosing value then
+                ( { model | closed = True }, Cmd.none )
+
+            else
+                receiveHost value model
 
         Tick _ ->
             ( { model | seconds = max 0 (model.seconds - 1) }, Cmd.none )

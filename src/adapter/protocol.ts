@@ -1242,7 +1242,9 @@ export type ElmCommandResultEvent =
   | { type: "command-result"; requestId: string; ok: true; value?: unknown }
   | { type: "command-result"; requestId: string; ok: false; error: string };
 
-export type ElmActionBoardEvent = { type: "snapshot"; snapshot: ElmSnapshotDto } | ElmCommandResultEvent;
+/** Sent as a view's tab closes, so its Elm program switches off its timers (`Host.isClosing`). */
+export type ElmClosedEvent = { type: "closed" };
+export type ElmActionBoardEvent = { type: "snapshot"; snapshot: ElmSnapshotDto } | ElmClosedEvent | ElmCommandResultEvent;
 export type ElmProjectsEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "project-meta"; projectMeta: ElmProjectMetaDto[] }
@@ -1252,11 +1254,13 @@ export type ElmProjectsEvent =
   | { type: "show-issues" }
   | ElmCommandResultEvent;
 export type ElmInboxEvent =
+  | ElmClosedEvent
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "start-processing"; itemId?: string }
   | { type: "project-issues"; count: number }
   | ElmCommandResultEvent;
 export type ElmProjectReviewEvent =
+  | ElmClosedEvent
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "support-counts"; counts: Array<{ projectId: string; count: number }> }
   | { type: "review-project-data"; data: ElmReviewProjectDataDto }
@@ -1264,6 +1268,7 @@ export type ElmProjectReviewEvent =
   | { type: "review-queue"; queue: string[] }
   | ElmCommandResultEvent;
 export type ElmBrainstormEvent =
+  | ElmClosedEvent
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "brainstorm-outcome"; projectId: string; desiredOutcome: string }
   | { type: "inspirations"; urls: string[] }
@@ -1272,6 +1277,7 @@ export type ElmFeedsEvent = { type: "feeds"; feeds: ElmFeedsDto } | ElmCommandRe
 export type ElmModalEvent = ElmCommandResultEvent;
 export type ElmSomedayReviewEvent = { type: "snapshot"; snapshot: ElmSnapshotDto } | ElmCommandResultEvent;
 export type ElmPomodoroEvent =
+  | ElmClosedEvent
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "pomodoro"; pomodoro: ElmPomodoroDto }
   | { type: "select-project"; projectId: string }

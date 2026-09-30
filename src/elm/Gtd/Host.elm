@@ -3,6 +3,7 @@ module Gtd.Host exposing
     , RequestId
     , Requests
     , envelope
+    , isClosing
     , issue
     , noRequests
     , outcomeDecoder
@@ -116,3 +117,12 @@ requestIdDecoder =
                     Nothing ->
                         Decode.fail ("Unknown request id: " ++ raw)
             )
+
+
+{-| Whether a host event says the view's tab was closed. Elm can't stop a program, so a
+closed view keeps running unseen; on this it switches off its timers, or every closed tab
+would go on ticking, and redrawing into nothing, until Obsidian quits.
+-}
+isClosing : Decode.Value -> Bool
+isClosing value =
+    Decode.decodeValue (Decode.field "type" Decode.string) value == Ok "closed"

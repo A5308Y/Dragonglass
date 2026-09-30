@@ -78,6 +78,9 @@ type alias Model =
     , requests : Requests Pending
     , saving : Bool
     , error : Maybe String
+
+    -- The tab was closed: timers off (see `Host.isClosing`).
+    , closed : Bool
     }
 
 
@@ -103,7 +106,13 @@ main =
     Browser.element
         { init = init
         , update = update
-        , subscriptions = \_ -> Sub.batch [ reviewFromHost GotHost, Time.every 1000 Tick ]
+        , subscriptions =
+            \model ->
+                if model.closed then
+                    Sub.none
+
+                else
+                    Sub.batch [ reviewFromHost GotHost, Time.every 1000 Tick ]
         , view = view
         }
 
@@ -137,6 +146,7 @@ init flags =
                 , requests = Host.noRequests
                 , saving = False
                 , error = Nothing
+                , closed = False
                 }
 
         Err error ->
@@ -152,7 +162,11 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotHost value ->
-            receiveHost value model
+            if Host.isClosing value then
+                ( { model | closed = True }, Cmd.none )
+
+            else
+                receiveHost value model
 
         Tick _ ->
             ( { model | sessionSeconds = model.sessionSeconds + 1, projectSeconds = model.projectSeconds - 1 }, Cmd.none )
@@ -1127,4 +1141,5 @@ emptyModel message =
     , requests = Host.noRequests
     , saving = False
     , error = Just message
+    , closed = False
     }
