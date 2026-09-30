@@ -1199,12 +1199,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-subproject-card[draggable="true"]:active { cursor: grabbing; }
 .dg-subproject-card.is-blocked { border-color: color-mix(in srgb, var(--color-orange) 35%, var(--background-modifier-border)); }
 .dg-subproject-card.has-issue { border-color: color-mix(in srgb, var(--color-yellow) 45%, var(--background-modifier-border)); }
-/* Lined up at the top, so a title that wraps keeps the tick box and menu on its first line.
-   One fixed line height for the title (`--dg-title-line`), and the tick box and menu
-   centred on it: Obsidian gives buttons their own font size, so a line height taken from
-   the row would not be the title's. */
+/* The tick box and menu are centred on the title, however many lines it wraps to, like
+   the rows of Open Actions. The title has a fixed line height (`--dg-title-line`) and
+   the menu is one such line high, so a one-line title lines up exactly. */
 .dg-subproject-card { --dg-check-size: 15px; --dg-title-line: 20px; }
-.dg-subproject-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.dg-subproject-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dg-subproject-card-heading .dg-icon-button {
   flex: 0 0 28px;
   height: var(--dg-title-line);
@@ -1216,7 +1215,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   flex: 0 0 auto;
   width: var(--dg-check-size);
   height: var(--dg-check-size);
-  margin: calc((var(--dg-title-line) - var(--dg-check-size)) / 2) -2px 0 0;
+  margin: 0 -2px 0 0;
   cursor: pointer;
 }
 .dg-subproject-title {
