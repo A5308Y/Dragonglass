@@ -56,6 +56,7 @@ describe("Elm command host", () => {
       parse: parser,
       execute,
       reply: (event) => replies.push(event),
+      surface: "Test",
       failureMessage: "Failed.",
     });
 
@@ -80,6 +81,7 @@ describe("Elm command host", () => {
         throw new Error("Operation failed.");
       },
       reply: (event) => replies.push(event),
+      surface: "Test",
       failureMessage: "Failed.",
     });
 

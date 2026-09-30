@@ -21,6 +21,7 @@ import type { GtdServices } from "./ui/services";
 import { localDate } from "./utils/date";
 import { normalizeVaultPath } from "./utils/path";
 import { createUlid } from "./utils/ulid";
+import { setTimingLog } from "./utils/timing";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, CHECKLISTS_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdChecklistsView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
 import { registerObsidianMarkdown } from "./adapter/obsidian-markdown";
 import { VIEW_LINK_ACTION, VIEW_LINK_NAMES, viewLinkName, type ViewLinkName } from "./domain/view-links";
@@ -67,6 +68,7 @@ export default class DragonglassGtdPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    setTimingLog(this.settings.logTimings);
     this.mailPasswords = new MailPasswords(this.app, () => this.settings.mail);
     this.mailPasswords.migrate();
     this.calendarSecret = new CalendarSecret(this.app, () => this.settings.googleCalendar);
@@ -201,6 +203,7 @@ export default class DragonglassGtdPlugin extends Plugin {
         ? saved!.weeklyReviewDay!
         : defaults.weeklyReviewDay,
       lastWeeklyReview: typeof saved?.lastWeeklyReview === "string" ? saved.lastWeeklyReview : defaults.lastWeeklyReview,
+      logTimings: saved?.logTimings === true,
       projectBoardColumns: Array.isArray(saved?.projectBoardColumns)
         ? saved.projectBoardColumns.filter((status) => isProjectStatus(status))
         : defaults.projectBoardColumns,
@@ -314,6 +317,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   }
 
   async saveSettings(refreshViews = true): Promise<void> {
+    setTimingLog(this.settings.logTimings);
     await this.saveData(this.settings);
     this.calendarSync?.schedule(0);
     this.feeds?.schedule(0);
@@ -492,7 +496,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.register(this.index.subscribe(() => {
       this.ribbonAttention.schedule();
       void this.recordFinishedWeeklyReview();
-    }));
+    }, "Ribbon dots"));
     this.register(this.feeds.subscribe(() => this.ribbonAttention.schedule()));
     this.register(this.checklists.subscribe(() => this.ribbonAttention.schedule()));
     this.registerInterval(window.setInterval(() => {

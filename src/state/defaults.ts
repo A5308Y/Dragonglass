@@ -65,6 +65,7 @@ export function defaultSettings(): GtdSettings {
     activeSavedViewId: null,
     weeklyReviewDay: DEFAULT_WEEKLY_REVIEW_DAY,
     lastWeeklyReview: "",
+    logTimings: false,
     googleCalendar: {
       enabled: false,
       endpointUrl: "",

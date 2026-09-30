@@ -35,9 +35,10 @@ export class ElmSomedayReviewHost {
       parse: parseSomedayReviewCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Someday/Maybe Review",
       failureMessage: "The Someday/Maybe Review operation failed.",
     });
-    this.unsubscribe = services.repository.index.subscribe(() => this.refresh());
+    this.unsubscribe = services.repository.index.subscribe(() => this.refresh(), "Someday/Maybe Review");
   }
 
   refresh(): void {

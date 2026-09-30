@@ -97,6 +97,7 @@ export class ElmModal extends Modal {
       parse: parseModalCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Dialog",
       failureMessage: "The GTD operation failed.",
       notifyErrors: false,
     });

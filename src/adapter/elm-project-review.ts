@@ -54,9 +54,10 @@ export class ElmProjectReviewHost {
       parse: parseProjectReviewCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Project Review",
       failureMessage: "The Project review operation failed.",
     });
-    this.unsubscribe = services.repository.index.subscribe(() => this.refresh());
+    this.unsubscribe = services.repository.index.subscribe(() => this.refresh(), "Project Review");
   }
 
   refresh(): void {

@@ -110,6 +110,6 @@ function waitForProjectRemoval(services: GtdServices, id: string): Promise<void>
       window.clearTimeout(timeout);
       unsubscribe();
       resolve();
-    });
+    }, "Project deletion");
   });
 }

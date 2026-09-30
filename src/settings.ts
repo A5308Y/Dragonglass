@@ -134,6 +134,16 @@ export class GtdSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings();
       }));
 
+    new Setting(containerEl)
+      .setName("Log timings")
+      .setDesc("For finding what makes clicks slow: writes to the developer console (View → Toggle Developer Tools → Console) "
+        + "how long each click's command takes, how long the index needs after a change, how long each view takes in the "
+        + "new data, and when the views have drawn it. Lines start with [Dragonglass].")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.logTimings).onChange(async (value) => {
+        this.plugin.settings.logTimings = value;
+        await this.plugin.saveSettings(false);
+      }));
+
     this.displayPomodoro(containerEl);
     this.displayChecklists(containerEl);
     this.displayFeeds(containerEl);

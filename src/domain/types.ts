@@ -257,6 +257,8 @@ export interface GtdSettings {
   weeklyReviewDay: number;
   /** The day the last Weekly Review was finished, or `""` before the first one. */
   lastWeeklyReview: string;
+  /** Writes how long clicks, index updates and redraws take to the developer console. */
+  logTimings: boolean;
   schemaVersion: number;
 }
 

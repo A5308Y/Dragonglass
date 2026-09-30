@@ -51,7 +51,7 @@ export class GoogleCalendarSync {
 
   start(): () => void {
     this.status = { state: this.getSettings().enabled ? "idle" : "disabled" };
-    const unsubscribe = this.index.subscribe(() => this.schedule());
+    const unsubscribe = this.index.subscribe(() => this.schedule(), "Calendar sync");
     this.schedule(3_000);
     return () => {
       unsubscribe();

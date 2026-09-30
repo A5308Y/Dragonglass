@@ -55,11 +55,12 @@ export class ElmBrainstormHost {
       parse: parseBrainstormCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Brainstorm",
       failureMessage: "Could not save the brainstorm.",
       // The partner reports its own trouble in the view, without a notice every turn.
       notifyErrors: false,
     });
-    this.unsubscribe = services.repository.index.subscribe(() => this.refresh());
+    this.unsubscribe = services.repository.index.subscribe(() => this.refresh(), "Brainstorm");
   }
 
   refresh(): void {

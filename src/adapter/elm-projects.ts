@@ -61,9 +61,10 @@ export class ElmProjectsHost {
       parse: parseProjectsCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Projects",
       failureMessage: "The Project operation failed.",
     });
-    this.unsubscribe = services.repository.index.subscribe(() => this.sendSnapshot());
+    this.unsubscribe = services.repository.index.subscribe(() => this.sendSnapshot(), "Projects");
     this.unsubscribeAgent = services.agent.subscribe(() => this.sendAgent());
     this.sendAgent();
   }

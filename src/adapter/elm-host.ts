@@ -1,5 +1,6 @@
 import { Notice } from "obsidian";
 import type { ElmCommandEnvelope, ElmCommandResultEvent } from "./protocol";
+import { logTiming, timingLog } from "../utils/timing";
 
 export interface ElmOutgoingPort {
   subscribe(listener: (value: unknown) => void): void;
@@ -13,6 +14,8 @@ interface CommandBridgeOptions<C> {
   reply(event: ElmCommandResultEvent): void;
   failureMessage: string;
   notifyErrors?: boolean;
+  /** The view's name in the timing log. */
+  surface: string;
 }
 
 /**
@@ -33,8 +36,11 @@ async function receiveElmCommand<C>(value: unknown, options: CommandBridgeOption
     new Notice("Dragonglass ignored an invalid Elm command.");
     return;
   }
+  const start = timingLog() ? performance.now() : 0;
+  const type = (envelope.command as { type?: unknown }).type;
   try {
     const result = await options.execute(envelope.command);
+    if (start) logTiming(`${options.surface}: ${String(type)}`, performance.now() - start);
     options.reply({
       type: "command-result",
       requestId: envelope.requestId,
@@ -42,6 +48,7 @@ async function receiveElmCommand<C>(value: unknown, options: CommandBridgeOption
       ...(result === undefined ? {} : { value: result }),
     });
   } catch (error) {
+    if (start) logTiming(`${options.surface}: ${String(type)} failed`, performance.now() - start);
     const message = error instanceof Error ? error.message : options.failureMessage;
     options.reply({ type: "command-result", requestId: envelope.requestId, ok: false, error: message });
     if (options.notifyErrors !== false) new Notice(message);

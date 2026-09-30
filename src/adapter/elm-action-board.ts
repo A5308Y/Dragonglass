@@ -40,9 +40,10 @@ export class ElmActionBoardHost {
       parse: parseActionBoardCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.reply(event),
+      surface: "Action board",
       failureMessage: "The GTD operation failed.",
     });
-    this.unsubscribe = services.repository.index.subscribe(() => this.sendSnapshot());
+    this.unsubscribe = services.repository.index.subscribe(() => this.sendSnapshot(), "Action board");
   }
 
   refresh(): void {

@@ -5,6 +5,7 @@ import { projectHierarchyIssue } from "../domain/project-hierarchy";
 import { projectStatusLabel, strandedProjects } from "../domain/project-tree";
 import { localDate } from "../utils/date";
 import { isPathInDirectory, rawInboxId } from "../utils/path";
+import { logTiming, timingLog } from "../utils/timing";
 
 type Listener = () => void;
 
@@ -21,7 +22,8 @@ export class GtdIndex {
   private actionsByPath = new Map<string, Action>();
   private projectsByPath = new Map<string, Project>();
   private parseIssues = new Map<string, IndexIssue>();
-  private listeners = new Set<Listener>();
+  /** Listener → its name in the timing log. */
+  private listeners = new Map<Listener, string>();
   private notifyTimer: number | null = null;
   private pendingSince = 0;
   private current: GtdSnapshot = {
@@ -67,8 +69,8 @@ export class GtdIndex {
     this.rebuildSnapshot();
   }
 
-  subscribe = (listener: Listener): (() => void) => {
-    this.listeners.add(listener);
+  subscribe = (listener: Listener, name = "listener"): (() => void) => {
+    this.listeners.set(listener, name);
     return () => this.listeners.delete(listener);
   };
 
@@ -123,6 +125,14 @@ export class GtdIndex {
   }
 
   private rebuildSnapshot(): void {
+    const start = timingLog() ? performance.now() : 0;
+    this.buildSnapshot();
+    // Every vault event passes here, typing included, so only noticeable ones are logged.
+    if (start && performance.now() - start >= 1) logTiming("Index rebuilt", performance.now() - start);
+    this.scheduleNotify();
+  }
+
+  private buildSnapshot(): void {
     const issues: IndexIssue[] = [...this.parseIssues.values()];
     const inboxItemsById = new Map<string, InboxItem>();
     const actionsById = new Map<string, Action>();
@@ -170,20 +180,33 @@ export class GtdIndex {
       projectsById,
       issues,
     };
-    this.scheduleNotify();
   }
 
   /** `getSnapshot` is current at once; the listeners hear of a burst of changes once. */
   private scheduleNotify(): void {
     if (this.notifyTimer !== null) {
-      if (Date.now() - this.pendingSince >= NOTIFY_MAX_WAIT_MS) return;
+      if (performance.now() - this.pendingSince >= NOTIFY_MAX_WAIT_MS) return;
       window.clearTimeout(this.notifyTimer);
     } else {
-      this.pendingSince = Date.now();
+      this.pendingSince = performance.now();
     }
     this.notifyTimer = window.setTimeout(() => {
       this.notifyTimer = null;
-      for (const listener of this.listeners) listener();
+      if (!timingLog()) {
+        for (const listener of this.listeners.keys()) listener();
+        return;
+      }
+      // Each listener takes in the new data now (an Elm view updates its model); the
+      // views draw in the next frame, which the last line measures.
+      const told = performance.now();
+      const costs: string[] = [];
+      for (const [listener, name] of this.listeners) {
+        const start = performance.now();
+        listener();
+        costs.push(`${name} ${Math.round(performance.now() - start)} ms`);
+      }
+      logTiming("Views told", performance.now() - told, `${Math.round(told - this.pendingSince)} ms after the change; ${costs.join(", ")}`);
+      window.requestAnimationFrame(() => logTiming("Views drawn", performance.now() - told, "since they were told"));
     }, NOTIFY_DELAY_MS);
   }
 }

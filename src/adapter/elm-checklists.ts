@@ -73,6 +73,7 @@ export class ElmChecklistsHost {
       parse: parseChecklistsCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Checklists",
       failureMessage: "The checklist operation failed.",
     });
   }

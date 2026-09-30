@@ -66,9 +66,10 @@ export class ElmPomodoroHost {
       parse: parsePomodoroCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Pomodoro",
       failureMessage: "The Pomodoro operation failed.",
     });
-    this.unsubscribeIndex = services.repository.index.subscribe(() => this.send({ type: "snapshot", snapshot: this.snapshot() }));
+    this.unsubscribeIndex = services.repository.index.subscribe(() => this.send({ type: "snapshot", snapshot: this.snapshot() }), "Pomodoro");
     this.unsubscribePomodoro = pomodoro.subscribe(() => {
       // The clock updates at once; the checklist run follows once its note is read.
       this.send({ type: "pomodoro", pomodoro: this.state() });

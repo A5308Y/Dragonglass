@@ -38,12 +38,13 @@ export class ElmInboxHost {
       parse: parseInboxCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Inbox",
       failureMessage: "The Inbox operation failed.",
     });
     this.unsubscribe = services.repository.index.subscribe(() => {
       this.send({ type: "snapshot", snapshot: this.snapshot() });
       this.send({ type: "project-issues", count: this.projectIssues() });
-    });
+    }, "Inbox");
   }
 
   refresh(startProcessing = false, itemId?: string): void {

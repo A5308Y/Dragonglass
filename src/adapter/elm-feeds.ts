@@ -34,6 +34,7 @@ export class ElmFeedsHost {
       parse: parseFeedsCommand,
       execute: (command) => this.execute(command),
       reply: (event) => this.send(event),
+      surface: "Feeds",
       failureMessage: "The Feeds operation failed.",
     });
     this.unsubscribe = feeds.subscribe(() => this.send({ type: "feeds", feeds: this.payload() }));
