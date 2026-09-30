@@ -2970,9 +2970,14 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-partner-dismiss { flex: 0 0 auto; height: auto; padding: 0 6px; color: var(--text-faint); }
 .dg-partner-dismiss:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
 
-/* One inspiration image in a brainstorm, shown whole in a frame of fixed height so the
-   page doesn't jump when it changes every three minutes. */
+/* One inspiration image in a brainstorm, shown whole in a landscape frame of fixed
+   shape, so the page doesn't jump when it changes every three minutes. The fields stay
+   in a readable column; the picture may use the pane's whole width. */
+.dg-brainstorm-content { width: 100%; }
+.dg-brainstorm-content > * { width: min(952px, 100%); align-self: center; }
+.dg-brainstorm-content > .dg-brainstorm-inspiration { width: min(1800px, 100%); }
 .dg-brainstorm-inspiration {
+  flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
@@ -2981,13 +2986,15 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-brainstorm-inspiration > img {
   display: block;
   width: 100%;
-  height: min(520px, 55vh);
+  height: auto;
+  aspect-ratio: 16 / 9;
+  max-height: 70vh;
   object-fit: contain;
   background: var(--background-primary-alt);
 }
 /* On a phone it leaves room for the ideas below it. */
 @media (max-width: 600px) {
-  .dg-brainstorm-inspiration > img { height: min(360px, 42vh); }
+  .dg-brainstorm-inspiration > img { max-height: 42vh; }
 }
 .dg-brainstorm-inspiration-bar {
   display: flex;
