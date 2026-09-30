@@ -1587,6 +1587,11 @@ viewDetail model project =
                 , button [ onClick BackToBoard ] [ text "← Projects" ]
                 , h2 [] [ text project.title ]
                 , span [ class ("dg-status dg-status-" ++ ProjectStatus.key project.status) ] [ text (ProjectStatus.label project.status) ]
+                , if onlyWaiting model project then
+                    waitingOnlyBadge
+
+                  else
+                    text ""
                 ]
             , div [ class "dg-header-actions" ]
                 [ button [ onClick (Send IgnoreReply (Command.OpenPomodoro project.id)) ] [ text "Start Pomodoro" ]
@@ -2259,6 +2264,11 @@ viewSubprojectCard model project =
                     )
                 ]
         , Ui.maybeView meta.actionIssue (\issue -> div [ class "dg-project-health" ] [ text issue ])
+        , if onlyWaiting model project then
+            div [] [ waitingOnlyBadge ]
+
+          else
+            text ""
         ]
 
 
@@ -2793,6 +2803,33 @@ isTopLevel model projectId =
     Data.findProject projectId model.snapshot.projects
         |> Maybe.map (\project -> project.parentProjectId == Nothing)
         |> Maybe.withDefault False
+
+
+{-| Whether every open Action in the Project's tree is Waiting: it is moving, but
+nothing in it is yours to do until someone answers. Finished Projects don't count.
+-}
+onlyWaiting : Model -> Project -> Bool
+onlyWaiting model project =
+    let
+        tree =
+            Set.insert project.id (Hierarchy.descendantIds project.id model.snapshot.projects)
+
+        open =
+            model.snapshot.actions
+                |> List.filter
+                    (\action ->
+                        ActionStatus.isOpen action.status
+                            && (Maybe.map (\projectId -> Set.member projectId tree) action.projectId |> Maybe.withDefault False)
+                    )
+    in
+    ProjectStatus.isOpen project.status
+        && not (List.isEmpty open)
+        && List.all (\action -> action.status == ActionStatus.Waiting) open
+
+
+waitingOnlyBadge : Html msg
+waitingOnlyBadge =
+    span [ class "dg-waiting-only" ] [ text "⏳ Only Waiting Actions" ]
 
 
 projectActions : Model -> Project -> List Action

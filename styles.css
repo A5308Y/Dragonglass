@@ -3036,3 +3036,16 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-inbox-project-issues:hover { text-decoration: underline; background: var(--background-modifier-hover) !important; }
 .dg-inbox-almost h3 { margin-top: 0; }
 .dg-inbox-almost button { margin-top: 14px; }
+
+/* A Project whose open Actions are all Waiting: moving, but nothing is yours to do. */
+.dg-waiting-only {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+.dg-subproject-card .dg-waiting-only { margin-top: 6px; }
