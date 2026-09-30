@@ -24,6 +24,8 @@ export interface GtdServices {
   editAction: (id: string, allowProjectConversion?: boolean, status?: ActionStatus) => void;
   editProject: (id: string) => void;
   showProjectDetail: (id: string) => void;
+  /** Opens the Projects board showing only Projects with an issue. */
+  showProjectIssues: () => void;
   openSomedayReview: () => void;
   /** Opens the Pomodoro view, with this Project chosen when no session is running. */
   openPomodoro: (projectId?: string) => void;

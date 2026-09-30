@@ -119,6 +119,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       editAction: (id, allowProjectConversion, status) => this.editAction(id, allowProjectConversion, status),
       editProject: (id) => this.editProject(id),
       showProjectDetail: (id) => void this.openProjectDetail(id),
+      showProjectIssues: () => void this.openProjectIssues(),
       openSomedayReview: () => void this.activateView(SOMEDAY_VIEW_TYPE),
       openPomodoro: (projectId) => void this.openPomodoro(projectId),
       openChecklistPomodoro: (path) => void this.openChecklistPomodoro(path),
@@ -749,6 +750,11 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (!this.settings.feeds.enabled) return void new Notice("Feeds are switched off in Dragonglass settings.");
     const result = await this.feeds.fetchAll();
     new Notice(result.added ? `Fetched ${result.added} new Feed Item${result.added === 1 ? "" : "s"}.` : "No new Feed Items.");
+  }
+
+  private async openProjectIssues(): Promise<void> {
+    const leaf = await this.activateView(PROJECTS_VIEW_TYPE);
+    if (leaf.view instanceof GtdProjectsView) leaf.view.showIssues();
   }
 
   private async openProjectDetail(id: string): Promise<void> {

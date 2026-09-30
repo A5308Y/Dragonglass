@@ -139,6 +139,7 @@ type Command
       -- Inbox
     | ReadInboxBody InboxItemId
     | ReadDesiredOutcome ProjectId
+    | ShowProjectIssues
     | TrashInboxItem InboxItemId
     | OpenMail InboxItemId
     | ReviewPullRequest InboxItemId
@@ -669,6 +670,9 @@ encode command =
 
         ReadDesiredOutcome projectId ->
             object "read-desired-outcome" [ ( "projectId", Encode.string projectId ) ]
+
+        ShowProjectIssues ->
+            object "show-project-issues" []
 
         TrashInboxItem itemId ->
             object "trash-inbox-item" [ ( "itemId", Encode.string itemId ) ]

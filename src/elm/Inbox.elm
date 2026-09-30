@@ -52,6 +52,9 @@ type alias ScheduleFields =
 
 type alias Model =
     { snapshot : Snapshot
+
+    -- Active Projects with an issue: Inbox zero waits until there are none.
+    , projectIssues : Int
     , hostSnapshot : Snapshot
     , setAside : Dict InboxItemId String
     , search : String
@@ -125,7 +128,7 @@ main =
 
 
 type alias Flags =
-    { snapshot : Snapshot, initialProcessing : Bool }
+    { snapshot : Snapshot, initialProcessing : Bool, projectIssues : Int }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -134,7 +137,7 @@ init flagsValue =
         Ok flags ->
             let
                 model =
-                    initialModel flags.snapshot
+                    initialModel flags.snapshot |> (\initial -> { initial | projectIssues = flags.projectIssues })
             in
             if flags.initialProcessing && not (List.isEmpty flags.snapshot.inboxItems) then
                 enterProcessing Nothing model
@@ -150,6 +153,7 @@ initialModel : Snapshot -> Model
 initialModel snapshot =
     { snapshot = snapshot
     , hostSnapshot = snapshot
+    , projectIssues = 0
     , setAside = Dict.empty
     , search = ""
     , processing = False
@@ -757,6 +761,7 @@ busyItems model =
 type HostEvent
     = SnapshotEvent Snapshot
     | StartProcessingEvent (Maybe InboxItemId)
+    | ProjectIssuesEvent Int
     | Replied Host.Outcome
 
 
@@ -802,6 +807,9 @@ receiveHost value model =
 
                     else
                         ( next, Cmd.none )
+
+        Ok (ProjectIssuesEvent count) ->
+            ( { model | projectIssues = count }, Cmd.none )
 
         Ok (StartProcessingEvent maybeId) ->
             -- Opening the processor again is a no-op, but naming an Item always moves to it.
@@ -939,7 +947,34 @@ view model =
         ]
 
 
-{-| The empty Inbox, in the list and at the end of processing: a quiet moment worth
+{-| The empty Inbox. It is Inbox zero only once no Project is stuck either: an Active
+Project without a next step is a loose end as much as an unprocessed capture.
+-}
+emptyInbox : Model -> Html Msg
+emptyInbox model =
+    if model.projectIssues > 0 then
+        div [ class "dg-inbox-zero dg-inbox-almost" ]
+            [ h3 [] [ text "The Inbox is empty" ]
+            , p []
+                [ text
+                    (Ui.plural model.projectIssues "Project"
+                        ++ (if model.projectIssues == 1 then
+                                " still needs"
+
+                            else
+                                " still need"
+                           )
+                        ++ " a next step. Once each has one, it’s Inbox zero."
+                    )
+                ]
+            , button [ class "mod-cta", onClick (Send IgnoreReply Command.ShowProjectIssues) ] [ text "Show Project issues" ]
+            ]
+
+    else
+        inboxZero
+
+
+{-| Inbox zero, in the list and at the end of processing: a quiet moment worth
 marking, so it gets a picture (drawn in `styles.css`) rather than a line of text.
 -}
 inboxZero : Html msg
@@ -963,7 +998,7 @@ listView model =
             , span [ class "dg-shortcut-hint" ] [ text "↑↓ move · ⌫ delete · Enter process · O open" ]
             ]
         , if List.isEmpty model.snapshot.inboxItems then
-            inboxZero
+            emptyInbox model
 
           else
             div [ class "dg-inbox-list", id listId, attribute "role" "list" ]
@@ -1096,7 +1131,7 @@ processorView : Model -> Html Msg
 processorView model =
     case currentItem model of
         Nothing ->
-            inboxZero
+            emptyInbox model
 
         Just item ->
             let
@@ -1131,6 +1166,13 @@ processorView model =
             div [ class "dg-processor", onProcessorChord, Ui.onModEnter (ProcessorChord ProcessChord) ]
                 [ div [ class "dg-workflow-progress" ]
                     [ span [] [ text (String.fromInt processed ++ " / " ++ String.fromInt model.sessionTotal ++ " processed") ]
+                    , if model.projectIssues > 0 then
+                        -- Processing may give a stuck Project its next step; this shows which are.
+                        button [ class "dg-flat-button dg-inbox-project-issues", onClick (Send IgnoreReply Command.ShowProjectIssues) ]
+                            [ text ("⚑ " ++ Ui.plural model.projectIssues "Project issue") ]
+
+                      else
+                        text ""
                     , span [ classList [ ( "is-overdue", model.seconds == 0 ) ] ] [ text (Ui.timer model.seconds) ]
                     ]
                 , div [ class "dg-progress-track" ] [ span [ style "width" (String.fromFloat progress ++ "%") ] [] ]
@@ -1703,9 +1745,10 @@ isAudio extension =
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map2 Flags
+    Decode.map3 Flags
         (Decode.field "snapshot" Data.snapshotDecoder)
         (Decode.field "initialProcessing" Decode.bool)
+        (Decode.oneOf [ Decode.field "projectIssues" Decode.int, Decode.succeed 0 ])
 
 
 hostEventDecoder : Decoder HostEvent
@@ -1719,6 +1762,9 @@ hostEventDecoder =
 
                     "start-processing" ->
                         Decode.map StartProcessingEvent (Decode.maybe (Decode.field "itemId" Decode.string))
+
+                    "project-issues" ->
+                        Decode.map ProjectIssuesEvent (Decode.field "count" Decode.int)
 
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder

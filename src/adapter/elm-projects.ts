@@ -76,6 +76,11 @@ export class ElmProjectsHost {
     this.setSelection(projectId);
   }
 
+  showIssues(): void {
+    this.onProjectChange(null);
+    this.send({ type: "show-issues" });
+  }
+
   setSelection(projectId: string | null): void {
     this.onProjectChange(projectId);
     this.send({ type: "show-project", projectId });

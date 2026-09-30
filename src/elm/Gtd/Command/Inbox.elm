@@ -16,6 +16,8 @@ type Command
     | ReadInboxBody InboxItemId
       -- An existing Project's vision, to show while processing into it.
     | ReadDesiredOutcome ProjectId
+      -- The Projects board with only the Projects that have an issue.
+    | ShowProjectIssues
     | TrashInboxItem InboxItemId
     | OpenMail InboxItemId
       -- A Next Action to review the pull request the Item links, then the Item is deleted.
@@ -60,6 +62,9 @@ encode command =
 
             ReadDesiredOutcome projectId ->
                 Base.ReadDesiredOutcome projectId
+
+            ShowProjectIssues ->
+                Base.ShowProjectIssues
 
             TrashInboxItem itemId ->
                 Base.TrashInboxItem itemId

@@ -279,6 +279,13 @@ export class GtdProjectsView extends ItemView {
     else this.refresh();
   }
 
+  /** The board with only the Projects that have an issue. */
+  showIssues(): void {
+    this.projectId = null;
+    if (!this.host) this.refresh();
+    this.host?.showIssues();
+  }
+
 
   refresh(): void {
     if (this.host) {

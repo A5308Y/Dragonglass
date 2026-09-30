@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
-import { attention } from "../src/domain/attention";
+import { attention, projectsWithIssues } from "../src/domain/attention";
 import type { Action, GtdSnapshot, InboxItem, Project } from "../src/domain/types";
 
 const file = (path: string) => ({ path }) as TFile;
@@ -25,6 +25,12 @@ describe("attention dots", () => {
   it("stays quiet when nothing waits", () => {
     expect(attention(snapshot([project()], [action()]), 0, weekly, today))
       .toEqual({ inbox: false, board: false, projects: false, review: false, feeds: false, checklists: false });
+  });
+
+  it("counts the Active Projects with an issue, for the Inbox", () => {
+    const stuck = project({ id: "P2", title: "Garden", file: file("Garden.md") });
+    expect(projectsWithIssues(snapshot([project(), stuck], [action()]))).toBe(1);
+    expect(projectsWithIssues(snapshot([project({ status: "someday" })], []))).toBe(0);
   });
 
   it("marks the Checklists while the daily checklist is due", () => {

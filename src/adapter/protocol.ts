@@ -653,6 +653,7 @@ type ElmNonMenuCommand =
   | { type: "open-mail"; itemId: string }
   | { type: "review-pull-request"; itemId: string }
   | { type: "read-desired-outcome"; projectId: string }
+  | { type: "show-project-issues" }
   | { type: "save-new-action"; input: ElmNewActionInput }
   | { type: "save-action"; actionId: string; changes: ElmActionChanges }
   | { type: "schedule-action"; actionId: string; schedule: ElmScheduleInput }
@@ -726,7 +727,7 @@ export const SURFACE_COMMANDS = {
   ],
   inbox: [
     "quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail", "review-pull-request",
-    "read-desired-outcome",
+    "read-desired-outcome", "show-project-issues",
   ],
   feeds: [
     "refresh-feeds", "add-feed", "keep-feed-items", "read-feed-item", "discard-feed-items", "undo-feed-discard", "open-link",
@@ -893,6 +894,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "set-project-selection":
       return value.projectId === undefined || typeof value.projectId === "string";
     case "quick-capture":
+    case "show-project-issues":
     case "open-inbox":
     case "open-someday-review":
     case "pause-pomodoro":
@@ -1236,10 +1238,12 @@ export type ElmProjectsEvent =
   | { type: "project-detail"; detail: ElmProjectDetailDto }
   | { type: "agent"; agent: ElmAgentDto }
   | { type: "show-project"; projectId: string | null }
+  | { type: "show-issues" }
   | ElmCommandResultEvent;
 export type ElmInboxEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "start-processing"; itemId?: string }
+  | { type: "project-issues"; count: number }
   | ElmCommandResultEvent;
 export type ElmProjectReviewEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }

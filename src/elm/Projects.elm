@@ -885,6 +885,7 @@ type HostEvent
     | ProjectMetaEvent (List ProjectMeta)
     | ProjectDetailEvent ProjectDetail
     | ShowProjectEvent (Maybe ProjectId)
+    | ShowIssuesEvent
     | AgentEvent AgentState
     | Replied Host.Outcome
 
@@ -937,6 +938,9 @@ receiveHost value model =
 
             else
                 ( model, Cmd.none )
+
+        Ok ShowIssuesEvent ->
+            ( { model | selectedProjectId = Nothing, detail = Nothing, issuesOnly = True }, Cmd.none )
 
         Ok (ShowProjectEvent maybeId) ->
             case maybeId of
@@ -3008,6 +3012,9 @@ hostEventDecoder =
 
                     "show-project" ->
                         Decode.map ShowProjectEvent (Decode.field "projectId" (Decode.maybe Decode.string))
+
+                    "show-issues" ->
+                        Decode.succeed ShowIssuesEvent
 
                     "agent" ->
                         Decode.map AgentEvent (Decode.field "agent" agentDecoder)
