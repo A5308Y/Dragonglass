@@ -3006,3 +3006,20 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 }
 .dg-brainstorm-inspiration-bar button { height: auto; padding: 2px 6px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-brainstorm-inspiration-bar button:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
+
+/* A session's Project tree: each active sub-project under the one chosen, indented by
+   its depth, with its Next Actions. */
+.dg-pomodoro-subproject {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding-left: calc(var(--dg-depth, 0) * 16px);
+}
+.dg-pomodoro-subproject-title {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+.dg-pomodoro-subproject > .dg-pomodoro-actions,
+.dg-pomodoro-subproject > .dg-pomodoro-hint { padding-left: 16px; }

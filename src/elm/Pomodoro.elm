@@ -550,6 +550,65 @@ nextActions model projectId =
         |> List.sortBy (\action -> ( Maybe.withDefault 999999 action.priority, action.created ))
 
 
+{-| One level of a Project tree as a session shows it: the Project, how deep it sits
+below the chosen one, and its Next Actions.
+-}
+type alias TreeLevel =
+    { project : Project, depth : Int, actions : List Action }
+
+
+{-| The chosen Project and every Active Project below it, depth first in board order,
+each with its Next Actions: a session on a Project may be spent anywhere in its tree.
+-}
+projectTree : Model -> Project -> List TreeLevel
+projectTree model root =
+    let
+        visit depth seen project =
+            if Set.member project.id seen then
+                []
+
+            else
+                let
+                    children =
+                        model.snapshot.projects
+                            |> List.filter (\child -> child.parentProjectId == Just project.id && child.status == ProjectStatus.Active)
+                            |> List.sortWith Hierarchy.compareByOrder
+                in
+                { project = project, depth = depth, actions = nextActions model project.id }
+                    :: List.concatMap (visit (depth + 1) (Set.insert project.id seen)) children
+    in
+    visit 0 Set.empty root
+
+
+{-| A tree's Next Actions, grouped under the sub-projects they belong to. The chosen
+Project's own come first, without a heading; a sub-project with none still shows,
+so what is active in the tree is all in view.
+-}
+treeActionsView : List TreeLevel -> (Action -> Html Msg) -> List (Html Msg)
+treeActionsView levels row =
+    List.concatMap
+        (\level ->
+            if level.depth == 0 then
+                if List.isEmpty level.actions then
+                    []
+
+                else
+                    [ ul [ class "dg-pomodoro-actions" ] (List.map row level.actions) ]
+
+            else
+                [ div [ class "dg-pomodoro-subproject", style "--dg-depth" (String.fromInt (level.depth - 1)) ]
+                    [ span [ class "dg-pomodoro-subproject-title" ] [ text ("↳ " ++ level.project.title) ]
+                    , if List.isEmpty level.actions then
+                        span [ class "dg-pomodoro-hint" ] [ text "No Next Actions" ]
+
+                      else
+                        ul [ class "dg-pomodoro-actions" ] (List.map row level.actions)
+                    ]
+                ]
+        )
+        levels
+
+
 scopedSessions : Model -> List Session
 scopedSessions model =
     case ( model.scope, scopeSubject model ) of
@@ -680,38 +739,41 @@ setupView model =
         ]
 
 
-{-| The Project's Next Actions, any of which can be picked as this session's focus.
+{-| The Next Actions of the Project and its active sub-projects, any of which can be
+picked as this session's focus.
 -}
 focusPicker : Model -> Project -> Html Msg
 focusPicker model project =
     let
-        actions =
-            nextActions model project.id
+        levels =
+            projectTree model project
+
+        none =
+            List.all (.actions >> List.isEmpty) levels
+
+        row action =
+            li []
+                [ label []
+                    [ input [ type_ "checkbox", checked (Set.member action.id model.focusIds), onCheck (ToggleFocus action.id) ] []
+                    , span [] [ text action.title ]
+                    ]
+                ]
     in
     div [ class "dg-pomodoro-field" ]
-        [ span [ class "dg-pomodoro-label" ] [ text "Next Actions" ]
-        , if List.isEmpty actions then
-            p [ class "dg-muted" ] [ text "This Project has no Next Actions. The intention can say what the session is for." ]
+        (span [ class "dg-pomodoro-label" ] [ text "Next Actions" ]
+            :: (if none && List.length levels == 1 then
+                    [ p [ class "dg-muted" ] [ text "This Project has no Next Actions. The intention can say what the session is for." ] ]
 
-          else
-            ul [ class "dg-pomodoro-actions" ]
-                (List.map
-                    (\action ->
-                        li []
-                            [ label []
-                                [ input [ type_ "checkbox", checked (Set.member action.id model.focusIds), onCheck (ToggleFocus action.id) ] []
-                                , span [] [ text action.title ]
-                                ]
-                            ]
-                    )
-                    actions
-                )
-        , if List.isEmpty actions then
-            text ""
+                else
+                    treeActionsView levels row
+               )
+            ++ [ if none then
+                    text ""
 
-          else
-            small "Tick the ones this session is for, if any."
-        ]
+                 else
+                    small "Tick the ones this session is for, if any."
+               ]
+        )
 
 
 runningView : Model -> Active -> Html Msg
@@ -805,8 +867,15 @@ projectActions model active =
         picked =
             List.filterMap (\actionId -> Dict.get actionId byId) active.focusActionIds
 
+        -- The rest of the tree's Next Actions, grouped as on the start screen.
+        levels =
+            Data.findProject active.projectId model.snapshot.projects
+                |> Maybe.map (projectTree model)
+                |> Maybe.withDefault []
+                |> List.map (\level -> { level | actions = List.filter (\action -> not (List.member action.id active.focusActionIds)) level.actions })
+
         others =
-            nextActions model active.projectId |> List.filter (\action -> not (List.member action.id active.focusActionIds))
+            List.concatMap .actions levels
 
         row action =
             let
@@ -846,8 +915,9 @@ projectActions model active =
 
               else
                 span [ class "dg-pomodoro-label" ] [ text "Other Next Actions" ]
-            , ul [ class "dg-pomodoro-actions" ] (List.map row others)
             ]
+                -- While the timer runs, only sub-projects with something left to tick.
+                ++ treeActionsView (List.filter (\level -> not (List.isEmpty level.actions)) levels) row
         )
 
 
