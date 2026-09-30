@@ -1202,8 +1202,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 /* Lined up at the top, so a title that wraps keeps the tick box and menu on its first line.
    One fixed line height for the title (`--dg-title-line`), and the tick box and menu
    centred on it: Obsidian gives buttons their own font size, so a line height taken from
-   the row would not be the title's. The +1px sets the box level with the letters, which
-   sit below the middle of their line. */
+   the row would not be the title's. */
 .dg-subproject-card { --dg-check-size: 15px; --dg-title-line: 20px; }
 .dg-subproject-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .dg-subproject-card-heading .dg-icon-button {
@@ -1217,7 +1216,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   flex: 0 0 auto;
   width: var(--dg-check-size);
   height: var(--dg-check-size);
-  margin: calc((var(--dg-title-line) - var(--dg-check-size)) / 2 + 1px) -2px 0 0;
+  margin: calc((var(--dg-title-line) - var(--dg-check-size)) / 2) -2px 0 0;
   cursor: pointer;
 }
 .dg-subproject-title {
