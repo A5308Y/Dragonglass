@@ -85,6 +85,11 @@ export class ElmInboxHost {
       }
       case "review-pull-request":
         return this.reviewPullRequest(this.item(command.itemId));
+      case "read-desired-outcome": {
+        const project = this.services.repository.index.getSnapshot().projectsById.get(command.projectId);
+        if (!project) throw new Error("This Project no longer exists.");
+        return this.services.repository.readDesiredOutcome(project);
+      }
       case "trash-inbox-item": {
         const item = this.item(command.itemId);
         await trashWithUndo(this.services.app, item.file, `Deleted “${item.title}”.`,

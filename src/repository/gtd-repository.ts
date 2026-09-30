@@ -742,6 +742,9 @@ export class GtdRepository {
   }
 
   private async setDesiredOutcomeForProject(project: Project, desiredOutcome: string): Promise<void> {
+    // Processing shows an existing Project's vision and sends it back as it is, most often unchanged.
+    const current = await this.app.vault.read(project.file);
+    if (setMarkdownSection(current, "Desired outcome", desiredOutcome) === current) return;
     await this.enqueue(project.file.path, () => this.app.vault.process(
       project.file,
       (content) => setMarkdownSection(content, "Desired outcome", desiredOutcome),

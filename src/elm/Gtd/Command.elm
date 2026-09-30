@@ -138,6 +138,7 @@ type Command
     | OpenNoteLink String String
       -- Inbox
     | ReadInboxBody InboxItemId
+    | ReadDesiredOutcome ProjectId
     | TrashInboxItem InboxItemId
     | OpenMail InboxItemId
     | ReviewPullRequest InboxItemId
@@ -665,6 +666,9 @@ encode command =
 
         ReadInboxBody itemId ->
             object "read-inbox-body" [ ( "itemId", Encode.string itemId ) ]
+
+        ReadDesiredOutcome projectId ->
+            object "read-desired-outcome" [ ( "projectId", Encode.string projectId ) ]
 
         TrashInboxItem itemId ->
             object "trash-inbox-item" [ ( "itemId", Encode.string itemId ) ]

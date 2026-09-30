@@ -30,7 +30,11 @@ export function setMarkdownSection(content: string, heading: string, value: stri
   const escaped = escapeRegExp(heading);
   const section = `${marker} ${heading}\n\n${value.trim()}\n`;
   const pattern = new RegExp(`^${marker} ${escaped}[ \\t]*\\r?\\n[\\s\\S]*?(?=^#{1,${level}} |$(?![\\s\\S]))`, "m");
-  if (pattern.test(content)) return content.replace(pattern, section);
+  // A section followed by another heading keeps the blank line before it, so writing a
+  // section back unchanged leaves the note as it was.
+  if (pattern.test(content)) {
+    return content.replace(pattern, (match: string, offset: number) => (offset + match.length >= content.length ? section : `${section}\n`));
+  }
   return `${content.trimEnd()}\n\n${section}`;
 }
 

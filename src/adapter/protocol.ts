@@ -652,6 +652,7 @@ type ElmNonMenuCommand =
   | { type: "process-inbox"; itemId: string; operation: "next-action" | "file" | "someday" | "backlog"; input: ElmInboxProcessingInput }
   | { type: "open-mail"; itemId: string }
   | { type: "review-pull-request"; itemId: string }
+  | { type: "read-desired-outcome"; projectId: string }
   | { type: "save-new-action"; input: ElmNewActionInput }
   | { type: "save-action"; actionId: string; changes: ElmActionChanges }
   | { type: "schedule-action"; actionId: string; schedule: ElmScheduleInput }
@@ -723,7 +724,10 @@ export const SURFACE_COMMANDS = {
     "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "delete-agent-run",
     "open-note-link",
   ],
-  inbox: ["quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail", "review-pull-request"],
+  inbox: [
+    "quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail", "review-pull-request",
+    "read-desired-outcome",
+  ],
   feeds: [
     "refresh-feeds", "add-feed", "keep-feed-items", "read-feed-item", "discard-feed-items", "undo-feed-discard", "open-link",
     "open-inbox",
@@ -988,6 +992,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
         && ["none", "area", "status"].includes(String(value.sections));
     case "load-review-project":
     case "load-brainstorm-outcome":
+    case "read-desired-outcome":
       return typeof value.projectId === "string";
     case "create-review-action":
       return typeof value.title === "string"

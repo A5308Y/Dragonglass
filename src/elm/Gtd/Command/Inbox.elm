@@ -14,6 +14,8 @@ type Command
     = QuickCapture
     | OpenFile String
     | ReadInboxBody InboxItemId
+      -- An existing Project's vision, to show while processing into it.
+    | ReadDesiredOutcome ProjectId
     | TrashInboxItem InboxItemId
     | OpenMail InboxItemId
       -- A Next Action to review the pull request the Item links, then the Item is deleted.
@@ -55,6 +57,9 @@ encode command =
 
             ReadInboxBody itemId ->
                 Base.ReadInboxBody itemId
+
+            ReadDesiredOutcome projectId ->
+                Base.ReadDesiredOutcome projectId
 
             TrashInboxItem itemId ->
                 Base.TrashInboxItem itemId

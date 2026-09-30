@@ -79,3 +79,10 @@ title: Heat pump
 `);
   });
 });
+
+describe("Writing a Project's vision back unchanged", () => {
+  it("leaves the note exactly as it was", () => {
+    const note = "---\ntype: gtd-project\n---\n# Roof\n\n## Desired outcome\n\nA dry attic,\nall winter long.\n\n## Notes\n\n- Call Mar\n";
+    expect(setMarkdownSection(note, "Desired outcome", readMarkdownSection(note, "Desired outcome"))).toBe(note);
+  });
+});

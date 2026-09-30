@@ -10,7 +10,7 @@ import Gtd.Data as Data exposing (InboxItem, Project, Snapshot)
 import Gtd.Energy as Energy exposing (Energy)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
-import Gtd.Id exposing (InboxItemId)
+import Gtd.Id exposing (InboxItemId, ProjectId)
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, node, option, p, section, select, small, span, strong, text, textarea)
@@ -43,6 +43,7 @@ type Pending
     | LoadBody InboxItemId
     | LoadPreview InboxItemId
     | Working InboxItemId
+    | LoadOutcome ProjectId
 
 
 type alias ScheduleFields =
@@ -66,6 +67,9 @@ type alias Model =
     , project : Picker Project
     , context : Picker String
     , desiredOutcome : String
+
+    -- The vision last loaded from the chosen Project, to tell it from text typed here.
+    , loadedOutcome : Maybe { projectId : ProjectId, text : String }
     , nextAction : String
     , actionStatus : ActionStatus
     , waitingSince : String
@@ -160,6 +164,7 @@ initialModel snapshot =
     , project = Picker.init "" Nothing
     , context = Picker.init "" Nothing
     , desiredOutcome = ""
+    , loadedOutcome = Nothing
     , nextAction = ""
     , actionStatus = ActionStatus.Next
     , waitingSince = snapshot.today
@@ -210,12 +215,35 @@ update msg model =
             ( { model | processing = False }, Cmd.none )
 
         ProjectPicker pickerMsg ->
-            ( { model
-                | project =
+            let
+                picked =
                     Picker.update pickerMsg (projectSuggestions model) (Hierarchy.breadcrumb model.snapshot.projects) model.project
-              }
-            , Cmd.none
-            )
+
+                chosen =
+                    Picker.selection picked |> Maybe.map .id
+
+                -- A vision loaded from the Project before goes with it, unless it was edited here.
+                untouched =
+                    String.isEmpty (String.trim model.desiredOutcome)
+                        || Maybe.map .text model.loadedOutcome == Just model.desiredOutcome
+
+                next =
+                    if untouched then
+                        { model | project = picked, desiredOutcome = "", loadedOutcome = Nothing }
+
+                    else
+                        { model | project = picked }
+            in
+            if chosen == (Picker.selection model.project |> Maybe.map .id) then
+                ( { model | project = picked }, Cmd.none )
+
+            else
+                case chosen of
+                    Just projectId ->
+                        send (LoadOutcome projectId) (Command.ReadDesiredOutcome projectId) next
+
+                    Nothing ->
+                        ( next, Cmd.none )
 
         ContextPicker pickerMsg ->
             ( { model | context = Picker.update pickerMsg (contextSuggestions model) identity model.context }, Cmd.none )
@@ -436,6 +464,7 @@ resetCurrent model =
                     , project = Picker.init prefill Nothing
                     , context = Picker.init "" Nothing
                     , desiredOutcome = ""
+                    , loadedOutcome = Nothing
                     , nextAction = prefill
                     , actionStatus = ActionStatus.Next
                     , waitingSince = model.snapshot.today
@@ -821,6 +850,24 @@ receiveHost value model =
                     else
                         ( next, Cmd.none )
 
+                ( Ok resultValue, LoadOutcome projectId ) ->
+                    let
+                        vision =
+                            Decode.decodeValue Decode.string resultValue |> Result.withDefault ""
+
+                        stillChosen =
+                            (Picker.selection next.project |> Maybe.map .id) == Just projectId
+
+                        -- Filled only while nothing was typed in the meantime.
+                        free =
+                            String.isEmpty (String.trim next.desiredOutcome)
+                    in
+                    if stillChosen && free && not (String.isEmpty (String.trim vision)) then
+                        ( { next | desiredOutcome = vision, loadedOutcome = Just { projectId = projectId, text = vision } }, Cmd.none )
+
+                    else
+                        ( next, Cmd.none )
+
                 ( Ok resultValue, LoadPreview itemId ) ->
                     if next.previewRequested == Just itemId then
                         ( { next | preview = Just (loadedBody itemId resultValue) }, Cmd.none )
@@ -1187,7 +1234,7 @@ processingForm model =
                 ]
             , processingField True
                 "Project Vision"
-                "Applied when a Project is selected or created."
+                "Loaded from an existing Project when you choose it, and saved back if you change it. A new Project starts with it."
                 [ textarea [ value model.desiredOutcome, placeholder "What will be true when this Project is complete?", onInput DesiredOutcomeChanged ] [] ]
             , processingField False
                 "Action"
