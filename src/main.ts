@@ -230,6 +230,10 @@ export default class DragonglassGtdPlugin extends Plugin {
           ? saved!.pomodoro!.focusMinutes
           : defaults.pomodoro.focusMinutes,
         logToDiary: saved?.pomodoro?.logToDiary === true,
+        tickSound: saved?.pomodoro?.tickSound === true,
+        tickVolume: Number.isInteger(saved?.pomodoro?.tickVolume) && saved!.pomodoro!.tickVolume >= 0 && saved!.pomodoro!.tickVolume <= 100
+          ? saved!.pomodoro!.tickVolume
+          : defaults.pomodoro.tickVolume,
         mite: parseMiteSettings(saved?.pomodoro?.mite, localDate()),
       },
       brainstorm: {

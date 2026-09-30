@@ -216,6 +216,8 @@ export interface ElmPomodoroDto {
   checklists: ElmChecklistChoiceDto[];
   /** The run the running session is spent on, if it is a checklist session. */
   checklistRun: ElmChecklistRunDto | null;
+  /** Whether a running session ticks (setting `pomodoro.tickSound`). */
+  ticking: boolean;
 }
 
 export interface ElmChecklistChoiceDto {
@@ -238,6 +240,7 @@ export function elmPomodoro(
   focusMinutes: number,
   now = new Date(),
   checklists: ElmPomodoroChecklists = { choices: [], run: null },
+  ticking = false,
 ): ElmPomodoroDto {
   const today = localDate(now);
   const active = store.active;
@@ -278,6 +281,7 @@ export function elmPomodoro(
     weekStart: addLocalDays(today, -((now.getDay() + 6) % 7)),
     checklists: checklists.choices,
     checklistRun: checklists.run,
+    ticking,
   };
 }
 
@@ -626,6 +630,7 @@ type ElmNonMenuCommand =
   | { type: "resume-pomodoro" }
   | { type: "finish-pomodoro"; outcome: PomodoroOutcome | null; reflection: string }
   | { type: "discard-pomodoro" }
+  | { type: "toggle-pomodoro-ticking" }
   | { type: "complete-pomodoro-action"; actionId: string }
   | { type: "start-checklist-pomodoro"; path: string; intention: string; minutes: number }
   | { type: "open-checklist-pomodoro"; path: string }
@@ -746,6 +751,7 @@ export const SURFACE_COMMANDS = {
   pomodoro: [
     "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro",
     "complete-pomodoro-action", "show-project", "start-checklist-pomodoro", "mark-checklist-item", "open-checklist-run",
+    "toggle-pomodoro-ticking",
   ],
   checklists: [
     "start-checklist-run", "show-checklist-run", "mark-checklist-item", "finish-checklist-run", "discard-checklist-run",
@@ -900,6 +906,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "pause-pomodoro":
     case "resume-pomodoro":
     case "discard-pomodoro":
+    case "toggle-pomodoro-ticking":
       return true;
     case "open-pomodoro":
     case "delegate-project":

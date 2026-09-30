@@ -309,6 +309,10 @@ export interface PomodoroSettings {
   focusMinutes: number;
   /** Also add one line per finished session to the Project's Diary. */
   logToDiary: boolean;
+  /** A soft clock tick every second while a session runs. */
+  tickSound: boolean;
+  /** Its volume, 0 to 100. */
+  tickVolume: number;
   /** Sending finished sessions to mite as time entries. */
   mite: MiteSettings;
 }

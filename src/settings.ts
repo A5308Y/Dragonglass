@@ -326,6 +326,22 @@ export class GtdSettingTab extends PluginSettingTab {
       });
 
     new Setting(sectionEl)
+      .setName("Ticking")
+      .setDesc("A soft clock tick every second while a session runs, not while it is paused. The timer's Ticking button switches it too.")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.pomodoro.tickSound).onChange(async (value) => {
+        this.plugin.settings.pomodoro.tickSound = value;
+        await this.plugin.saveSettings(false);
+      }))
+      .addSlider((slider) => slider
+        .setLimits(5, 100, 5)
+        .setValue(this.plugin.settings.pomodoro.tickVolume)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.pomodoro.tickVolume = value;
+          await this.plugin.saveSettings(false);
+        }));
+
+    new Setting(sectionEl)
       .setName("Log to Project Diary")
       .setDesc("Also add one line per finished session to the Project's Diary: length, intention, outcome and reflection.")
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.pomodoro.logToDiary).onChange(async (value) => {

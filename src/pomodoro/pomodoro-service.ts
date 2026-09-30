@@ -21,6 +21,7 @@ import type { PomodoroSettings } from "../domain/types";
 import { withExternalLink } from "../domain/mite";
 import { SyncedJsonFile } from "../state/synced-json-file";
 import { showUndoNotice } from "../ui/undo";
+import { TickSound } from "./tick-sound";
 
 /**
  * Owns the running Pomodoro and the session log.
@@ -38,6 +39,7 @@ export class PomodoroService {
   private alarm: number | null = null;
   private ticker: number | null = null;
   private statusBar: HTMLElement | null = null;
+  private readonly tick = new TickSound();
 
   constructor(
     private readonly app: App,
@@ -68,6 +70,7 @@ export class PomodoroService {
     void this.load();
     return () => {
       this.clearTimers();
+      this.tick.close();
       this.statusBar = null;
       for (const ref of watching) this.app.vault.offref(ref);
     };
@@ -92,6 +95,8 @@ export class PomodoroService {
   }
 
   async begin(start: PomodoroStart): Promise<void> {
+    // Sound may only start from something the person did: starting a session is that.
+    if (this.getSettings().tickSound) this.tick.prepare();
     await this.load();
     await this.update(startPomodoro(this.store, start, new Date()));
   }
@@ -101,6 +106,7 @@ export class PomodoroService {
   }
 
   async resume(): Promise<void> {
+    if (this.getSettings().tickSound) this.tick.prepare();
     await this.update(resumePomodoro(this.store, new Date()));
   }
 
@@ -149,9 +155,24 @@ export class PomodoroService {
           this.notify();
         }, delay);
       }
-      this.ticker = window.setInterval(() => this.renderStatus(), 1_000);
+      this.ticker = window.setInterval(() => {
+        this.renderStatus();
+        this.playTick();
+      }, 1_000);
     }
     this.renderStatus();
+  }
+
+  /** Readies the sound when ticking is switched on, which is something the person did. */
+  prepareTicking(): void {
+    this.tick.prepare();
+  }
+
+  private playTick(): void {
+    const settings = this.getSettings();
+    const active = this.store.active;
+    if (!settings.tickSound || !active?.resumedAt || remainingSeconds(active, new Date()) <= 0) return;
+    this.tick.play(settings.tickVolume / 100);
   }
 
   private renderStatus(): void {

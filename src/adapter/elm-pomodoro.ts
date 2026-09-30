@@ -117,7 +117,8 @@ export class ElmPomodoroHost {
   }
 
   private state() {
-    return elmPomodoro(this.pomodoro.getStore(), this.services.getSettings().pomodoro.focusMinutes, new Date(), this.checklistState);
+    const settings = this.services.getSettings().pomodoro;
+    return elmPomodoro(this.pomodoro.getStore(), settings.focusMinutes, new Date(), this.checklistState, settings.tickSound);
   }
 
   private send(event: ElmPomodoroEvent): void {
@@ -148,6 +149,14 @@ export class ElmPomodoroHost {
         return this.pomodoro.finish({ outcome: command.outcome, reflection: command.reflection });
       case "discard-pomodoro":
         return this.pomodoro.discard();
+      case "toggle-pomodoro-ticking": {
+        const settings = this.services.getSettings();
+        const on = !settings.pomodoro.tickSound;
+        if (on) this.pomodoro.prepareTicking();
+        await this.services.saveSettings({ ...settings, pomodoro: { ...settings.pomodoro, tickSound: on } }, false);
+        this.send({ type: "pomodoro", pomodoro: this.state() });
+        return;
+      }
       case "start-checklist-pomodoro": {
         const run = await this.checklists.begin(command.path);
         return this.pomodoro.begin({

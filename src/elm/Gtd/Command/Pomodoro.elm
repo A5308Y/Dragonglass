@@ -16,6 +16,7 @@ type Command
     | ResumePomodoro
     | FinishPomodoro (Maybe PomodoroOutcome) String
     | DiscardPomodoro
+    | ToggleTicking
     | CompletePomodoroAction ActionId
     | ShowProject ProjectId
     | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
@@ -41,6 +42,9 @@ encode command =
 
             DiscardPomodoro ->
                 Base.DiscardPomodoro
+
+            ToggleTicking ->
+                Base.TogglePomodoroTicking
 
             CompletePomodoroAction actionId ->
                 Base.CompletePomodoroAction actionId

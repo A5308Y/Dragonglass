@@ -76,6 +76,8 @@ export function defaultSettings(): GtdSettings {
       storePath: "GTD/pomodoros.json",
       focusMinutes: 25,
       logToDiary: false,
+      tickSound: false,
+      tickVolume: 30,
       mite: parseMiteSettings({}, localDate()),
     },
     brainstorm: {

@@ -104,6 +104,7 @@ type Command
     | ResumePomodoro
     | FinishPomodoro (Maybe PomodoroOutcome) String
     | DiscardPomodoro
+    | TogglePomodoroTicking
     | CompletePomodoroAction ActionId
     | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
     | OpenChecklistPomodoro String
@@ -559,6 +560,9 @@ encode command =
 
         DiscardPomodoro ->
             object "discard-pomodoro" []
+
+        TogglePomodoroTicking ->
+            object "toggle-pomodoro-ticking" []
 
         CompletePomodoroAction actionId ->
             object "complete-pomodoro-action" [ ( "actionId", Encode.string actionId ) ]

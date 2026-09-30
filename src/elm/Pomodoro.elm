@@ -84,6 +84,7 @@ type alias PomodoroState =
     , weekStart : String
     , checklists : List ChecklistChoice
     , checklistRun : Maybe Checklist.Run
+    , ticking : Bool
     }
 
 
@@ -220,7 +221,7 @@ initialModel snapshot state nowMs =
 
 emptyState : PomodoroState
 emptyState =
-    { focusMinutes = 25, active = Nothing, sessions = [], today = "", weekStart = "", checklists = [], checklistRun = Nothing }
+    { focusMinutes = 25, active = Nothing, sessions = [], today = "", weekStart = "", checklists = [], checklistRun = Nothing, ticking = False }
 
 
 selectProject : Maybe ProjectId -> Model -> Model
@@ -811,6 +812,19 @@ runningView model active =
               else
                 button [ onClick Pause ] [ text "Pause" ]
             , button [ onClick FinishEarly ] [ text "Finish early" ]
+            , button
+                [ classList [ ( "is-active", model.state.ticking ) ]
+                , attribute "aria-pressed" (Ui.boolAttribute model.state.ticking)
+                , onClick (Send Command.ToggleTicking)
+                ]
+                [ text
+                    (if model.state.ticking then
+                        "🔊 Ticking"
+
+                     else
+                        "🔇 Ticking"
+                    )
+                ]
             , button [ class "mod-warning", onClick Discard ] [ text "Discard" ]
             ]
         ]
@@ -1187,7 +1201,7 @@ flagsDecoder =
 
 stateDecoder : Decoder PomodoroState
 stateDecoder =
-    Decode.map7 PomodoroState
+    Decode.map8 PomodoroState
         (Decode.field "focusMinutes" Decode.int)
         (Decode.field "active" (Decode.nullable activeDecoder))
         (Decode.field "sessions" (Decode.list sessionDecoder))
@@ -1203,6 +1217,7 @@ stateDecoder =
             )
         )
         (Decode.field "checklistRun" (Decode.nullable Checklist.runDecoder))
+        (Decode.oneOf [ Decode.field "ticking" Decode.bool, Decode.succeed False ])
 
 
 activeDecoder : Decoder Active
