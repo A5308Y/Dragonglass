@@ -925,7 +925,8 @@ dg-markdown.dg-inbox-preview > :first-child { margin-top: 0; }
    middle of title and details; Edit and Delete stay centred on the row. */
 .dg-action-row { --dg-title-line: 20px; align-items: start; }
 .dg-action-row-actions { align-self: center; }
-.dg-action-row-checkbox {
+/* Specific enough to beat Obsidian's `input[type=checkbox]`, which sets its own size and margin. */
+.dg-action-row input.dg-action-row-checkbox {
   width: 17px;
   height: 17px;
   margin: calc((var(--dg-title-line) - 17px) / 2) 0 0 0;
