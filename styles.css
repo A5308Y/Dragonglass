@@ -1200,18 +1200,24 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-subproject-card.is-blocked { border-color: color-mix(in srgb, var(--color-orange) 35%, var(--background-modifier-border)); }
 .dg-subproject-card.has-issue { border-color: color-mix(in srgb, var(--color-yellow) 45%, var(--background-modifier-border)); }
 /* Lined up at the top, so a title that wraps keeps the tick box and menu on its first line.
-   The row sets the title's line height, so `1lh` on the tick box is one line of the title. */
-.dg-subproject-card { --dg-check-size: 15px; }
-.dg-subproject-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; line-height: 1.35; }
-.dg-subproject-card-heading .dg-icon-button { flex: 0 0 28px; }
+   One fixed line height for the title (`--dg-title-line`), and the tick box and menu
+   centred on it: Obsidian gives buttons their own font size, so a line height taken from
+   the row would not be the title's. The +1px sets the box level with the letters, which
+   sit below the middle of their line. */
+.dg-subproject-card { --dg-check-size: 15px; --dg-title-line: 20px; }
+.dg-subproject-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.dg-subproject-card-heading .dg-icon-button {
+  flex: 0 0 28px;
+  height: var(--dg-title-line);
+  min-height: 0;
+  line-height: var(--dg-title-line);
+}
 /* The done checkbox leads the heading, like the one on Action cards. */
 .dg-subproject-card-heading input.dg-subproject-done {
   flex: 0 0 auto;
   width: var(--dg-check-size);
   height: var(--dg-check-size);
-  margin: calc((1lh - var(--dg-check-size)) / 2) -2px 0 0;
-  font: inherit;
-  line-height: inherit;
+  margin: calc((var(--dg-title-line) - var(--dg-check-size)) / 2 + 1px) -2px 0 0;
   cursor: pointer;
 }
 .dg-subproject-title {
@@ -1231,8 +1237,8 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   color: var(--text-normal);
   /* Obsidian gives buttons a fixed height; a long name needs as many lines as it takes. */
   height: auto;
-  min-height: 22px;
-  line-height: 1.35;
+  min-height: var(--dg-title-line);
+  line-height: var(--dg-title-line);
 }
 .dg-subproject-blocked {
   margin-top: 8px;
