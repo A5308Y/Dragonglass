@@ -754,7 +754,7 @@ export const SURFACE_COMMANDS = {
   pomodoro: [
     "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro",
     "complete-pomodoro-action", "show-project", "start-checklist-pomodoro", "mark-checklist-item", "open-checklist-run",
-    "set-pomodoro-sound",
+    "set-pomodoro-sound", "open-link", "open-note-link",
   ],
   checklists: [
     "start-checklist-run", "show-checklist-run", "mark-checklist-item", "finish-checklist-run", "discard-checklist-run",

@@ -13,6 +13,7 @@ view only counts down from the start and pause times the host reports.
 
 import Browser
 import Dict
+import Gtd.ActionCard as ActionCard
 import Gtd.ActionStatus as ActionStatus
 import Gtd.Checklist as Checklist
 import Gtd.Command.Pomodoro as Command exposing (Command)
@@ -133,6 +134,9 @@ type alias Model =
     -- A checklist chosen before the host has listed the checklists.
     , pendingChecklist : Maybe String
     , focusIds : Set ActionId
+
+    -- Narrows the start screen's cards to one context; `Nothing` shows them all.
+    , contextFilter : Maybe String
     , intention : String
     , minutes : String
     , wrappingUp : Bool
@@ -150,6 +154,7 @@ type Msg
     | Tick Time.Posix
     | SubjectPicker (Picker.PickerMsg Subject)
     | ToggleFocus ActionId Bool
+    | SetContextFilter String
     | IntentionChanged String
     | MinutesChanged String
     | Start
@@ -208,6 +213,7 @@ initialModel snapshot state nowMs =
     , subject = Picker.init "" Nothing
     , pendingChecklist = Nothing
     , focusIds = Set.empty
+    , contextFilter = Nothing
     , intention = ""
     , minutes = String.fromInt state.focusMinutes
     , wrappingUp = False
@@ -292,15 +298,37 @@ update msg model =
                 picked =
                     Picker.update pickerMsg (subjectSuggestions model) (subjectLabel model) model.subject
             in
+            let
+                changed =
+                    Maybe.map subjectKey (Picker.selection picked) /= Maybe.map subjectKey (Picker.selection model.subject)
+            in
             ( { model
                 | subject = picked
                 , pendingChecklist = Nothing
                 , focusIds =
-                    if Maybe.map subjectKey (Picker.selection picked) /= Maybe.map subjectKey (Picker.selection model.subject) then
+                    if changed then
                         Set.empty
 
                     else
                         model.focusIds
+                , contextFilter =
+                    if changed then
+                        Nothing
+
+                    else
+                        model.contextFilter
+              }
+            , Cmd.none
+            )
+
+        SetContextFilter context ->
+            ( { model
+                | contextFilter =
+                    if String.isEmpty context then
+                        Nothing
+
+                    else
+                        Just context
               }
             , Cmd.none
             )
@@ -741,8 +769,9 @@ setupView model =
         ]
 
 
-{-| The Next Actions of the Project and its active sub-projects, any of which can be
-picked as this session's focus.
+{-| The Next Actions of the Project and its active sub-projects, as the Action Board's
+cards, any of which can be picked as this session's focus. A context narrows them to
+what can be done where you are.
 -}
 focusPicker : Model -> Project -> Html Msg
 focusPicker model project =
@@ -750,24 +779,88 @@ focusPicker model project =
         levels =
             projectTree model project
 
-        none =
-            List.all (.actions >> List.isEmpty) levels
+        contexts =
+            levels |> List.concatMap .actions |> List.filterMap .context |> Ui.uniqueSorted
 
-        row action =
-            li []
-                [ label []
-                    [ input [ type_ "checkbox", checked (Set.member action.id model.focusIds), onCheck (ToggleFocus action.id) ] []
-                    , span [] [ text action.title ]
+        matches action =
+            case model.contextFilter of
+                Just context ->
+                    action.context == Just context
+
+                Nothing ->
+                    True
+
+        shown =
+            levels
+                |> List.map (\level -> { level | actions = List.filter matches level.actions })
+                -- Narrowed to a context, a sub-project without such Actions has nothing to offer here.
+                |> List.filter (\level -> level.depth == 0 || model.contextFilter == Nothing || not (List.isEmpty level.actions))
+
+        none =
+            List.all (.actions >> List.isEmpty) shown
+
+        card action =
+            ActionCard.view
+                { today = model.snapshot.today
+                , selected = Set.member action.id model.focusIds
+                , select = ToggleFocus action.id
+                , selectLabel = "Focus on"
+                , project = Nothing
+                , openUrl = \url -> Send (Command.OpenLink url)
+                , openNote = \link -> Send (Command.OpenNoteLink link action.file.path)
+                }
+                action
+
+        levelView entry =
+            if entry.depth == 0 then
+                if List.isEmpty entry.actions then
+                    []
+
+                else
+                    [ div [ class "dg-pomodoro-cards" ] (List.map card entry.actions) ]
+
+            else
+                [ div [ class "dg-pomodoro-subproject", style "--dg-depth" (String.fromInt (entry.depth - 1)) ]
+                    [ span [ class "dg-pomodoro-subproject-title" ] [ text ("↳ " ++ entry.project.title) ]
+                    , if List.isEmpty entry.actions then
+                        span [ class "dg-pomodoro-hint" ] [ text "No Next Actions" ]
+
+                      else
+                        div [ class "dg-pomodoro-cards" ] (List.map card entry.actions)
                     ]
                 ]
     in
     div [ class "dg-pomodoro-field" ]
-        (span [ class "dg-pomodoro-label" ] [ text "Next Actions" ]
-            :: (if none && List.length levels == 1 then
-                    [ p [ class "dg-muted" ] [ text "This Project has no Next Actions. The intention can say what the session is for." ] ]
+        (div [ class "dg-pomodoro-field-heading" ]
+            [ span [ class "dg-pomodoro-label" ] [ text "Next Actions" ]
+            , if List.isEmpty contexts then
+                text ""
+
+              else
+                Ui.labelled "Context"
+                    (Html.select [ class "dropdown", onInput SetContextFilter ]
+                        (Html.option [ value "", Html.Attributes.selected (model.contextFilter == Nothing) ] [ text "All contexts" ]
+                            :: List.map
+                                (\context -> Html.option [ value context, Html.Attributes.selected (model.contextFilter == Just context) ] [ text ("@" ++ context) ])
+                                contexts
+                        )
+                    )
+            ]
+            :: (if none then
+                    [ p [ class "dg-muted" ]
+                        [ text
+                            (case model.contextFilter of
+                                Just context ->
+                                    "No Next Actions @" ++ context ++ " in this Project."
+
+                                Nothing ->
+                                    "This Project has no Next Actions. The intention can say what the session is for."
+                            )
+                        ]
+                    ]
 
                 else
-                    treeActionsView levels row
+                    List.concatMap levelView shown
                )
             ++ [ if none then
                     text ""

@@ -3070,3 +3070,13 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
   white-space: nowrap;
 }
 .dg-subproject-card .dg-waiting-only { margin-top: 6px; }
+
+/* The Pomodoro start screen's Next Actions, as the Action Board's cards. A card picked
+   as the session's focus says so with its ticked box and an accent edge. */
+.dg-pomodoro-field-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dg-pomodoro-cards { display: flex; flex-direction: column; gap: 6px; }
+.dg-pomodoro-subproject > .dg-pomodoro-cards { padding-left: 16px; }
+.dg-choice-card.is-selected {
+  border-color: var(--interactive-accent);
+  box-shadow: inset 3px 0 0 var(--interactive-accent);
+}

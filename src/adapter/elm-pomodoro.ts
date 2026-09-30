@@ -7,6 +7,7 @@ import type { ChecklistService } from "../checklists/checklist-service";
 import type { PomodoroService } from "../pomodoro/pomodoro-service";
 import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
+import { openWebLink } from "../ui/open-link";
 import { createUlid } from "../utils/ulid";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
 import {
@@ -183,6 +184,11 @@ export class ElmPomodoroHost {
       case "show-project":
         this.services.showProjectDetail(command.projectId);
         return;
+      case "open-link":
+        openWebLink(command.url);
+        return;
+      case "open-note-link":
+        return this.services.app.workspace.openLinkText(command.link, command.sourcePath, false);
     }
     return assertNever(command);
   }

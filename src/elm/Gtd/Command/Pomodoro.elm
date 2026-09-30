@@ -18,6 +18,8 @@ type Command
     | DiscardPomodoro
       -- "off", "ticking" or "folder".
     | SetSound String
+    | OpenLink String
+    | OpenNoteLink String String
     | CompletePomodoroAction ActionId
     | ShowProject ProjectId
     | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
@@ -46,6 +48,12 @@ encode command =
 
             SetSound sound ->
                 Base.SetPomodoroSound sound
+
+            OpenLink url ->
+                Base.OpenLink url
+
+            OpenNoteLink link sourcePath ->
+                Base.OpenNoteLink link sourcePath
 
             CompletePomodoroAction actionId ->
                 Base.CompletePomodoroAction actionId
