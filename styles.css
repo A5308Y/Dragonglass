@@ -921,10 +921,14 @@ dg-markdown.dg-inbox-preview > :first-child { margin-top: 0; }
   background: var(--background-primary);
 }
 .dg-action-row:hover { border-color: var(--background-modifier-border-hover); }
+/* The tick box sits on the title's line, as on sub-project cards, rather than in the
+   middle of title and details; Edit and Delete stay centred on the row. */
+.dg-action-row { --dg-title-line: 20px; align-items: start; }
+.dg-action-row-actions { align-self: center; }
 .dg-action-row-checkbox {
   width: 17px;
   height: 17px;
-  margin: 0;
+  margin: calc((var(--dg-title-line) - 17px) / 2) 0 0 0;
   cursor: pointer;
 }
 .dg-action-row-checkbox:disabled { cursor: wait; }
@@ -940,6 +944,8 @@ dg-markdown.dg-inbox-preview > :first-child { margin-top: 0; }
   white-space: nowrap;
   color: var(--text-normal);
   font-weight: var(--font-medium);
+  height: auto;
+  line-height: var(--dg-title-line);
 }
 button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-action-row-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 9px; margin-top: 5px; }
