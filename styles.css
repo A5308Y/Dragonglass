@@ -2078,8 +2078,11 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
     background: var(--interactive-accent-hover);
     color: var(--text-on-accent);
   }
+  /* Some themes give every hovered button the accent colour, which turned
+     destructive buttons blue; a red button stays red, only lighter. */
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-warning:not(:disabled):hover {
-    background: color-mix(in srgb, var(--background-modifier-error) 85%, white);
+    background: color-mix(in srgb, var(--background-modifier-error) 85%, white) !important;
+    color: var(--text-on-accent) !important;
   }
   /* Active toggles are accent-filled, some with `!important`. */
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.is-active:not(:disabled):not(.dg-flat-button):hover {
