@@ -1,6 +1,6 @@
 import { Modal, Notice, Setting, type App, type ButtonComponent } from "obsidian";
-import { formatBytes, type AgentService, type DelegationPlan, type RerunDefaults } from "../agent/agent-service";
-import type { AgentRuntime, LocalHarness } from "../domain/delegation";
+import { formatBytes, type AgentService, type CodeEffort, type DelegationPlan, type RerunDefaults } from "../agent/agent-service";
+import { codeTaskIdentifier, type AgentRuntime, type LocalHarness } from "../domain/delegation";
 import type { AgentSettings } from "../domain/types";
 
 /**
@@ -10,6 +10,8 @@ import type { AgentSettings } from "../domain/types";
  *
  * Claude reads the Project's tree. A local model may read the tree with internet
  * access, or the whole vault without any: the more it sees, the less it can reach.
+ * A code run is offered where the Project, or one above it, has a Lamdera app's
+ * repository: it gets only the Project's own words, and changes that app's code.
  */
 export async function delegateProject(
   app: App,
@@ -32,9 +34,15 @@ class DelegateModal extends Modal {
   private runtime: AgentRuntime = "claude";
   private harness: LocalHarness = "loop";
   private budget: number;
+  private effort: CodeEffort = "medium";
+  private continueCode: boolean;
+  private readonly codeRepository: { name: string; fromProjectId: string } | null;
   private summaryEl!: HTMLElement;
   private budgetSetting!: Setting;
   private scopeSetting!: Setting;
+  private earlierSetting: Setting | null = null;
+  private effortSetting!: Setting;
+  private continueCodeSetting!: Setting;
   private limitEl!: HTMLElement;
 
   constructor(
@@ -48,6 +56,10 @@ class DelegateModal extends Modal {
     this.budget = previous?.budgetUsd ?? settings.defaultBudgetUsd;
     this.runtime = previous?.runtime ?? "claude";
     this.harness = previous?.harness ?? "loop";
+    this.codeRepository = agent.codeRepository(plan.scope.root.id);
+    if (this.runtime === "lamdera" && !this.codeRepository) this.runtime = "claude";
+    // A follow-up continues on the Project's branch and pull request unless asked otherwise.
+    this.continueCode = agent.hasCodeRuns(plan.scope.root.id);
   }
 
   onOpen(): void {
@@ -64,9 +76,12 @@ class DelegateModal extends Modal {
         .addOption("local-smol", `Local model, smolagents (${localModel})`)
         .addOption("local-qwen", `Local model, Qwen-Agent (${localModel})`)
         .addOption("codex", `ChatGPT, with Codex and your plan (${this.settings.codexModel || "Codex's default model"})`)
+        .then((dropdown) => {
+          if (this.codeRepository) dropdown.addOption("lamdera", `Code: the Lamdera app “${this.codeRepository.name}”, with the coding agent`);
+        })
         .setValue(this.runtime !== "local" ? this.runtime : this.harness === "smolagents" ? "local-smol" : this.harness === "qwen-agent" ? "local-qwen" : "local")
         .onChange((value) => {
-          this.runtime = value === "claude" || value === "codex" ? value : "local";
+          this.runtime = value === "claude" || value === "codex" || value === "lamdera" ? value : "local";
           this.harness = value === "local-smol" ? "smolagents" : value === "local-qwen" ? "qwen-agent" : "loop";
           // Only a local run may read the whole vault.
           if (this.runtime !== "local" && this.plan.wholeVault) void this.replan(false);
@@ -94,7 +109,7 @@ class DelegateModal extends Modal {
     let continueEarlier = Boolean(this.previous?.earlier);
     if (this.previous?.earlier) {
       const earlier = this.previous.earlier;
-      new Setting(contentEl)
+      this.earlierSetting = new Setting(contentEl)
         .setName("Continue from the earlier run")
         .setDesc(`It ended as: ${earlier.statusText}. `
           + (earlier.resultsFolder
@@ -104,6 +119,23 @@ class DelegateModal extends Modal {
           continueEarlier = value;
         }));
     }
+
+    this.continueCodeSetting = new Setting(contentEl)
+      .setName("Continue on the existing branch and pull request")
+      .setDesc("The agent picks up its earlier checkout and is told what the earlier runs on this Project were asked and reported. "
+        + "Off starts a fresh branch from the base branch.")
+      .addToggle((toggle) => toggle.setValue(this.continueCode).onChange((value) => {
+        this.continueCode = value;
+      }));
+    this.effortSetting = new Setting(contentEl)
+      .setName("Reasoning effort")
+      .setDesc("How long Codex thinks before it changes code. Higher takes longer and uses more of your plan.")
+      .addDropdown((dropdown) => dropdown
+        .addOptions({ low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" })
+        .setValue(this.effort)
+        .onChange((value) => {
+          this.effort = value as CodeEffort;
+        }));
 
     this.budgetSetting = new Setting(contentEl)
       .setName("Budget")
@@ -126,12 +158,16 @@ class DelegateModal extends Modal {
       error.setText("");
       startButton.setDisabled(true).setButtonText("Starting…");
       try {
-        await this.agent.delegate(this.plan, instructions.value, {
-          runtime: this.runtime,
-          harness: this.harness,
-          budgetUsd: this.budget,
-          ...(continueEarlier && this.previous?.earlier ? { earlierAttempt: this.previous.earlier } : {}),
-        });
+        if (this.runtime === "lamdera") {
+          await this.agent.delegateCode(this.plan.scope.root.id, instructions.value, { effort: this.effort, continuation: this.continueCode });
+        } else {
+          await this.agent.delegate(this.plan, instructions.value, {
+            runtime: this.runtime,
+            harness: this.harness,
+            budgetUsd: this.budget,
+            ...(continueEarlier && this.previous?.earlier ? { earlierAttempt: this.previous.earlier } : {}),
+          });
+        }
         new Notice(`Starting the agent on “${this.plan.scope.root.title}”. Its progress shows on the Project's page.`);
         this.close();
       } catch (reason) {
@@ -170,9 +206,17 @@ class DelegateModal extends Modal {
   private render(): void {
     const { plan } = this;
     const local = this.runtime === "local";
+    const code = this.runtime === "lamdera";
     this.scopeSetting.settingEl.toggle(local);
     this.budgetSetting.settingEl.toggle(this.runtime === "claude");
-    this.limitEl.toggle(this.runtime !== "claude");
+    this.earlierSetting?.settingEl.toggle(!code);
+    this.effortSetting.settingEl.toggle(code);
+    this.continueCodeSetting.settingEl.toggle(code && this.agent.hasCodeRuns(plan.scope.root.id));
+    this.limitEl.toggle(this.runtime !== "claude" && !code);
+    if (code) {
+      this.renderCode();
+      return;
+    }
     this.limitEl.setText(local
       ? `A local run costs nothing. It stops after ${this.settings.localMaxTurns} turns or `
         + `${this.settings.localMaxMinutes} minutes, whichever comes first.`
@@ -215,6 +259,30 @@ class DelegateModal extends Modal {
             + "it was given. Every request it makes is logged in the run folder."
           : "⚠ The material goes to Anthropic's API, and the agent can reach the internet, so it could pass on what it was "
             + "given. Only delegate trees that aren't sensitive. Every request it makes is logged in the run folder.",
+    });
+  }
+
+  /** What a code run gets and does: the Project's own words, and one app's repository. */
+  private renderCode(): void {
+    const summary = this.summaryEl;
+    summary.empty();
+    const repository = this.codeRepository;
+    if (!repository) return;
+    const inherited = repository.fromProjectId !== this.plan.scope.root.id;
+    summary.createEl("p", {
+      text: `The coding agent works on “${repository.name}”${inherited ? ", the repository of a Project above this one," : ""} `
+        + `on the branch agent/${codeTaskIdentifier(this.plan.scope.root.id)}-…. It gets this Project's note, desired outcome `
+        + "and open Actions, and your instructions; no other vault files.",
+    });
+    summary.createEl("p", {
+      text: "Codex only edits files. The coding agent formats them, commits, runs lamdera check --force before every push "
+        + "(with one repair attempt; its migrations are committed too), merges the base branch, pushes without force, opens or "
+        + "updates the pull request and deploys a preview. When the pull request is ready, a “Review PR” Next Action appears here.",
+    });
+    summary.createEl("p", {
+      cls: "dg-delegate-warning",
+      text: "⚠ The Project's text goes to OpenAI. The coding agent's container holds its GitHub, Lamdera and ChatGPT sign-ins, "
+        + "and Codex can reach the internet from there. It never merges, and never deploys production.",
     });
   }
 }

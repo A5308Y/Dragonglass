@@ -16,7 +16,7 @@
  * don't exist, and delegation simply isn't offered there.
  */
 
-import { Notice, Platform, TFile, normalizePath, type App } from "obsidian";
+import { Notice, Platform, TFile, normalizePath, parseYaml, type App } from "obsidian";
 import type * as ChildProcess from "node:child_process";
 import type * as FsPromises from "node:fs/promises";
 import type * as NodeOs from "node:os";
@@ -29,9 +29,14 @@ import {
   agentRunStatus,
   agentRunStatusText,
   briefInstructions,
+  codeRunConversation,
+  codeTaskBrief,
+  codeTaskIdentifier,
   delegationBrief,
   delegationScope,
+  repositoryNames,
   resultsFolderName,
+  reviewActionTitle,
   runFolderName,
   runReportInboxItem,
   agentRuntime,
@@ -48,6 +53,7 @@ import {
   type EarlierAttempt,
 } from "../domain/delegation";
 import { projectBreadcrumbs } from "../domain/project-hierarchy";
+import { nearestMapped } from "../domain/project-tree";
 import type { AgentSettings } from "../domain/types";
 import type { GtdRepository } from "../repository/gtd-repository";
 import { localDate } from "../utils/date";
@@ -106,6 +112,15 @@ export interface DelegationOptions {
   budgetUsd: number;
   /** An earlier run to continue from: the brief tells the agent where it got to. */
   earlierAttempt?: EarlierAttempt;
+}
+
+/** Reasoning effort a code run asks Codex for, as the coding agent's labels name it. */
+export type CodeEffort = "low" | "medium" | "high" | "xhigh";
+
+export interface CodeDelegationOptions {
+  effort: CodeEffort;
+  /** Continue on the Project's existing branch and pull request, with the earlier runs as the conversation. */
+  continuation: boolean;
 }
 
 /** A finished run's choices, for starting it again from the Delegate dialog. */
@@ -261,6 +276,129 @@ export class AgentService {
         resolve(code === 0 && await this.codexSignedIn());
       });
     });
+  }
+
+  // CODE RUNS
+
+  /** The repository a Project's code runs work on: its own, or the nearest Project's above it. */
+  codeRepository(projectId: string): { name: string; fromProjectId: string } | null {
+    const mapped = nearestMapped(projectId, this.repository.index.getSnapshot().projects, this.getSettings().lamdera.repositories);
+    return mapped ? { name: mapped.value, fromProjectId: mapped.projectId } : null;
+  }
+
+  /** Whether a Project already has code runs, which a new one can continue (same branch and pull request). */
+  hasCodeRuns(projectId: string): boolean {
+    return this.runs.some((run) => run.runtime === "lamdera" && run.projectId === projectId);
+  }
+
+  /** The repository names the coding agent's repositories file offers. */
+  async codeRepositoryNames(): Promise<string[]> {
+    const node = requireNode();
+    const { kit } = await this.lamderaKit();
+    const file = this.getSettings().lamdera.repositoriesFile;
+    const path = node.path.isAbsolute(file) ? file : node.path.join(kit, file);
+    let text: string;
+    try {
+      text = await node.fs.readFile(path, "utf8");
+    } catch {
+      throw new Error(`The coding agent's repositories file was not found at ${path}.`);
+    }
+    return repositoryNames(parseYaml(text));
+  }
+
+  /**
+   * Starts a code run: the Lamdera coding agent implements the instructions in the Project's
+   * repository, checks it with `lamdera check --force` before every push, and opens or updates a
+   * pull request. It gets the Project's own words in its brief and no other vault files.
+   */
+  async delegateCode(projectId: string, instructions: string, options: CodeDelegationOptions): Promise<string> {
+    const node = requireNode();
+    if (!this.available()) throw new Error("Delegating needs the Obsidian desktop app on macOS.");
+    if (!instructions.trim()) throw new Error("Say what the agent should implement.");
+    const snapshot = this.repository.index.getSnapshot();
+    const project = snapshot.projectsById.get(projectId);
+    if (!project) throw new Error("This Project no longer exists.");
+    const repository = this.codeRepository(projectId);
+    if (!repository) throw new Error("Choose a repository for this Project first: Settings → Agent delegation → Lamdera apps.");
+    await this.lamderaKit();
+    await this.dockerPath();
+    const queue = this.laneBusy("lamdera");
+
+    const agentActionIds = new Set([...this.runs, ...this.deleted].flatMap((run) => (run.actionId ? [run.actionId] : [])));
+    const openActions = snapshot.actions
+      .filter((action) => action.projectId === projectId && !agentActionIds.has(action.id) && action.status !== "done" && action.status !== "cancelled")
+      .map((action) => action.title);
+    const brief = codeTaskBrief({
+      breadcrumb: projectBreadcrumbs(snapshot.projects).get(projectId) ?? project.title,
+      desiredOutcome: await this.repository.readDesiredOutcome(project),
+      projectNote: await this.app.vault.read(project.file),
+      openActions,
+      instructions,
+    });
+    const conversation = options.continuation ? await this.codeConversation(projectId) : "";
+
+    const createdAt = new Date();
+    const runId = runFolderName(createdAt, project.title);
+    const runDir = node.path.join(this.runsDirectory(), runId);
+    for (const folder of ["input", "outbox", "exchange", "logs"]) {
+      await node.fs.mkdir(node.path.join(runDir, folder), { recursive: true });
+    }
+    await node.fs.writeFile(node.path.join(runDir, "input", "brief.md"), brief);
+    await writeJson(node, node.path.join(runDir, "input", "run.json"), {
+      runId,
+      projectId,
+      projectTitle: project.title,
+      createdAt: createdAt.toISOString(),
+      instructions: instructions.trim(),
+      runtime: "lamdera",
+      repository: repository.name,
+      identifier: codeTaskIdentifier(projectId),
+      continuation: options.continuation,
+      conversation,
+      effort: options.effort,
+      offline: false,
+      wholeVault: false,
+      budgetUsd: 0,
+      model: "Codex, signed in for the coding agent",
+    });
+    await this.writeHostNotes(runId, { ...(queue ? { queued: true } : { starting: true }), ...await this.createWaitingAction(projectId, instructions) });
+    await this.scan();
+
+    if (!queue) void this.launch(runId, {});
+    else new Notice(`Queued: “${project.title}” starts when the code run before it ends.`);
+    return runId;
+  }
+
+  /** The Project's earlier code runs, oldest first, for a follow-up to continue from. */
+  private async codeConversation(projectId: string): Promise<string> {
+    const node = requireNode();
+    const earlier = this.runs.filter((run) => run.runtime === "lamdera" && run.projectId === projectId);
+    const entries = await Promise.all(earlier.map(async (run) => {
+      const runDir = node.path.join(this.runsDirectory(), run.id);
+      const meta = await readJson(node, node.path.join(runDir, "input", "run.json"));
+      const report = await node.fs.readFile(node.path.join(runDir, "outbox", "REPORT.md"), "utf8").catch(() => "");
+      return { createdAt: run.createdAt, instructions: typeof meta?.instructions === "string" ? meta.instructions : "", report };
+    }));
+    return codeRunConversation(entries.filter((entry) => entry.instructions));
+  }
+
+  /** The coding agent's checkout and the Compose files Dragonglass starts it with. */
+  private async lamderaKit(): Promise<{ kit: string; composeFile: string; envFile: string }> {
+    const node = requireNode();
+    const settings = this.getSettings().lamdera;
+    const configured = settings.kitDirectory.trim();
+    if (!configured) throw new Error("Set the coding agent's folder in Dragonglass's settings: Agent delegation → Lamdera apps.");
+    const kit = configured.startsWith("~/") ? node.path.join(node.os.homedir(), configured.slice(2)) : configured;
+    const composeFile = node.path.join(kit, "compose.yml");
+    const envFile = node.path.isAbsolute(settings.envFile) ? settings.envFile : node.path.join(kit, settings.envFile);
+    for (const [file, what] of [[composeFile, "compose.yml"], [envFile, "its Compose env file"]] as const) {
+      try {
+        await node.fs.access(file);
+      } catch {
+        throw new Error(`The coding agent's ${what} was not found at ${file}.`);
+      }
+    }
+    return { kit, composeFile, envFile };
   }
 
   /** Collects what a run for this Project would get, without writing anything. */
@@ -523,13 +661,14 @@ export class AgentService {
     }
 
     // In each lane, the oldest queued run starts once the lane is free.
-    for (const lane of ["local", "codex"] as const) {
+    for (const lane of ["local", "codex", "lamdera"] as const) {
       const next = runs.filter((run) => run.queued && run.runtime === lane).sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
       if (!next || this.laneBusy(lane) || this.launching.has(next.id)) continue;
       delete next.queued;
       next.starting = true;
       await this.writeHostNotes(next.id, { queued: false, starting: true });
-      new Notice(`${lane === "local" ? "The local model" : "Codex"} is free: starting the queued run on “${next.projectTitle}”.`);
+      const free = lane === "local" ? "The local model is" : lane === "codex" ? "Codex is" : "The coding agent is";
+      new Notice(`${free} free: starting the queued run on “${next.projectTitle}”.`);
       void this.launch(next.id);
     }
 
@@ -584,6 +723,7 @@ export class AgentService {
       activity: await this.readActivity(name, node.path.join(runDir, "exchange", "activity.jsonl")),
       ...(host?.actionId ? { actionId: host.actionId } : {}),
       ...(host?.actionTitle ? { actionTitle: host.actionTitle } : {}),
+      ...(meta.runtime === "lamdera" ? codeRunFields(meta, result) : {}),
     };
   }
 
@@ -660,9 +800,21 @@ export class AgentService {
     let composeFile = "";
     this.launching.add(runId);
     try {
-      composeFile = await this.composeFile();
       const meta = (await readJson(node, node.path.join(runDir, "input", "run.json"))) ?? {};
       const runtime = agentRuntime(meta.runtime);
+      if (runtime === "lamdera") {
+        // The coding agent's own Compose project (named in its env file), so the run uses the
+        // sign-ins and preserved checkouts set up there. Never `down` that project: its daemon may run.
+        const kit = await this.lamderaKit();
+        await this.docker(
+          ["compose", "-f", kit.composeFile, "--env-file", kit.envFile, "--profile", "dragonglass", "run", "-d", "--name", containerName(runId), "task"],
+          { RUN_DIR: runDir },
+        );
+        await this.writeHostNotes(runId, { starting: false });
+        new Notice(`The coding agent started on “${this.runs.find((run) => run.id === runId)?.projectTitle ?? runId}”.`);
+        return;
+      }
+      composeFile = await this.composeFile();
       const budgetUsd = typeof meta.budgetUsd === "number" && meta.budgetUsd > 0 ? meta.budgetUsd : this.getSettings().defaultBudgetUsd;
       const runEnv = env ?? await this.runEnv(runtime, meta.wholeVault === true, budgetUsd);
       await this.docker(
@@ -693,10 +845,13 @@ export class AgentService {
         run.runnerError = runnerError;
         await this.writeHostNotes(run.id, { runnerError });
       }
-      const composeFile = await this.composeFile().catch(() => "");
-      if (composeFile) await this.dockerQuietly(["compose", "-f", composeFile, "-p", composeProject(run.id), "down", "--remove-orphans"]);
+      if (run.runtime !== "lamdera") {
+        const composeFile = await this.composeFile().catch(() => "");
+        if (composeFile) await this.dockerQuietly(["compose", "-f", composeFile, "-p", composeProject(run.id), "down", "--remove-orphans"]);
+      }
       const imported = await this.importOutbox(run);
       await this.completeWaitingAction(run);
+      if (run.runtime === "lamdera" && run.resultSubtype === "success" && run.pullRequestUrl) await this.createReviewAction(run);
       await this.writeHostNotes(run.id, { importedTo: imported.folder, finishedAt: new Date().toISOString() });
       const status = agentRunStatus(run, false);
       // A run taken out of the queue never started; there is nothing to report on.
@@ -777,7 +932,7 @@ export class AgentService {
       const project = this.repository.index.getSnapshot().projectsById.get(run.projectId);
       const reportPath = resultsFolder ? normalizePath(`${resultsFolder}/REPORT.md`) : "";
       const report = reportPath ? this.app.vault.getAbstractFileByPath(reportPath) : null;
-      const spent = run.runtime === "codex" ? `ChatGPT plan (Codex): ${run.model}` : run.runtime === "local"
+      const spent = run.runtime === "lamdera" ? codeRunSummary(run) : run.runtime === "codex" ? `ChatGPT plan (Codex): ${run.model}` : run.runtime === "local"
         ? `Local${run.harness && run.harness !== "loop" ? ` (${localHarnessLabel(run.harness)})` : ""}: ${run.model}${run.wholeVault ? " · whole vault" : ""}${run.offline ? " · offline" : ""}`
         : typeof run.costUsd === "number"
           ? `Cost: about $${run.costUsd.toFixed(2)} of $${run.budgetUsd.toFixed(2)}`
@@ -855,6 +1010,31 @@ export class AgentService {
       ...(run.actionTitle ? { title: run.actionTitle } : {}),
       status: "done",
     });
+  }
+
+  /**
+   * A code run's pull request is ready: a Next Action in the Project says so, with the links, as
+   * Linear's "In Review" would. The run's Waiting Action is done by now.
+   */
+  private async createReviewAction(run: AgentRunRecord): Promise<void> {
+    try {
+      const node = requireNode();
+      const meta = await readJson(node, node.path.join(this.runsDirectory(), run.id, "input", "run.json"));
+      const instructions = typeof meta?.instructions === "string" ? meta.instructions : run.projectTitle;
+      await this.repository.createAction({
+        title: reviewActionTitle(instructions),
+        status: "next",
+        projectId: run.projectId,
+        context: this.getSettings().lamdera.reviewContext,
+        body: [
+          `- [Pull request](${run.pullRequestUrl})`,
+          ...(run.previewUrl ? [`- [Preview](${run.previewUrl})`] : []),
+          ...(run.branch ? [`- Branch: \`${run.branch}\``] : []),
+        ].join("\n"),
+      });
+    } catch (error) {
+      new Notice(`The pull request is ready, but the review Action could not be created: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** What the runner and proxy are started with, from the current settings; keys come from the Keychain. */
@@ -1036,6 +1216,30 @@ export class AgentService {
 /** The Docker names a run's containers use, derived from its folder name. */
 function composeProject(runId: string): string {
   return `dg-${runId}`.toLowerCase();
+}
+
+/** A code run's branch, pull request and preview, from its run.json and the result the coding agent wrote. */
+function codeRunFields(meta: Record<string, unknown>, result: Record<string, unknown> | null): Partial<AgentRunRecord> {
+  const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+  // Only web links are shown and linked; the coding agent checks the pull request's own address.
+  const link = (value: unknown) => (typeof value === "string" && /^https:\/\/[^\s)]+$/.test(value) ? value : undefined);
+  const fields = {
+    repository: text(meta.repository),
+    branch: text(result?.branch),
+    pullRequestUrl: link(result?.pullRequestUrl),
+    previewUrl: link(result?.previewUrl),
+    retryAt: text(result?.retryAt),
+  };
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as Partial<AgentRunRecord>;
+}
+
+/** The Inbox report's line on what a code run did, with its links. */
+function codeRunSummary(run: AgentRunRecord): string {
+  return [
+    `Code: ${run.repository ?? "a Lamdera app"}${run.branch ? `, branch \`${run.branch}\`` : ""}`,
+    ...(run.pullRequestUrl ? [`[Pull request](${run.pullRequestUrl})`] : []),
+    ...(run.previewUrl ? [`[Preview](${run.previewUrl})`] : []),
+  ].join(" · ");
 }
 
 function containerName(runId: string): string {

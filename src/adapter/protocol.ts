@@ -95,6 +95,11 @@ export interface ElmAgentDto {
     questions: Array<{ id: string; question: string; askedAt: string }>;
     /** Newest first; `at` is the time of day in this device's time zone: "14:05:12". */
     activity: Array<{ at: string; kind: string; text: string }>;
+    /** Code runs: the repository's name, the branch, and the https links the run published; `""` otherwise. */
+    repository: string;
+    branch: string;
+    pullRequestUrl: string;
+    previewUrl: string;
   }>;
   costs: Array<{ projectId: string; own: number; tree: number }>;
 }

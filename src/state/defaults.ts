@@ -109,6 +109,13 @@ export function defaultSettings(): GtdSettings {
       codexMaxMinutes: 60,
       localContextTokens: 32768,
       localMaxReplyTokens: 8192,
+      lamdera: {
+        kitDirectory: "",
+        envFile: "docker/.env",
+        repositoriesFile: "docker/repositories.yml",
+        repositories: {},
+        reviewContext: "Laptop",
+      },
     },
     feeds: {
       enabled: false,

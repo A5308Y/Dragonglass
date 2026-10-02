@@ -189,6 +189,10 @@ type alias AgentRun =
     , reportPath : String
     , questions : List AgentQuestion
     , activity : List AgentActivity
+    , repository : String
+    , branch : String
+    , pullRequestUrl : String
+    , previewUrl : String
     }
 
 
@@ -1671,7 +1675,17 @@ viewAgentRun model run =
         -- A local run costs nothing, and a Codex run is paid by the ChatGPT plan; what matters there is
         -- which model it used and what it could reach.
         spent =
-            if run.runtime == "codex" then
+            if run.runtime == "lamdera" then
+                "Code: "
+                    ++ run.repository
+                    ++ (if String.isEmpty run.branch then
+                            ""
+
+                        else
+                            " · " ++ run.branch
+                       )
+
+            else if run.runtime == "codex" then
                 "ChatGPT plan (Codex): " ++ run.model
 
             else if run.runtime == "local" then
@@ -1720,6 +1734,8 @@ viewAgentRun model run =
 
                   else
                     button [ onClick (Send IgnoreReply (Command.OpenFile run.reportPath)) ] [ text "Open report" ]
+                , linkButton "Pull request" run.pullRequestUrl
+                , linkButton "Preview" run.previewUrl
                 , if active then
                     button [ class "mod-warning", onClick (Send IgnoreReply (Command.StopAgentRun run.id)) ]
                         [ text
@@ -1733,8 +1749,12 @@ viewAgentRun model run =
 
                   else
                     text ""
-                , -- Opens the Delegate dialog filled in from this run, to adjust and start again.
-                  if model.agent.available && List.member run.status [ "failed", "stopped", "interrupted" ] then
+                , -- Opens the Delegate dialog filled in from this run, to adjust and start again. A code run
+                  -- can also follow up on a finished one: it continues on the same branch and pull request.
+                  if model.agent.available && run.runtime == "lamdera" && run.status == "finished" then
+                    button [ onClick (Send IgnoreReply (Command.RerunAgentRun run.id)) ] [ text "Follow up…" ]
+
+                  else if model.agent.available && List.member run.status [ "failed", "stopped", "interrupted" ] then
                     button [ onClick (Send IgnoreReply (Command.RerunAgentRun run.id)) ] [ text "Run again…" ]
 
                   else
@@ -1750,6 +1770,17 @@ viewAgentRun model run =
         , div [] (List.map (viewAgentQuestion model run) run.questions)
         , viewAgentActivity run
         ]
+
+
+{-| A button that opens a link a run published, when it published one.
+-}
+linkButton : String -> String -> Html Msg
+linkButton label url =
+    if String.isEmpty url then
+        text ""
+
+    else
+        button [ onClick (Send IgnoreReply (Command.OpenLink url)) ] [ text label ]
 
 
 {-| What the agent is doing, folded away: the collapsed line shows its latest step, so
@@ -2944,6 +2975,10 @@ agentRunDecoder =
                     )
                 )
             )
+        |> andMap (Decode.field "repository" Decode.string)
+        |> andMap (Decode.field "branch" Decode.string)
+        |> andMap (Decode.field "pullRequestUrl" Decode.string)
+        |> andMap (Decode.field "previewUrl" Decode.string)
 
 
 andMap : Decoder a -> Decoder (a -> b) -> Decoder b

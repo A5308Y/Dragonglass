@@ -4,6 +4,7 @@ import type { Project } from "../src/domain/types";
 import {
   ancestorsToActivate,
   finishedAncestors,
+  nearestMapped,
   projectDescendants,
   statusChangeProblem,
   strandedProjects,
@@ -75,5 +76,25 @@ describe("Project tree rule", () => {
     expect(strandedProjects([parent, child, grandchild]).map((entry) => [entry.project.id, entry.inactiveAncestor.id]))
       .toEqual([["C", "P"], ["G", "P"]]);
     expect(strandedProjects([{ ...parent, status: "active" }, child, grandchild])).toEqual([]);
+  });
+});
+
+describe("Settings inherited down a Project tree", () => {
+  it("finds the value on the Project or the nearest Project above it", () => {
+    const projects = [
+      project("app", "App"),
+      project("feature", "Feature", { parentProjectId: "app" }),
+      project("detail", "Detail", { parentProjectId: "feature" }),
+      project("other", "Other"),
+    ];
+    const values = { app: "habits", detail: "portal" };
+    expect(nearestMapped("feature", projects, values)).toEqual({ projectId: "app", value: "habits" });
+    expect(nearestMapped("detail", projects, values)).toEqual({ projectId: "detail", value: "portal" });
+    expect(nearestMapped("other", projects, values)).toBeNull();
+  });
+
+  it("stops at a cycle instead of looping", () => {
+    const projects = [project("a", "A", { parentProjectId: "b" }), project("b", "B", { parentProjectId: "a" })];
+    expect(nearestMapped("a", projects, {})).toBeNull();
   });
 });

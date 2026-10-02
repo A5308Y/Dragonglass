@@ -111,6 +111,8 @@ export interface ActionInput {
   followUp?: string;
   scheduledStart?: string;
   durationMinutes?: number;
+  /** Markdown under the title of a new Action's note, e.g. the links an agent run left. */
+  body?: string;
 }
 
 export interface ProjectInput {
@@ -302,6 +304,25 @@ export interface AgentSettings {
   localContextTokens: number;
   /** The longest single reply a local model may write, in tokens, thinking included. */
   localMaxReplyTokens: number;
+  lamdera: LamderaAgentSettings;
+}
+
+/**
+ * Code runs: the Lamdera coding agent (its own repository, lamdera_linear_agent_ruby) changes
+ * one of the Lamdera apps and opens a pull request. Its sign-ins and its list of repositories
+ * stay with that agent; Dragonglass only names a repository and starts a run.
+ */
+export interface LamderaAgentSettings {
+  /** The coding agent's checkout, holding its compose.yml. Empty turns code runs off. */
+  kitDirectory: string;
+  /** Its Compose env file, relative to the checkout: it sets the instance's project name and volumes. */
+  envFile: string;
+  /** Its repositories file, relative to the checkout, read for the names it knows. */
+  repositoriesFile: string;
+  /** Dragonglass Project id → repository name in that file. Sub-projects inherit it. */
+  repositories: Record<string, string>;
+  /** The context of the "Review PR" Next Action a finished code run leaves. */
+  reviewContext: string;
 }
 
 export const POMODORO_SOUNDS = ["off", "ticking", "folder"] as const;

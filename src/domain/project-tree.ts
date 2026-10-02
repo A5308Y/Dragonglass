@@ -116,3 +116,24 @@ export function strandedProjects(projects: readonly Project[]): Array<{ project:
 function describe(projects: readonly Project[]): string {
   return projects.map((project) => `${project.title} (${projectStatusLabel(project.status)})`).join(", ");
 }
+
+/**
+ * A setting kept per Project and inherited by its sub-projects (a mite project, a code
+ * repository): the value set on the Project itself or on the nearest Project above it.
+ */
+export function nearestMapped<T>(
+  projectId: string,
+  projects: readonly Project[],
+  values: Readonly<Record<string, T>>,
+): { projectId: string; value: T } | null {
+  const byId = new Map(projects.map((project) => [project.id, project]));
+  const visited = new Set<string>();
+  let current: string | undefined = projectId;
+  while (current && !visited.has(current)) {
+    visited.add(current);
+    const value = values[current];
+    if (value !== undefined) return { projectId: current, value };
+    current = byId.get(current)?.parentProjectId;
+  }
+  return null;
+}

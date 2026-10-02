@@ -693,7 +693,8 @@ export class GtdRepository {
       created: localDate(),
       completed: status === "done" ? new Date().toISOString() : null,
     };
-    return this.app.vault.create(path, markdown(frontmatter, `# ${title}\n\n## Done when\n\n`));
+    const body = input.body?.trim() ? `${input.body.trim()}\n\n` : "";
+    return this.app.vault.create(path, markdown(frontmatter, `# ${title}\n\n${body}## Done when\n\n`));
   }
 
   private async prepareProcessingProject(

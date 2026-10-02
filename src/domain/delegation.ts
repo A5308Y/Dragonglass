@@ -10,7 +10,7 @@
 
 import { projectDescendants, projectStatusLabel } from "./project-tree";
 import { escapeVaultText } from "./text";
-import type { Action, Project } from "./types";
+import type { Action, LamderaAgentSettings, Project } from "./types";
 import { normalizeVaultPath } from "../utils/path";
 
 export interface DelegationScope {
@@ -296,13 +296,23 @@ export interface AgentRunRecord {
   /** The Waiting Action that stands for the run in the Project, and its title while no question is open. */
   actionId?: string;
   actionTitle?: string;
+  /** For code runs: the repository's name in the coding agent's config, and what the run published. */
+  repository?: string;
+  branch?: string;
+  pullRequestUrl?: string;
+  previewUrl?: string;
+  /** When a code run stopped at Codex's usage limit: when it can be started again. */
+  retryAt?: string;
 }
 
-/** Claude through the API, a model on this Mac, or OpenAI's Codex on a ChatGPT plan. */
-export type AgentRuntime = "claude" | "local" | "codex";
+/**
+ * Claude through the API, a model on this Mac, OpenAI's Codex on a ChatGPT plan, or the
+ * Lamdera coding agent, which changes code in one of the Lamdera apps and opens a pull request.
+ */
+export type AgentRuntime = "claude" | "local" | "codex" | "lamdera";
 
 export function agentRuntime(value: unknown): AgentRuntime {
-  return value === "local" || value === "codex" ? value : "claude";
+  return value === "local" || value === "codex" || value === "lamdera" ? value : "claude";
 }
 
 /** What drives a local model: Dragonglass's own small loop, smolagents' CodeAgent, or Qwen-Agent. */
@@ -346,7 +356,11 @@ export function agentRunStatus(run: AgentRunRecord, alive: boolean): AgentRunSta
 export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus): string {
   switch (status) {
     case "queued":
-      return "Queued: it starts when the local model is free";
+      return run.runtime === "codex"
+        ? "Queued: it starts when the Codex run before it ends"
+        : run.runtime === "lamdera"
+          ? "Queued: it starts when the code run before it ends"
+          : "Queued: it starts when the local model is free";
     case "starting":
       return "Starting (the first run builds the containers, which takes a few minutes)";
     case "running":
@@ -366,6 +380,11 @@ export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus):
       if (run.resultSubtype === "error_max_time") return "Stopped at its time limit";
       if (run.resultSubtype === "error_no_tool_calls") return "Stopped: the model kept answering without using its tools";
       if (run.resultSubtype === "error_repeating") return "Stopped: it kept repeating the same step";
+      if (run.resultSubtype === "error_validation") return "Failed: `lamdera check --force` still fails after one repair, so nothing was pushed";
+      if (run.resultSubtype === "error_merge") return "Failed: merging the base branch needs a manual merge";
+      if (run.resultSubtype === "usage_limited") {
+        return run.retryAt ? `Stopped at Codex's usage limit: start it again after ${localTime(run.retryAt)}` : "Stopped at Codex's usage limit";
+      }
       return run.resultError ? `Failed: ${run.resultError}` : "Failed";
   }
 }
@@ -396,4 +415,117 @@ export function agentCosts(
 
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function localTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// CODE RUNS
+
+/**
+ * The coding agent's name for a Project's task: stable, so every run on the Project works
+ * on the same branch and pull request (`agent/DG-…`), and short, because Lamdera names the
+ * preview after the branch and caps that name at 20 characters.
+ */
+export function codeTaskIdentifier(projectId: string): string {
+  const characters = projectId.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (characters.length >= 6) return `DG-${characters.slice(-6)}`;
+  let hash = 2_166_136_261;
+  for (const character of projectId) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16_777_619);
+  }
+  return `DG-${(hash >>> 0).toString(36).toUpperCase().padStart(6, "0").slice(-6)}`;
+}
+
+export interface CodeTaskBriefInput {
+  breadcrumb: string;
+  desiredOutcome: string;
+  /** The Project note's text, without its frontmatter. */
+  projectNote: string;
+  openActions: readonly string[];
+  instructions: string;
+}
+
+/**
+ * What the coding agent is told about the task. It reads the app's code, not the vault, so
+ * the brief carries the Project's own words and nothing else from the vault.
+ */
+export function codeTaskBrief(input: CodeTaskBriefInput): string {
+  const note = input.projectNote.replace(/^---\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n?/, "").trim();
+  return [
+    "# Task",
+    "",
+    "## Project",
+    "",
+    input.breadcrumb,
+    "",
+    "## Desired outcome",
+    "",
+    input.desiredOutcome.trim() || "(No desired outcome has been written down yet.)",
+    "",
+    "## What to implement",
+    "",
+    input.instructions.trim(),
+    "",
+    ...(input.openActions.length ? ["## Open Actions in the Project", "", ...input.openActions.map((title) => `- ${title}`), ""] : []),
+    ...(note ? ["## The Project note", "", note, ""] : []),
+  ].join("\n");
+}
+
+export interface EarlierCodeRun {
+  createdAt: string;
+  instructions: string;
+  /** The start of the run's REPORT.md, or `""`. */
+  report: string;
+}
+
+/** The earlier runs on the same task, oldest first, as the transcript a follow-up continues. */
+export function codeRunConversation(runs: readonly EarlierCodeRun[]): string {
+  return [...runs]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    .flatMap((run) => [`User (${run.createdAt}): ${run.instructions.trim()}`, ...(run.report.trim() ? [`Agent: ${run.report.trim()}`] : []), ""])
+    .join("\n")
+    .trim();
+}
+
+/** The Next Action a code run leaves once its pull request is ready, in the Project it worked on. */
+export function reviewActionTitle(instructions: string): string {
+  return `Review PR: ${firstLine(instructions) || "agent changes"}`;
+}
+
+/** The coding agent's repository names are slugs (see its `repositories.yml`). */
+const REPOSITORY_NAME = /^[a-z0-9][a-z0-9-]*$/;
+
+/** Saved code-run settings, read without trusting them: they sync with the vault. */
+export function parseLamderaAgentSettings(raw: unknown, defaults: LamderaAgentSettings): LamderaAgentSettings {
+  const value = typeof raw === "object" && raw !== null ? raw as Record<string, unknown> : {};
+  const text = (field: unknown, fallback: string) => (typeof field === "string" && field.trim() ? field.trim() : fallback);
+  const repositories: Record<string, string> = {};
+  if (typeof value.repositories === "object" && value.repositories !== null) {
+    for (const [projectId, name] of Object.entries(value.repositories as Record<string, unknown>)) {
+      if (typeof name === "string" && REPOSITORY_NAME.test(name)) repositories[projectId] = name;
+    }
+  }
+  return {
+    kitDirectory: typeof value.kitDirectory === "string" ? value.kitDirectory.trim() : defaults.kitDirectory,
+    envFile: text(value.envFile, defaults.envFile),
+    repositoriesFile: text(value.repositoriesFile, defaults.repositoriesFile),
+    repositories,
+    reviewContext: text(value.reviewContext, defaults.reviewContext),
+  };
+}
+
+/** The repository names a parsed `repositories.yml` offers to code runs, in its order. */
+export function repositoryNames(document: unknown): string[] {
+  const projects = typeof document === "object" && document !== null ? (document as Record<string, unknown>).projects : undefined;
+  if (!Array.isArray(projects)) return [];
+  return projects.flatMap((project) => {
+    const name = typeof project === "object" && project !== null ? (project as Record<string, unknown>).name : undefined;
+    return typeof name === "string" && REPOSITORY_NAME.test(name) ? [name] : [];
+  });
 }

@@ -10,6 +10,10 @@ import {
   briefInstructions,
   withoutEntityFrontmatter,
   agentRuntime,
+  codeRunConversation,
+  codeTaskBrief,
+  codeTaskIdentifier,
+  reviewActionTitle,
   localHarness,
   localHarnessService,
   runReportInboxItem,
@@ -250,6 +254,7 @@ describe("Agent runtimes", () => {
   it("reads Codex and local runs back, and older runs without a runtime as Claude", () => {
     expect(agentRuntime("codex")).toBe("codex");
     expect(agentRuntime("local")).toBe("local");
+    expect(agentRuntime("lamdera")).toBe("lamdera");
     expect(agentRuntime(undefined)).toBe("claude");
     expect(agentRuntime("gpt")).toBe("claude");
   });
@@ -317,5 +322,67 @@ describe("Run status and costs", () => {
     expect(costs.get("K")).toEqual({ own: 1.75, tree: 1.75 });
     expect(costs.get("H")).toEqual({ own: 1, tree: 2.75 });
     expect(costs.has("G")).toBe(false);
+  });
+});
+
+describe("Code runs", () => {
+  const run = (changes: Partial<AgentRunRecord> = {}): AgentRunRecord => ({
+    id: "r",
+    projectId: "K",
+    projectTitle: "Kitchen",
+    createdAt: "2026-09-26T07:00:00Z",
+    budgetUsd: 0,
+    model: "Codex default",
+    runtime: "lamdera",
+    offline: false,
+    wholeVault: false,
+    costUsd: 0,
+    openQuestions: [],
+    ...changes,
+  });
+
+  it("names a Project's task the same way every time, short enough for a Lamdera preview", () => {
+    expect(codeTaskIdentifier("01K6ABCDEF0123456789XYZWVU")).toBe("DG-XYZWVU");
+    expect(codeTaskIdentifier("01K6ABCDEF0123456789XYZWVU")).toBe(codeTaskIdentifier("01K6ABCDEF0123456789XYZWVU"));
+    expect(codeTaskIdentifier("p-1")).toMatch(/^DG-[A-Z0-9]{6}$/);
+    expect(codeTaskIdentifier("p-1")).not.toBe(codeTaskIdentifier("p-2"));
+  });
+
+  it("briefs the coding agent with the Project's own words only", () => {
+    const brief = codeTaskBrief({
+      breadcrumb: "Habits › Dark mode",
+      desiredOutcome: "The app follows the system theme.",
+      projectNote: "---\ntype: gtd-project\nid: X\n---\nUsers asked for it.\n",
+      openActions: ["Check the colours"],
+      instructions: "Add a dark theme.",
+    });
+    expect(brief).toContain("## What to implement\n\nAdd a dark theme.");
+    expect(brief).toContain("- Check the colours");
+    expect(brief).toContain("## The Project note\n\nUsers asked for it.");
+    expect(brief).not.toContain("gtd-project");
+    expect(codeTaskBrief({ breadcrumb: "A", desiredOutcome: "", projectNote: "", openActions: [], instructions: "Do it." }))
+      .not.toContain("## Open Actions");
+  });
+
+  it("turns earlier runs into the transcript a follow-up continues, oldest first", () => {
+    expect(codeRunConversation([
+      { createdAt: "2026-10-02T10:00:00Z", instructions: "Make the button blue.", report: "" },
+      { createdAt: "2026-10-01T10:00:00Z", instructions: "Add a button.", report: "Ready for review." },
+    ])).toBe("User (2026-10-01T10:00:00Z): Add a button.\nAgent: Ready for review.\n\nUser (2026-10-02T10:00:00Z): Make the button blue.");
+    expect(codeRunConversation([])).toBe("");
+  });
+
+  it("titles the review Action after the task", () => {
+    expect(reviewActionTitle("Add a dark theme.\nWith a toggle.")).toBe("Review PR: Add a dark theme.");
+  });
+
+  it("says why a code run stopped", () => {
+    expect(agentRunStatusText(run({ resultSubtype: "error_validation" }), "failed")).toContain("lamdera check --force");
+    expect(agentRunStatusText(run({ resultSubtype: "error_merge" }), "failed")).toContain("manual merge");
+    expect(agentRunStatusText(run({ resultSubtype: "usage_limited" }), "failed")).toBe("Stopped at Codex's usage limit");
+    expect(agentRunStatusText(run({ resultSubtype: "usage_limited", retryAt: "2026-10-02T12:00:00Z" }), "failed"))
+      .toMatch(/^Stopped at Codex's usage limit: start it again after 2026-10-0\d \d\d:\d\d$/);
+    expect(agentRunStatusText(run({ queued: true }), "queued")).toBe("Queued: it starts when the code run before it ends");
+    expect(agentRunStatusText(run({ queued: true, runtime: "codex" }), "queued")).toBe("Queued: it starts when the Codex run before it ends");
   });
 });

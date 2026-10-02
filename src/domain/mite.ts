@@ -10,6 +10,7 @@
  */
 
 import type { PomodoroSession, PomodoroStore } from "./pomodoro";
+import { nearestMapped } from "./project-tree";
 import type { Project } from "./types";
 import { localDate } from "../utils/date";
 
@@ -60,16 +61,7 @@ export function miteTargetFor(
   projects: readonly Project[],
   targets: Readonly<Record<string, MiteTarget>>,
 ): MiteTarget | null {
-  const byId = new Map(projects.map((project) => [project.id, project]));
-  const visited = new Set<string>();
-  let current: string | undefined = projectId;
-  while (current && !visited.has(current)) {
-    visited.add(current);
-    const target = targets[current];
-    if (target) return target;
-    current = byId.get(current)?.parentProjectId;
-  }
-  return null;
+  return nearestMapped(projectId, projects, targets)?.value ?? null;
 }
 
 export function miteEntry(session: PomodoroSession, target: MiteTarget, settings: Pick<MiteSettings, "breakMinutes" | "defaultServiceId">): MiteEntry {

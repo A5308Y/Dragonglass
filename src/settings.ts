@@ -21,6 +21,8 @@ export class GtdSettingTab extends PluginSettingTab {
   private pomodoroExpanded = false;
   /** mite's projects and services, loaded on request while the settings are open. */
   private miteChoices: { projects: MiteChoice[]; services: MiteChoice[] } | null = null;
+  /** The coding agent's repository names, loaded on request while the settings are open. */
+  private codeRepositoryNames: string[] | null = null;
   private agentExpanded = false;
   private mailExpanded = false;
   private calendarExpanded = false;
@@ -866,6 +868,117 @@ export class GtdSettingTab extends PluginSettingTab {
           await save();
         });
       });
+
+    this.displayCodeRuns(sectionEl);
+  }
+
+  /**
+   * Code runs: which of the Lamdera coding agent's repositories each Project's runs work on.
+   * The repositories themselves, and every sign-in, are the coding agent's; see its README.
+   */
+  private displayCodeRuns(sectionEl: HTMLElement): void {
+    const lamdera = this.plugin.settings.agent.lamdera;
+    const save = async () => this.plugin.saveSettings(false);
+    sectionEl.createEl("h4", { text: "Lamdera apps" });
+    sectionEl.createEl("p", {
+      text: "Code runs hand a Project's idea to the Lamdera coding agent (lamdera_linear_agent_ruby), which implements it in "
+        + "one of your Lamdera apps, runs lamdera check --force before every push, and opens a pull request. Set that agent up "
+        + "first, as its README describes; Dragonglass starts its “task” service and reads the result back.",
+    });
+
+    new Setting(sectionEl)
+      .setName("Coding agent folder")
+      .setDesc("Its checkout, holding compose.yml. Empty turns code runs off.")
+      .addText((text) => text.setPlaceholder("~/Repositories/lamdera_linear_agent_ruby").setValue(lamdera.kitDirectory).onChange(async (value) => {
+        lamdera.kitDirectory = value.trim();
+        this.codeRepositoryNames = null;
+        await save();
+      }));
+    new Setting(sectionEl)
+      .setName("Compose env file")
+      .setDesc("Relative to that folder. It names the agent's Compose project, whose sign-ins and checkouts runs share.")
+      .addText((text) => text.setValue(lamdera.envFile).onChange(async (value) => {
+        lamdera.envFile = value.trim() || "docker/.env";
+        await save();
+      }));
+    new Setting(sectionEl)
+      .setName("Repositories file")
+      .setDesc("Relative to that folder. Repositories with a “name” there can be chosen below.")
+      .addText((text) => text.setValue(lamdera.repositoriesFile).onChange(async (value) => {
+        lamdera.repositoriesFile = value.trim() || "docker/repositories.yml";
+        this.codeRepositoryNames = null;
+        await save();
+      }));
+    new Setting(sectionEl)
+      .setName("Context for reviewing pull requests")
+      .setDesc("A finished code run leaves a “Review PR” Next Action with this context.")
+      .addText((text) => text.setValue(lamdera.reviewContext).onChange(async (value) => {
+        lamdera.reviewContext = value.trim() || "Laptop";
+        await save();
+      }));
+    if (!lamdera.kitDirectory) return;
+
+    // Which repository each Project's code runs use; sub-projects inherit it.
+    const projects = this.plugin.projectList();
+    const breadcrumbs = projectBreadcrumbs(projects);
+    const nameOf = (projectId: string) => breadcrumbs.get(projectId) ?? projects.find((project) => project.id === projectId)?.title ?? "A deleted Project";
+    const mapped = Object.entries(lamdera.repositories).sort(([left], [right]) => nameOf(left).localeCompare(nameOf(right)));
+    for (const [projectId, name] of mapped) {
+      new Setting(sectionEl)
+        .setName(nameOf(projectId))
+        .setDesc(`→ ${name}. Its sub-projects too, unless they have their own.`)
+        .addButton((button) => button.setButtonText("Remove").onClick(async () => {
+          delete lamdera.repositories[projectId];
+          await save();
+          this.display();
+        }));
+    }
+
+    const names = this.codeRepositoryNames;
+    if (!names) {
+      new Setting(sectionEl)
+        .setName("Repositories")
+        .setDesc("Read the coding agent's repositories file to choose a repository for a Project.")
+        .addButton((button) => button.setButtonText("Load repositories").onClick(async () => {
+          button.setDisabled(true).setButtonText("Loading…");
+          try {
+            this.codeRepositoryNames = await this.plugin.agent.codeRepositoryNames();
+            if (!this.codeRepositoryNames.length) new Notice("The repositories file has no repository with a “name” yet.");
+            this.display();
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : String(error));
+            button.setDisabled(false).setButtonText("Load repositories");
+          }
+        }));
+      return;
+    }
+    let projectId = "";
+    let repository = "";
+    const open = projects
+      .filter((project) => project.status !== "completed" && project.status !== "cancelled" && !lamdera.repositories[project.id])
+      .sort((left, right) => nameOf(left.id).localeCompare(nameOf(right.id)));
+    new Setting(sectionEl)
+      .setName("Add a Project")
+      .addDropdown((dropdown) => {
+        dropdown.addOption("", "Dragonglass Project…");
+        for (const project of open) dropdown.addOption(project.id, nameOf(project.id));
+        dropdown.onChange((value) => {
+          projectId = value;
+        });
+      })
+      .addDropdown((dropdown) => {
+        dropdown.addOption("", "Repository…");
+        for (const name of names) dropdown.addOption(name, name);
+        dropdown.onChange((value) => {
+          repository = value;
+        });
+      })
+      .addButton((button) => button.setButtonText("Add").onClick(async () => {
+        if (!projectId || !repository) return void new Notice("Choose a Project and a repository.");
+        lamdera.repositories[projectId] = repository;
+        await save();
+        this.display();
+      }));
   }
 
   private displayFeeds(containerEl: HTMLElement): void {
