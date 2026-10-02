@@ -35,7 +35,6 @@ export class GtdBrainstormView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
   refresh(): void {
     if (this.host) return this.host.refresh();
@@ -55,7 +54,6 @@ export class GtdProjectReviewView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
   refresh(): void {
     if (this.host) return this.host.refresh();
@@ -78,7 +76,6 @@ export class GtdSomedayReviewView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
   refresh(): void {
     if (this.host) return this.host.refresh();
@@ -107,7 +104,6 @@ export class GtdPomodoroView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
 
   /** Chooses the Project or checklist for the next session; a running session is left alone. */
@@ -136,7 +132,6 @@ export class GtdChecklistsView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
 
   /** Shows a run, or the list of checklists for `null`. */
@@ -164,7 +159,6 @@ export class GtdFeedsView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
   refresh(): void {
     if (this.host) return this.host.refresh();
@@ -191,7 +185,6 @@ export class GtdInboxView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
 
   startProcessing(itemId?: string): void {
@@ -231,7 +224,6 @@ export class ActionBoardView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
 
   refresh(): void {
@@ -270,7 +262,6 @@ export class GtdProjectsView extends ItemView {
   async onClose(): Promise<void> {
     this.host?.destroy();
     this.host = null;
-    this.contentEl.empty();
   }
 
   showProject(projectId: string): void {

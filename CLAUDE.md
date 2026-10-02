@@ -134,6 +134,10 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   sends `{ type: "closed" }` in `destroy()`, and each view with a timer checks
   `Host.isClosing` in its `GotHost` branch, sets `closed`, and returns `Sub.none` from
   `subscriptions` once closed. A new view with a timer must do the same.
+- Don't empty a view's `contentEl` in `onClose`: Elm renders into it, and the redraw that
+  "closed" (or a last tick) queues then fails on the missing nodes. A failed Elm draw
+  retries on every animation frame, so one such error floods the console for good.
+  Obsidian removes the tab's DOM itself.
 
 ## Index updates and speed
 
