@@ -16,6 +16,7 @@ import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, node, option, p, section, select, small, span, strong, text, textarea)
 import Html.Attributes exposing (attribute, checked, class, classList, controls, id, placeholder, preload, selected, src, style, tabindex, title, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput)
+import Html.Keyed
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -1018,12 +1019,16 @@ listView model =
             emptyInbox model
 
           else
-            div [ class "dg-inbox-list", id listId, attribute "role" "list" ]
+            -- Keyed, so a row's element stays with its Item: unkeyed, deleting an Item made
+            -- the focused element show the Item after the selected one, and a click on it
+            -- selected nothing, as the element already had focus.
+            Html.Keyed.node "div"
+                [ class "dg-inbox-list", id listId, attribute "role" "list" ]
                 (if List.isEmpty items then
-                    [ div [ class "dg-empty-row" ] [ text "No Inbox Items match this search." ] ]
+                    [ ( "", div [ class "dg-empty-row" ] [ text "No Inbox Items match this search." ] ) ]
 
                  else
-                    List.map (inboxRow (selectedItem model |> Maybe.map .id)) items
+                    List.map (\item -> ( item.id, inboxRow (selectedItem model |> Maybe.map .id) item )) items
                 )
         , Ui.maybeView (selectedItem model) (readingPane model)
         ]
@@ -1042,6 +1047,7 @@ inboxRow selectedId item =
         , tabindex 0
         , onRowKey item.id
         , Html.Events.on "focusin" (Decode.succeed (SelectRow item.id))
+        , onClick (SelectRow item.id)
         , Html.Events.on "dblclick" (Decode.succeed (Send IgnoreReply (Command.OpenFile item.file.path)))
         ]
         [ span [ class "dg-inbox-row-title" ] [ text item.title ]
