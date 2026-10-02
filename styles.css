@@ -2074,15 +2074,16 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
     background: color-mix(in srgb, var(--interactive-normal) 85%, var(--dg-hover-tint));
     border-color: var(--background-modifier-border-hover);
   }
-  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-cta:not(:disabled):hover {
+  /* Obsidian's `setWarning()` adds `mod-destructive mod-cta` (older versions
+     `mod-warning`), so a destructive button is excluded from the accent hover
+     or it turns blue instead of a lighter red. */
+  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-cta:not(.mod-destructive):not(:disabled):hover {
     background: var(--interactive-accent-hover);
     color: var(--text-on-accent);
   }
-  /* Some themes give every hovered button the accent colour, which turned
-     destructive buttons blue; a red button stays red, only lighter. */
-  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.mod-warning:not(:disabled):hover {
-    background: color-mix(in srgb, var(--background-modifier-error) 85%, white) !important;
-    color: var(--text-on-accent) !important;
+  :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button:is(.mod-warning, .mod-destructive):not(:disabled):hover {
+    background: color-mix(in srgb, var(--background-modifier-error) 85%, white);
+    color: var(--text-on-accent);
   }
   /* Active toggles are accent-filled, some with `!important`. */
   :is(.dg-view, .dg-modal, .dg-button-scope, .dg-settings, .dg-undo-notice) button.is-active:not(:disabled):not(.dg-flat-button):hover {
