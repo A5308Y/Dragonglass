@@ -3084,3 +3084,21 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
   border-color: var(--interactive-accent);
   box-shadow: inset 3px 0 0 var(--interactive-accent);
 }
+
+/* Uncaught errors from Dragonglass's code (`src/ui/error-bar.ts`). The bar sits between
+   the view's header and its content, outside the DOM Elm owns. */
+.dg-error-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-error);
+  background: color-mix(in srgb, var(--background-modifier-error) 12%, var(--background-primary));
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+}
+.dg-error-bar-icon { color: var(--text-error); font-weight: var(--font-semibold); }
+.dg-error-bar-text { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.dg-error-bar-actions { display: flex; gap: 6px; margin-left: auto; }

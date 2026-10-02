@@ -9,6 +9,7 @@ import { attention } from "./domain/attention";
 import { weeklyReviewFinished } from "./domain/weekly-review";
 import { unreadItems } from "./domain/feed";
 import { RibbonAttention } from "./ui/ribbon-attention";
+import { ErrorBar } from "./ui/error-bar";
 import { describeImport, normalizeMailPort } from "./domain/mail";
 import { POMODORO_SOUNDS, type ActionStatus, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
@@ -146,6 +147,12 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.registerView(SOMEDAY_VIEW_TYPE, (leaf) => new GtdSomedayReviewView(leaf, this.services));
     this.registerView(POMODORO_VIEW_TYPE, (leaf) => new GtdPomodoroView(leaf, this.services, this.pomodoro, this.checklists));
     this.registerView(CHECKLISTS_VIEW_TYPE, (leaf) => new GtdChecklistsView(leaf, this.services, this.checklists));
+    // Uncaught errors from Dragonglass's code show above its views, not only in the console.
+    const errorBar = new ErrorBar(this.app, this.manifest.id, Object.values(LINKED_VIEWS));
+    this.registerDomEvent(window, "error", errorBar.onError);
+    this.registerDomEvent(window, "unhandledrejection", errorBar.onRejection);
+    this.registerEvent(this.app.workspace.on("layout-change", errorBar.onLayoutChange));
+    this.register(() => errorBar.stop());
     this.register(this.pomodoro.start(this.addStatusBarItem()));
     const board = this.addRibbonIcon("list-checks", "Open GTD Action Board", () => void this.activateView(BOARD_VIEW_TYPE));
     const inbox = this.addRibbonIcon("inbox", "Open GTD Inbox", () => void this.activateView(INBOX_VIEW_TYPE));
