@@ -653,7 +653,6 @@ export type ElmNonMenuCommand =
   | { type: "create-review-action"; title: string; projectId: string; context: string }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
   | { type: "move-review-to-someday"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
-  | { type: "load-brainstorm-outcome"; projectId: string }
   | { type: "save-brainstorm"; actionId: string; ideas: string; desiredOutcome?: string }
   | { type: "save-standalone-brainstorm"; topic: string; ideas: string }
   | { type: "shuffle-brainstorm-words" }
@@ -752,8 +751,10 @@ export const SURFACE_COMMANDS = {
     "open-someday-review",
   ],
   brainstorm: [
-    "load-brainstorm-outcome", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
-    "focus-brainstorm-ideas", "show-project", "suggest-brainstorm-ideas",
+    "load-project-detail", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
+    "focus-brainstorm-ideas", "show-project", "suggest-brainstorm-ideas", "open-file", "open-link",
+    "create-support-note", "create-support-folder", "read-support-note", "update-support-note",
+    "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link",
   ],
   somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project"],
   pomodoro: [
@@ -1012,7 +1013,6 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
         && (value.columnsBy === "status" || value.columnsBy === "area")
         && ["none", "area", "status"].includes(String(value.sections));
     case "load-review-project":
-    case "load-brainstorm-outcome":
     case "read-desired-outcome":
       return typeof value.projectId === "string";
     case "create-review-action":
@@ -1278,7 +1278,7 @@ export type ElmProjectReviewEvent =
 export type ElmBrainstormEvent =
   | ElmClosedEvent
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
-  | { type: "brainstorm-outcome"; projectId: string; desiredOutcome: string }
+  | { type: "brainstorm-project-detail"; detail: ElmProjectDetailDto }
   | { type: "inspirations"; urls: string[] }
   | ElmCommandResultEvent;
 export type ElmFeedsEvent = { type: "feeds"; feeds: ElmFeedsDto } | ElmCommandResultEvent;
