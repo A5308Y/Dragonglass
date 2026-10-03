@@ -278,6 +278,8 @@ export class ElmProjectsHost {
         return this.services.rerunAgentRun(command.runId);
       case "plan-project":
         return this.services.planProject(command.projectId);
+      case "organise-idea":
+        return this.organiseIdea(command);
       case "update-code-run": {
         const run = this.services.agent.views().find((candidate) => candidate.id === command.runId);
         if (!run) throw new Error("This run no longer exists.");
@@ -288,6 +290,32 @@ export class ElmProjectsHost {
         return this.services.deleteAgentRun(command.runId);
     }
     return assertNever(command);
+  }
+
+  /**
+   * One of a plan's ideas becomes what was chosen, and its box in the plan note is ticked once it has:
+   * an Action or a Sub-project through their usual dialogs (prefilled, ticked only when saved), Someday
+   * as a Someday Sub-project straight away, or nothing, for an idea that is done with.
+   */
+  private async organiseIdea(command: Extract<ElmProjectsCommand, { type: "organise-idea" }>): Promise<void> {
+    const tick = () => this.services.repository.tickPlanIdea(command.path, command.text);
+    switch (command.as) {
+      case "action":
+        new ElmModal(this.services, { kind: "new-action", projectId: command.projectId, title: command.text }, { onActionCreated: tick }).open();
+        return;
+      case "subproject":
+        new ElmModal(this.services, { kind: "new-project", parentProjectId: command.projectId, status: "active", title: command.text }, {
+          onProjectCreated: tick,
+        }).open();
+        return;
+      case "someday":
+        await this.services.repository.createProject({ title: command.text, status: "someday", parentProjectId: command.projectId });
+        await tick();
+        return;
+      case "done":
+        await tick();
+        return;
+    }
   }
 
   private project(id: string): Project {

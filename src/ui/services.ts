@@ -35,8 +35,8 @@ export interface GtdServices {
   openChecklists: (runId?: string) => void;
   /** Shows what delegating a Project tree would hand over, and starts the run. */
   delegateProject: (projectId: string) => Promise<void>;
-  /** Opens the Plan Project dialog (`src/ui/plan-project.ts`). */
-  planProject: (projectId: string, onClose?: () => void) => Promise<void>;
+  /** Plans a Project: the Brainstorm view on it (Purpose, Desired outcome, ideas), then its page. */
+  planProject: (projectId: string) => Promise<void>;
   /** Opens the Delegate dialog filled in from an earlier run, to start it again. */
   rerunAgentRun: (runId: string) => Promise<void>;
   /** Asks, then deletes an ended agent run, and its results if wanted. */

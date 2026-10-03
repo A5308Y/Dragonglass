@@ -29,10 +29,11 @@ export function isSupportCommand(command: { type: string }): command is SupportC
  * support files, for a view that splits a tree's folders between its Projects.
  */
 export async function projectDetail(services: GtdServices, project: Project, files?: readonly TFile[]): Promise<ElmProjectDetailDto> {
-  const [purpose, desiredOutcome, diary] = await Promise.all([
+  const [purpose, desiredOutcome, diary, ideas] = await Promise.all([
     services.repository.readProjectPurpose(project),
     services.repository.readDesiredOutcome(project),
     services.repository.readProjectDiary(project),
+    services.repository.planIdeas(project),
   ]);
   const relative = (path: string, fallback: string) =>
     project.supportPath && path.startsWith(`${project.supportPath}/`) ? path.slice(project.supportPath.length + 1) : fallback;
@@ -56,6 +57,7 @@ export async function projectDetail(services: GtdServices, project: Project, fil
     projectId: project.id,
     purpose,
     desiredOutcome,
+    ideas,
     diary: diary.map((entry) => ({ timestamp: entry.timestamp ?? "", text: entry.text })),
     supportFiles,
     linkedFiles: services.repository.linkedFiles(project).map(({ link, file }) => ({

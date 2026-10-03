@@ -1,4 +1,3 @@
-import { PLAN_KINDS, type PlanItem } from "../domain/project-plan";
 import type { FeedStoreData } from "../domain/feed";
 import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../domain/pomodoro";
 import {
@@ -109,9 +108,11 @@ export interface ElmAgentDto {
 
 export interface ElmProjectDetailDto {
   projectId: string;
-  /** The `## Purpose` section planning writes (`src/ui/plan-project.ts`), or `""`. */
+  /** The `## Purpose` section a plan writes (a Brainstorm session on the Project), or `""`. */
   purpose: string;
   desiredOutcome: string;
+  /** A plan's ideas still to organise: the open boxes of its plan notes (`src/domain/project-plan.ts`). */
+  ideas: Array<{ path: string; text: string }>;
   diary: ElmDiaryEntryDto[];
   supportFiles: ElmProjectSupportFileDto[];
   supportFolders: Array<{ path: string; label: string }>;
@@ -638,12 +639,10 @@ export type ElmNonMenuCommand =
   | { type: "stop-agent-run"; runId: string }
   | { type: "rerun-agent-run"; runId: string }
   | { type: "update-code-run"; runId: string }
-  // Planning a Project (src/ui/plan-project.ts): opened from the Project page and the Project Review.
+  // Planning a Project: opens the Brainstorm view on it, from the Project page.
   | { type: "plan-project"; projectId: string }
-  | { type: "save-project-plan"; projectId: string; purpose: string; desiredOutcome: string; items: PlanItem[] }
-  | { type: "add-plan-action"; projectId: string; title: string; context: string }
-  | { type: "delegate-plan-project"; projectId: string }
-  | { type: "close-plan" }
+  // Turns one of a plan's ideas into an Action, a Sub-project or Someday, or ticks it off.
+  | { type: "organise-idea"; projectId: string; path: string; text: string; as: "action" | "subproject" | "someday" | "done" }
   | { type: "delete-agent-run"; runId: string }
   | { type: "start-pomodoro"; projectId: string; intention: string; focusActionIds: string[]; minutes: number }
   | { type: "pause-pomodoro" }
@@ -665,7 +664,8 @@ export type ElmNonMenuCommand =
   | { type: "create-review-action"; title: string; projectId: string; context: string }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
   | { type: "move-review-to-someday"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
-  | { type: "save-brainstorm"; actionId: string; ideas: string; desiredOutcome?: string }
+  | { type: "save-brainstorm"; actionId: string; ideas: string; desiredOutcome?: string; purpose?: string }
+  | { type: "save-project-brainstorm"; projectId: string; purpose: string; desiredOutcome: string; ideas: string }
   | { type: "save-standalone-brainstorm"; topic: string; ideas: string }
   | { type: "shuffle-brainstorm-words" }
   | { type: "focus-brainstorm-ideas"; start: number; end: number }
@@ -746,7 +746,7 @@ export const SURFACE_COMMANDS = {
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link", "open-link",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
-    "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "update-code-run", "delete-agent-run", "plan-project",
+    "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "update-code-run", "delete-agent-run", "plan-project", "organise-idea",
     "open-note-link",
   ],
   inbox: [
@@ -760,10 +760,10 @@ export const SURFACE_COMMANDS = {
   projectReview: [
     "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
     "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action", "set-project-status",
-    "open-someday-review", "plan-project",
+    "open-someday-review",
   ],
   brainstorm: [
-    "load-project-detail", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
+    "load-project-detail", "save-brainstorm", "save-project-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
     "focus-brainstorm-ideas", "show-project", "suggest-brainstorm-ideas", "open-file", "open-link",
     "create-support-note", "create-support-folder", "read-support-note", "update-support-note",
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link",
@@ -777,7 +777,6 @@ export const SURFACE_COMMANDS = {
     "open-file", "create-support-note", "create-support-folder", "read-support-note", "update-support-note",
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link",
   ],
-  planProject: ["save-project-plan", "add-plan-action", "delegate-plan-project", "close-plan"],
   checklists: [
     "start-checklist-run", "show-checklist-run", "mark-checklist-item", "finish-checklist-run", "discard-checklist-run",
     "capture-from-checklist", "open-checklist-pomodoro", "open-file",
@@ -802,7 +801,6 @@ export type ElmModalCommand = SurfaceCommand<"modals">;
 export type ElmSomedayReviewCommand = SurfaceCommand<"somedayReview">;
 export type ElmPomodoroCommand = SurfaceCommand<"pomodoro">;
 export type ElmChecklistsCommand = SurfaceCommand<"checklists">;
-export type ElmPlanProjectCommand = SurfaceCommand<"planProject">;
 
 export type ElmActionBoardMenuEntry = ElmMenuEntry<Exclude<ElmActionBoardCommand, { type: "show-menu" }>>;
 export type ElmProjectsMenuEntry = ElmMenuEntry<Exclude<ElmProjectsCommand, { type: "show-menu" }>>;
@@ -828,10 +826,6 @@ export const parseSomedayReviewCommand = parserFor<ElmSomedayReviewCommand>(
 export const parsePomodoroCommand = parserFor<ElmPomodoroCommand>(
   (value): value is ElmPomodoroCommand => isSurfaceCommand(value, POMODORO_COMMANDS),
 );
-export const parsePlanProjectCommand = parserFor<ElmPlanProjectCommand>(
-  (value): value is ElmPlanProjectCommand => isSurfaceCommand(value, PLAN_PROJECT_COMMANDS),
-);
-
 export const parseChecklistsCommand = parserFor<ElmChecklistsCommand>(
   (value): value is ElmChecklistsCommand => isSurfaceCommand(value, CHECKLISTS_COMMANDS),
 );
@@ -896,7 +890,6 @@ const MODAL_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.modals);
 const SOMEDAY_REVIEW_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.somedayReview);
 const POMODORO_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.pomodoro);
 const CHECKLISTS_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.checklists);
-const PLAN_PROJECT_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.planProject);
 
 function isSurfaceCommand(value: unknown, allowed: ReadonlySet<string>, nested?: CommandValidator<unknown>): boolean {
   if (!isRecord(value) || typeof value.type !== "string" || !allowed.has(value.type)) return false;
@@ -948,18 +941,12 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "stop-agent-run":
     case "rerun-agent-run":
     case "plan-project":
-    case "delegate-plan-project":
       return typeof value.projectId === "string";
-    case "save-project-plan":
+    case "organise-idea":
       return typeof value.projectId === "string"
-        && typeof value.purpose === "string"
-        && typeof value.desiredOutcome === "string"
-        && Array.isArray(value.items)
-        && value.items.every(isPlanItem);
-    case "add-plan-action":
-      return typeof value.projectId === "string" && typeof value.title === "string" && typeof value.context === "string";
-    case "close-plan":
-      return true;
+        && typeof value.path === "string"
+        && typeof value.text === "string"
+        && (value.as === "action" || value.as === "subproject" || value.as === "someday" || value.as === "done");
     case "update-code-run":
     case "delete-agent-run":
       return typeof value.runId === "string";
@@ -1061,7 +1048,13 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "save-brainstorm":
       return typeof value.actionId === "string"
         && typeof value.ideas === "string"
-        && (value.desiredOutcome === undefined || typeof value.desiredOutcome === "string");
+        && (value.desiredOutcome === undefined || typeof value.desiredOutcome === "string")
+        && (value.purpose === undefined || typeof value.purpose === "string");
+    case "save-project-brainstorm":
+      return typeof value.projectId === "string"
+        && typeof value.purpose === "string"
+        && typeof value.desiredOutcome === "string"
+        && typeof value.ideas === "string";
     case "save-standalone-brainstorm":
       return typeof value.topic === "string" && typeof value.ideas === "string";
     case "shuffle-brainstorm-words":
@@ -1213,14 +1206,6 @@ function isOptionalBoolean(value: unknown): boolean {
   return value === undefined || typeof value === "boolean";
 }
 
-function isPlanItem(value: unknown): value is PlanItem {
-  return isRecord(value)
-    && typeof value.title === "string"
-    && typeof value.kind === "string" && (PLAN_KINDS as readonly string[]).includes(value.kind)
-    && typeof value.context === "string"
-    && typeof value.after === "string";
-}
-
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
@@ -1320,6 +1305,8 @@ export type ElmBrainstormEvent =
   | ElmClosedEvent
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "brainstorm-project-detail"; detail: ElmProjectDetailDto }
+  /** Starts a session on a Project: planning it (Purpose, Desired outcome, ideas). */
+  | { type: "plan-project"; projectId: string }
   | { type: "inspirations"; urls: string[] }
   | ElmCommandResultEvent;
 export type ElmFeedsEvent = { type: "feeds"; feeds: ElmFeedsDto } | ElmCommandResultEvent;

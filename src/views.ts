@@ -41,6 +41,11 @@ export class GtdBrainstormView extends ItemView {
     this.contentEl.empty();
     this.host = new ElmBrainstormHost(this.contentEl, this.services);
   }
+  /** Starts a session on a Project, to plan it. */
+  plan(projectId: string): void {
+    if (!this.host) this.refresh();
+    this.host?.plan(projectId);
+  }
 }
 
 export class GtdProjectReviewView extends ItemView {

@@ -47,9 +47,16 @@ type alias DiaryEntry =
     { timestamp : String, body : String }
 
 
+{-| One of a plan's ideas still to organise, and the plan note it is a box in.
+-}
+type alias PlanIdea =
+    { path : String, text : String }
+
+
 type alias ProjectDetail =
     { projectId : ProjectId
     , purpose : String
+    , ideas : List PlanIdea
     , desiredOutcome : String
     , diary : List DiaryEntry
     , material : Support.Material
@@ -1503,6 +1510,7 @@ viewDetail model project =
                       else
                         div [ class "dg-project-main-image" ] [ img [ src imageUrl, alt ("Main image for " ++ project.title) ] [] ]
                     , viewOutcome model project
+                    , viewPlanIdeas model project
                     , viewActionsSection model project openActions completedActions
                     , viewSubprojects model project
                     , viewAgent model project
@@ -1883,6 +1891,47 @@ saveChord model =
 
     else
         "Ctrl+Enter"
+
+
+{-| A plan's ideas still to organise: each becomes an Action or a Sub-project through the usual dialog,
+goes to Someday, or is ticked off. The rest of organising is this page as it is: order, blockers,
+Next Actions.
+-}
+viewPlanIdeas : Model -> Project -> Html Msg
+viewPlanIdeas model project =
+    let
+        ideas =
+            Maybe.map .ideas model.detail |> Maybe.withDefault []
+
+        organise idea as_ =
+            Send IgnoreReply (Command.OrganiseIdea { projectId = project.id, path = idea.path, text = idea.text, as_ = as_ })
+    in
+    if List.isEmpty ideas then
+        text ""
+
+    else
+        section [ class "dg-detail-section dg-plan-ideas" ]
+            [ div [ class "dg-detail-section-heading" ]
+                [ h3 [ class "dg-detail-eyebrow" ] [ text "Ideas to organise" ]
+                , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length ideas)) ]
+                ]
+            , div [ class "dg-plan-idea-list" ]
+                (List.map
+                    (\idea ->
+                        div [ class "dg-plan-idea" ]
+                            [ span [ class "dg-plan-idea-text" ] [ text idea.text ]
+                            , div [ class "dg-plan-idea-actions" ]
+                                [ button [ onClick (organise idea "action") ] [ text "Action" ]
+                                , button [ onClick (organise idea "subproject") ] [ text "Sub-project" ]
+                                , button [ onClick (organise idea "someday") ] [ text "Someday" ]
+                                , button [ class "dg-flat-button dg-plan-idea-done", onClick (organise idea "done") ]
+                                    (Ui.iconLabel "✓" ("Done with " ++ idea.text))
+                                ]
+                            ]
+                    )
+                    ideas
+                )
+            ]
 
 
 viewActionsSection : Model -> Project -> List Action -> List Action -> Html Msg
@@ -2654,9 +2703,14 @@ diaryDecoder =
 
 projectDetailDecoder : Decoder ProjectDetail
 projectDetailDecoder =
-    Decode.map5 ProjectDetail
+    Decode.map6 ProjectDetail
         (Decode.field "projectId" Decode.string)
         (Decode.oneOf [ Decode.field "purpose" Decode.string, Decode.succeed "" ])
+        (Decode.oneOf
+            [ Decode.field "ideas" (Decode.list (Decode.map2 PlanIdea (Decode.field "path" Decode.string) (Decode.field "text" Decode.string)))
+            , Decode.succeed []
+            ]
+        )
         (Decode.field "desiredOutcome" Decode.string)
         (Decode.field "diary" (Decode.list diaryDecoder))
         Support.materialDecoder

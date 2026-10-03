@@ -11,7 +11,6 @@ import { unreadItems } from "./domain/feed";
 import { parseCodeAgentSettings } from "./domain/delegation";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { ErrorBar } from "./ui/error-bar";
-import { planProject } from "./ui/plan-project";
 import { describeImport, normalizeMailPort } from "./domain/mail";
 import { POMODORO_SOUNDS, type ActionStatus, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
@@ -130,7 +129,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       openChecklistPomodoro: (path) => void this.openChecklistPomodoro(path),
       openChecklists: (runId) => void this.openChecklists(runId),
       delegateProject: (projectId) => delegateProject(this.app, this.agent, projectId, this.settings.agent),
-      planProject: (projectId, onClose) => planProject(this.services, projectId, onClose),
+      planProject: (projectId) => this.planProject(projectId),
       deleteAgentRun: (runId) => confirmDeleteAgentRun(this.app, this.agent, runId),
       rerunAgentRun: async (runId) => {
         const previous = await this.agent.rerunDefaults(runId);
@@ -598,6 +597,12 @@ export default class DragonglassGtdPlugin extends Plugin {
   private editProject(id: string): void {
     if (!this.index.getSnapshot().projectsById.has(id)) return void new Notice("This Project is missing or has a duplicate ID.");
     new ElmModal(this.services, { kind: "edit-project", projectId: id }).open();
+  }
+
+  /** Planning a Project starts as a Brainstorm session on it; organising follows on its page. */
+  private async planProject(projectId: string): Promise<void> {
+    const leaf = await this.activateView(BRAINSTORM_VIEW_TYPE);
+    if (leaf.view instanceof GtdBrainstormView) leaf.view.plan(projectId);
   }
 
   private async openPomodoro(projectId?: string): Promise<void> {

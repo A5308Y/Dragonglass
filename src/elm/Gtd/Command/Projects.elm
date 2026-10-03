@@ -56,6 +56,7 @@ type Command
     | RerunAgentRun String
     | UpdateCodeRun String
     | PlanProject String
+    | OrganiseIdea { projectId : String, path : String, text : String, as_ : String }
     | DeleteAgentRun String
     | OpenFile String
     | ShowMenu Float Float (List MenuEntry)
@@ -190,6 +191,9 @@ toBase command =
 
         PlanProject projectId ->
             Base.PlanProject projectId
+
+        OrganiseIdea idea ->
+            Base.OrganiseIdea idea
 
         DeleteAgentRun runId ->
             Base.DeleteAgentRun runId

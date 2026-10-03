@@ -31,11 +31,14 @@ sessionSeconds =
 
 
 {-| What is being brainstormed. A topic session remembers the Action it suspended,
-so abandoning the topic returns to exactly where the session started.
+so abandoning the topic returns to exactly where the session started. A Project
+session plans a Project: its Purpose, Desired outcome and ideas, which the Project
+page then organises.
 -}
 type Session
     = TaskSession ActionId
     | TopicSession { topic : String, resume : Maybe ActionId }
+    | ProjectSession ProjectId
 
 
 type alias DiaryEntry =
@@ -44,6 +47,7 @@ type alias DiaryEntry =
 
 type alias ProjectDetail =
     { projectId : ProjectId
+    , purpose : String
     , desiredOutcome : String
     , diary : List DiaryEntry
     , material : Support.Material
@@ -126,6 +130,7 @@ partnerEvery =
 type alias SetAside =
     { session : Maybe Session
     , topicDraft : String
+    , purpose : String
     , desiredOutcome : String
     , ideas : String
     , seconds : Int
@@ -137,6 +142,7 @@ type alias Model =
     , session : Maybe Session
     , setAside : Maybe SetAside
     , topicDraft : String
+    , purpose : String
     , desiredOutcome : String
     , ideas : String
     , projectDetail : Maybe ProjectDetail
@@ -172,6 +178,7 @@ type Msg
     | ShufflePrompts
     | RestoreSetAside
     | DismissSetAside
+    | PurposeChanged String
     | OutcomeChanged String
     | IdeasChanged String
     | IdeasSelected Int Int
@@ -248,6 +255,7 @@ emptyModel snapshot words session =
     , session = session
     , setAside = Nothing
     , topicDraft = ""
+    , purpose = ""
     , desiredOutcome = ""
     , ideas = ""
     , projectDetail = Nothing
@@ -329,6 +337,7 @@ update msg model =
                     , setAside = setAside model
                     , topicDraft = ""
                     , ideas = ""
+                    , purpose = ""
                     , desiredOutcome = ""
                     , projectDetail = Nothing
                     , support = Support.init
@@ -358,6 +367,7 @@ update msg model =
                         { model
                             | session = saved.session
                             , topicDraft = saved.topicDraft
+                            , purpose = saved.purpose
                             , desiredOutcome = saved.desiredOutcome
                             , ideas = saved.ideas
                             , projectDetail = Nothing
@@ -380,6 +390,9 @@ update msg model =
 
         OutcomeChanged outcome ->
             ( { model | desiredOutcome = outcome }, Cmd.none )
+
+        PurposeChanged purpose ->
+            ( { model | purpose = purpose }, Cmd.none )
 
         IdeasChanged ideas ->
             let
@@ -609,17 +622,43 @@ sessionTopic model =
         Just (TaskSession _) ->
             currentAction model |> Maybe.map .title |> Maybe.withDefault ""
 
+        Just (ProjectSession _) ->
+            currentProject model |> Maybe.map .title |> Maybe.withDefault ""
+
         Nothing ->
             ""
 
 
+{-| Whether there is anything to save: ideas, or for a Project plan its Purpose or Desired outcome too.
+-}
+canSave : Model -> Bool
+canSave model =
+    case model.session of
+        Just (ProjectSession _) ->
+            List.any (not << String.isEmpty << String.trim) [ model.ideas, model.purpose, model.desiredOutcome ]
+
+        _ ->
+            not (String.isEmpty (String.trim model.ideas))
+
+
 save : Model -> ( Model, Cmd Msg )
 save model =
-    if String.isEmpty (String.trim model.ideas) then
+    if not (canSave model) then
         ( model, Cmd.none )
 
     else
         case model.session of
+            Just (ProjectSession projectId) ->
+                send FinishSave
+                    (Command.SaveProjectBrainstorm
+                        { projectId = projectId
+                        , purpose = String.trim model.purpose
+                        , desiredOutcome = String.trim model.desiredOutcome
+                        , ideas = model.ideas
+                        }
+                    )
+                    { model | saving = True }
+
             Just (TopicSession fields) ->
                 send FinishSave (Command.SaveStandaloneBrainstorm fields.topic model.ideas) { model | saving = True }
 
@@ -630,6 +669,7 @@ save model =
                             (Command.SaveBrainstorm action.id
                                 model.ideas
                                 (Maybe.map (always model.desiredOutcome) (currentProject model))
+                                (Maybe.map (always model.purpose) (currentProject model))
                             )
                             { model | saving = True }
 
@@ -644,13 +684,14 @@ save model =
 -}
 setAside : Model -> Maybe SetAside
 setAside model =
-    if String.isEmpty (String.trim model.ideas) && String.isEmpty (String.trim model.desiredOutcome) then
+    if String.isEmpty (String.trim model.ideas) && String.isEmpty (String.trim model.desiredOutcome) && String.isEmpty (String.trim model.purpose) then
         model.setAside
 
     else
         Just
             { session = model.session
             , topicDraft = model.topicDraft
+            , purpose = model.purpose
             , desiredOutcome = model.desiredOutcome
             , ideas = model.ideas
             , seconds = model.seconds
@@ -662,7 +703,8 @@ newSession model =
     let
         reset =
             { model
-                | desiredOutcome = ""
+                | purpose = ""
+                , desiredOutcome = ""
                 , ideas = ""
                 , seconds = sessionSeconds
                 , selectionStart = 0
@@ -770,6 +812,7 @@ hasSavingRequest requests =
 
 type HostEvent
     = SnapshotEvent Snapshot
+    | PlanProjectEvent ProjectId
     | ProjectDetailEvent ProjectDetail
     | InspirationsEvent (List String)
     | Replied Host.Outcome
@@ -783,6 +826,19 @@ receiveHost value model =
 
         Ok (SnapshotEvent snapshot) ->
             applySnapshot snapshot model
+
+        Ok (PlanProjectEvent projectId) ->
+            if model.session == Just (ProjectSession projectId) then
+                ( model, Cmd.none )
+
+            else
+                -- Whatever was under way is set aside, as Shuffle and Change topic do, so it can be restored.
+                newSession
+                    { model
+                        | session = Just (ProjectSession projectId)
+                        , setAside = setAside model
+                        , partner = idlePartner (model.partner.generation + 1)
+                    }
 
         Ok (InspirationsEvent images) ->
             -- The same list comes with every refresh; only a changed one is taken, keeping the image shown.
@@ -799,6 +855,12 @@ receiveHost value model =
                         -- Only fill an empty field, so a refresh never overwrites restored or typed text.
                         ( { model
                             | projectDetail = Just detail
+                            , purpose =
+                                if String.isEmpty model.purpose then
+                                    detail.purpose
+
+                                else
+                                    model.purpose
                             , desiredOutcome =
                                 if String.isEmpty model.desiredOutcome then
                                     detail.desiredOutcome
@@ -855,6 +917,10 @@ applySnapshot snapshot model =
         Just (TopicSession _) ->
             ( next, Cmd.none )
 
+        -- A plan stays on its Project while the vault changes around it.
+        Just (ProjectSession _) ->
+            ( next, Cmd.none )
+
         _ ->
             let
                 stillThere =
@@ -874,6 +940,7 @@ applySnapshot snapshot model =
                             ( { next
                                 | session = Nothing
                                 , ideas = ""
+                                , purpose = ""
                                 , desiredOutcome = ""
                                 , projectDetail = Nothing
                                 , support = Support.init
@@ -902,7 +969,11 @@ finish pending resultValue model =
             in
             case model.session of
                 Just (TopicSession _) ->
-                    ( { closed | session = Nothing, topicDraft = "", ideas = "", desiredOutcome = "", seconds = sessionSeconds }, Cmd.none )
+                    ( { closed | session = Nothing, topicDraft = "", ideas = "", purpose = "", desiredOutcome = "", seconds = sessionSeconds }, Cmd.none )
+
+                -- The plan is saved; the Project page takes over to organise its ideas.
+                Just (ProjectSession _) ->
+                    ( { closed | session = Nothing, ideas = "", purpose = "", desiredOutcome = "", projectDetail = Nothing, support = Support.init, seconds = sessionSeconds }, Cmd.none )
 
                 _ ->
                     ( { closed | ideas = "" }, Cmd.none )
@@ -1059,7 +1130,15 @@ viewSession model session =
                 TopicSession _ ->
                     True
 
-                TaskSession _ ->
+                _ ->
+                    False
+
+        planning =
+            case session of
+                ProjectSession _ ->
+                    True
+
+                _ ->
                     False
 
         sessionTitle =
@@ -1069,6 +1148,9 @@ viewSession model session =
 
                 TaskSession _ ->
                     currentAction model |> Maybe.map .title |> Maybe.withDefault ""
+
+                ProjectSession _ ->
+                    project |> Maybe.map .title |> Maybe.withDefault "A Project that no longer exists"
     in
     div [ class "dg-brainstorm-content" ]
         [ section [ class "dg-brainstorm-task" ]
@@ -1077,6 +1159,9 @@ viewSession model session =
                     [ text
                         (if standalone then
                             "Standalone topic"
+
+                         else if planning then
+                            "Plan this Project: why, what done looks like, every idea"
 
                          else
                             "Brainstorm this"
@@ -1100,7 +1185,7 @@ viewSession model session =
                 ]
             , button
                 [ onClick
-                    (if standalone then
+                    (if standalone || planning then
                         AbandonTopic
 
                      else
@@ -1110,6 +1195,9 @@ viewSession model session =
                 [ text
                     (if standalone then
                         "Change topic"
+
+                     else if planning then
+                        "Leave plan"
 
                      else
                         "Shuffle"
@@ -1121,6 +1209,13 @@ viewSession model session =
             [ div [ class "dg-section-heading" ] [ h3 [] [ text "Random prompts" ], button [ onClick ShufflePrompts ] [ text "Shuffle words" ] ]
             , div [] (List.map (\word -> button [ onClick (InsertWord word) ] [ text word ]) model.words)
             ]
+        , Ui.maybeView project
+            (\_ ->
+                section [ class "dg-brainstorm-field" ]
+                    [ label [ for "dg-brainstorm-purpose" ] [ text "Purpose" ]
+                    , textarea [ id "dg-brainstorm-purpose", value model.purpose, placeholder "Why does this Project exist? What is it for?", onInput PurposeChanged ] []
+                    ]
+            )
         , Ui.maybeView project
             (\_ ->
                 section [ class "dg-brainstorm-field" ]
@@ -1152,16 +1247,23 @@ viewSession model session =
                 [ text
                     (case project of
                         Just item ->
-                            "Saves into " ++ item.title ++ "'s support folder"
+                            if planning then
+                                "Purpose and outcome go into " ++ item.title ++ ", the ideas into a plan note to organise on its page"
+
+                            else
+                                "Saves into " ++ item.title ++ "'s support folder"
 
                         Nothing ->
                             "Creates a new Inbox Item"
                     )
                 ]
-            , button [ class "mod-cta", disabled (String.isEmpty (String.trim model.ideas) || model.saving), onClick Save ]
+            , button [ class "mod-cta", disabled (not (canSave model) || model.saving), onClick Save ]
                 [ text
                     (if model.saving then
                         "Saving…"
+
+                     else if planning then
+                        "Save and organise"
 
                      else if standalone then
                         "Save ideas to Inbox"
@@ -1354,9 +1456,14 @@ currentAction model =
 
 currentProject : Model -> Maybe Project
 currentProject model =
-    currentAction model
-        |> Maybe.andThen .projectId
-        |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects)
+    case model.session of
+        Just (ProjectSession projectId) ->
+            Data.findProject projectId model.snapshot.projects
+
+        _ ->
+            currentAction model
+                |> Maybe.andThen .projectId
+                |> Maybe.andThen (\projectId -> Data.findProject projectId model.snapshot.projects)
 
 
 itemAt : Int -> List a -> Maybe a
@@ -1400,8 +1507,9 @@ diaryDecoder =
 
 projectDetailDecoder : Decoder ProjectDetail
 projectDetailDecoder =
-    Decode.map4 ProjectDetail
+    Decode.map5 ProjectDetail
         (Decode.field "projectId" Decode.string)
+        (Decode.oneOf [ Decode.field "purpose" Decode.string, Decode.succeed "" ])
         (Decode.field "desiredOutcome" Decode.string)
         (Decode.field "diary" (Decode.list diaryDecoder))
         Support.materialDecoder
@@ -1418,6 +1526,9 @@ hostEventDecoder =
 
                     "inspirations" ->
                         Decode.map InspirationsEvent (Decode.field "urls" (Decode.list Decode.string))
+
+                    "plan-project" ->
+                        Decode.map PlanProjectEvent (Decode.field "projectId" Decode.string)
 
                     "brainstorm-project-detail" ->
                         Decode.map ProjectDetailEvent (Decode.field "detail" projectDetailDecoder)

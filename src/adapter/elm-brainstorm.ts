@@ -65,6 +65,11 @@ export class ElmBrainstormHost {
     this.unsubscribe = services.repository.index.subscribe(() => this.refresh(), "Brainstorm");
   }
 
+  /** Starts a Brainstorm session on a Project, to plan it. */
+  plan(projectId: string): void {
+    this.send({ type: "plan-project", projectId });
+  }
+
   refresh(): void {
     this.send({ type: "snapshot", snapshot: this.snapshot() });
     // An image added to the folder turns up in the next pass, as any vault change does.
@@ -108,11 +113,20 @@ export class ElmBrainstormHost {
         return;
       }
       case "save-brainstorm":
-        await this.services.repository.saveBrainstorm(command.actionId, command.ideas, command.desiredOutcome);
+        await this.services.repository.saveBrainstorm(command.actionId, command.ideas, command.desiredOutcome, command.purpose);
         new Notice(command.desiredOutcome === undefined
           ? "Brainstorm captured to Inbox; Action completed."
           : "Brainstorm saved to Project support material; Action completed.");
         return;
+      case "save-project-brainstorm": {
+        const note = await this.services.repository.saveProjectBrainstorm(
+          command.projectId, command.purpose, command.desiredOutcome, command.ideas,
+        );
+        // Organising is the Project page's: it lists the ideas still open, each one click from what it becomes.
+        this.services.showProjectDetail(command.projectId);
+        new Notice(note ? "Plan saved. Organise its ideas on the Project page." : "Purpose and Desired outcome saved.");
+        return;
+      }
       case "save-standalone-brainstorm":
         await this.services.repository.saveStandaloneBrainstorm(command.topic, command.ideas);
         new Notice("Standalone brainstorm captured to Inbox.");

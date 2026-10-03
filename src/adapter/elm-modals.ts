@@ -31,12 +31,12 @@ import {
 export type ElmModalForm =
   | { kind: "prompt"; title: string; placeholder: string }
   | { kind: "capture" }
-  | { kind: "new-action"; projectId?: string }
+  | { kind: "new-action"; projectId?: string; title?: string }
   | { kind: "edit-action"; actionId: string; allowProjectConversion: boolean; status?: Action["status"] }
   | { kind: "schedule-action"; actionId: string }
   | { kind: "import-actions"; projectId?: string }
   | { kind: "import-subprojects"; parentProjectId?: string }
-  | { kind: "new-project"; parentProjectId?: string; status?: Project["status"] }
+  | { kind: "new-project"; parentProjectId?: string; status?: Project["status"]; title?: string }
   | { kind: "edit-project"; projectId: string }
   | { kind: "batch-tags"; projectIds: string[] }
   | { kind: "batch-parent"; projectIds: string[] }
@@ -47,6 +47,8 @@ interface ElmModalHandlers {
   onPrompt?: (value: string) => void;
   /** Receives the file a new Project created. */
   onProjectCreated?: (file: TFile) => Promise<void>;
+  /** Runs once a new Action was created. */
+  onActionCreated?: () => Promise<void>;
   /** Runs once the modal has closed, however it closed, so a caller waiting on it is released. */
   onDismissed?: () => void;
 }
@@ -140,6 +142,7 @@ export class ElmModal extends Modal {
         // One file written straight into the Actions folder: going through an Inbox Item
         // first cost four writes, and every open view redrew after each of them.
         await this.services.repository.createAction(actionInput(command.input));
+        await this.handlers.onActionCreated?.();
         new Notice("Action created.");
         return;
       case "save-action":

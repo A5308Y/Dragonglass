@@ -1,56 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { ideasFromText, planDiaryEntry, plannedSteps, type PlanItem } from "../src/domain/project-plan";
+import { ideasFromText, openPlanIdeas, planNoteBody, tickPlanIdea } from "../src/domain/project-plan";
 import { setMarkdownSectionBefore } from "../src/utils/markdown";
 
-const item = (title: string, kind: PlanItem["kind"], changes: Partial<PlanItem> = {}): PlanItem =>
-  ({ title, kind, context: "", after: "", ...changes });
-
 describe("Planning a Project", () => {
-  it("turns typed ideas into a list, without bullets or numbering", () => {
+  it("turns brainstormed lines into ideas, without bullets, numbering or boxes", () => {
     expect(ideasFromText("- Find tiles\n2. Book plumber\n\n* [ ] Pick colour\n  Measure the room  ")).toEqual([
       "Find tiles", "Book plumber", "Pick colour", "Measure the room",
     ]);
   });
 
-  it("sorts the decisions and creates a Sub-project before the one that waits for it", () => {
-    const steps = plannedSteps([
-      item("Install the bathroom", "subproject", { after: "idea:2" }),
-      item("Call the plumber", "action", { context: "Phone" }),
-      item("Demolish the old one", "subproject"),
-      item("Sauna", "someday"),
-      item("Gold taps", "drop"),
-      item("  ", "action"),
-    ], new Set());
-
-    expect(steps.subprojects.map((planned) => planned.title)).toEqual(["Demolish the old one", "Install the bathroom", "Sauna"]);
-    expect(steps.subprojects[1]).toMatchObject({ afterIdea: 2, someday: false });
-    expect(steps.subprojects[2]).toMatchObject({ someday: true });
-    expect(steps.actions).toEqual([{ title: "Call the plumber", context: "Phone" }]);
-    expect(steps.dropped).toEqual(["Gold taps"]);
+  it("writes the ideas as open boxes, and reads back the ones still open", () => {
+    const body = planNoteBody("Plan - Bathroom", "2026-10-03", ["Find tiles", "Book plumber"]);
+    expect(body).toBe("# Plan - Bathroom\n\n*2026-10-03*\n\n## Ideas\n\n- [ ] Find tiles\n- [ ] Book plumber\n");
+    expect(openPlanIdeas(body)).toEqual(["Find tiles", "Book plumber"]);
   });
 
-  it("lets a Sub-project wait for one that already exists in the tree, and nothing else", () => {
-    expect(plannedSteps([item("Tiles", "subproject", { after: "project:P2" })], new Set(["P2"])).subprojects[0])
-      .toMatchObject({ afterProjectId: "P2" });
-    expect(() => plannedSteps([item("Tiles", "subproject", { after: "project:X" })], new Set(["P2"]))).toThrow("outside");
-  });
-
-  it("refuses an Action without a context, a wait on a non-Sub-project and a cycle", () => {
-    expect(() => plannedSteps([item("Call", "action")], new Set())).toThrow("needs a context");
-    expect(() => plannedSteps([item("A", "subproject", { after: "idea:1" }), item("B", "action", { context: "X" })], new Set()))
-      .toThrow("isn't a Sub-project");
-    expect(() => plannedSteps([item("A", "subproject", { after: "idea:1" }), item("B", "subproject", { after: "idea:0" })], new Set()))
-      .toThrow("waits for itself");
-  });
-
-  it("keeps the plan's decisions, dropped ideas included, as a Diary entry", () => {
-    const entry = planDiaryEntry(plannedSteps([
-      item("Call the plumber", "action", { context: "Phone" }),
-      item("Demolish", "subproject"),
-      item("Sauna", "someday"),
-      item("Gold taps", "drop"),
-    ], new Set()));
-    expect(entry).toBe("Planned the Project.\nNext Actions: Call the plumber\nSub-projects: Demolish\nSomeday: Sauna\nDropped ideas: Gold taps");
+  it("ticks exactly the idea that was organised, and nothing when it is already gone", () => {
+    const body = "## Ideas\n\n- [ ] Find tiles\n- [x] Old idea\n- [ ] Find tiles later\n";
+    const ticked = tickPlanIdea(body, "Find tiles");
+    expect(ticked).toBe("## Ideas\n\n- [x] Find tiles\n- [x] Old idea\n- [ ] Find tiles later\n");
+    expect(openPlanIdeas(ticked)).toEqual(["Find tiles later"]);
+    expect(tickPlanIdea(ticked, "Find tiles")).toBe(ticked);
   });
 
   it("puts a Project's Purpose before its Desired outcome, and rewrites it in place later", () => {

@@ -140,11 +140,6 @@ export class ElmProjectReviewHost {
         return confirmDeleteProject(this.services, command.projectId);
       case "set-project-status":
         return setProjectStatus(this.services, command.projectId, command.status);
-      case "plan-project":
-        // The review edits the outcome too: once the plan is closed, it shows the one the plan wrote.
-        return this.services.planProject(command.projectId, () => {
-          void this.execute({ type: "load-review-project", projectId: command.projectId });
-        });
       case "open-someday-review":
         this.continueToSomeday();
         return;

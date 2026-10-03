@@ -1,3 +1,4 @@
+import { PLAN_NOTE_KEY, PLAN_NOTE_VALUE, ideasFromText, openPlanIdeas, planNoteBody, tickPlanIdea } from "../domain/project-plan";
 import {
   App,
   normalizePath,
@@ -654,7 +655,7 @@ export class GtdRepository {
     await this.markProjectsReviewed([projectId]);
   }
 
-  async saveBrainstorm(actionId: string, ideas: string, desiredOutcome?: string): Promise<TFile> {
+  async saveBrainstorm(actionId: string, ideas: string, desiredOutcome?: string, purpose?: string): Promise<TFile> {
     const action = this.requireAction(actionId);
     const cleanIdeas = ideas.trim();
     if (!cleanIdeas) throw new Error("Brainstorming notes are required.");
@@ -668,12 +669,50 @@ export class GtdRepository {
       const path = this.uniqueMarkdownPath(supportPath, `${title} ${date}`, action.id);
       const body = `# ${title}\n\n*${date}*\n${visionBlock}\n## Ideas\n\n${cleanIdeas}\n`;
       file = await this.app.vault.create(path, body);
+      if (purpose !== undefined) await this.setProjectPurpose(project.id, purpose);
       if (desiredOutcome !== undefined) await this.setDesiredOutcome(project.id, desiredOutcome);
     } else {
       file = await this.createInboxItem(title, `${visionBlock}\n## Ideas\n\n${cleanIdeas}`);
     }
     await this.updateAction(action.id, { status: "done" });
     return file;
+  }
+
+  /**
+   * Saves a Brainstorm session on a Project, the first part of planning it: Purpose and Desired
+   * outcome go into the Project note, the ideas into a plan note in its support folder as open boxes,
+   * to be organised on the Project page. Returns the plan note, or `null` when there were no ideas.
+   */
+  async saveProjectBrainstorm(projectId: string, purpose: string, desiredOutcome: string, ideas: string): Promise<TFile | null> {
+    const project = this.requireProject(projectId);
+    await this.setProjectPurpose(project.id, purpose);
+    await this.setDesiredOutcome(project.id, desiredOutcome);
+    const list = ideasFromText(ideas);
+    if (!list.length) return null;
+    const date = localDate();
+    const supportPath = await this.ensureProjectSupportPath(project);
+    const title = `Plan - ${project.title}`;
+    const path = this.uniqueMarkdownPath(supportPath, `${title} ${date}`, project.id);
+    return this.app.vault.create(path, markdown({ [PLAN_NOTE_KEY]: PLAN_NOTE_VALUE }, planNoteBody(title, date, list)));
+  }
+
+  /** The ideas a Project's plan notes still hold open, oldest note first. */
+  async planIdeas(project: Project): Promise<Array<{ path: string; text: string }>> {
+    const notes = this.supportFiles(project)
+      .filter((file) => file.extension === "md" && this.app.metadataCache.getFileCache(file)?.frontmatter?.[PLAN_NOTE_KEY] === PLAN_NOTE_VALUE)
+      .sort((left, right) => left.stat.ctime - right.stat.ctime);
+    const ideas: Array<{ path: string; text: string }> = [];
+    for (const note of notes) {
+      for (const text of openPlanIdeas(await this.app.vault.cachedRead(note))) ideas.push({ path: note.path, text });
+    }
+    return ideas;
+  }
+
+  /** Ticks an idea in its plan note: it has been organised, or let go. */
+  async tickPlanIdea(path: string, idea: string): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) throw new Error("The plan note no longer exists.");
+    await this.enqueue(file.path, () => this.app.vault.process(file, (content) => tickPlanIdea(content, idea)));
   }
 
   async saveStandaloneBrainstorm(topic: string, ideas: string): Promise<TFile> {

@@ -158,19 +158,18 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 
 ## Planning a Project
 
-- "Plan…" (Project page header and menus, Project Review) opens one dialog, the Elm `PlanProject`
-  program hosted by `src/ui/plan-project.ts`: Purpose → Desired outcome → Ideas → Organise → Next Actions
-  (David Allen's Natural Planning Model). Nothing is written before "Create"; the host then writes plain
-  Dragonglass data and nothing else: `## Purpose` (before `## Desired outcome`, `setProjectPurpose`), the
-  outcome, Sub-projects (Active, or Someday) with `blocked_by` for "after …", `next` Actions, one Diary
-  entry with every decision, dropped ideas included.
-- The rules (checking, ordering Sub-projects after the one they wait for, the Diary text) are pure in
-  `src/domain/project-plan.ts`, tested in `tests/project-plan.test.ts`. Actions have no Someday status:
-  a Someday idea becomes a Someday Sub-project.
-- The last step lists the tree's branches without a Next Action with the existing review check
-  (`projectsNeedingAction`), leaving out Sub-projects still waiting for another. Don't add a second check.
-- Opened from the Project Review, the dialog's close reloads the review's outcome, which would otherwise
-  write the old text back on completion.
+- "Plan…" (Project page header and menus) starts a Brainstorm session on the Project (`ProjectSession` in
+  `Brainstorm.elm`, `GtdBrainstormView.plan`): Purpose, Desired outcome and ideas, with the timer, prompts,
+  partner and Support Material as usual. Don't build a separate planning UI; the Brainstorm view is it.
+- Saving (`saveProjectBrainstorm`) writes `## Purpose` (before `## Desired outcome`, `setProjectPurpose`)
+  and the outcome into the Project note, and the ideas as open boxes into a plan note in its support
+  folder, marked `dragonglass: plan` in its frontmatter. Then the Project page opens.
+- Organising is the Project page: "Ideas to organise" lists the open boxes (`planIdeas`), each one click
+  from an Action or Sub-project (the usual dialogs, prefilled; the box is ticked once saved), a Someday
+  Sub-project, or ✓. Everything else (order, blockers, Next Actions) is the page as it is. The plan's state
+  is that Markdown task list, so it can be fixed by hand. Rules: `src/domain/project-plan.ts`, tested in
+  `tests/project-plan.test.ts`.
+- Brainstorming an Action in a Project shows and saves the Purpose too.
 
 ## Project trees
 

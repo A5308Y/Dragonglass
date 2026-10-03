@@ -7,7 +7,6 @@ module Gtd.Command exposing
     , MenuEntry(..)
     , NewActionInput
     , NewProjectInput
-    , PlanItem
     , ProjectChanges
     , ScheduleInput(..)
     , encode
@@ -99,10 +98,7 @@ type Command
     | RerunAgentRun String
     | UpdateCodeRun String
     | PlanProject String
-    | SaveProjectPlan { projectId : String, purpose : String, desiredOutcome : String, items : List PlanItem }
-    | AddPlanAction { projectId : String, title : String, context : String }
-    | DelegatePlanProject String
-    | ClosePlan
+    | OrganiseIdea { projectId : String, path : String, text : String, as_ : String }
     | DeleteAgentRun String
       -- Pomodoro
     | OpenPomodoro ProjectId
@@ -129,7 +125,8 @@ type Command
     | CompleteProjectReview ProjectId String (List ProjectId)
     | MoveReviewToSomeday ProjectId String (List ProjectId)
       -- Brainstorm
-    | SaveBrainstorm ActionId String (Maybe String)
+    | SaveBrainstorm ActionId String (Maybe String) (Maybe String)
+    | SaveProjectBrainstorm { projectId : String, purpose : String, desiredOutcome : String, ideas : String }
     | SaveStandaloneBrainstorm String String
     | ShuffleBrainstormWords
     | FocusBrainstormIdeas Int Int
@@ -273,13 +270,6 @@ type ImportKind
 
 
 -- ENCODING
-
-
-{-| One idea of a plan and what to make of it: kind is "action", "subproject", "someday" or "drop";
-after is "", "idea:<index>" or "project:<id>" (see `src/domain/project-plan.ts`).
--}
-type alias PlanItem =
-    { title : String, kind : String, context : String, after : String }
 
 
 encode : Command -> Encode.Value
@@ -551,37 +541,13 @@ encode command =
         PlanProject projectId ->
             object "plan-project" [ ( "projectId", Encode.string projectId ) ]
 
-        SaveProjectPlan plan ->
-            object "save-project-plan"
-                [ ( "projectId", Encode.string plan.projectId )
-                , ( "purpose", Encode.string plan.purpose )
-                , ( "desiredOutcome", Encode.string plan.desiredOutcome )
-                , ( "items"
-                  , Encode.list
-                        (\item ->
-                            Encode.object
-                                [ ( "title", Encode.string item.title )
-                                , ( "kind", Encode.string item.kind )
-                                , ( "context", Encode.string item.context )
-                                , ( "after", Encode.string item.after )
-                                ]
-                        )
-                        plan.items
-                  )
+        OrganiseIdea idea ->
+            object "organise-idea"
+                [ ( "projectId", Encode.string idea.projectId )
+                , ( "path", Encode.string idea.path )
+                , ( "text", Encode.string idea.text )
+                , ( "as", Encode.string idea.as_ )
                 ]
-
-        AddPlanAction fields ->
-            object "add-plan-action"
-                [ ( "projectId", Encode.string fields.projectId )
-                , ( "title", Encode.string fields.title )
-                , ( "context", Encode.string fields.context )
-                ]
-
-        DelegatePlanProject projectId ->
-            object "delegate-plan-project" [ ( "projectId", Encode.string projectId ) ]
-
-        ClosePlan ->
-            object "close-plan" []
 
         DeleteAgentRun runId ->
             object "delete-agent-run" [ ( "runId", Encode.string runId ) ]
@@ -669,11 +635,20 @@ encode command =
         MoveReviewToSomeday projectId desiredOutcome activeIds ->
             reviewCommand "move-review-to-someday" projectId desiredOutcome activeIds
 
-        SaveBrainstorm actionId ideas maybeOutcome ->
+        SaveBrainstorm actionId ideas maybeOutcome maybePurpose ->
             object "save-brainstorm"
                 ([ ( "actionId", Encode.string actionId ), ( "ideas", Encode.string ideas ) ]
                     ++ maybeStringField "desiredOutcome" maybeOutcome
+                    ++ maybeStringField "purpose" maybePurpose
                 )
+
+        SaveProjectBrainstorm plan ->
+            object "save-project-brainstorm"
+                [ ( "projectId", Encode.string plan.projectId )
+                , ( "purpose", Encode.string plan.purpose )
+                , ( "desiredOutcome", Encode.string plan.desiredOutcome )
+                , ( "ideas", Encode.string plan.ideas )
+                ]
 
         SaveStandaloneBrainstorm topic ideas ->
             object "save-standalone-brainstorm"

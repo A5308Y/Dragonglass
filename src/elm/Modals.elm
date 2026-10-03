@@ -244,7 +244,14 @@ buildForm snapshot images spec =
                     CaptureForm ""
 
                 "new-action" ->
-                    ActionForm NewAction (newActionFields snapshot (project "projectId"))
+                    -- A title can come prefilled, e.g. from a plan's idea on the Project page.
+                    ActionForm NewAction
+                        (let
+                            fields =
+                                newActionFields snapshot (project "projectId")
+                         in
+                         { fields | title = stringField "title" }
+                        )
 
                 "edit-action" ->
                     case Data.findAction (stringField "actionId") snapshot.actions of
@@ -282,9 +289,13 @@ buildForm snapshot images spec =
 
                 "new-project" ->
                     ProjectForm NewProject
-                        (newProjectFields snapshot
-                            (project "parentProjectId")
-                            (Decode.decodeValue (Decode.field "status" ProjectStatus.decoder) spec |> Result.withDefault ProjectStatus.Active)
+                        (let
+                            fields =
+                                newProjectFields snapshot
+                                    (project "parentProjectId")
+                                    (Decode.decodeValue (Decode.field "status" ProjectStatus.decoder) spec |> Result.withDefault ProjectStatus.Active)
+                         in
+                         { fields | title = stringField "title" }
                         )
 
                 "edit-project" ->

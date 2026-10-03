@@ -10,7 +10,8 @@ import Json.Encode as Encode
 
 type Command
     = LoadProjectDetail ProjectId
-    | SaveBrainstorm ActionId String (Maybe String)
+    | SaveBrainstorm ActionId String (Maybe String) (Maybe String)
+    | SaveProjectBrainstorm { projectId : String, purpose : String, desiredOutcome : String, ideas : String }
     | SaveStandaloneBrainstorm String String
     | ShuffleBrainstormWords
     | FocusBrainstormIdeas Int Int
@@ -37,8 +38,11 @@ encode command =
             LoadProjectDetail projectId ->
                 Base.LoadProjectDetail projectId
 
-            SaveBrainstorm actionId ideas outcome ->
-                Base.SaveBrainstorm actionId ideas outcome
+            SaveBrainstorm actionId ideas outcome purpose ->
+                Base.SaveBrainstorm actionId ideas outcome purpose
+
+            SaveProjectBrainstorm plan ->
+                Base.SaveProjectBrainstorm plan
 
             SaveStandaloneBrainstorm topic ideas ->
                 Base.SaveStandaloneBrainstorm topic ideas
