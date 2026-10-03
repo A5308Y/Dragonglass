@@ -3102,3 +3102,26 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-error-bar-icon { color: var(--text-error); font-weight: var(--font-semibold); }
 .dg-error-bar-text { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
 .dg-error-bar-actions { display: flex; gap: 6px; margin-left: auto; }
+
+/* The running Pomodoro's Support Material, one folded block per Project of the session's tree.
+   Opened, a block shows the same panels as the Project page's Support tab (`Gtd.Support`). */
+.dg-pomodoro-support { gap: 8px; }
+.dg-pomodoro-support-block {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-primary);
+}
+.dg-pomodoro-support-toggle {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  width: 100%;
+  height: auto;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: var(--font-ui-small);
+}
+.dg-pomodoro-support-toggle:hover { background: var(--background-modifier-hover) !important; }
+.dg-pomodoro-support-body { padding: 0 10px 10px; }
+.dg-pomodoro-support-body .dg-detail-section { margin-top: 12px; }

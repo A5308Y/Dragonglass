@@ -584,7 +584,7 @@ export interface ElmImportedRow {
   done: boolean;
 }
 
-type ElmNonMenuCommand =
+export type ElmNonMenuCommand =
   | { type: "create-action"; projectId?: string }
   | { type: "create-project"; parentProjectId?: string; status: Project["status"] }
   | { type: "set-project-selection"; projectId?: string }
@@ -760,6 +760,9 @@ export const SURFACE_COMMANDS = {
     "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro",
     "complete-pomodoro-action", "show-project", "start-checklist-pomodoro", "mark-checklist-item", "open-checklist-run",
     "set-pomodoro-sound", "open-link", "open-note-link",
+    // The session's Support Material, as on the Project page (`src/adapter/project-detail.ts`).
+    "open-file", "create-support-note", "create-support-folder", "read-support-note", "update-support-note",
+    "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link",
   ],
   checklists: [
     "start-checklist-run", "show-checklist-run", "mark-checklist-item", "finish-checklist-run", "discard-checklist-run",
@@ -1287,5 +1290,7 @@ export type ElmPomodoroEvent =
   | { type: "pomodoro"; pomodoro: ElmPomodoroDto }
   | { type: "select-project"; projectId: string }
   | { type: "select-checklist"; path: string }
+  /** The running session's Project tree's Support Material: the root and its Active sub-projects. */
+  | { type: "session-support"; projects: ElmProjectDetailDto[] }
   | ElmCommandResultEvent;
 export type ElmChecklistsEvent = { type: "checklists"; checklists: ElmChecklistsDto } | ElmCommandResultEvent;

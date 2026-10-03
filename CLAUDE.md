@@ -69,6 +69,12 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   session, the time-up notice and the status bar, so a session survives closing
   the view. `Pomodoro.elm` only renders and counts down from the times it is sent.
 - The log is `GTD/pomodoros.json` (setting `pomodoro.storePath`).
+- The running screen shows the session tree's Support Material (its Project and the Active
+  sub-projects below, as for its Actions), one folded block per Project. The panels are
+  `Gtd.Support`, shared with the Project page's Support tab, and the host side is
+  `src/adapter/project-detail.ts`, shared too: change both views there, not in one of them.
+  A file is listed under the Project whose support folder holds it most deeply
+  (`projectSupportFiles`), so a nested sub-project's folder isn't shown twice.
 - A time-tracking sync should: read finished sessions from the service's store,
   convert each with `toTimeEntry` (key = session id, stable across re-syncs),
   and record what it sent in `session.external[<integration>] = { id, syncedAt }`

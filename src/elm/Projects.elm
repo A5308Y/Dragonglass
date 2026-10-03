@@ -13,6 +13,7 @@ import Gtd.Links as Links
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ranking as Ranking
 import Gtd.Settings exposing (ProjectColumnsBy(..), ProjectSections(..))
+import Gtd.Support as Support
 import Gtd.Ui as Ui
 import Html exposing (Html, article, button, div, h2, h3, header, img, input, label, main_, node, option, p, section, select, small, span, strong, text, textarea)
 import Html.Attributes exposing (alt, attribute, checked, class, classList, disabled, draggable, placeholder, rows, selected, src, tabindex, title, type_, value)
@@ -46,44 +47,11 @@ type alias DiaryEntry =
     { timestamp : String, body : String }
 
 
-{-| What a support file is, and therefore how Project detail presents it.
--}
-type SupportKind
-    = SupportNote
-    | SupportImage
-    | SupportAttachment
-
-
-type alias SupportFile =
-    { path : String, label : String, kind : SupportKind, resourceUrl : String }
-
-
-type alias SupportFolder =
-    { path : String, label : String }
-
-
-{-| A vault file the Project links to without owning it. `path` is empty when the
-link no longer resolves to a file.
--}
-type alias LinkedFile =
-    { link : String, path : String, label : String }
-
-
-{-| A web link the Project refers to. `entry` is how it is written in the Project
-note, which identifies it for removal.
--}
-type alias ExternalLink =
-    { entry : String, url : String, title : String }
-
-
 type alias ProjectDetail =
     { projectId : ProjectId
     , desiredOutcome : String
     , diary : List DiaryEntry
-    , supportFiles : List SupportFile
-    , supportFolders : List SupportFolder
-    , linkedFiles : List LinkedFile
-    , externalLinks : List ExternalLink
+    , material : Support.Material
     }
 
 
@@ -146,14 +114,7 @@ type alias Model =
     , outcomeDraft : String
     , diaryDraft : String
     , showAllDiary : Bool
-    , linkUrl : String
-    , linkTitle : String
-    , supportNoteTitle : String
-    , supportFolderPath : String
-    , openSupport : Set String
-    , editingSupport : Maybe String
-    , supportBodies : Dict String String
-    , supportDraft : String
+    , support : Support.State
     , draggedProject : Maybe ProjectId
     , subprojectDropTarget : Maybe SubprojectDropTarget
     , agent : AgentState
@@ -242,19 +203,8 @@ type Msg
     | AgentAnswerChanged String String
     | SendAgentAnswer String String
     | ToggleAllDiary
-    | LinkUrlChanged String
-    | LinkTitleChanged String
-    | AddExternalLink
     | AddDiaryEntry
-    | SupportNoteTitleChanged String
-    | CreateSupportNote
-    | SupportFolderChanged String
-    | CreateSupportFolder
-    | ToggleSupport SupportFile
-    | BeginSupportEdit SupportFile
-    | SupportDraftChanged String
-    | CancelSupportEdit
-    | SaveSupportNote String
+    | SupportMsg Support.Msg
     | DragStarted ProjectId
     | DragOver
     | DragOverSubproject ProjectStatus (Maybe ProjectId)
@@ -323,14 +273,7 @@ init flags =
                     , outcomeDraft = ""
                     , diaryDraft = ""
                     , showAllDiary = False
-                    , linkUrl = ""
-                    , linkTitle = ""
-                    , supportNoteTitle = ""
-                    , supportFolderPath = ""
-                    , openSupport = Set.empty
-                    , editingSupport = Nothing
-                    , supportBodies = Dict.empty
-                    , supportDraft = ""
+                    , support = Support.init
                     , draggedProject = Nothing
                     , subprojectDropTarget = Nothing
                     , agent = emptyAgent
@@ -450,7 +393,7 @@ update msg model =
         BackToBoard ->
             send IgnoreReply
                 (Command.SetProjectSelection Nothing)
-                { model | selectedProjectId = Nothing, detail = Nothing, outcomeEditing = False, editingSupport = Nothing }
+                { model | selectedProjectId = Nothing, detail = Nothing, outcomeEditing = False, support = Support.init }
 
         ToggleCompleted ->
             ( { model | showCompleted = not model.showCompleted }, Cmd.none )
@@ -526,24 +469,6 @@ update msg model =
         ToggleAllDiary ->
             ( { model | showAllDiary = not model.showAllDiary }, Cmd.none )
 
-        LinkUrlChanged url ->
-            ( { model | linkUrl = url }, Cmd.none )
-
-        LinkTitleChanged title ->
-            ( { model | linkTitle = title }, Cmd.none )
-
-        AddExternalLink ->
-            if String.isEmpty (String.trim model.linkUrl) then
-                ( model, Cmd.none )
-
-            else
-                withSelected model
-                    (\projectId ->
-                        send IgnoreReply
-                            (Command.AddProjectLink projectId (String.trim model.linkUrl) (String.trim model.linkTitle))
-                            { model | linkUrl = "", linkTitle = "" }
-                    )
-
         AddDiaryEntry ->
             withSelected model
                 (\projectId ->
@@ -554,74 +479,20 @@ update msg model =
                         send AppendDiary (Command.AddDiaryEntry projectId (String.trim model.diaryDraft)) model
                 )
 
-        SupportNoteTitleChanged noteTitle ->
-            ( { model | supportNoteTitle = noteTitle }, Cmd.none )
-
-        CreateSupportNote ->
-            withSelected model
-                (\projectId ->
-                    if String.isEmpty (String.trim model.supportNoteTitle) then
-                        ( model, Cmd.none )
-
-                    else
-                        send OpenNewSupportNote (Command.CreateSupportNote projectId (String.trim model.supportNoteTitle)) model
-                )
-
-        SupportFolderChanged path ->
-            ( { model | supportFolderPath = path }, Cmd.none )
-
-        CreateSupportFolder ->
-            withSelected model
-                (\projectId ->
-                    if String.isEmpty (String.trim model.supportFolderPath) then
-                        ( model, Cmd.none )
-
-                    else
-                        send IgnoreReply
-                            (Command.CreateSupportFolder projectId (String.trim model.supportFolderPath))
-                            { model | supportFolderPath = "" }
-                )
-
-        ToggleSupport file ->
+        SupportMsg supportMsg ->
             let
-                nextOpen =
-                    toggleSet file.path model.openSupport
+                ( support, request ) =
+                    Support.update supportMsg model.support
 
                 next =
-                    { model | openSupport = nextOpen }
+                    { model | support = support }
             in
-            if Set.member file.path nextOpen && file.kind == SupportNote && not (Dict.member file.path model.supportBodies) then
-                readSupport file.path next
+            case request of
+                Just ask ->
+                    withSelected next (\projectId -> supportRequest projectId ask next)
 
-            else
-                ( next, Cmd.none )
-
-        BeginSupportEdit file ->
-            if Dict.member file.path model.supportBodies then
-                ( { model
-                    | openSupport = Set.insert file.path model.openSupport
-                    , editingSupport = Just file.path
-                    , supportDraft = Dict.get file.path model.supportBodies |> Maybe.withDefault ""
-                  }
-                , Cmd.none
-                )
-
-            else
-                readSupport file.path { model | openSupport = Set.insert file.path model.openSupport, editingSupport = Just file.path }
-
-        SupportDraftChanged body ->
-            ( { model | supportDraft = body }, Cmd.none )
-
-        CancelSupportEdit ->
-            ( { model | editingSupport = Nothing }, Cmd.none )
-
-        SaveSupportNote path ->
-            withSelected model
-                (\projectId ->
-                    send IgnoreReply
-                        (Command.UpdateSupportNote projectId path model.supportDraft)
-                        { model | supportBodies = Dict.insert path model.supportDraft model.supportBodies, editingSupport = Nothing }
-                )
+                Nothing ->
+                    ( next, Cmd.none )
 
         DragStarted projectId ->
             ( { model | draggedProject = Just projectId, subprojectDropTarget = Nothing }, Cmd.none )
@@ -841,11 +712,9 @@ selectProject projectId model =
                 , showSecondary = False
                 , detailTab = OverviewTab
                 , showAllDiary = False
-                , linkUrl = ""
-                , linkTitle = ""
                 , tagFilters = Set.empty
                 , outcomeEditing = False
-                , editingSupport = Nothing
+                , support = Support.init
             }
 
         ( afterSelection, selectionCmd ) =
@@ -857,9 +726,40 @@ selectProject projectId model =
     ( loaded, Cmd.batch [ selectionCmd, detailCmd ] )
 
 
-readSupport : String -> Model -> ( Model, Cmd Msg )
-readSupport path model =
-    withSelected model (\projectId -> send (ReadSupport path) (Command.ReadSupportNote projectId path) model)
+{-| What the Support tab asks of the host, for the Project shown.
+-}
+supportRequest : ProjectId -> Support.Request -> Model -> ( Model, Cmd Msg )
+supportRequest projectId request model =
+    case request of
+        Support.OpenFile path ->
+            send IgnoreReply (Command.OpenFile path) model
+
+        Support.OpenUrl url ->
+            send IgnoreReply (Command.OpenLink url) model
+
+        Support.ReadNote path ->
+            send (ReadSupport path) (Command.ReadSupportNote projectId path) model
+
+        Support.SaveNote path body ->
+            send IgnoreReply (Command.UpdateSupportNote projectId path body) model
+
+        Support.CreateNoteNamed title ->
+            send OpenNewSupportNote (Command.CreateSupportNote projectId title) model
+
+        Support.CreateFolderAt path ->
+            send IgnoreReply (Command.CreateSupportFolder projectId path) model
+
+        Support.LinkFile ->
+            send IgnoreReply (Command.LinkProjectFile projectId) model
+
+        Support.UnlinkFile link ->
+            send IgnoreReply (Command.UnlinkProjectFile projectId link) model
+
+        Support.AddLinkTo url title ->
+            send IgnoreReply (Command.AddProjectLink projectId url title) model
+
+        Support.RemoveLink entry ->
+            send IgnoreReply (Command.RemoveProjectLink projectId entry) model
 
 
 send : Pending -> Command -> Model -> ( Model, Cmd Msg )
@@ -988,17 +888,7 @@ finish pending resultValue model =
         ReadSupport path ->
             case Decode.decodeValue Decode.string resultValue of
                 Ok body ->
-                    ( { model
-                        | supportBodies = Dict.insert path body model.supportBodies
-                        , supportDraft =
-                            if model.editingSupport == Just path then
-                                body
-
-                            else
-                                model.supportDraft
-                      }
-                    , Cmd.none
-                    )
+                    ( { model | support = Support.gotNoteBody path body model.support }, Cmd.none )
 
                 Err _ ->
                     ( model, Cmd.none )
@@ -1022,16 +912,11 @@ finish pending resultValue model =
         OpenNewSupportNote ->
             case Decode.decodeValue Decode.string resultValue of
                 Ok path ->
-                    withSelected model
-                        (\projectId ->
-                            send (ReadSupport path)
-                                (Command.ReadSupportNote projectId path)
-                                { model
-                                    | supportNoteTitle = ""
-                                    , openSupport = Set.insert path model.openSupport
-                                    , editingSupport = Just path
-                                }
-                        )
+                    let
+                        ( support, request ) =
+                            Support.noteCreated path model.support
+                    in
+                    withSelected { model | support = support } (\projectId -> supportRequest projectId request { model | support = support })
 
                 Err _ ->
                     ( model, Cmd.none )
@@ -1621,11 +1506,14 @@ viewDetail model project =
                     ]
 
                 SupportTab ->
-                    [ viewDiary model
-                    , viewSupport model project
-                    , viewLinkedFiles model project
-                    , viewExternalLinks model project
-                    ]
+                    viewDiary model
+                        :: (case model.detail of
+                                Just detail ->
+                                    List.map (Html.map SupportMsg) (Support.view project.supportPath detail.material model.support)
+
+                                Nothing ->
+                                    []
+                           )
             )
         ]
 
@@ -1890,10 +1778,7 @@ viewDetailTabs model project openActions =
         supportCount =
             Maybe.map
                 (\detail ->
-                    List.length detail.diary
-                        + List.length detail.supportFiles
-                        + List.length detail.linkedFiles
-                        + List.length detail.externalLinks
+                    List.length detail.diary + Support.count detail.material
                 )
                 model.detail
 
@@ -2365,269 +2250,6 @@ diaryPreview =
     5
 
 
-viewSupport : Model -> Project -> Html Msg
-viewSupport model project =
-    let
-        files =
-            Maybe.map .supportFiles model.detail |> Maybe.withDefault []
-
-        folders =
-            Maybe.map .supportFolders model.detail |> Maybe.withDefault []
-
-        readable =
-            List.filter (\file -> file.kind /= SupportAttachment) files
-
-        attachments =
-            List.filter (\file -> file.kind == SupportAttachment) files
-    in
-    section [ class "dg-detail-section dg-support-panel" ]
-        [ div [ class "dg-detail-section-heading" ]
-            [ div []
-                [ h3 [ class "dg-detail-eyebrow" ] [ text "Support folder" ]
-                , Ui.maybeView project.supportPath (\path -> div [ class "dg-support-path" ] [ text path ])
-                ]
-            , span [ class "dg-detail-count" ]
-                [ text (String.fromInt (List.length files) ++ " files · " ++ String.fromInt (List.length folders) ++ " folders") ]
-            ]
-        , div [ class "dg-support-create" ]
-            [ div [ class "dg-support-note-create" ]
-                [ input [ value model.supportNoteTitle, placeholder "Note title…", onInput SupportNoteTitleChanged ] []
-                , button [ class "mod-cta", disabled (String.isEmpty (String.trim model.supportNoteTitle)), onClick CreateSupportNote ] [ text "Create note" ]
-                ]
-            , div [ class "dg-support-folder-create" ]
-                [ input [ value model.supportFolderPath, placeholder "Folder name or path…", onInput SupportFolderChanged ] []
-                , button [ disabled (String.isEmpty (String.trim model.supportFolderPath)), onClick CreateSupportFolder ] [ text "Create folder" ]
-                ]
-            ]
-        , if List.isEmpty folders then
-            text ""
-
-          else
-            div [ class "dg-support-folders" ]
-                [ span [] [ text "Folders" ]
-                , div [] (List.map (\folder -> span [] [ text ("📁 " ++ folder.label) ]) folders)
-                ]
-        , div [ class "dg-support-notes" ] (List.map (viewSupportFile model) readable)
-        , if List.isEmpty attachments then
-            text ""
-
-          else
-            div [ class "dg-support-attachments" ]
-                [ span [] [ text "Other files" ]
-                , div []
-                    (List.map
-                        (\file -> button [ class "dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile file.path)) ] [ text file.label ])
-                        attachments
-                    )
-                ]
-        , if List.isEmpty files && List.isEmpty folders then
-            span [ class "dg-support-empty" ] [ text "No support material yet." ]
-
-          else
-            text ""
-        ]
-
-
-{-| Files elsewhere in the vault that the Project refers to. They are only linked,
-so deleting the Project leaves them where they are.
--}
-viewLinkedFiles : Model -> Project -> Html Msg
-viewLinkedFiles model project =
-    let
-        linked =
-            Maybe.map .linkedFiles model.detail |> Maybe.withDefault []
-    in
-    section [ class "dg-detail-section dg-linked-files-panel" ]
-        [ div [ class "dg-detail-section-heading" ]
-            [ h3 [ class "dg-detail-eyebrow" ] [ text "Linked files" ]
-            , div [ class "dg-detail-section-actions" ]
-                [ span [ class "dg-detail-count" ] [ text (String.fromInt (List.length linked)) ]
-                , button [ onClick (Send IgnoreReply (Command.LinkProjectFile project.id)) ] [ text "Link file…" ]
-                ]
-            ]
-        , if List.isEmpty linked then
-            span [ class "dg-support-empty" ] [ text "No linked files. Linked files stay where they are, even if this Project is deleted." ]
-
-          else
-            div [ class "dg-linked-files" ]
-                (List.map
-                    (\file ->
-                        div [ class "dg-linked-file" ]
-                            [ if String.isEmpty file.path then
-                                span [ class "dg-missing" ] [ text ("⚠ Missing: " ++ file.label) ]
-
-                              else
-                                button [ class "dg-linked-file-open dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile file.path)) ]
-                                    [ span [ class "dg-link-icon", attribute "aria-hidden" "true" ] [ text "📄" ]
-                                    , span [ class "dg-linked-file-label" ] [ text file.label ]
-                                    ]
-                            , button
-                                [ class "dg-linked-file-unlink dg-flat-button"
-                                , onClick (Send IgnoreReply (Command.UnlinkProjectFile project.id file.link))
-                                ]
-                                (Ui.iconLabel "Unlink" ("Unlink " ++ file.label))
-                            ]
-                    )
-                    linked
-                )
-        ]
-
-
-{-| Web pages the Project refers to. Only http and https links are kept.
--}
-viewExternalLinks : Model -> Project -> Html Msg
-viewExternalLinks model project =
-    let
-        links =
-            Maybe.map .externalLinks model.detail |> Maybe.withDefault []
-    in
-    section [ class "dg-detail-section dg-external-links-panel" ]
-        [ div [ class "dg-detail-section-heading" ]
-            [ h3 [ class "dg-detail-eyebrow" ] [ text "External links" ]
-            , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length links)) ]
-            ]
-        , div [ class "dg-external-link-add" ]
-            [ Ui.labelled "Web address"
-                (input
-                    [ type_ "url"
-                    , value model.linkUrl
-                    , placeholder "https://…"
-                    , onInput LinkUrlChanged
-                    , Ui.onEnter { enter = AddExternalLink, ignore = NoOp }
-                    ]
-                    []
-                )
-            , Ui.labelled "Link title"
-                (input
-                    [ value model.linkTitle
-                    , placeholder "Title (optional)"
-                    , onInput LinkTitleChanged
-                    , Ui.onEnter { enter = AddExternalLink, ignore = NoOp }
-                    ]
-                    []
-                )
-            , button [ disabled (String.isEmpty (String.trim model.linkUrl)), onClick AddExternalLink ] [ text "Add link" ]
-            ]
-        , if List.isEmpty links then
-            span [ class "dg-support-empty" ] [ text "No external links." ]
-
-          else
-            div [ class "dg-linked-files" ]
-                (List.map
-                    (\link ->
-                        div [ class "dg-linked-file" ]
-                            [ button [ class "dg-linked-file-open dg-flat-button", onClick (Send IgnoreReply (Command.OpenLink link.url)) ]
-                                [ span [ class "dg-link-icon", attribute "aria-hidden" "true" ] [ text "🌐" ]
-                                , span [ class "dg-linked-file-label" ] [ text link.title ]
-                                , span [ class "dg-link-icon", attribute "aria-hidden" "true" ] [ text "↗" ]
-                                , if link.title /= link.url then
-                                    span [ class "dg-external-link-host" ] [ text (host link.url) ]
-
-                                  else
-                                    text ""
-                                ]
-                            , button
-                                [ class "dg-linked-file-unlink dg-flat-button"
-                                , onClick (Send IgnoreReply (Command.RemoveProjectLink project.id link.entry))
-                                ]
-                                (Ui.iconLabel "Remove" ("Remove link " ++ link.title))
-                            ]
-                    )
-                    links
-                )
-        ]
-
-
-{-| The host part of a web address, shown next to a titled link.
--}
-host : String -> String
-host url =
-    url
-        |> String.split "://"
-        |> List.drop 1
-        |> List.head
-        |> Maybe.withDefault url
-        |> String.split "/"
-        |> List.head
-        |> Maybe.withDefault url
-
-
-viewSupportFile : Model -> SupportFile -> Html Msg
-viewSupportFile model file =
-    let
-        open =
-            Set.member file.path model.openSupport
-
-        editing =
-            model.editingSupport == Just file.path
-    in
-    article [ classList [ ( "dg-support-note", True ), ( "dg-support-image", file.kind == SupportImage ), ( "is-open", open ) ] ]
-        [ header []
-            [ button
-                [ class "dg-support-note-toggle dg-flat-button"
-                , onClick (ToggleSupport file)
-                , attribute "aria-expanded" (Ui.boolAttribute open)
-                ]
-                [ span [] [ text (disclosure open) ], span [] [ text file.label ] ]
-            , div []
-                (button [ class "dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile file.path)) ] [ text "Open" ]
-                    :: (if file.kind == SupportNote then
-                            [ button [ class "dg-flat-button", onClick (BeginSupportEdit file) ] [ text "Edit" ] ]
-
-                        else
-                            []
-                       )
-                )
-            ]
-        , if not open then
-            text ""
-
-          else
-            div
-                [ class
-                    (if file.kind == SupportImage then
-                        "dg-support-note-body dg-support-image-body"
-
-                     else
-                        "dg-support-note-body"
-                    )
-                ]
-                [ viewSupportBody model file editing ]
-        ]
-
-
-viewSupportBody : Model -> SupportFile -> Bool -> Html Msg
-viewSupportBody model file editing =
-    if file.kind == SupportImage then
-        img [ src file.resourceUrl, alt file.label ] []
-
-    else if editing then
-        div []
-            [ textarea
-                [ value model.supportDraft
-                , onInput SupportDraftChanged
-                , Ui.onModEnter (SaveSupportNote file.path)
-                ]
-                []
-            , div [ class "dg-support-note-edit-actions" ]
-                [ button [ onClick CancelSupportEdit ] [ text "Cancel" ]
-                , button [ class "mod-cta", onClick (SaveSupportNote file.path) ] [ text "Save note" ]
-                ]
-            ]
-
-    else
-        case Dict.get file.path model.supportBodies of
-            Just content ->
-                if String.isEmpty content then
-                    span [ class "dg-muted" ] [ text "This note is empty." ]
-
-                else
-                    markdownView content file.path
-
-            Nothing ->
-                span [ class "dg-muted" ] [ text "Loading…" ]
-
-
 markdownView : String -> String -> Html Msg
 markdownView markdown sourcePath =
     node "dg-markdown"
@@ -3005,66 +2627,13 @@ diaryDecoder =
         (Decode.field "text" Decode.string)
 
 
-supportKindDecoder : Decoder SupportKind
-supportKindDecoder =
-    Decode.string
-        |> Decode.andThen
-            (\raw ->
-                case raw of
-                    "note" ->
-                        Decode.succeed SupportNote
-
-                    "image" ->
-                        Decode.succeed SupportImage
-
-                    "attachment" ->
-                        Decode.succeed SupportAttachment
-
-                    _ ->
-                        Decode.fail ("Unknown support file kind: " ++ raw)
-            )
-
-
-supportFileDecoder : Decoder SupportFile
-supportFileDecoder =
-    Decode.map4 SupportFile
-        (Decode.field "path" Decode.string)
-        (Decode.field "label" Decode.string)
-        (Decode.field "kind" supportKindDecoder)
-        (Decode.field "resourceUrl" Decode.string)
-
-
-supportFolderDecoder : Decoder SupportFolder
-supportFolderDecoder =
-    Decode.map2 SupportFolder (Decode.field "path" Decode.string) (Decode.field "label" Decode.string)
-
-
 projectDetailDecoder : Decoder ProjectDetail
 projectDetailDecoder =
-    Decode.map7 ProjectDetail
+    Decode.map4 ProjectDetail
         (Decode.field "projectId" Decode.string)
         (Decode.field "desiredOutcome" Decode.string)
         (Decode.field "diary" (Decode.list diaryDecoder))
-        (Decode.field "supportFiles" (Decode.list supportFileDecoder))
-        (Decode.field "supportFolders" (Decode.list supportFolderDecoder))
-        (Decode.field "linkedFiles"
-            (Decode.list
-                (Decode.map3 LinkedFile
-                    (Decode.field "link" Decode.string)
-                    (Decode.field "path" Decode.string)
-                    (Decode.field "label" Decode.string)
-                )
-            )
-        )
-        (Decode.field "externalLinks"
-            (Decode.list
-                (Decode.map3 ExternalLink
-                    (Decode.field "entry" Decode.string)
-                    (Decode.field "url" Decode.string)
-                    (Decode.field "title" Decode.string)
-                )
-            )
-        )
+        Support.materialDecoder
 
 
 hostEventDecoder : Decoder HostEvent
@@ -3126,14 +2695,7 @@ emptyModel message =
     , outcomeDraft = ""
     , diaryDraft = ""
     , showAllDiary = False
-    , linkUrl = ""
-    , linkTitle = ""
-    , supportNoteTitle = ""
-    , supportFolderPath = ""
-    , openSupport = Set.empty
-    , editingSupport = Nothing
-    , supportBodies = Dict.empty
-    , supportDraft = ""
+    , support = Support.init
     , draggedProject = Nothing
     , subprojectDropTarget = Nothing
     , agent = emptyAgent

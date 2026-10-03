@@ -240,21 +240,50 @@ export function projectSupportFileCounts(
   filePaths: Iterable<string>,
 ): Map<string, number> {
   const counts = new Map(folders.map((folder) => [folder.id, 0]));
+  forEachSupportOwner(folders, filePaths, (ids) => {
+    for (const id of ids) counts.set(id, counts.get(id)! + 1);
+  });
+  return counts;
+}
+
+/**
+ * The support files of several Projects, each file under the Project whose folder holds it
+ * most deeply, as the counts credit them. A view showing a Project tree lists a sub-project's
+ * nested folder once, under the sub-project, rather than again under every Project above it.
+ */
+export function projectSupportFiles(
+  folders: readonly ProjectSupportFolder[],
+  filePaths: Iterable<string>,
+): Map<string, string[]> {
+  const files = new Map<string, string[]>(folders.map((folder) => [folder.id, []]));
+  forEachSupportOwner(folders, filePaths, (ids, path) => {
+    for (const id of ids) files.get(id)!.push(path);
+  });
+  return files;
+}
+
+/** Calls `found` with the Projects owning each file most deeply, for the files some Project owns. */
+function forEachSupportOwner(
+  folders: readonly ProjectSupportFolder[],
+  filePaths: Iterable<string>,
+  found: (ids: readonly string[], filePath: string) => void,
+): void {
   // Folder → the Projects that own it. Each file then climbs its own folders to the first
   // one owned, so the cost follows the vault's depth rather than its Projects: this runs
   // on every change to the vault.
   const owners = new Map<string, string[]>();
   for (const folder of folders) {
-    if (folder.path) owners.set(folder.path, [...(owners.get(folder.path) ?? []), folder.id]);
+    const path = normalizeVaultPath(folder.path);
+    if (path) owners.set(path, [...(owners.get(path) ?? []), folder.id]);
   }
-  if (!owners.size) return counts;
+  if (!owners.size) return;
 
   for (const filePath of filePaths) {
     let path = filePath;
     for (;;) {
       const ids = owners.get(path);
       if (ids) {
-        for (const id of ids) counts.set(id, counts.get(id)! + 1);
+        found(ids, filePath);
         break;
       }
       const slash = path.lastIndexOf("/");
@@ -262,5 +291,4 @@ export function projectSupportFileCounts(
       path = path.slice(0, slash);
     }
   }
-  return counts;
 }

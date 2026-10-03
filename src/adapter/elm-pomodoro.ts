@@ -10,6 +10,8 @@ import { localDate } from "../utils/date";
 import { openWebLink } from "../ui/open-link";
 import { createUlid } from "../utils/ulid";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
+import { executeSupportCommand, projectDetail } from "./project-detail";
+import type { Project } from "../domain/types";
 import {
   elmChecklistRun,
   elmPomodoro,
@@ -40,6 +42,9 @@ export class ElmPomodoroHost {
   /** Checklists as last read; the notes are read asynchronously, so the first state has none. */
   private checklistState: ElmPomodoroChecklists = { choices: [], run: null };
   private version = 0;
+  private supportVersion = 0;
+  /** The Project the support material was last sent for, so a session that stays put isn't re-sent needlessly. */
+  private supportProjectId: string | null = null;
   private closed = false;
 
   constructor(
@@ -69,19 +74,26 @@ export class ElmPomodoroHost {
       surface: "Pomodoro",
       failureMessage: "The Pomodoro operation failed.",
     });
-    this.unsubscribeIndex = services.repository.index.subscribe(() => this.send({ type: "snapshot", snapshot: this.snapshot() }), "Pomodoro");
+    this.unsubscribeIndex = services.repository.index.subscribe(() => {
+      this.send({ type: "snapshot", snapshot: this.snapshot() });
+      // Any vault change may be a support file added, edited or removed.
+      void this.sendSessionSupport(true);
+    }, "Pomodoro");
     this.unsubscribePomodoro = pomodoro.subscribe(() => {
       // The clock updates at once; the checklist run follows once its note is read.
       this.send({ type: "pomodoro", pomodoro: this.state() });
       void this.readChecklists();
+      void this.sendSessionSupport(false);
     });
     this.unsubscribeChecklists = checklists.subscribe(() => void this.readChecklists());
     void this.readChecklists();
+    void this.sendSessionSupport(true);
   }
 
   refresh(): void {
     this.send({ type: "snapshot", snapshot: this.snapshot() });
     void this.readChecklists();
+    void this.sendSessionSupport(true);
   }
 
   select(subject: PomodoroSubject): void {
@@ -114,6 +126,25 @@ export class ElmPomodoroHost {
     if (version !== this.version) return;
     this.checklistState = state;
     this.send({ type: "pomodoro", pomodoro: this.state() });
+  }
+
+  /**
+   * Sends the running session's Support Material: its Project and the Active sub-projects below,
+   * the tree whose Actions the session shows, with each file under the Project that owns it most
+   * deeply. Nothing for a checklist session or between sessions. `changed` is false when only the
+   * session's clock moved, which leaves the material as it was sent.
+   */
+  private async sendSessionSupport(changed: boolean): Promise<void> {
+    const projectId = this.pomodoro.getStore().active?.projectId || null;
+    if (!changed && projectId === this.supportProjectId) return;
+    this.supportProjectId = projectId;
+    const version = ++this.supportVersion;
+    const snapshot = this.services.repository.index.getSnapshot();
+    const root = projectId ? snapshot.projectsById.get(projectId) : undefined;
+    const tree = root ? sessionTree(root, snapshot.projects) : [];
+    const files = this.services.repository.supportFilesByProject(tree);
+    const projects = await Promise.all(tree.map((project) => projectDetail(this.services, project, files.get(project.id) ?? [])));
+    if (version === this.supportVersion) this.send({ type: "session-support", projects });
   }
 
   private snapshot() {
@@ -192,7 +223,33 @@ export class ElmPomodoroHost {
         return;
       case "open-note-link":
         return this.services.app.workspace.openLinkText(command.link, command.sourcePath, false);
+      case "open-file":
+      case "create-support-note":
+      case "create-support-folder":
+      case "read-support-note":
+      case "update-support-note":
+      case "link-project-file":
+      case "unlink-project-file":
+      case "add-project-link":
+      case "remove-project-link":
+        return executeSupportCommand(this.services, command);
     }
     return assertNever(command);
   }
+}
+
+/** A session's Project and the Active sub-projects below it, reached through Active Projects only, as the view lists them. */
+function sessionTree(root: Project, projects: readonly Project[]): Project[] {
+  const tree: Project[] = [];
+  const seen = new Set<string>();
+  const visit = (project: Project) => {
+    if (seen.has(project.id)) return;
+    seen.add(project.id);
+    tree.push(project);
+    for (const child of projects) {
+      if (child.parentProjectId === project.id && child.status === "active") visit(child);
+    }
+  };
+  visit(root);
+  return tree;
 }

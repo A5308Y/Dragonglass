@@ -11,6 +11,7 @@ import {
   projectPlacementsAfterMove,
   projectActionIssue,
   projectSupportFileCounts,
+  projectSupportFiles,
   projectTagAdditions,
   wouldCreateProjectDependencyCycle,
 } from "../src/domain/project-board";
@@ -239,6 +240,20 @@ describe("Project support material counts", () => {
     ]);
 
     expect([...counts]).toEqual([["A", 1], ["B", 2], ["C", 1]]);
+  });
+
+  it("lists each file under the Project that owns it most deeply", () => {
+    const files = projectSupportFiles(folders, [
+      "Support/Alpha/Brief.md",
+      "Support/Alpha/Beta/Notes.md",
+      "Support/Alpha/Beta/Deeper/Scan.pdf",
+      "Elsewhere/Unrelated.md",
+      "Support/Alphabet/Decoy.md",
+    ]);
+
+    expect(files.get("A")).toEqual(["Support/Alpha/Brief.md"]);
+    expect(files.get("B")).toEqual(["Support/Alpha/Beta/Notes.md", "Support/Alpha/Beta/Deeper/Scan.pdf"]);
+    expect(files.get("C")).toEqual([]);
   });
 
   it("counts a file for every Project sharing the same support folder", () => {

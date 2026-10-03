@@ -24,6 +24,7 @@ import Gtd.Id exposing (ActionId, ProjectId)
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.PomodoroOutcome as Outcome exposing (PomodoroOutcome)
 import Gtd.ProjectStatus as ProjectStatus
+import Gtd.Support as Support
 import Gtd.Ui as Ui
 import Html exposing (Html, article, button, div, h2, h3, header, input, label, li, p, section, span, strong, text, textarea, ul)
 import Html.Attributes exposing (attribute, checked, class, classList, disabled, for, id, placeholder, rows, style, title, type_, value)
@@ -144,7 +145,12 @@ type alias Model =
     , reflection : String
     , scope : Scope
     , historyLimit : Int
-    , requests : Requests ()
+
+    -- The running session's Support Material, per Project of its tree, and what is unfolded.
+    , sessionSupport : List Support.Material
+    , support : Dict.Dict ProjectId Support.State
+    , supportOpen : Set ProjectId
+    , requests : Requests Pending
     , error : Maybe String
 
     -- The tab was closed: timers off (see `Host.isClosing`).
@@ -172,8 +178,18 @@ type Msg
     | CompleteAction ActionId
     | SetScope Scope
     | ShowMore
+    | ToggleSupportBlock ProjectId
+    | SupportMsg ProjectId Support.Msg
     | Send Command
     | NoOp
+
+
+{-| What a host reply should finish.
+-}
+type Pending
+    = IgnoreReply
+    | ReadSupport ProjectId String
+    | OpenNewSupportNote ProjectId
 
 
 main : Program Decode.Value Model Msg
@@ -224,6 +240,9 @@ initialModel snapshot state nowMs =
     , reflection = ""
     , scope = AllSessions
     , historyLimit = 20
+    , sessionSupport = []
+    , support = Dict.empty
+    , supportOpen = Set.empty
     , requests = Host.noRequests
     , error = Nothing
     , closed = False
@@ -432,6 +451,33 @@ update msg model =
         ShowMore ->
             ( { model | historyLimit = model.historyLimit + 20 }, Cmd.none )
 
+        ToggleSupportBlock projectId ->
+            ( { model
+                | supportOpen =
+                    if Set.member projectId model.supportOpen then
+                        Set.remove projectId model.supportOpen
+
+                    else
+                        Set.insert projectId model.supportOpen
+              }
+            , Cmd.none
+            )
+
+        SupportMsg projectId supportMsg ->
+            let
+                ( state, request ) =
+                    Support.update supportMsg (supportState projectId model)
+
+                next =
+                    { model | support = Dict.insert projectId state model.support }
+            in
+            case request of
+                Just ask ->
+                    supportRequest projectId ask next
+
+                Nothing ->
+                    ( next, Cmd.none )
+
         Send command ->
             send command model
 
@@ -441,9 +487,14 @@ update msg model =
 
 send : Command -> Model -> ( Model, Cmd Msg )
 send command model =
+    sendFor IgnoreReply command model
+
+
+sendFor : Pending -> Command -> Model -> ( Model, Cmd Msg )
+sendFor pending command model =
     let
         ( requestId, requests ) =
-            Host.issue () model.requests
+            Host.issue pending model.requests
     in
     ( { model | requests = requests, error = Nothing }, pomodoroToHost (Host.envelope requestId (Command.encode command)) )
 
@@ -470,7 +521,78 @@ type HostEvent
     | StateEvent PomodoroState
     | SelectProjectEvent ProjectId
     | SelectChecklistEvent String
+    | SessionSupportEvent (List Support.Material)
     | Replied Host.Outcome
+
+
+supportState : ProjectId -> Model -> Support.State
+supportState projectId model =
+    Dict.get projectId model.support |> Maybe.withDefault Support.init
+
+
+{-| What a Project's Support Material asks of the host, as on the Project page.
+-}
+supportRequest : ProjectId -> Support.Request -> Model -> ( Model, Cmd Msg )
+supportRequest projectId request model =
+    case request of
+        Support.OpenFile path ->
+            send (Command.OpenFile path) model
+
+        Support.OpenUrl url ->
+            send (Command.OpenLink url) model
+
+        Support.ReadNote path ->
+            sendFor (ReadSupport projectId path) (Command.ReadSupportNote projectId path) model
+
+        Support.SaveNote path body ->
+            send (Command.UpdateSupportNote projectId path body) model
+
+        Support.CreateNoteNamed title ->
+            sendFor (OpenNewSupportNote projectId) (Command.CreateSupportNote projectId title) model
+
+        Support.CreateFolderAt path ->
+            send (Command.CreateSupportFolder projectId path) model
+
+        Support.LinkFile ->
+            send (Command.LinkProjectFile projectId) model
+
+        Support.UnlinkFile link ->
+            send (Command.UnlinkProjectFile projectId link) model
+
+        Support.AddLinkTo url title ->
+            send (Command.AddProjectLink projectId url title) model
+
+        Support.RemoveLink entry ->
+            send (Command.RemoveProjectLink projectId entry) model
+
+
+finish : Pending -> Decode.Value -> Model -> ( Model, Cmd Msg )
+finish pending resultValue model =
+    case pending of
+        IgnoreReply ->
+            ( model, Cmd.none )
+
+        ReadSupport projectId path ->
+            case Decode.decodeValue Decode.string resultValue of
+                Ok body ->
+                    ( { model | support = Dict.insert projectId (Support.gotNoteBody path body (supportState projectId model)) model.support }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        OpenNewSupportNote projectId ->
+            case Decode.decodeValue Decode.string resultValue of
+                Ok path ->
+                    let
+                        ( state, request ) =
+                            Support.noteCreated path (supportState projectId model)
+                    in
+                    supportRequest projectId request { model | support = Dict.insert projectId state model.support }
+
+                Err _ ->
+                    ( model, Cmd.none )
 
 
 receiveHost : Decode.Value -> Model -> ( Model, Cmd Msg )
@@ -493,17 +615,20 @@ receiveHost value model =
         Ok (SelectChecklistEvent path) ->
             ( selectChecklist (Just path) model, Cmd.none )
 
+        Ok (SessionSupportEvent materials) ->
+            ( { model | sessionSupport = materials }, Cmd.none )
+
         Ok (Replied outcome) ->
             let
-                ( _, requests ) =
+                ( pending, requests ) =
                     Host.resolve outcome.requestId model.requests
             in
             case outcome.result of
                 Err message ->
                     ( { model | requests = requests, error = Just message }, Cmd.none )
 
-                Ok _ ->
-                    ( { model | requests = requests }, Cmd.none )
+                Ok resultValue ->
+                    finish (Maybe.withDefault IgnoreReply pending) resultValue { model | requests = requests }
 
         Err error ->
             ( { model | error = Just (Decode.errorToString error) }, Cmd.none )
@@ -640,7 +765,7 @@ treeActionsView levels row =
                     []
 
                 else
-                    [ ul [ class "dg-pomodoro-actions" ] (List.map row level.actions) ]
+                    [ div [ class "dg-pomodoro-cards" ] (List.map row level.actions) ]
 
             else
                 [ div [ class "dg-pomodoro-subproject", style "--dg-depth" (String.fromInt (level.depth - 1)) ]
@@ -649,7 +774,7 @@ treeActionsView levels row =
                         span [ class "dg-pomodoro-hint" ] [ text "No Next Actions" ]
 
                       else
-                        ul [ class "dg-pomodoro-actions" ] (List.map row level.actions)
+                        div [ class "dg-pomodoro-cards" ] (List.map row level.actions)
                     ]
                 ]
         )
@@ -820,6 +945,7 @@ focusPicker model project =
             ActionCard.view
                 { today = model.snapshot.today
                 , selected = Set.member action.id model.focusIds
+                , done = False
                 , select = ToggleFocus action.id
                 , selectLabel = "Focus on"
                 , project = Nothing
@@ -916,6 +1042,7 @@ runningView model active =
         , div [ class "dg-progress-track" ] [ span [ style "width" (String.fromFloat progress ++ "%") ] [] ]
         , blockquote active.intention
         , sessionActions model active
+        , sessionSupportView model active
         , div [ class "dg-pomodoro-controls" ]
             [ if paused then
                 button [ class "mod-cta", onClick Resume ] [ text "Resume" ]
@@ -1014,23 +1141,19 @@ projectActions model active =
         others =
             List.concatMap .actions levels
 
+        -- Cards as on the start screen, with energy, context and dates; ticking one completes the Action.
         row action =
-            let
-                done =
-                    action.status == ActionStatus.Done
-            in
-            li [ classList [ ( "is-done", done ) ] ]
-                [ label []
-                    [ input
-                        [ type_ "checkbox"
-                        , checked done
-                        , disabled done
-                        , onCheck (\_ -> CompleteAction action.id)
-                        ]
-                        []
-                    , span [] [ text action.title ]
-                    ]
-                ]
+            ActionCard.view
+                { today = model.snapshot.today
+                , selected = False
+                , done = action.status == ActionStatus.Done
+                , select = \_ -> CompleteAction action.id
+                , selectLabel = "Done"
+                , project = Nothing
+                , openUrl = \url -> Send (Command.OpenLink url)
+                , openNote = \link -> Send (Command.OpenNoteLink link action.file.path)
+                }
+                action
     in
     div [ class "dg-pomodoro-field" ]
         (if List.isEmpty picked && List.isEmpty others then
@@ -1046,7 +1169,7 @@ projectActions model active =
                         "Focus"
                     )
                 ]
-            , ul [ class "dg-pomodoro-actions" ] (List.map row picked)
+            , div [ class "dg-pomodoro-cards" ] (List.map row picked)
             , if List.isEmpty picked || List.isEmpty others then
                 text ""
 
@@ -1056,6 +1179,100 @@ projectActions model active =
                 -- While the timer runs, only sub-projects with something left to tick.
                 ++ treeActionsView (List.filter (\level -> not (List.isEmpty level.actions)) levels) row
         )
+
+
+{-| The Support Material of the session's Project and its Active sub-projects, each folded
+to one line until it is opened, so the clock and the Actions stay in view. The session's
+own Project is always listed, so material can be added to it; a sub-project only when it
+has some.
+-}
+sessionSupportView : Model -> Active -> Html Msg
+sessionSupportView model active =
+    let
+        materials =
+            Dict.fromList (List.map (\material -> ( material.projectId, material )) model.sessionSupport)
+
+        blocks =
+            Data.findProject active.projectId model.snapshot.projects
+                |> Maybe.map (projectTree model)
+                |> Maybe.withDefault []
+                |> List.filterMap
+                    (\level ->
+                        Dict.get level.project.id materials
+                            |> Maybe.andThen
+                                (\material ->
+                                    if level.depth == 0 || not (Support.isEmpty material) then
+                                        Just (supportBlock model level.project material)
+
+                                    else
+                                        Nothing
+                                )
+                    )
+    in
+    if active.checklist /= Nothing || List.isEmpty blocks then
+        text ""
+
+    else
+        div [ class "dg-pomodoro-field dg-pomodoro-support" ]
+            (span [ class "dg-pomodoro-label" ] [ text "Support material" ] :: blocks)
+
+
+supportBlock : Model -> Project -> Support.Material -> Html Msg
+supportBlock model project material =
+    let
+        open =
+            Set.member project.id model.supportOpen
+    in
+    article [ classList [ ( "dg-pomodoro-support-block", True ), ( "is-open", open ) ] ]
+        [ button
+            [ class "dg-pomodoro-support-toggle dg-flat-button"
+            , onClick (ToggleSupportBlock project.id)
+            , attribute "aria-expanded" (Ui.boolAttribute open)
+            ]
+            [ span [ attribute "aria-hidden" "true" ]
+                [ text
+                    (if open then
+                        "▾"
+
+                     else
+                        "▸"
+                    )
+                ]
+            , strong [] [ text project.title ]
+            , span [ class "dg-pomodoro-hint" ] [ text (supportSummary material) ]
+            ]
+        , if open then
+            div [ class "dg-pomodoro-support-body" ]
+                (List.map (Html.map (SupportMsg project.id)) (Support.view project.supportPath material (supportState project.id model)))
+
+          else
+            text ""
+        ]
+
+
+supportSummary : Support.Material -> String
+supportSummary material =
+    let
+        part n singular pluralWord =
+            if n == 0 then
+                []
+
+            else if n == 1 then
+                [ "1 " ++ singular ]
+
+            else
+                [ String.fromInt n ++ " " ++ pluralWord ]
+
+        parts =
+            part (List.length material.files) "file" "files"
+                ++ part (List.length material.linkedFiles) "linked file" "linked files"
+                ++ part (List.length material.externalLinks) "web link" "web links"
+    in
+    if List.isEmpty parts then
+        "Nothing yet"
+
+    else
+        String.join " · " parts
 
 
 wrapUpView : Model -> Active -> Html Msg
@@ -1106,6 +1323,7 @@ wrapUpView model active =
                 []
             ]
         , sessionActions model active
+        , sessionSupportView model active
         , div [ class "dg-pomodoro-controls" ]
             [ button [ class "mod-cta", onClick Finish ] [ text "Save session" ]
             , if timeUp then
@@ -1410,6 +1628,9 @@ hostEventDecoder =
 
                     "select-checklist" ->
                         Decode.map SelectChecklistEvent (Decode.field "path" Decode.string)
+
+                    "session-support" ->
+                        Decode.map SessionSupportEvent (Decode.field "projects" (Decode.list Support.materialDecoder))
 
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder

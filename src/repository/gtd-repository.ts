@@ -18,7 +18,7 @@ import type {
   ProjectWriteOptions,
   ProjectInput,
 } from "../domain/types";
-import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, wouldCreateProjectDependencyCycle } from "../domain/project-board";
+import { isProjectSupportMaterialPath, normalizeProjectTags, projectSupportFileCounts, projectSupportFiles, wouldCreateProjectDependencyCycle } from "../domain/project-board";
 import { ranksForOrder } from "../domain/ranking";
 import { externalLinksInNote, formatExternalLink, parseExternalLink } from "../domain/external-links";
 import { mailProcessingBody } from "../domain/mail-note";
@@ -827,6 +827,19 @@ export class GtdRepository {
    * Counts support material for every Project in one vault pass, keyed by Project ID.
    * Board cards need all of these at once, and {@link supportFiles} rescans the vault per Project.
    */
+  /**
+   * The support files of a set of Projects, each file under the Project that owns it most
+   * deeply: a sub-project's nested folder is listed under it, not again under its ancestors.
+   */
+  supportFilesByProject(projects: readonly Project[]): Map<string, TFile[]> {
+    const folders = projects
+      .filter((project) => project.supportPath)
+      .map((project) => ({ id: project.id, path: normalizeVaultPath(project.supportPath!) }));
+    const byPath = new Map(this.app.vault.getFiles().map((file) => [file.path, file]));
+    const owned = projectSupportFiles(folders, byPath.keys());
+    return new Map(projects.map((project) => [project.id, (owned.get(project.id) ?? []).map((path) => byPath.get(path)!)]));
+  }
+
   supportFileCounts(): Map<string, number> {
     const folders = this.index.getSnapshot().projects
       .filter((project) => project.supportPath)

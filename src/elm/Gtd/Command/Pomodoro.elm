@@ -25,6 +25,16 @@ type Command
     | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
     | MarkChecklistItem { runId : String, key : String, state : MarkState }
     | OpenChecklistRun String
+      -- The session's Support Material, as on the Project page.
+    | OpenFile String
+    | CreateSupportNote ProjectId String
+    | CreateSupportFolder ProjectId String
+    | ReadSupportNote ProjectId String
+    | UpdateSupportNote ProjectId String String
+    | LinkProjectFile ProjectId
+    | UnlinkProjectFile ProjectId String
+    | AddProjectLink ProjectId String String
+    | RemoveProjectLink ProjectId String
 
 
 encode : Command -> Encode.Value
@@ -69,4 +79,31 @@ encode command =
 
             OpenChecklistRun runId ->
                 Base.OpenChecklistRun runId
+
+            OpenFile path ->
+                Base.OpenFile path
+
+            CreateSupportNote projectId title ->
+                Base.CreateSupportNote projectId title
+
+            CreateSupportFolder projectId path ->
+                Base.CreateSupportFolder projectId path
+
+            ReadSupportNote projectId path ->
+                Base.ReadSupportNote projectId path
+
+            UpdateSupportNote projectId path body ->
+                Base.UpdateSupportNote projectId path body
+
+            LinkProjectFile projectId ->
+                Base.LinkProjectFile projectId
+
+            UnlinkProjectFile projectId link ->
+                Base.UnlinkProjectFile projectId link
+
+            AddProjectLink projectId url title ->
+                Base.AddProjectLink projectId url title
+
+            RemoveProjectLink projectId entry ->
+                Base.RemoveProjectLink projectId entry
         )
