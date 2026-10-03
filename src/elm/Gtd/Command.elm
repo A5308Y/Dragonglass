@@ -122,7 +122,6 @@ type Command
     | CompleteProjectReview ProjectId String (List ProjectId)
     | MoveReviewToSomeday ProjectId String (List ProjectId)
       -- Brainstorm
-    | LoadBrainstormOutcome ProjectId
     | SaveBrainstorm ActionId String (Maybe String)
     | SaveStandaloneBrainstorm String String
     | ShuffleBrainstormWords
@@ -617,9 +616,6 @@ encode command =
 
         MoveReviewToSomeday projectId desiredOutcome activeIds ->
             reviewCommand "move-review-to-someday" projectId desiredOutcome activeIds
-
-        LoadBrainstormOutcome projectId ->
-            object "load-brainstorm-outcome" [ ( "projectId", Encode.string projectId ) ]
 
         SaveBrainstorm actionId ideas maybeOutcome ->
             object "save-brainstorm"

@@ -1980,6 +1980,10 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-brainstorm-task h3 { margin-top: 3px; }
 .dg-brainstorm-task button,
 .dg-word-bank button { min-height: 30px; }
+.dg-brainstorm-context > .dg-section-heading { justify-content: space-between; padding: 0 2px; }
+.dg-brainstorm-context > .dg-section-heading h3 { margin: 0; font-size: var(--font-ui-medium); }
+.dg-brainstorm-context-body { margin-top: 8px; }
+.dg-brainstorm-context-body > .dg-detail-section + .dg-detail-section { margin-top: 12px; }
 .dg-word-bank > div:last-child { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .dg-word-bank > div:last-child button {
   border-radius: 999px;

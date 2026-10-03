@@ -5,7 +5,8 @@ import Gtd.ActionStatus as ActionStatus
 import Gtd.Command.Brainstorm as Command exposing (Command)
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Host as Host exposing (RequestId, Requests)
-import Gtd.Id exposing (ActionId)
+import Gtd.Id exposing (ActionId, ProjectId)
+import Gtd.Support as Support
 import Gtd.Ui as Ui
 import Html exposing (Html, button, div, h2, h3, h4, header, img, input, label, li, p, section, small, span, text, textarea, ul)
 import Html.Attributes exposing (alt, attribute, autofocus, class, classList, disabled, for, id, placeholder, src, title, value)
@@ -37,12 +38,26 @@ type Session
     | TopicSession { topic : String, resume : Maybe ActionId }
 
 
+type alias DiaryEntry =
+    { timestamp : String, body : String }
+
+
+type alias ProjectDetail =
+    { projectId : ProjectId
+    , desiredOutcome : String
+    , diary : List DiaryEntry
+    , material : Support.Material
+    }
+
+
 {-| What a host reply should finish.
 -}
 type Pending
     = IgnoreReply
     | ApplyWords
     | FinishSave
+    | ReadSupport ProjectId String
+    | OpenNewSupportNote ProjectId
       -- The partner's answer, for the partner generation that asked.
     | PartnerReply Int
 
@@ -124,6 +139,9 @@ type alias Model =
     , topicDraft : String
     , desiredOutcome : String
     , ideas : String
+    , projectDetail : Maybe ProjectDetail
+    , support : Support.State
+    , showAllDiary : Bool
     , words : List String
     , seconds : Int
     , selectionStart : Int
@@ -164,6 +182,8 @@ type Msg
     | AskPartner
     | AddSuggestion String
     | DismissSuggestion String
+    | ToggleAllDiary
+    | SupportMsg Support.Msg
     | NextInspiration
     | Send Pending Command
     | NoOp
@@ -205,7 +225,7 @@ init flags =
                         itemAt (modBy (List.length available) decoded.randomIndex) available
                             |> Maybe.map (.id >> TaskSession)
             in
-            loadOutcome
+            loadProjectDetail
                 (emptyModel decoded.snapshot decoded.words session
                     |> (\model ->
                             { model
@@ -230,6 +250,9 @@ emptyModel snapshot words session =
     , topicDraft = ""
     , desiredOutcome = ""
     , ideas = ""
+    , projectDetail = Nothing
+    , support = Support.init
+    , showAllDiary = False
     , words = words
     , seconds = sessionSeconds
     , selectionStart = 0
@@ -299,17 +322,19 @@ update msg model =
                         _ ->
                             Nothing
             in
-            ( { model
-                | session = Maybe.map TaskSession resumed
-                , partner = idlePartner (model.partner.generation + 1)
-                , setAside = setAside model
-                , topicDraft = ""
-                , ideas = ""
-                , desiredOutcome = ""
-                , seconds = sessionSeconds
-              }
-            , Cmd.none
-            )
+            loadProjectDetail
+                { model
+                    | session = Maybe.map TaskSession resumed
+                    , partner = idlePartner (model.partner.generation + 1)
+                    , setAside = setAside model
+                    , topicDraft = ""
+                    , ideas = ""
+                    , desiredOutcome = ""
+                    , projectDetail = Nothing
+                    , support = Support.init
+                    , showAllDiary = False
+                    , seconds = sessionSeconds
+                }
 
         ShuffleTask ->
             let
@@ -329,18 +354,20 @@ update msg model =
         RestoreSetAside ->
             case model.setAside of
                 Just saved ->
-                    ( { model
-                        | session = saved.session
-                        , topicDraft = saved.topicDraft
-                        , desiredOutcome = saved.desiredOutcome
-                        , ideas = saved.ideas
-                        , seconds = saved.seconds
-                        , selectionStart = String.length saved.ideas
-                        , selectionEnd = String.length saved.ideas
-                        , setAside = Nothing
-                      }
-                    , Cmd.none
-                    )
+                    loadProjectDetail
+                        { model
+                            | session = saved.session
+                            , topicDraft = saved.topicDraft
+                            , desiredOutcome = saved.desiredOutcome
+                            , ideas = saved.ideas
+                            , projectDetail = Nothing
+                            , support = Support.init
+                            , showAllDiary = False
+                            , seconds = saved.seconds
+                            , selectionStart = String.length saved.ideas
+                            , selectionEnd = String.length saved.ideas
+                            , setAside = Nothing
+                        }
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -421,6 +448,24 @@ update msg model =
 
         DismissSuggestion suggestion ->
             ( { model | partner = withoutSuggestion suggestion model.partner }, Cmd.none )
+
+        ToggleAllDiary ->
+            ( { model | showAllDiary = not model.showAllDiary }, Cmd.none )
+
+        SupportMsg supportMsg ->
+            let
+                ( support, request ) =
+                    Support.update supportMsg model.support
+
+                next =
+                    { model | support = support }
+            in
+            case ( currentProject next, request ) of
+                ( Just project, Just ask ) ->
+                    supportRequest project.id ask next
+
+                _ ->
+                    ( next, Cmd.none )
 
         NextInspiration ->
             ( { model | inspiration = model.inspiration + 1, inspirationShown = 0 }, Cmd.none )
@@ -624,25 +669,62 @@ newSession model =
                 , selectionEnd = 0
                 , error = Nothing
                 , partner = idlePartner (model.partner.generation + 1)
+                , projectDetail = Nothing
+                , support = Support.init
+                , showAllDiary = False
             }
 
         ( shuffled, shuffleCmd ) =
             send ApplyWords Command.ShuffleBrainstormWords reset
 
-        ( loaded, outcomeCmd ) =
-            loadOutcome shuffled
+        ( loaded, detailCmd ) =
+            loadProjectDetail shuffled
     in
-    ( loaded, Cmd.batch [ shuffleCmd, outcomeCmd ] )
+    ( loaded, Cmd.batch [ shuffleCmd, detailCmd ] )
 
 
-loadOutcome : Model -> ( Model, Cmd Msg )
-loadOutcome model =
+loadProjectDetail : Model -> ( Model, Cmd Msg )
+loadProjectDetail model =
     case currentProject model of
         Just project ->
-            send IgnoreReply (Command.LoadBrainstormOutcome project.id) model
+            send IgnoreReply (Command.LoadProjectDetail project.id) model
 
         Nothing ->
             ( model, Cmd.none )
+
+
+supportRequest : ProjectId -> Support.Request -> Model -> ( Model, Cmd Msg )
+supportRequest projectId request model =
+    case request of
+        Support.OpenFile path ->
+            send IgnoreReply (Command.OpenFile path) model
+
+        Support.OpenUrl url ->
+            send IgnoreReply (Command.OpenLink url) model
+
+        Support.ReadNote path ->
+            send (ReadSupport projectId path) (Command.ReadSupportNote projectId path) model
+
+        Support.SaveNote path body ->
+            send IgnoreReply (Command.UpdateSupportNote projectId path body) model
+
+        Support.CreateNoteNamed title ->
+            send (OpenNewSupportNote projectId) (Command.CreateSupportNote projectId title) model
+
+        Support.CreateFolderAt path ->
+            send IgnoreReply (Command.CreateSupportFolder projectId path) model
+
+        Support.LinkFile ->
+            send IgnoreReply (Command.LinkProjectFile projectId) model
+
+        Support.UnlinkFile link ->
+            send IgnoreReply (Command.UnlinkProjectFile projectId link) model
+
+        Support.AddLinkTo url title ->
+            send IgnoreReply (Command.AddProjectLink projectId url title) model
+
+        Support.RemoveLink entry ->
+            send IgnoreReply (Command.RemoveProjectLink projectId entry) model
 
 
 send : Pending -> Command -> Model -> ( Model, Cmd Msg )
@@ -671,6 +753,12 @@ hasSavingRequest requests =
                     IgnoreReply ->
                         False
 
+                    ReadSupport _ _ ->
+                        False
+
+                    OpenNewSupportNote _ ->
+                        False
+
                     PartnerReply _ ->
                         False
             )
@@ -682,7 +770,7 @@ hasSavingRequest requests =
 
 type HostEvent
     = SnapshotEvent Snapshot
-    | OutcomeEvent String String
+    | ProjectDetailEvent ProjectDetail
     | InspirationsEvent (List String)
     | Replied Host.Outcome
 
@@ -704,12 +792,22 @@ receiveHost value model =
             else
                 ( { model | inspirations = images }, Cmd.none )
 
-        Ok (OutcomeEvent projectId outcome) ->
+        Ok (ProjectDetailEvent detail) ->
             case currentProject model of
                 Just project ->
-                    -- Only fill an empty field, so a late reply never overwrites restored or typed text.
-                    if project.id == projectId && String.isEmpty model.desiredOutcome then
-                        ( { model | desiredOutcome = outcome }, Cmd.none )
+                    if project.id == detail.projectId then
+                        -- Only fill an empty field, so a refresh never overwrites restored or typed text.
+                        ( { model
+                            | projectDetail = Just detail
+                            , desiredOutcome =
+                                if String.isEmpty model.desiredOutcome then
+                                    detail.desiredOutcome
+
+                                else
+                                    model.desiredOutcome
+                          }
+                        , Cmd.none
+                        )
 
                     else
                         ( model, Cmd.none )
@@ -765,7 +863,7 @@ applySnapshot snapshot model =
             in
             case stillThere of
                 Just action ->
-                    ( { next | session = Just (TaskSession action.id) }, Cmd.none )
+                    loadProjectDetail { next | session = Just (TaskSession action.id) }
 
                 Nothing ->
                     case List.head (candidates snapshot) of
@@ -773,7 +871,17 @@ applySnapshot snapshot model =
                             newSession { next | session = Just (TaskSession action.id) }
 
                         Nothing ->
-                            ( { next | session = Nothing, ideas = "", desiredOutcome = "", seconds = sessionSeconds }, Cmd.none )
+                            ( { next
+                                | session = Nothing
+                                , ideas = ""
+                                , desiredOutcome = ""
+                                , projectDetail = Nothing
+                                , support = Support.init
+                                , showAllDiary = False
+                                , seconds = sessionSeconds
+                              }
+                            , Cmd.none
+                            )
 
 
 finish : Pending -> Decode.Value -> Model -> ( Model, Cmd Msg )
@@ -798,6 +906,34 @@ finish pending resultValue model =
 
                 _ ->
                     ( { closed | ideas = "" }, Cmd.none )
+
+        ReadSupport projectId path ->
+            case ( currentProject model, Decode.decodeValue Decode.string resultValue ) of
+                ( Just project, Ok body ) ->
+                    if project.id == projectId then
+                        ( { model | support = Support.gotNoteBody path body model.support }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        OpenNewSupportNote projectId ->
+            case ( currentProject model, Decode.decodeValue Decode.string resultValue ) of
+                ( Just project, Ok path ) ->
+                    if project.id == projectId then
+                        let
+                            ( support, request ) =
+                                Support.noteCreated path model.support
+                        in
+                        supportRequest projectId request { model | support = support }
+
+                    else
+                        ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         PartnerReply generation ->
             if generation /= model.partner.generation then
@@ -992,6 +1128,7 @@ viewSession model session =
                     , textarea [ id "dg-brainstorm-outcome", value model.desiredOutcome, placeholder "What future state are you working toward?", onInput OutcomeChanged ] []
                     ]
             )
+        , Ui.maybeView project (projectContextView model)
         , section [ class "dg-brainstorm-field dg-ideas-field" ]
             [ label [ for "dg-brainstorm-ideas" ] [ text "Your ideas" ]
             , textarea
@@ -1034,6 +1171,75 @@ viewSession model session =
                     )
                 ]
             ]
+        ]
+
+
+diaryPreview : Int
+diaryPreview =
+    3
+
+
+projectContextView : Model -> Project -> Html Msg
+projectContextView model project =
+    section [ class "dg-brainstorm-context" ]
+        [ div [ class "dg-section-heading" ]
+            [ h3 [] [ text "Project material and diary" ]
+            , span [ class "dg-count" ] [ text project.title ]
+            ]
+        , case model.projectDetail of
+            Just detail ->
+                if detail.projectId == project.id then
+                    div [ class "dg-brainstorm-context-body" ]
+                        (diaryView model detail.diary
+                            :: List.map (Html.map SupportMsg) (Support.view project.supportPath detail.material model.support)
+                        )
+
+                else
+                    contextLoading
+
+            Nothing ->
+                contextLoading
+        ]
+
+
+contextLoading : Html Msg
+contextLoading =
+    section [ class "dg-detail-section" ] [ span [ class "dg-muted" ] [ text "Loading Project material…" ] ]
+
+
+diaryView : Model -> List DiaryEntry -> Html Msg
+diaryView model entries =
+    section [ class "dg-detail-section dg-project-diary-panel" ]
+        [ div [ class "dg-detail-section-heading" ]
+            [ h3 [ class "dg-detail-eyebrow" ] [ text "Diary" ]
+            , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length entries)) ]
+            ]
+        , div [ class "dg-diary-list" ]
+            (if List.isEmpty entries then
+                [ span [ class "dg-muted" ] [ text "No entries yet." ] ]
+
+             else
+                List.map (\entry -> div [] [ span [] [ text entry.timestamp ], p [] [ text entry.body ] ])
+                    (if model.showAllDiary then
+                        entries
+
+                     else
+                        List.take diaryPreview entries
+                    )
+            )
+        , if List.length entries > diaryPreview then
+            button [ class "dg-disclosure dg-diary-more dg-flat-button", onClick ToggleAllDiary ]
+                [ text
+                    (if model.showAllDiary then
+                        "Show latest " ++ String.fromInt diaryPreview
+
+                     else
+                        "Show all " ++ String.fromInt (List.length entries)
+                    )
+                ]
+
+          else
+            text ""
         ]
 
 
@@ -1185,6 +1391,22 @@ flagsDecoder =
         (Decode.oneOf [ Decode.field "inspirations" (Decode.list Decode.string), Decode.succeed [] ])
 
 
+diaryDecoder : Decoder DiaryEntry
+diaryDecoder =
+    Decode.map2 DiaryEntry
+        (Decode.oneOf [ Decode.field "timestamp" Decode.string, Decode.succeed "" ])
+        (Decode.field "text" Decode.string)
+
+
+projectDetailDecoder : Decoder ProjectDetail
+projectDetailDecoder =
+    Decode.map4 ProjectDetail
+        (Decode.field "projectId" Decode.string)
+        (Decode.field "desiredOutcome" Decode.string)
+        (Decode.field "diary" (Decode.list diaryDecoder))
+        Support.materialDecoder
+
+
 hostEventDecoder : Decoder HostEvent
 hostEventDecoder =
     Decode.field "type" Decode.string
@@ -1197,10 +1419,8 @@ hostEventDecoder =
                     "inspirations" ->
                         Decode.map InspirationsEvent (Decode.field "urls" (Decode.list Decode.string))
 
-                    "brainstorm-outcome" ->
-                        Decode.map2 OutcomeEvent
-                            (Decode.field "projectId" Decode.string)
-                            (Decode.field "desiredOutcome" Decode.string)
+                    "brainstorm-project-detail" ->
+                        Decode.map ProjectDetailEvent (Decode.field "detail" projectDetailDecoder)
 
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder
