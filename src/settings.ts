@@ -1,6 +1,7 @@
 import { App, Notice, PluginSettingTab, SecretComponent, Setting } from "obsidian";
 import { confirmDialog } from "./ui/confirm";
 import { miteAccount } from "./domain/mite";
+import { codeRepositoryLabel, type CodeRepository } from "./domain/delegation";
 import { projectBreadcrumbs } from "./domain/project-hierarchy";
 import type { MiteChoice } from "./pomodoro/mite-sync";
 import { localDate, localDateTime } from "./utils/date";
@@ -21,8 +22,8 @@ export class GtdSettingTab extends PluginSettingTab {
   private pomodoroExpanded = false;
   /** mite's projects and services, loaded on request while the settings are open. */
   private miteChoices: { projects: MiteChoice[]; services: MiteChoice[] } | null = null;
-  /** The coding agent's repository names, loaded on request while the settings are open. */
-  private codeRepositoryNames: string[] | null = null;
+  /** The coding agent's repositories, loaded on request while the settings are open. */
+  private codeRepositoryList: CodeRepository[] | null = null;
   private agentExpanded = false;
   private mailExpanded = false;
   private calendarExpanded = false;
@@ -873,17 +874,18 @@ export class GtdSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Code runs: which of the Lamdera coding agent's repositories each Project's runs work on.
+   * Code runs: which of the coding agent's repositories each Project's runs work on.
    * The repositories themselves, and every sign-in, are the coding agent's; see its README.
    */
   private displayCodeRuns(sectionEl: HTMLElement): void {
     const lamdera = this.plugin.settings.agent.lamdera;
     const save = async () => this.plugin.saveSettings(false);
-    sectionEl.createEl("h4", { text: "Lamdera apps" });
+    sectionEl.createEl("h4", { text: "Code repositories" });
     sectionEl.createEl("p", {
-      text: "Code runs hand a Project's idea to the Lamdera coding agent (lamdera_linear_agent_ruby), which implements it in "
-        + "one of your Lamdera apps, runs lamdera check --force before every push, and opens a pull request. Set that agent up "
-        + "first, as its README describes; Dragonglass starts its “task” service and reads the result back.",
+      text: "Code runs hand a Project's idea to the coding agent (lamdera_linear_agent_ruby), which implements it in one of "
+        + "your repositories and opens a pull request. Before every push it runs the repository's checks: lamdera check --force "
+        + "for a Lamdera app, the commands listed in its repositories file for any other. Set that agent up first, as its "
+        + "README describes; Dragonglass starts its “task” service and reads the result back.",
     });
 
     new Setting(sectionEl)
@@ -891,7 +893,7 @@ export class GtdSettingTab extends PluginSettingTab {
       .setDesc("Its checkout, holding compose.yml. Empty turns code runs off.")
       .addText((text) => text.setPlaceholder("~/Repositories/lamdera_linear_agent_ruby").setValue(lamdera.kitDirectory).onChange(async (value) => {
         lamdera.kitDirectory = value.trim();
-        this.codeRepositoryNames = null;
+        this.codeRepositoryList = null;
         await save();
       }));
     new Setting(sectionEl)
@@ -906,7 +908,7 @@ export class GtdSettingTab extends PluginSettingTab {
       .setDesc("Relative to that folder. Repositories with a “name” there can be chosen below.")
       .addText((text) => text.setValue(lamdera.repositoriesFile).onChange(async (value) => {
         lamdera.repositoriesFile = value.trim() || "docker/repositories.yml";
-        this.codeRepositoryNames = null;
+        this.codeRepositoryList = null;
         await save();
       }));
     new Setting(sectionEl)
@@ -934,16 +936,17 @@ export class GtdSettingTab extends PluginSettingTab {
         }));
     }
 
-    const names = this.codeRepositoryNames;
-    if (!names) {
+    const available = this.codeRepositoryList;
+    if (!available) {
       new Setting(sectionEl)
         .setName("Repositories")
         .setDesc("Read the coding agent's repositories file to choose a repository for a Project.")
         .addButton((button) => button.setButtonText("Load repositories").onClick(async () => {
           button.setDisabled(true).setButtonText("Loading…");
           try {
-            this.codeRepositoryNames = await this.plugin.agent.codeRepositoryNames();
-            if (!this.codeRepositoryNames.length) new Notice("The repositories file has no repository with a “name” yet.");
+            const loaded = await this.plugin.agent.codeRepositories();
+            this.codeRepositoryList = loaded;
+            if (!loaded.length) new Notice("The repositories file has no repository with a “name” yet.");
             this.display();
           } catch (error) {
             new Notice(error instanceof Error ? error.message : String(error));
@@ -968,7 +971,7 @@ export class GtdSettingTab extends PluginSettingTab {
       })
       .addDropdown((dropdown) => {
         dropdown.addOption("", "Repository…");
-        for (const name of names) dropdown.addOption(name, name);
+        for (const entry of available) dropdown.addOption(entry.name, codeRepositoryLabel(entry));
         dropdown.onChange((value) => {
           repository = value;
         });

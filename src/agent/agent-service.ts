@@ -34,7 +34,8 @@ import {
   codeTaskIdentifier,
   delegationBrief,
   delegationScope,
-  repositoryNames,
+  codeRepositories,
+  type CodeRepository,
   resultsFolderName,
   reviewActionTitle,
   runFolderName,
@@ -291,8 +292,8 @@ export class AgentService {
     return this.runs.some((run) => run.runtime === "lamdera" && run.projectId === projectId);
   }
 
-  /** The repository names the coding agent's repositories file offers. */
-  async codeRepositoryNames(): Promise<string[]> {
+  /** The repositories the coding agent's repositories file offers, with their kind. */
+  async codeRepositories(): Promise<CodeRepository[]> {
     const node = requireNode();
     const { kit } = await this.lamderaKit();
     const file = this.getSettings().lamdera.repositoriesFile;
@@ -303,13 +304,13 @@ export class AgentService {
     } catch {
       throw new Error(`The coding agent's repositories file was not found at ${path}.`);
     }
-    return repositoryNames(parseYaml(text));
+    return codeRepositories(parseYaml(text));
   }
 
   /**
-   * Starts a code run: the Lamdera coding agent implements the instructions in the Project's
-   * repository, checks it with `lamdera check --force` before every push, and opens or updates a
-   * pull request. It gets the Project's own words in its brief and no other vault files.
+   * Starts a code run: the coding agent implements the instructions in the Project's repository,
+   * runs the repository's checks before every push (`lamdera check --force` for a Lamdera app, the
+   * commands in its config otherwise), and opens or updates a pull request. It gets the Project's own words in its brief and no other vault files.
    */
   async delegateCode(projectId: string, instructions: string, options: CodeDelegationOptions): Promise<string> {
     const node = requireNode();
@@ -319,7 +320,7 @@ export class AgentService {
     const project = snapshot.projectsById.get(projectId);
     if (!project) throw new Error("This Project no longer exists.");
     const repository = this.codeRepository(projectId);
-    if (!repository) throw new Error("Choose a repository for this Project first: Settings → Agent delegation → Lamdera apps.");
+    if (!repository) throw new Error("Choose a repository for this Project first: Settings → Agent delegation → Code repositories.");
     await this.lamderaKit();
     await this.dockerPath();
     const queue = this.laneBusy("lamdera");
@@ -387,7 +388,7 @@ export class AgentService {
     const node = requireNode();
     const settings = this.getSettings().lamdera;
     const configured = settings.kitDirectory.trim();
-    if (!configured) throw new Error("Set the coding agent's folder in Dragonglass's settings: Agent delegation → Lamdera apps.");
+    if (!configured) throw new Error("Set the coding agent's folder in Dragonglass's settings: Agent delegation → Code repositories.");
     const kit = configured.startsWith("~/") ? node.path.join(node.os.homedir(), configured.slice(2)) : configured;
     const composeFile = node.path.join(kit, "compose.yml");
     const envFile = node.path.isAbsolute(settings.envFile) ? settings.envFile : node.path.join(kit, settings.envFile);
@@ -1229,6 +1230,8 @@ function codeRunFields(meta: Record<string, unknown>, result: Record<string, unk
     pullRequestUrl: link(result?.pullRequestUrl),
     previewUrl: link(result?.previewUrl),
     retryAt: text(result?.retryAt),
+    stack: text(result?.stack),
+    checks: text(result?.checks),
   };
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)) as Partial<AgentRunRecord>;
 }
@@ -1236,7 +1239,8 @@ function codeRunFields(meta: Record<string, unknown>, result: Record<string, unk
 /** The Inbox report's line on what a code run did, with its links. */
 function codeRunSummary(run: AgentRunRecord): string {
   return [
-    `Code: ${run.repository ?? "a Lamdera app"}${run.branch ? `, branch \`${run.branch}\`` : ""}`,
+    `Code: ${run.repository ?? "a repository"}${run.branch ? `, branch \`${run.branch}\`` : ""}`,
+    ...(run.checks && run.resultSubtype === "success" ? [`checked with ${run.checks}`] : []),
     ...(run.pullRequestUrl ? [`[Pull request](${run.pullRequestUrl})`] : []),
     ...(run.previewUrl ? [`[Preview](${run.previewUrl})`] : []),
   ].join(" · ");

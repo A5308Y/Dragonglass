@@ -213,7 +213,7 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   material) is imported without it (`withoutEntityFrontmatter`), or it would clash with
   the original's id.
 
-## Code runs (Lamdera)
+## Code runs
 
 - The `lamdera` runtime hands a Project's idea to the Lamdera coding agent, a separate repository
   (`lamdera_linear_agent_ruby`). Dragonglass only writes the run folder and starts that agent's `task`
@@ -227,8 +227,12 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   (`nearestMapped`); the agent resolves it from its config, never from task text.
 - `codeTaskIdentifier` is stable per Project, so every run on it shares the branch and PR; "Follow up…"
   continues with the earlier runs as the conversation. A successful run leaves a "Review PR" Next Action.
-- An Obsidian/Elm plugin agent should be the same runner with a per-repository stack (formatter,
-  validation gate, preview), not a second agent.
+- Repositories have a stack in the agent's `repositories.yml`: `lamdera` (`lamdera check --force`,
+  Evergreen, preview) or `commands` (its `checks` argument lists, optional `format`, no preview; e.g.
+  Obsidian plugins). The checks live in that file, not in the repository or the brief, so the agent
+  can't weaken its own gate. A new kind of repository is a new stack there (`Stacks` in the Ruby
+  agent), not a second agent. The runtime id stays `lamdera` and the settings key `agent.lamdera`,
+  so stored runs and settings keep working; user-facing text says "code"/"Code repositories".
 
 ## Ranking cards
 

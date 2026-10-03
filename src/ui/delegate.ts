@@ -10,8 +10,8 @@ import type { AgentSettings } from "../domain/types";
  *
  * Claude reads the Project's tree. A local model may read the tree with internet
  * access, or the whole vault without any: the more it sees, the less it can reach.
- * A code run is offered where the Project, or one above it, has a Lamdera app's
- * repository: it gets only the Project's own words, and changes that app's code.
+ * A code run is offered where the Project, or one above it, has a code repository:
+ * it gets only the Project's own words, and changes that repository's code.
  */
 export async function delegateProject(
   app: App,
@@ -77,7 +77,7 @@ class DelegateModal extends Modal {
         .addOption("local-qwen", `Local model, Qwen-Agent (${localModel})`)
         .addOption("codex", `ChatGPT, with Codex and your plan (${this.settings.codexModel || "Codex's default model"})`)
         .then((dropdown) => {
-          if (this.codeRepository) dropdown.addOption("lamdera", `Code: the Lamdera app “${this.codeRepository.name}”, with the coding agent`);
+          if (this.codeRepository) dropdown.addOption("lamdera", `Code: “${this.codeRepository.name}”, with the coding agent`);
         })
         .setValue(this.runtime !== "local" ? this.runtime : this.harness === "smolagents" ? "local-smol" : this.harness === "qwen-agent" ? "local-qwen" : "local")
         .onChange((value) => {
@@ -275,9 +275,10 @@ class DelegateModal extends Modal {
         + "and open Actions, and your instructions; no other vault files.",
     });
     summary.createEl("p", {
-      text: "Codex only edits files. The coding agent formats them, commits, runs lamdera check --force before every push "
-        + "(with one repair attempt; its migrations are committed too), merges the base branch, pushes without force, opens or "
-        + "updates the pull request and deploys a preview. When the pull request is ready, a “Review PR” Next Action appears here.",
+      text: "Codex only edits files. The coding agent formats them, commits, runs the repository's checks before every push "
+        + "(lamdera check --force for a Lamdera app, whose migrations are committed too, or the commands in its config; with "
+        + "one repair attempt), merges the base branch, pushes without force and opens or updates the pull request. A Lamdera "
+        + "app also gets a preview. When the pull request is ready, a “Review PR” Next Action appears here.",
     });
     summary.createEl("p", {
       cls: "dg-delegate-warning",

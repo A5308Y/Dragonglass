@@ -303,11 +303,15 @@ export interface AgentRunRecord {
   previewUrl?: string;
   /** When a code run stopped at Codex's usage limit: when it can be started again. */
   retryAt?: string;
+  /** A code run's repository kind (`lamdera` or `commands`) and the checks it must pass before a push. */
+  stack?: string;
+  checks?: string;
 }
 
 /**
  * Claude through the API, a model on this Mac, OpenAI's Codex on a ChatGPT plan, or the
- * Lamdera coding agent, which changes code in one of the Lamdera apps and opens a pull request.
+ * coding agent (`lamdera_linear_agent_ruby`), which changes code in one of your repositories, a
+ * Lamdera app or another kind, and opens a pull request. The id stays `lamdera`, which it was first.
  */
 export type AgentRuntime = "claude" | "local" | "codex" | "lamdera";
 
@@ -380,7 +384,9 @@ export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus):
       if (run.resultSubtype === "error_max_time") return "Stopped at its time limit";
       if (run.resultSubtype === "error_no_tool_calls") return "Stopped: the model kept answering without using its tools";
       if (run.resultSubtype === "error_repeating") return "Stopped: it kept repeating the same step";
-      if (run.resultSubtype === "error_validation") return "Failed: `lamdera check --force` still fails after one repair, so nothing was pushed";
+      if (run.resultSubtype === "error_validation") {
+        return `Failed: ${run.checks || "`lamdera check --force`"} still fail${run.checks?.includes(",") ? "" : "s"} after one repair, so nothing was pushed`;
+      }
       if (run.resultSubtype === "error_merge") return "Failed: merging the base branch needs a manual merge";
       if (run.resultSubtype === "usage_limited") {
         return run.retryAt ? `Stopped at Codex's usage limit: start it again after ${localTime(run.retryAt)}` : "Stopped at Codex's usage limit";
@@ -520,12 +526,25 @@ export function parseLamderaAgentSettings(raw: unknown, defaults: LamderaAgentSe
   };
 }
 
-/** The repository names a parsed `repositories.yml` offers to code runs, in its order. */
-export function repositoryNames(document: unknown): string[] {
+/** A repository code runs can work on: a Lamdera app, or another kind checked by its own commands. */
+export interface CodeRepository {
+  name: string;
+  stack: "lamdera" | "commands";
+}
+
+/** The repositories a parsed `repositories.yml` offers to code runs, in its order. */
+export function codeRepositories(document: unknown): CodeRepository[] {
   const projects = typeof document === "object" && document !== null ? (document as Record<string, unknown>).projects : undefined;
   if (!Array.isArray(projects)) return [];
-  return projects.flatMap((project) => {
-    const name = typeof project === "object" && project !== null ? (project as Record<string, unknown>).name : undefined;
-    return typeof name === "string" && REPOSITORY_NAME.test(name) ? [name] : [];
+  return projects.flatMap((project): CodeRepository[] => {
+    const entry = typeof project === "object" && project !== null ? project as Record<string, unknown> : {};
+    return typeof entry.name === "string" && REPOSITORY_NAME.test(entry.name)
+      ? [{ name: entry.name, stack: entry.stack === "commands" ? "commands" : "lamdera" }]
+      : [];
   });
+}
+
+/** How a repository is named in the settings and the Delegate dialog. */
+export function codeRepositoryLabel(repository: CodeRepository): string {
+  return `${repository.name} (${repository.stack === "lamdera" ? "Lamdera app" : "checked by its commands"})`;
 }

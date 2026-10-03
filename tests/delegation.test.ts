@@ -10,6 +10,8 @@ import {
   briefInstructions,
   withoutEntityFrontmatter,
   agentRuntime,
+  codeRepositories,
+  codeRepositoryLabel,
   codeRunConversation,
   codeTaskBrief,
   codeTaskIdentifier,
@@ -372,12 +374,28 @@ describe("Code runs", () => {
     expect(codeRunConversation([])).toBe("");
   });
 
+  it("lists the coding agent's repositories with their kind", () => {
+    const repositories = codeRepositories({
+      projects: [
+        { name: "kalories", repo_path: "/data/repos/kalories" },
+        { name: "dragonglass", stack: "commands", checks: [["npm", "test"]] },
+        { linear_project_id: "11111111-1111-4111-8111-111111111111" },
+        { name: "Not A Slug" },
+      ],
+    });
+    expect(repositories).toEqual([{ name: "kalories", stack: "lamdera" }, { name: "dragonglass", stack: "commands" }]);
+    expect(repositories.map(codeRepositoryLabel)).toEqual(["kalories (Lamdera app)", "dragonglass (checked by its commands)"]);
+    expect(codeRepositories(null)).toEqual([]);
+  });
+
   it("titles the review Action after the task", () => {
     expect(reviewActionTitle("Add a dark theme.\nWith a toggle.")).toBe("Review PR: Add a dark theme.");
   });
 
   it("says why a code run stopped", () => {
     expect(agentRunStatusText(run({ resultSubtype: "error_validation" }), "failed")).toContain("lamdera check --force");
+    expect(agentRunStatusText(run({ resultSubtype: "error_validation", checks: "`npm ci`, `npm test`" }), "failed"))
+      .toBe("Failed: `npm ci`, `npm test` still fail after one repair, so nothing was pushed");
     expect(agentRunStatusText(run({ resultSubtype: "error_merge" }), "failed")).toContain("manual merge");
     expect(agentRunStatusText(run({ resultSubtype: "usage_limited" }), "failed")).toBe("Stopped at Codex's usage limit");
     expect(agentRunStatusText(run({ resultSubtype: "usage_limited", retryAt: "2026-10-02T12:00:00Z" }), "failed"))
