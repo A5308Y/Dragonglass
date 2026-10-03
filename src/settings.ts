@@ -886,7 +886,7 @@ export class GtdSettingTab extends PluginSettingTab {
     const save = async () => this.plugin.saveSettings(false);
     sectionEl.createEl("h4", { text: "Code repositories" });
     sectionEl.createEl("p", {
-      text: "Code runs hand a Project's idea to the coding agent (lamdera_linear_agent_ruby), which implements it in one of "
+      text: "Code runs hand a Project's idea to the coding agent (lithic-coding-agent), which implements it in one of "
         + "your repositories and opens a pull request. Before every push it runs the repository's checks: lamdera check --force "
         + "for a Lamdera app, the commands listed in its repositories file for any other. Set that agent up first, as its "
         + "README describes; Dragonglass starts its “task” service and reads the result back.",
@@ -895,7 +895,7 @@ export class GtdSettingTab extends PluginSettingTab {
     new Setting(sectionEl)
       .setName("Coding agent folder")
       .setDesc("Its checkout, holding compose.yml. Empty turns code runs off.")
-      .addText((text) => text.setPlaceholder("~/Repositories/lamdera_linear_agent_ruby").setValue(lamdera.kitDirectory).onChange(async (value) => {
+      .addText((text) => text.setPlaceholder("~/Repositories/lithic-coding-agent").setValue(lamdera.kitDirectory).onChange(async (value) => {
         lamdera.kitDirectory = value.trim();
         this.codeRepositoryList = null;
         await save();

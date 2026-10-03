@@ -310,7 +310,7 @@ export interface AgentRunRecord {
 
 /**
  * Claude through the API, a model on this Mac, OpenAI's Codex on a ChatGPT plan, or the
- * coding agent (`lamdera_linear_agent_ruby`), which changes code in one of your repositories, a
+ * coding agent (`lithic-coding-agent`), which changes code in one of your repositories, a
  * Lamdera app or another kind, and opens a pull request. The id stays `lamdera`, which it was first.
  */
 export type AgentRuntime = "claude" | "local" | "codex" | "lamdera";

@@ -308,8 +308,8 @@ export interface AgentSettings {
 }
 
 /**
- * Code runs: the Lamdera coding agent (its own repository, lamdera_linear_agent_ruby) changes
- * one of the Lamdera apps and opens a pull request. Its sign-ins and its list of repositories
+ * Code runs: the coding agent (its own repository, lithic-coding-agent) changes one of your
+ * repositories, a Lamdera app or another kind, and opens a pull request. Its sign-ins and its list of repositories
  * stay with that agent; Dragonglass only names a repository and starts a run.
  */
 export interface LamderaAgentSettings {

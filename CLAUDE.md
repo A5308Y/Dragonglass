@@ -215,8 +215,8 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 
 ## Code runs
 
-- The `lamdera` runtime hands a Project's idea to the Lamdera coding agent, a separate repository
-  (`lamdera_linear_agent_ruby`). Dragonglass only writes the run folder and starts that agent's `task`
+- The `lamdera` runtime hands a Project's idea to the coding agent, a separate repository
+  (`lithic-coding-agent`). Dragonglass only writes the run folder and starts that agent's `task`
   service (`--profile dragonglass`, its own env file, so its own Compose project, sign-ins and checkouts);
   `AgentService.delegateCode` / `launch`. Never `compose down` that project: its Linear daemon may run there.
 - The agent owns Git: Codex only edits files; the runner formats, commits, runs `lamdera check --force`
