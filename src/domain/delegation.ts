@@ -10,7 +10,7 @@
 
 import { projectDescendants, projectStatusLabel } from "./project-tree";
 import { escapeVaultText } from "./text";
-import type { Action, LamderaAgentSettings, Project } from "./types";
+import type { Action, CodeAgentSettings, Project } from "./types";
 import { normalizeVaultPath } from "../utils/path";
 
 export interface DelegationScope {
@@ -508,7 +508,7 @@ export function reviewActionTitle(instructions: string): string {
 const REPOSITORY_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
 /** Saved code-run settings, read without trusting them: they sync with the vault. */
-export function parseLamderaAgentSettings(raw: unknown, defaults: LamderaAgentSettings): LamderaAgentSettings {
+export function parseCodeAgentSettings(raw: unknown, defaults: CodeAgentSettings): CodeAgentSettings {
   const value = typeof raw === "object" && raw !== null ? raw as Record<string, unknown> : {};
   const text = (field: unknown, fallback: string) => (typeof field === "string" && field.trim() ? field.trim() : fallback);
   const repositories: Record<string, string> = {};

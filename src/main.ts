@@ -8,7 +8,7 @@ import { ancestorsToActivate } from "./domain/project-tree";
 import { attention } from "./domain/attention";
 import { weeklyReviewFinished } from "./domain/weekly-review";
 import { unreadItems } from "./domain/feed";
-import { parseLamderaAgentSettings } from "./domain/delegation";
+import { parseCodeAgentSettings } from "./domain/delegation";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { ErrorBar } from "./ui/error-bar";
 import { describeImport, normalizeMailPort } from "./domain/mail";
@@ -297,7 +297,7 @@ export default class DragonglassGtdPlugin extends Plugin {
         localContextTokens: Number.isInteger(saved?.agent?.localContextTokens) && saved!.agent!.localContextTokens >= 4096
           ? saved!.agent!.localContextTokens
           : defaults.agent.localContextTokens,
-        lamdera: parseLamderaAgentSettings(saved?.agent?.lamdera, defaults.agent.lamdera),
+        lamdera: parseCodeAgentSettings(saved?.agent?.lamdera, defaults.agent.lamdera),
       },
       feeds: {
         ...defaults.feeds,

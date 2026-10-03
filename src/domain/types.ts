@@ -304,7 +304,7 @@ export interface AgentSettings {
   localContextTokens: number;
   /** The longest single reply a local model may write, in tokens, thinking included. */
   localMaxReplyTokens: number;
-  lamdera: LamderaAgentSettings;
+  lamdera: CodeAgentSettings;
 }
 
 /**
@@ -312,7 +312,7 @@ export interface AgentSettings {
  * repositories, a Lamdera app or another kind, and opens a pull request. Its sign-ins and its list of repositories
  * stay with that agent; Dragonglass only names a repository and starts a run.
  */
-export interface LamderaAgentSettings {
+export interface CodeAgentSettings {
   /** The coding agent's checkout, holding its compose.yml. Empty turns code runs off. */
   kitDirectory: string;
   /** Its Compose env file, relative to the checkout: it sets the instance's project name and volumes. */
