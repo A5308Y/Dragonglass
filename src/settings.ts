@@ -34,6 +34,9 @@ export class GtdSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    // Rebuilding the tab briefly makes it shorter than the viewport, which clamps
+    // scrollTop to zero. Several settings redraw to reveal their dependent controls.
+    const scrollTop = this.containerEl.scrollTop;
     this.unsubscribeCalendarStatus?.();
     this.unsubscribeCalendarStatus = undefined;
     this.unsubscribeFeedStatus?.();
@@ -153,6 +156,7 @@ export class GtdSettingTab extends PluginSettingTab {
     this.displayMail(containerEl);
     this.displayAgent(containerEl);
     this.displayCalendar(containerEl);
+    containerEl.scrollTop = scrollTop;
   }
 
   private displayCalendar(containerEl: HTMLElement): void {
