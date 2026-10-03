@@ -888,8 +888,9 @@ export class AgentService {
     }
     if (output) await node.fs.writeFile(node.path.join(this.runsDirectory(), run.id, "logs", "runner.log"), output);
     await this.dockerQuietly(["rm", "-f", container]);
-    const lines = output.split("\n").map((line) => line.trim()).filter(Boolean);
-    return [...lines].reverse().find((line) => /error|exception|refused|denied|not found|cannot|can't/i.test(line))
+    // Stack frames ("from bin/run-task:14:in …", "at …") name where it failed, not what failed.
+    const lines = output.split("\n").map((line) => line.trim()).filter((line) => line && !/^(from|at) \S/.test(line));
+    return [...lines].reverse().find((line) => /error|exception|refused|denied|not found|cannot|can't|invalid|must/i.test(line))
       ?? lines.at(-1) ?? "";
   }
 
