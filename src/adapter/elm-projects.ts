@@ -154,6 +154,7 @@ export class ElmProjectsHost {
           offline: run.offline,
           wholeVault: run.wholeVault,
           reportPath: run.reportPath,
+          canUpdate: run.canUpdate,
           questions: run.status === "waiting" ? run.openQuestions : [],
           activity: (run.activity ?? []).map((entry) => ({ ...entry, at: localTimeOfDay(entry.at) })),
           repository: run.repository ?? "",
@@ -275,6 +276,12 @@ export class ElmProjectsHost {
         return this.services.agent.stop(command.runId);
       case "rerun-agent-run":
         return this.services.rerunAgentRun(command.runId);
+      case "update-code-run": {
+        const run = this.services.agent.views().find((candidate) => candidate.id === command.runId);
+        if (!run) throw new Error("This run no longer exists.");
+        await this.services.agent.updateCode(run.projectId);
+        return;
+      }
       case "delete-agent-run":
         return this.services.deleteAgentRun(command.runId);
     }

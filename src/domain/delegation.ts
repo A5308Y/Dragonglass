@@ -306,6 +306,13 @@ export interface AgentRunRecord {
   /** A code run's repository kind (`lamdera` or `commands`) and the checks it must pass before a push. */
   stack?: string;
   checks?: string;
+  /** A code run that only brings the Project's pull request up to date with the base branch. */
+  mode?: "update";
+  /** An update that found nothing to do: the base branch hadn't moved, or the pull request is gone. */
+  upToDate?: boolean;
+  /** The "Review PR" Next Action a successful code run left, and whether it has been done since. */
+  reviewActionId?: string;
+  reviewSettled?: boolean;
 }
 
 /**
@@ -372,6 +379,7 @@ export function agentRunStatusText(run: AgentRunRecord, status: AgentRunStatus):
     case "waiting":
       return "Waiting for your answer";
     case "finished":
+      if (run.mode === "update") return run.upToDate ? "Already up to date" : "Brought up to date with the base branch";
       return "Finished";
     case "stopped":
       return "Stopped";
@@ -547,4 +555,49 @@ export function codeRepositories(document: unknown): CodeRepository[] {
 /** How a repository is named in the settings and the Delegate dialog. */
 export function codeRepositoryLabel(repository: CodeRepository): string {
   return `${repository.name} (${repository.stack === "lamdera" ? "Lamdera app" : "checked by its commands"})`;
+}
+
+/** The instructions an update run is started with. */
+export const CODE_UPDATE_INSTRUCTIONS = "Bring the pull request up to date with the base branch.";
+
+type ReviewedCodeRun = Pick<AgentRunRecord, "projectId" | "runtime" | "repository" | "reviewActionId" | "createdAt">;
+
+/**
+ * The Projects whose pull requests to bring up to date once a review is settled: the other Projects
+ * on the same repository whose "Review PR" Action is still open. Their branches were cut before the
+ * settled pull request was merged, so they may now conflict with the base branch. Projects with a code
+ * run already queued or running are left out, so several merges in a row update each branch once.
+ */
+export function projectsToUpdate(
+  settled: Pick<AgentRunRecord, "projectId" | "repository">,
+  runs: readonly ReviewedCodeRun[],
+  openActionIds: ReadonlySet<string>,
+  busyProjectIds: ReadonlySet<string>,
+): string[] {
+  if (!settled.repository) return [];
+  const projects = runs
+    .filter((run) => run.runtime === "lamdera" && run.repository === settled.repository && run.projectId !== settled.projectId)
+    .filter((run) => run.reviewActionId !== undefined && openActionIds.has(run.reviewActionId))
+    .filter((run) => !busyProjectIds.has(run.projectId))
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    .map((run) => run.projectId);
+  return [...new Set(projects)];
+}
+
+/**
+ * The code run whose pull request a Project's "Update branch" button brings up to date: the newest
+ * one whose "Review PR" Action is still open, while no other code run of the Project is under way.
+ */
+export function updatableCodeRunId(
+  projectId: string,
+  runs: ReadonlyArray<ReviewedCodeRun & Pick<AgentRunRecord, "id">>,
+  openActionIds: ReadonlySet<string>,
+  busyProjectIds: ReadonlySet<string>,
+): string | null {
+  if (busyProjectIds.has(projectId)) return null;
+  const candidates = runs
+    .filter((run) => run.runtime === "lamdera" && run.projectId === projectId)
+    .filter((run) => run.reviewActionId !== undefined && openActionIds.has(run.reviewActionId))
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  return candidates[0]?.id ?? null;
 }

@@ -10,7 +10,10 @@ import {
   briefInstructions,
   withoutEntityFrontmatter,
   agentRuntime,
+  CODE_UPDATE_INSTRUCTIONS,
   codeRepositories,
+  projectsToUpdate,
+  updatableCodeRunId,
   codeRepositoryLabel,
   codeRunConversation,
   codeTaskBrief,
@@ -402,5 +405,53 @@ describe("Code runs", () => {
       .toMatch(/^Stopped at Codex's usage limit: start it again after 2026-10-0\d \d\d:\d\d$/);
     expect(agentRunStatusText(run({ queued: true }), "queued")).toBe("Queued: it starts when the code run before it ends");
     expect(agentRunStatusText(run({ queued: true, runtime: "codex" }), "queued")).toBe("Queued: it starts when the Codex run before it ends");
+  });
+});
+
+describe("Keeping open code pull requests up to date", () => {
+  const run = (id: string, projectId: string, changes: Partial<AgentRunRecord> = {}) => ({
+    id,
+    projectId,
+    runtime: "lamdera" as const,
+    repository: "habits",
+    createdAt: `2026-10-0${id.length}T10:00:00Z`,
+    ...changes,
+  });
+
+  it("updates the other Projects on the same repository whose review is still open", () => {
+    const runs = [
+      run("a", "P1", { reviewActionId: "R1" }),
+      run("bb", "P2", { reviewActionId: "R2" }),
+      run("ccc", "P3", { reviewActionId: "R3", repository: "portal" }),
+      run("dddd", "P4", { reviewActionId: "R4" }),
+      run("eeeee", "P5"),
+    ];
+    const open = new Set(["R2", "R3"]);
+    expect(projectsToUpdate({ projectId: "P1", repository: "habits" }, runs, open, new Set())).toEqual(["P2"]);
+    // A Project with a run already queued or running gets no second one.
+    expect(projectsToUpdate({ projectId: "P1", repository: "habits" }, runs, open, new Set(["P2"]))).toEqual([]);
+    expect(projectsToUpdate({ projectId: "P1" }, runs, open, new Set())).toEqual([]);
+  });
+
+  it("offers the update on the newest code run whose review is open, unless one is under way", () => {
+    const runs = [
+      run("a", "P1", { reviewActionId: "R1" }),
+      run("bb", "P1", { reviewActionId: "R2" }),
+      run("ccc", "P1", { mode: "update" }),
+    ];
+    expect(updatableCodeRunId("P1", runs, new Set(["R1", "R2"]), new Set())).toBe("bb");
+    expect(updatableCodeRunId("P1", runs, new Set(["R1"]), new Set())).toBe("a");
+    expect(updatableCodeRunId("P1", runs, new Set(), new Set())).toBeNull();
+    expect(updatableCodeRunId("P1", runs, new Set(["R2"]), new Set(["P1"]))).toBeNull();
+  });
+
+  it("says what an update did", () => {
+    const update = (changes: Partial<AgentRunRecord>): AgentRunRecord => ({
+      id: "u", projectId: "P", projectTitle: "P", createdAt: "", budgetUsd: 0, model: "", runtime: "lamdera",
+      offline: false, wholeVault: false, costUsd: 0, openQuestions: [], mode: "update", ...changes,
+    });
+    expect(agentRunStatusText(update({ upToDate: true }), "finished")).toBe("Already up to date");
+    expect(agentRunStatusText(update({}), "finished")).toBe("Brought up to date with the base branch");
+    expect(CODE_UPDATE_INSTRUCTIONS).toContain("up to date");
   });
 });

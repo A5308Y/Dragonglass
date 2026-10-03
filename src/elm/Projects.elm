@@ -148,6 +148,7 @@ type alias AgentRun =
     , offline : Bool
     , wholeVault : Bool
     , reportPath : String
+    , canUpdate : Bool
     , questions : List AgentQuestion
     , activity : List AgentActivity
     , repository : String
@@ -1624,6 +1625,12 @@ viewAgentRun model run =
                     button [ onClick (Send IgnoreReply (Command.OpenFile run.reportPath)) ] [ text "Open report" ]
                 , linkButton "Pull request" run.pullRequestUrl
                 , linkButton "Preview" run.previewUrl
+                , -- Merges the base branch into the open pull request, resolving conflicts, and checks it again.
+                  if model.agent.available && run.canUpdate then
+                    button [ onClick (Send IgnoreReply (Command.UpdateCodeRun run.id)) ] [ text "Update branch" ]
+
+                  else
+                    text ""
                 , if active then
                     button [ class "mod-warning", onClick (Send IgnoreReply (Command.StopAgentRun run.id)) ]
                         [ text
@@ -2577,6 +2584,7 @@ agentRunDecoder =
         |> andMap (Decode.field "offline" Decode.bool)
         |> andMap (Decode.field "wholeVault" Decode.bool)
         |> andMap (Decode.field "reportPath" Decode.string)
+        |> andMap (Decode.field "canUpdate" Decode.bool)
         |> andMap
             (Decode.field "questions"
                 (Decode.list

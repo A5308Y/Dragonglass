@@ -226,7 +226,14 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   agent's `repositories.yml`, mapped per Project in the settings and inherited by sub-projects
   (`nearestMapped`); the agent resolves it from its config, never from task text.
 - `codeTaskIdentifier` is stable per Project, so every run on it shares the branch and PR; "Follow up…"
-  continues with the earlier runs as the conversation. A successful run leaves a "Review PR" Next Action.
+  continues with the earlier runs as the conversation. A successful run leaves a "Review PR" Next Action
+  (its id in the run's `host.json` as `reviewActionId`).
+- Update runs (`mode: "update"` in `run.json`, `AgentService.updateCode`) only merge the base branch into the
+  Project's open PR, with one Codex attempt at a conflict or failing checks, then check and push; no Waiting
+  Action, no new Review Action, an Inbox report only on failure. They start from "Update branch" on the newest
+  run whose Review Action is open (`updatableCodeRunId`), and automatically: once a Review Action is done,
+  the other Projects on that repository with an open one get one each (`projectsToUpdate`, `settleReviews`).
+  All code runs share one lane, so updates queue behind the run under way.
 - Repositories have a stack in the agent's `repositories.yml`: `lamdera` (`lamdera check --force`,
   Evergreen, preview) or `commands` (its `checks` argument lists, optional `format`, no preview; e.g.
   Obsidian plugins). The checks live in that file, not in the repository or the brief, so the agent

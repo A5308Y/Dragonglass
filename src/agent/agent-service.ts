@@ -29,6 +29,7 @@ import {
   agentRunStatus,
   agentRunStatusText,
   briefInstructions,
+  CODE_UPDATE_INSTRUCTIONS,
   codeRunConversation,
   codeTaskBrief,
   codeTaskIdentifier,
@@ -37,7 +38,9 @@ import {
   codeRepositories,
   type CodeRepository,
   resultsFolderName,
+  projectsToUpdate,
   reviewActionTitle,
+  updatableCodeRunId,
   runFolderName,
   runReportInboxItem,
   agentRuntime,
@@ -138,6 +141,8 @@ export interface RerunDefaults {
 
 export interface AgentRunView extends AgentRunRecord {
   status: AgentRunStatus;
+  /** A code run whose open pull request "Update branch" can bring up to date now. */
+  canUpdate: boolean;
   statusText: string;
   /** The imported REPORT.md in the vault, or `""`. */
   reportPath: string;
@@ -166,6 +171,9 @@ interface HostNotes {
   startError?: string;
   importedTo?: string;
   finishedAt?: string;
+  /** Code runs: the "Review PR" Action a successful run left, and whether it has been done since. */
+  reviewActionId?: string;
+  reviewSettled?: boolean;
 }
 
 export class AgentService {
@@ -210,6 +218,10 @@ export class AgentService {
   }
 
   views(): AgentRunView[] {
+    const openActionIds = this.openActionIds();
+    const busy = this.busyCodeProjects();
+    const updatable = new Set([...new Set(this.runs.map((run) => run.projectId))]
+      .flatMap((projectId) => updatableCodeRunId(projectId, this.runs, openActionIds, busy) ?? []));
     return this.runs.map((run) => {
       const status = agentRunStatus(run, this.running.has(containerName(run.id)));
       const report = run.importedTo ? normalizePath(`${run.importedTo}/REPORT.md`) : "";
@@ -217,6 +229,7 @@ export class AgentService {
         ...run,
         status,
         statusText: agentRunStatusText(run, status),
+        canUpdate: updatable.has(run.id),
         reportPath: report && this.app.vault.getAbstractFileByPath(report) instanceof TFile ? report : "",
       };
     });
@@ -313,9 +326,27 @@ export class AgentService {
    * commands in its config otherwise), and opens or updates a pull request. It gets the Project's own words in its brief and no other vault files.
    */
   async delegateCode(projectId: string, instructions: string, options: CodeDelegationOptions): Promise<string> {
+    if (!instructions.trim()) throw new Error("Say what the agent should implement.");
+    return this.startCodeRun(projectId, instructions, { ...options, mode: "implement" });
+  }
+
+  /**
+   * Brings a Project's open pull request up to date with the base branch: the coding agent merges it
+   * in, lets Codex resolve a conflict or repair failing checks once, validates and pushes. It
+   * implements nothing, leaves no Waiting Action, and reports to the Inbox only when it fails.
+   */
+  async updateCode(projectId: string, options: { quiet?: boolean } = {}): Promise<string> {
+    return this.startCodeRun(projectId, CODE_UPDATE_INSTRUCTIONS, { effort: "medium", continuation: true, mode: "update", ...options });
+  }
+
+  private async startCodeRun(
+    projectId: string,
+    instructions: string,
+    options: CodeDelegationOptions & { mode: "implement" | "update"; quiet?: boolean },
+  ): Promise<string> {
     const node = requireNode();
     if (!this.available()) throw new Error("Delegating needs the Obsidian desktop app on macOS.");
-    if (!instructions.trim()) throw new Error("Say what the agent should implement.");
+    const update = options.mode === "update";
     const snapshot = this.repository.index.getSnapshot();
     const project = snapshot.projectsById.get(projectId);
     if (!project) throw new Error("This Project no longer exists.");
@@ -336,7 +367,7 @@ export class AgentService {
       openActions,
       instructions,
     });
-    const conversation = options.continuation ? await this.codeConversation(projectId) : "";
+    const conversation = options.continuation && !update ? await this.codeConversation(projectId) : "";
 
     const createdAt = new Date();
     const runId = runFolderName(createdAt, project.title);
@@ -355,6 +386,7 @@ export class AgentService {
       repository: repository.name,
       identifier: codeTaskIdentifier(projectId),
       continuation: options.continuation,
+      ...(update ? { mode: "update" } : {}),
       conversation,
       effort: options.effort,
       offline: false,
@@ -362,11 +394,15 @@ export class AgentService {
       budgetUsd: 0,
       model: "Codex, signed in for the coding agent",
     });
-    await this.writeHostNotes(runId, { ...(queue ? { queued: true } : { starting: true }), ...await this.createWaitingAction(projectId, instructions) });
+    await this.writeHostNotes(runId, {
+      ...(queue ? { queued: true } : { starting: true }),
+      // An update is bookkeeping on an open pull request, not new work: no Waiting Action for it.
+      ...(update ? {} : await this.createWaitingAction(projectId, instructions)),
+    });
     await this.scan();
 
     if (!queue) void this.launch(runId, {});
-    else new Notice(`Queued: “${project.title}” starts when the code run before it ends.`);
+    else if (!options.quiet) new Notice(`Queued: “${project.title}” starts when the code run before it ends.`);
     return runId;
   }
 
@@ -673,6 +709,9 @@ export class AgentService {
       void this.launch(next.id);
     }
 
+    await this.linkEarlierReviewActions(runs);
+    await this.settleReviews(runs);
+
     for (const run of runs) {
       const alive = this.running.has(containerName(run.id));
       if (alive || run.starting) await this.syncWaitingAction(run);
@@ -725,6 +764,10 @@ export class AgentService {
       ...(host?.actionId ? { actionId: host.actionId } : {}),
       ...(host?.actionTitle ? { actionTitle: host.actionTitle } : {}),
       ...(meta.runtime === "lamdera" ? codeRunFields(meta, result) : {}),
+      ...(meta.runtime === "lamdera" && meta.mode === "update" ? { mode: "update" as const } : {}),
+      ...(result?.upToDate === true ? { upToDate: true } : {}),
+      ...(host?.reviewActionId ? { reviewActionId: host.reviewActionId } : {}),
+      ...(host?.reviewSettled ? { reviewSettled: true } : {}),
     };
   }
 
@@ -852,12 +895,17 @@ export class AgentService {
       }
       const imported = await this.importOutbox(run);
       await this.completeWaitingAction(run);
-      if (run.runtime === "lamdera" && run.resultSubtype === "success" && run.pullRequestUrl) await this.createReviewAction(run);
+      // An update keeps the pull request the earlier run's "Review PR" Action already stands for.
+      if (run.runtime === "lamdera" && run.mode !== "update" && run.resultSubtype === "success" && run.pullRequestUrl) {
+        await this.createReviewAction(run);
+      }
       await this.writeHostNotes(run.id, { importedTo: imported.folder, finishedAt: new Date().toISOString() });
       const status = agentRunStatus(run, false);
       // A run taken out of the queue never started; there is nothing to report on.
       const neverStarted = status === "stopped" && !imported.folder && !run.activity?.length;
-      if (this.getSettings().reportToInbox && !neverStarted) await this.reportToInbox(run, status, imported.folder);
+      // An update that worked is nothing to process; one that didn't needs a decision.
+      const quietUpdate = run.mode === "update" && status === "finished";
+      if (this.getSettings().reportToInbox && !neverStarted && !quietUpdate) await this.reportToInbox(run, status, imported.folder);
       const cost = typeof run.costUsd === "number" ? `, about $${run.costUsd.toFixed(2)}` : "";
       const files = imported.count ? `${imported.count} file${imported.count === 1 ? "" : "s"} in its Project Material` : "nothing in the outbox";
       const cleaned = imported.cleaned
@@ -1023,7 +1071,7 @@ export class AgentService {
       const node = requireNode();
       const meta = await readJson(node, node.path.join(this.runsDirectory(), run.id, "input", "run.json"));
       const instructions = typeof meta?.instructions === "string" ? meta.instructions : run.projectTitle;
-      await this.repository.createAction({
+      const reviewActionId = await this.repository.createAction({
         title: reviewActionTitle(instructions),
         status: "next",
         projectId: run.projectId,
@@ -1034,9 +1082,95 @@ export class AgentService {
           ...(run.branch ? [`- Branch: \`${run.branch}\``] : []),
         ].join("\n"),
       });
+      run.reviewActionId = reviewActionId;
+      await this.writeHostNotes(run.id, { reviewActionId });
     } catch (error) {
       new Notice(`The pull request is ready, but the review Action could not be created: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * A "Review PR" Action done since the last scan means that pull request is settled, usually merged.
+   * The other open pull requests on its repository were cut from the base branch before it, so each
+   * gets an update run, queued behind whatever runs now. Projects with a code run already waiting or
+   * running are skipped, so several merges in a row update each branch once. A deleted Action is not
+   * taken for a settled review: the index may simply not have read it yet.
+   */
+  private async settleReviews(runs: readonly AgentRunRecord[]): Promise<void> {
+    const snapshot = this.repository.index.getSnapshot();
+    const settled = runs.filter((run) => {
+      if (run.runtime !== "lamdera" || !run.reviewActionId || run.reviewSettled) return false;
+      const action = snapshot.actionsById.get(run.reviewActionId);
+      return action !== undefined && (action.status === "done" || action.status === "cancelled");
+    });
+    if (!settled.length) return;
+    const openActionIds = this.openActionIds();
+    const busy = this.busyCodeProjects();
+    const targets = new Set<string>();
+    for (const run of settled) {
+      run.reviewSettled = true;
+      await this.writeHostNotes(run.id, { reviewSettled: true });
+      for (const projectId of projectsToUpdate(run, runs, openActionIds, busy)) targets.add(projectId);
+    }
+    if (targets.size) void this.startUpdates([...targets]);
+  }
+
+  /**
+   * Code runs finished before their "Review PR" Action was recorded get it linked here, but only where
+   * a Project has exactly one such run and exactly one "Review PR" Action no run claims: a guess with
+   * more than one candidate on either side could update the wrong pull request.
+   */
+  private async linkEarlierReviewActions(runs: readonly AgentRunRecord[]): Promise<void> {
+    const snapshot = this.repository.index.getSnapshot();
+    const unlinked = runs.filter((run) => run.runtime === "lamdera" && run.mode !== "update"
+      && run.resultSubtype === "success" && run.pullRequestUrl && !run.reviewActionId && run.importedTo !== undefined);
+    if (!unlinked.length) return;
+    const claimed = new Set(runs.flatMap((run) => (run.reviewActionId ? [run.reviewActionId] : [])));
+    for (const projectId of new Set(unlinked.map((run) => run.projectId))) {
+      const projectRuns = unlinked.filter((run) => run.projectId === projectId);
+      const actions = snapshot.actions.filter((action) =>
+        action.projectId === projectId && action.title.startsWith("Review PR: ") && !claimed.has(action.id));
+      if (projectRuns.length !== 1 || actions.length !== 1) continue;
+      const run = projectRuns[0]!;
+      const action = actions[0]!;
+      run.reviewActionId = action.id;
+      // Reviewed before it was linked: that merge is history, not a reason to update other branches now.
+      const settled = action.status === "done" || action.status === "cancelled";
+      if (settled) run.reviewSettled = true;
+      await this.writeHostNotes(run.id, { reviewActionId: action.id, ...(settled ? { reviewSettled: true } : {}) });
+    }
+  }
+
+  /** Queues an update for each Project, one after another, and says so once. */
+  private async startUpdates(projectIds: readonly string[]): Promise<void> {
+    const titles: string[] = [];
+    for (const projectId of projectIds) {
+      try {
+        await this.updateCode(projectId, { quiet: true });
+        titles.push(this.repository.index.getSnapshot().projectsById.get(projectId)?.title ?? projectId);
+      } catch (error) {
+        new Notice(`Could not bring a pull request up to date: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (titles.length) {
+      new Notice(`A pull request was settled, so the coding agent brings ${titles.length === 1 ? "this one" : `these ${titles.length}`} `
+        + `up to date with the base branch: ${titles.map((title) => `“${title}”`).join(", ")}.`, 10_000);
+    }
+  }
+
+  /** The Actions not done or cancelled, e.g. "Review PR" Actions still waiting for a review. */
+  private openActionIds(): Set<string> {
+    return new Set(this.repository.index.getSnapshot().actions
+      .filter((action) => action.status !== "done" && action.status !== "cancelled")
+      .map((action) => action.id));
+  }
+
+  /** Projects with a code run queued, starting or running. */
+  private busyCodeProjects(): Set<string> {
+    return new Set(this.runs
+      .filter((run) => run.runtime === "lamdera" && !run.startError
+        && (run.queued || run.starting || this.launching.has(run.id) || this.running.has(containerName(run.id))))
+      .map((run) => run.projectId));
   }
 
   /** What the runner and proxy are started with, from the current settings; keys come from the Keychain. */

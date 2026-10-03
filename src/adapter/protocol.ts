@@ -92,6 +92,8 @@ export interface ElmAgentDto {
     offline: boolean;
     wholeVault: boolean;
     reportPath: string;
+    /** A code run whose open pull request "Update branch" can bring up to date now. */
+    canUpdate: boolean;
     questions: Array<{ id: string; question: string; askedAt: string }>;
     /** Newest first; `at` is the time of day in this device's time zone: "14:05:12". */
     activity: Array<{ at: string; kind: string; text: string }>;
@@ -632,6 +634,7 @@ export type ElmNonMenuCommand =
   | { type: "answer-agent-question"; runId: string; questionId: string; answer: string }
   | { type: "stop-agent-run"; runId: string }
   | { type: "rerun-agent-run"; runId: string }
+  | { type: "update-code-run"; runId: string }
   | { type: "delete-agent-run"; runId: string }
   | { type: "start-pomodoro"; projectId: string; intention: string; focusActionIds: string[]; minutes: number }
   | { type: "pause-pomodoro" }
@@ -734,7 +737,7 @@ export const SURFACE_COMMANDS = {
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link", "open-link",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
-    "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "delete-agent-run",
+    "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "update-code-run", "delete-agent-run",
     "open-note-link",
   ],
   inbox: [
@@ -928,6 +931,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.runId === "string" && typeof value.questionId === "string" && typeof value.answer === "string";
     case "stop-agent-run":
     case "rerun-agent-run":
+    case "update-code-run":
     case "delete-agent-run":
       return typeof value.runId === "string";
     case "start-pomodoro":

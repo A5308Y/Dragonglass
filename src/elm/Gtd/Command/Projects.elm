@@ -54,6 +54,7 @@ type Command
     | AnswerAgentQuestion String String String
     | StopAgentRun String
     | RerunAgentRun String
+    | UpdateCodeRun String
     | DeleteAgentRun String
     | OpenFile String
     | ShowMenu Float Float (List MenuEntry)
@@ -182,6 +183,9 @@ toBase command =
 
         RerunAgentRun runId ->
             Base.RerunAgentRun runId
+
+        UpdateCodeRun runId ->
+            Base.UpdateCodeRun runId
 
         DeleteAgentRun runId ->
             Base.DeleteAgentRun runId
