@@ -55,6 +55,7 @@ type Command
     | StopAgentRun String
     | RerunAgentRun String
     | UpdateCodeRun String
+    | PlanProject String
     | DeleteAgentRun String
     | OpenFile String
     | ShowMenu Float Float (List MenuEntry)
@@ -186,6 +187,9 @@ toBase command =
 
         UpdateCodeRun runId ->
             Base.UpdateCodeRun runId
+
+        PlanProject projectId ->
+            Base.PlanProject projectId
 
         DeleteAgentRun runId ->
             Base.DeleteAgentRun runId

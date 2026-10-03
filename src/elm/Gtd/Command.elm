@@ -7,6 +7,7 @@ module Gtd.Command exposing
     , MenuEntry(..)
     , NewActionInput
     , NewProjectInput
+    , PlanItem
     , ProjectChanges
     , ScheduleInput(..)
     , encode
@@ -97,6 +98,11 @@ type Command
     | StopAgentRun String
     | RerunAgentRun String
     | UpdateCodeRun String
+    | PlanProject String
+    | SaveProjectPlan { projectId : String, purpose : String, desiredOutcome : String, items : List PlanItem }
+    | AddPlanAction { projectId : String, title : String, context : String }
+    | DelegatePlanProject String
+    | ClosePlan
     | DeleteAgentRun String
       -- Pomodoro
     | OpenPomodoro ProjectId
@@ -267,6 +273,13 @@ type ImportKind
 
 
 -- ENCODING
+
+
+{-| One idea of a plan and what to make of it: kind is "action", "subproject", "someday" or "drop";
+after is "", "idea:<index>" or "project:<id>" (see `src/domain/project-plan.ts`).
+-}
+type alias PlanItem =
+    { title : String, kind : String, context : String, after : String }
 
 
 encode : Command -> Encode.Value
@@ -534,6 +547,41 @@ encode command =
 
         UpdateCodeRun runId ->
             object "update-code-run" [ ( "runId", Encode.string runId ) ]
+
+        PlanProject projectId ->
+            object "plan-project" [ ( "projectId", Encode.string projectId ) ]
+
+        SaveProjectPlan plan ->
+            object "save-project-plan"
+                [ ( "projectId", Encode.string plan.projectId )
+                , ( "purpose", Encode.string plan.purpose )
+                , ( "desiredOutcome", Encode.string plan.desiredOutcome )
+                , ( "items"
+                  , Encode.list
+                        (\item ->
+                            Encode.object
+                                [ ( "title", Encode.string item.title )
+                                , ( "kind", Encode.string item.kind )
+                                , ( "context", Encode.string item.context )
+                                , ( "after", Encode.string item.after )
+                                ]
+                        )
+                        plan.items
+                  )
+                ]
+
+        AddPlanAction fields ->
+            object "add-plan-action"
+                [ ( "projectId", Encode.string fields.projectId )
+                , ( "title", Encode.string fields.title )
+                , ( "context", Encode.string fields.context )
+                ]
+
+        DelegatePlanProject projectId ->
+            object "delegate-plan-project" [ ( "projectId", Encode.string projectId ) ]
+
+        ClosePlan ->
+            object "close-plan" []
 
         DeleteAgentRun runId ->
             object "delete-agent-run" [ ( "runId", Encode.string runId ) ]

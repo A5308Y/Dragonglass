@@ -38,6 +38,22 @@ export function setMarkdownSection(content: string, heading: string, value: stri
   return `${content.trimEnd()}\n\n${section}`;
 }
 
+/**
+ * Writes a section like `setMarkdownSection`, but a section the note doesn't have yet goes in before
+ * the `before` heading (e.g. a Project's Purpose before its Desired outcome) rather than at the end.
+ */
+export function setMarkdownSectionBefore(content: string, heading: string, value: string, before: string, level = 2): string {
+  if (readMarkdownSectionExists(content, heading, level)) return setMarkdownSection(content, heading, value, level);
+  const marker = "#".repeat(level);
+  const anchor = new RegExp(`^${marker} ${escapeRegExp(before)}[ \\t]*$`, "m").exec(content);
+  if (!anchor) return setMarkdownSection(content, heading, value, level);
+  return `${content.slice(0, anchor.index)}${marker} ${heading}\n\n${value.trim()}\n\n${content.slice(anchor.index)}`;
+}
+
+function readMarkdownSectionExists(content: string, heading: string, level: number): boolean {
+  return new RegExp(`^${"#".repeat(level)} ${escapeRegExp(heading)}[ \\t]*\\r?$`, "m").test(content);
+}
+
 export function prependMarkdownSectionLine(content: string, heading: string, line: string, level = 2): string {
   const marker = "#".repeat(level);
   const escaped = escapeRegExp(heading);

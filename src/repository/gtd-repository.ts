@@ -29,7 +29,7 @@ import { linkedFileEntry, normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
 import { plainTitle } from "../domain/text";
 import { localDate, parseDateOnly } from "../utils/date";
-import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, type DiaryEntry } from "../utils/markdown";
+import { diaryEntryMarkdown, noteBody, parseDiaryEntries, prependMarkdownSectionLine, readMarkdownSection, replaceNoteBody, setMarkdownSection, setMarkdownSectionBefore, type DiaryEntry } from "../utils/markdown";
 import { baseName, generatedFolderNames, normalizeVaultPath, parentPath, safeName } from "../utils/path";
 import { createUlid } from "../utils/ulid";
 import { GtdIndex } from "./gtd-index";
@@ -301,6 +301,11 @@ export class GtdRepository {
 
   async createProject(input: ProjectInput): Promise<TFile> {
     return (await this.createProjectRecord(input)).file;
+  }
+
+  /** Creates a Project, e.g. a Sub-project a plan decided on, and returns its id. */
+  async createProjectWithId(input: ProjectInput & { desiredOutcome?: string }): Promise<string> {
+    return (await this.createProjectRecord(input)).id;
   }
 
   /** Creates immediate children in list order. Returns how many were written. */
@@ -598,6 +603,21 @@ export class GtdRepository {
       project.file,
       (content) => setMarkdownSection(content, "Desired outcome", desiredOutcome),
     ));
+  }
+
+  /** Why the Project exists: the `## Purpose` section planning writes, or `""`. */
+  async readProjectPurpose(project: Project): Promise<string> {
+    return readMarkdownSection(await this.app.vault.cachedRead(project.file), "Purpose");
+  }
+
+  /** Writes the Purpose, before the Desired outcome when the note has none yet; unchanged text isn't written. */
+  async setProjectPurpose(projectId: string, purpose: string): Promise<void> {
+    const project = this.requireProject(projectId);
+    const write = (content: string) => setMarkdownSectionBefore(content, "Purpose", purpose, "Desired outcome");
+    const current = await this.app.vault.read(project.file);
+    if (!purpose.trim() && !readMarkdownSection(current, "Purpose")) return;
+    if (write(current) === current) return;
+    await this.enqueue(project.file.path, () => this.app.vault.process(project.file, write));
   }
 
   async readInboxBody(item: InboxItem): Promise<string> {

@@ -49,6 +49,7 @@ type alias DiaryEntry =
 
 type alias ProjectDetail =
     { projectId : ProjectId
+    , purpose : String
     , desiredOutcome : String
     , diary : List DiaryEntry
     , material : Support.Material
@@ -1484,7 +1485,8 @@ viewDetail model project =
                     text ""
                 ]
             , div [ class "dg-header-actions" ]
-                [ button [ onClick (Send IgnoreReply (Command.OpenPomodoro project.id)) ] [ text "Start Pomodoro" ]
+                [ button [ onClick (Send IgnoreReply (Command.PlanProject project.id)) ] [ text "Plan…" ]
+                , button [ onClick (Send IgnoreReply (Command.OpenPomodoro project.id)) ] [ text "Start Pomodoro" ]
                 , button [ onClick (Send IgnoreReply (Command.OpenFile project.file.path)) ] [ text "Open note" ]
                 , button [ onClick (Send IgnoreReply (Command.EditProjectModal project.id)) ] [ text "Edit" ]
                 ]
@@ -1854,10 +1856,23 @@ viewOutcome model project =
                 ]
 
           else if String.isEmpty outcome then
-            div [ class "dg-detail-empty" ] [ text "No desired outcome written yet." ]
+            div [ class "dg-detail-empty" ] [ text "No desired outcome written yet. “Plan…” walks through purpose, outcome and ideas." ]
 
           else
             markdownView outcome project.file.path
+        , case Maybe.map .purpose model.detail of
+            Just purpose ->
+                if String.isEmpty purpose then
+                    text ""
+
+                else
+                    div [ class "dg-project-purpose" ]
+                        [ h3 [ class "dg-detail-eyebrow" ] [ text "Purpose" ]
+                        , markdownView purpose project.file.path
+                        ]
+
+            Nothing ->
+                text ""
         ]
 
 
@@ -2294,6 +2309,7 @@ projectMenu x y model project =
             ++ delegateEntry model project
             ++ [ MenuItem "New Action…" (Command.NewActionModal (Just project.id))
                , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id) ProjectStatus.Active)
+               , MenuItem "Plan Project…" (Command.PlanProject project.id)
                , MenuItem "Open note" (Command.OpenFile project.file.path)
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
                , MenuSeparator
@@ -2375,6 +2391,7 @@ subprojectMenu x y model project =
             ++ [ MenuSeparator
                , MenuItem "Blocked by…" (Command.ProjectDependenciesModal project.id)
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
+               , MenuItem "Plan Project…" (Command.PlanProject project.id)
                , MenuItem "Open note" (Command.OpenFile project.file.path)
                , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
                ]
@@ -2637,8 +2654,9 @@ diaryDecoder =
 
 projectDetailDecoder : Decoder ProjectDetail
 projectDetailDecoder =
-    Decode.map4 ProjectDetail
+    Decode.map5 ProjectDetail
         (Decode.field "projectId" Decode.string)
+        (Decode.oneOf [ Decode.field "purpose" Decode.string, Decode.succeed "" ])
         (Decode.field "desiredOutcome" Decode.string)
         (Decode.field "diary" (Decode.list diaryDecoder))
         Support.materialDecoder

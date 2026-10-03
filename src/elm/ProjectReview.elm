@@ -683,6 +683,11 @@ viewOutcome model =
     div [ class "dg-review-panel dg-review-outcome-panel" ]
         [ panelHeading "◎" "Desired outcome" "Reconnect with what done looks like."
         , textarea [ value model.desiredOutcome, placeholder "What will be true when this Project is complete?", onInput OutcomeChanged ] []
+        , Ui.maybeView model.reviewData
+            (\data ->
+                -- Purpose, outcome, ideas and Next Actions in one go, for a Project that has drifted.
+                button [ class "dg-review-plan", onClick (Send IgnoreReply (Command.PlanProject data.projectId)) ] [ text "Plan this Project…" ]
+            )
         ]
 
 

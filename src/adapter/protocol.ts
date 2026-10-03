@@ -1,3 +1,4 @@
+import { PLAN_KINDS, type PlanItem } from "../domain/project-plan";
 import type { FeedStoreData } from "../domain/feed";
 import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../domain/pomodoro";
 import {
@@ -108,6 +109,8 @@ export interface ElmAgentDto {
 
 export interface ElmProjectDetailDto {
   projectId: string;
+  /** The `## Purpose` section planning writes (`src/ui/plan-project.ts`), or `""`. */
+  purpose: string;
   desiredOutcome: string;
   diary: ElmDiaryEntryDto[];
   supportFiles: ElmProjectSupportFileDto[];
@@ -635,6 +638,12 @@ export type ElmNonMenuCommand =
   | { type: "stop-agent-run"; runId: string }
   | { type: "rerun-agent-run"; runId: string }
   | { type: "update-code-run"; runId: string }
+  // Planning a Project (src/ui/plan-project.ts): opened from the Project page and the Project Review.
+  | { type: "plan-project"; projectId: string }
+  | { type: "save-project-plan"; projectId: string; purpose: string; desiredOutcome: string; items: PlanItem[] }
+  | { type: "add-plan-action"; projectId: string; title: string; context: string }
+  | { type: "delegate-plan-project"; projectId: string }
+  | { type: "close-plan" }
   | { type: "delete-agent-run"; runId: string }
   | { type: "start-pomodoro"; projectId: string; intention: string; focusActionIds: string[]; minutes: number }
   | { type: "pause-pomodoro" }
@@ -737,7 +746,7 @@ export const SURFACE_COMMANDS = {
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link", "open-link",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
-    "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "update-code-run", "delete-agent-run",
+    "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "update-code-run", "delete-agent-run", "plan-project",
     "open-note-link",
   ],
   inbox: [
@@ -751,7 +760,7 @@ export const SURFACE_COMMANDS = {
   projectReview: [
     "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
     "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action", "set-project-status",
-    "open-someday-review",
+    "open-someday-review", "plan-project",
   ],
   brainstorm: [
     "load-project-detail", "save-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",
@@ -768,6 +777,7 @@ export const SURFACE_COMMANDS = {
     "open-file", "create-support-note", "create-support-folder", "read-support-note", "update-support-note",
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link",
   ],
+  planProject: ["save-project-plan", "add-plan-action", "delegate-plan-project", "close-plan"],
   checklists: [
     "start-checklist-run", "show-checklist-run", "mark-checklist-item", "finish-checklist-run", "discard-checklist-run",
     "capture-from-checklist", "open-checklist-pomodoro", "open-file",
@@ -792,6 +802,7 @@ export type ElmModalCommand = SurfaceCommand<"modals">;
 export type ElmSomedayReviewCommand = SurfaceCommand<"somedayReview">;
 export type ElmPomodoroCommand = SurfaceCommand<"pomodoro">;
 export type ElmChecklistsCommand = SurfaceCommand<"checklists">;
+export type ElmPlanProjectCommand = SurfaceCommand<"planProject">;
 
 export type ElmActionBoardMenuEntry = ElmMenuEntry<Exclude<ElmActionBoardCommand, { type: "show-menu" }>>;
 export type ElmProjectsMenuEntry = ElmMenuEntry<Exclude<ElmProjectsCommand, { type: "show-menu" }>>;
@@ -817,6 +828,10 @@ export const parseSomedayReviewCommand = parserFor<ElmSomedayReviewCommand>(
 export const parsePomodoroCommand = parserFor<ElmPomodoroCommand>(
   (value): value is ElmPomodoroCommand => isSurfaceCommand(value, POMODORO_COMMANDS),
 );
+export const parsePlanProjectCommand = parserFor<ElmPlanProjectCommand>(
+  (value): value is ElmPlanProjectCommand => isSurfaceCommand(value, PLAN_PROJECT_COMMANDS),
+);
+
 export const parseChecklistsCommand = parserFor<ElmChecklistsCommand>(
   (value): value is ElmChecklistsCommand => isSurfaceCommand(value, CHECKLISTS_COMMANDS),
 );
@@ -881,6 +896,7 @@ const MODAL_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.modals);
 const SOMEDAY_REVIEW_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.somedayReview);
 const POMODORO_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.pomodoro);
 const CHECKLISTS_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.checklists);
+const PLAN_PROJECT_COMMANDS: ReadonlySet<string> = new Set(SURFACE_COMMANDS.planProject);
 
 function isSurfaceCommand(value: unknown, allowed: ReadonlySet<string>, nested?: CommandValidator<unknown>): boolean {
   if (!isRecord(value) || typeof value.type !== "string" || !allowed.has(value.type)) return false;
@@ -931,6 +947,19 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.runId === "string" && typeof value.questionId === "string" && typeof value.answer === "string";
     case "stop-agent-run":
     case "rerun-agent-run":
+    case "plan-project":
+    case "delegate-plan-project":
+      return typeof value.projectId === "string";
+    case "save-project-plan":
+      return typeof value.projectId === "string"
+        && typeof value.purpose === "string"
+        && typeof value.desiredOutcome === "string"
+        && Array.isArray(value.items)
+        && value.items.every(isPlanItem);
+    case "add-plan-action":
+      return typeof value.projectId === "string" && typeof value.title === "string" && typeof value.context === "string";
+    case "close-plan":
+      return true;
     case "update-code-run":
     case "delete-agent-run":
       return typeof value.runId === "string";
@@ -1182,6 +1211,14 @@ function isOptionalString(value: unknown): boolean {
 
 function isOptionalBoolean(value: unknown): boolean {
   return value === undefined || typeof value === "boolean";
+}
+
+function isPlanItem(value: unknown): value is PlanItem {
+  return isRecord(value)
+    && typeof value.title === "string"
+    && typeof value.kind === "string" && (PLAN_KINDS as readonly string[]).includes(value.kind)
+    && typeof value.context === "string"
+    && typeof value.after === "string";
 }
 
 function isStringArray(value: unknown): value is string[] {

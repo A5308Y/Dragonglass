@@ -24,6 +24,7 @@ type Command
     | SetActionStatus ActionId ActionStatus
     | TrashAction ActionId
     | OpenSomedayReview
+    | PlanProject ProjectId
 
 
 encode : Command -> Encode.Value
@@ -68,4 +69,7 @@ encode command =
 
             OpenSomedayReview ->
                 Base.OpenSomedayReview
+
+            PlanProject projectId ->
+                Base.PlanProject projectId
         )

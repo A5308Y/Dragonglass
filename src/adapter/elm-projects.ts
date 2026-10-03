@@ -276,6 +276,8 @@ export class ElmProjectsHost {
         return this.services.agent.stop(command.runId);
       case "rerun-agent-run":
         return this.services.rerunAgentRun(command.runId);
+      case "plan-project":
+        return this.services.planProject(command.projectId);
       case "update-code-run": {
         const run = this.services.agent.views().find((candidate) => candidate.id === command.runId);
         if (!run) throw new Error("This run no longer exists.");

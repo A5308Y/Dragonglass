@@ -3129,3 +3129,47 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-pomodoro-support-toggle:hover { background: var(--background-modifier-hover) !important; }
 .dg-pomodoro-support-body { padding: 0 10px 10px; }
 .dg-pomodoro-support-body .dg-detail-section { margin-top: 12px; }
+
+/* Plan Project (src/elm/PlanProject.elm): five steps in one dialog. */
+.dg-plan { display: flex; flex-direction: column; gap: 12px; }
+.dg-plan h2 { margin: 0; }
+.dg-plan-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: dg-plan-step;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.dg-plan-steps li { counter-increment: dg-plan-step; }
+.dg-plan-steps li::before { content: counter(dg-plan-step) ". "; }
+/* The current step is said in weight and colour, not colour alone. */
+.dg-plan-steps li.is-current { color: var(--text-normal); font-weight: var(--font-semibold); }
+.dg-plan-step { display: flex; flex-direction: column; gap: 10px; }
+.dg-plan-hint { margin: 0; color: var(--text-muted); font-size: var(--font-ui-small); }
+.dg-plan-text { width: 100%; resize: vertical; }
+.dg-plan-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.dg-plan-items,
+.dg-plan-gaps { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.dg-plan-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 0.8fr);
+  align-items: center;
+  gap: 8px;
+}
+.dg-plan-item-title { width: 100%; }
+.dg-plan-item.is-dropped .dg-plan-item-title { color: var(--text-faint); text-decoration: line-through; }
+.dg-plan-default-context { width: 100%; }
+.dg-plan-gap { display: flex; flex-direction: column; gap: 6px; }
+.dg-plan-gap-add { display: flex; flex-wrap: wrap; gap: 6px; }
+.dg-plan-gap-add input { flex: 1 1 160px; }
+.dg-plan-error { margin: 0; color: var(--text-error); }
+.dg-plan-done { margin: 0; }
+.dg-project-purpose { margin-top: 12px; }
+.dg-review-plan { align-self: flex-start; margin-top: 8px; }
+@media (max-width: 600px) {
+  .dg-plan-item { grid-template-columns: 1fr; }
+}

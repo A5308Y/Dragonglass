@@ -11,6 +11,7 @@ import { unreadItems } from "./domain/feed";
 import { parseCodeAgentSettings } from "./domain/delegation";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { ErrorBar } from "./ui/error-bar";
+import { planProject } from "./ui/plan-project";
 import { describeImport, normalizeMailPort } from "./domain/mail";
 import { POMODORO_SOUNDS, type ActionStatus, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
@@ -129,6 +130,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       openChecklistPomodoro: (path) => void this.openChecklistPomodoro(path),
       openChecklists: (runId) => void this.openChecklists(runId),
       delegateProject: (projectId) => delegateProject(this.app, this.agent, projectId, this.settings.agent),
+      planProject: (projectId, onClose) => planProject(this.services, projectId, onClose),
       deleteAgentRun: (runId) => confirmDeleteAgentRun(this.app, this.agent, runId),
       rerunAgentRun: async (runId) => {
         const previous = await this.agent.rerunDefaults(runId);
