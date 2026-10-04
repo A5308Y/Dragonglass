@@ -125,6 +125,16 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   where this device deliberately took them back (Undo, reopening a mail backlog).
   A new field in a store needs a rule there too, or one device's value silently wins.
 
+## Checking this device's copy
+
+- The vault syncs through iCloud, which can leave a device showing an old state. "Check this
+  device's copy" (`src/ui/check-device-copy.ts`, rules in `src/domain/device-copy.ts`) reads every
+  note on the device and names what differs from what Obsidian shows: stale cached properties, files
+  Obsidian missed or lists but are gone, iCloud placeholders (`.<name>.icloud`), and the newest change
+  that did arrive. It shows what it finds rather than fixing it quietly.
+- Notes whose cached properties are wrong are read from the file by the index
+  (`GtdIndex.useFileProperties`) until Obsidian reads them again.
+
 ## Building and deploying
 
 - `npm run build` type-checks, compiles Elm, bundles `main.js` and deploys to

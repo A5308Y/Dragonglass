@@ -34,6 +34,7 @@ import { MailPasswords } from "./mail/mail-passwords";
 import { CalendarSecret } from "./calendar/calendar-secret";
 import { parseMiteSettings } from "./domain/mite";
 import { AgentService } from "./agent/agent-service";
+import { checkDeviceCopy } from "./ui/check-device-copy";
 import { delegateProject } from "./ui/delegate";
 import { confirmDeleteAgentRun } from "./ui/delete-agent-run";
 import type { PomodoroSession } from "./domain/pomodoro";
@@ -436,6 +437,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "import-actions", name: "Import Actions", callback: () => this.importActions() });
     this.addCommand({ id: "import-subprojects", name: "Import Sub-projects", callback: () => this.importSubprojects() });
     this.addCommand({ id: "new-project", name: "New Project", callback: () => this.createProject() });
+    this.addCommand({ id: "check-device-copy", name: "Check this device's copy", callback: () => void checkDeviceCopy(this.app, this.index) });
   }
 
   private async initializeIndex(): Promise<void> {

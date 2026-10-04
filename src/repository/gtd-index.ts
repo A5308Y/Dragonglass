@@ -22,6 +22,12 @@ export class GtdIndex {
   private actionsByPath = new Map<string, Action>();
   private projectsByPath = new Map<string, Project>();
   private parseIssues = new Map<string, IndexIssue>();
+  /**
+   * Properties read from the file for notes whose properties Obsidian's cache has wrong
+   * (`useFileProperties`), or `null` for a file Obsidian lists that isn't on this device.
+   * Each is dropped once Obsidian reads that file again.
+   */
+  private fileProperties = new Map<string, Record<string, unknown> | null>();
   /** Listener → its name in the timing log. */
   private listeners = new Map<Listener, string>();
   private notifyTimer: number | null = null;
@@ -46,13 +52,21 @@ export class GtdIndex {
   initialize(plugin: Plugin): void {
     this.reindex();
 
-    plugin.registerEvent(this.metadataCache.on("changed", (file) => this.refresh(file)));
+    plugin.registerEvent(this.metadataCache.on("changed", (file) => {
+      this.fileProperties.delete(file.path);
+      this.refresh(file);
+    }));
     plugin.registerEvent(this.vault.on("create", (file) => {
+      this.fileProperties.delete(file.path);
       if (file instanceof TFile) this.refresh(file);
       else this.reindex();
     }));
-    plugin.registerEvent(this.vault.on("rename", (file, oldPath) => this.rename(file, oldPath)));
+    plugin.registerEvent(this.vault.on("rename", (file, oldPath) => {
+      this.fileProperties.delete(oldPath);
+      this.rename(file, oldPath);
+    }));
     plugin.registerEvent(this.vault.on("delete", (file) => {
+      this.fileProperties.delete(file.path);
       if (file instanceof TFile) this.remove(file.path);
       else this.reindex();
     }));
@@ -67,6 +81,15 @@ export class GtdIndex {
     this.parseIssues.clear();
     for (const file of this.vault.getFiles()) this.readFile(file);
     this.rebuildSnapshot();
+  }
+
+  /**
+   * Reads these notes from the given properties instead of Obsidian's cache, which missed a
+   * change (`null`: the file isn't on this device any more), until Obsidian reads them again.
+   */
+  useFileProperties(properties: ReadonlyMap<string, Record<string, unknown> | null>): void {
+    for (const [path, value] of properties) this.fileProperties.set(path, value);
+    this.reindex();
   }
 
   subscribe = (listener: Listener, name = "listener"): (() => void) => {
@@ -104,7 +127,10 @@ export class GtdIndex {
   }
 
   private readFile(file: TFile): void {
-    const frontmatter = file.extension === "md" ? this.metadataCache.getFileCache(file)?.frontmatter : undefined;
+    const fromFile = this.fileProperties.get(file.path);
+    if (fromFile === null) return;
+    const frontmatter = file.extension !== "md" ? undefined
+      : fromFile ?? this.metadataCache.getFileCache(file)?.frontmatter;
     const type = frontmatter?.type;
     try {
       if (isPathInDirectory(file.path, this.getInboxDirectory())) {
