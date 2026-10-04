@@ -1906,6 +1906,36 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-agent-question textarea { width: 100%; min-height: 64px; resize: vertical; }
 .dg-agent-question-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
 
+.dg-delegate-agent-choices { margin: 0 0 4px; padding: 0; border: 0; }
+.dg-delegate-agent-choices legend { margin-bottom: 6px; padding: 0; font-weight: var(--font-semibold); }
+.dg-delegate-agent-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dg-delegate-agent-option {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  cursor: pointer;
+}
+.dg-delegate-agent-option:hover { background: var(--background-modifier-hover); }
+.dg-delegate-agent-option.is-selected {
+  border-color: var(--interactive-accent);
+  box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+.dg-delegate-agent-option input { margin: 2px 0 0; }
+.dg-delegate-agent-copy { min-width: 0; }
+.dg-delegate-agent-copy strong { display: block; }
+.dg-delegate-agent-copy span {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  overflow-wrap: anywhere;
+}
 .dg-delegate .dg-delegate-label { display: block; margin: 12px 0 4px; font-weight: var(--font-semibold); }
 .dg-delegate .dg-delegate-instructions { width: 100%; resize: vertical; }
 .dg-delegate-email input { width: 100%; }
@@ -1919,6 +1949,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   overflow: auto;
   font-size: var(--font-ui-smaller);
 }
+body.is-phone .dg-delegate-agent-options { grid-template-columns: 1fr; }
 .dg-diary-list span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-diary-list p { margin: 2px 0 0; }
 .dg-review-stats { display: block; }

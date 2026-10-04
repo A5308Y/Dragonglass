@@ -3,6 +3,8 @@ import { formatBytes, type AgentService, type CodeEffort, type DelegationPlan, t
 import { codeTaskIdentifier, type AgentRuntime, type LocalHarness } from "../domain/delegation";
 import type { AgentSettings } from "../domain/types";
 
+let nextAgentChoiceId = 0;
+
 /**
  * Asks what the agent should do with a Project tree, shows exactly what it will get,
  * and starts the run. The file list is there so the scope can be checked before
@@ -37,7 +39,10 @@ class DelegateModal extends Modal {
   private effort: CodeEffort = "medium";
   private continueCode: boolean;
   private readonly codeRepository: { name: string; fromProjectId: string } | null;
+  private readonly agentChoiceId = ++nextAgentChoiceId;
+  private readonly agentChoices = new Map<AgentRuntime, { input: HTMLInputElement; option: HTMLElement }>();
   private summaryEl!: HTMLElement;
+  private harnessSetting!: Setting;
   private budgetSetting!: Setting;
   private scopeSetting!: Setting;
   private earlierSetting: Setting | null = null;
@@ -68,24 +73,28 @@ class DelegateModal extends Modal {
     this.titleEl.setText(`${this.previous ? "Run again" : "Delegate"}: “${this.plan.breadcrumb}”`);
 
     const localModel = this.settings.localModel || "the one loaded in LM Studio";
-    new Setting(contentEl)
-      .setName("Agent")
+    const agentChoices = contentEl.createEl("fieldset", { cls: "dg-delegate-agent-choices" });
+    agentChoices.createEl("legend", { text: "Agent" });
+    const options = agentChoices.createDiv({ cls: "dg-delegate-agent-options" });
+    this.addAgentChoice(options, "claude", "Claude", `${this.settings.model} through the Anthropic API; billed per token.`);
+    this.addAgentChoice(options, "local", "Local model", `${localModel} on this Mac; no token cost.`);
+    this.addAgentChoice(options, "codex", "ChatGPT (Codex)",
+      `${this.settings.codexModel || "Codex's default model"}; uses your ChatGPT plan.`);
+    if (this.codeRepository) {
+      this.addAgentChoice(options, "lamdera", "Coding agent",
+        `Changes “${this.codeRepository.name}” and opens a pull request.`);
+    }
+
+    this.harnessSetting = new Setting(contentEl)
+      .setName("Local agent")
+      .setDesc("How the local model works through the task.")
       .addDropdown((dropdown) => dropdown
-        .addOption("claude", `Claude (${this.settings.model})`)
-        .addOption("local", `Local model, Dragonglass's loop (${localModel})`)
-        .addOption("local-smol", `Local model, smolagents (${localModel})`)
-        .addOption("local-qwen", `Local model, Qwen-Agent (${localModel})`)
-        .addOption("codex", `ChatGPT, with Codex and your plan (${this.settings.codexModel || "Codex's default model"})`)
-        .then((dropdown) => {
-          if (this.codeRepository) dropdown.addOption("lamdera", `Code: “${this.codeRepository.name}”, with the coding agent`);
-        })
-        .setValue(this.runtime !== "local" ? this.runtime : this.harness === "smolagents" ? "local-smol" : this.harness === "qwen-agent" ? "local-qwen" : "local")
+        .addOption("loop", "Dragonglass's loop")
+        .addOption("smolagents", "smolagents")
+        .addOption("qwen-agent", "Qwen-Agent")
+        .setValue(this.harness)
         .onChange((value) => {
-          this.runtime = value === "claude" || value === "codex" || value === "lamdera" ? value : "local";
-          this.harness = value === "local-smol" ? "smolagents" : value === "local-qwen" ? "qwen-agent" : "loop";
-          // Only a local run may read the whole vault.
-          if (this.runtime !== "local" && this.plan.wholeVault) void this.replan(false);
-          else this.render();
+          this.harness = value === "smolagents" || value === "qwen-agent" ? value : "loop";
         }));
 
     this.scopeSetting = new Setting(contentEl)
@@ -207,6 +216,8 @@ class DelegateModal extends Modal {
     const { plan } = this;
     const local = this.runtime === "local";
     const code = this.runtime === "lamdera";
+    this.renderAgentChoices();
+    this.harnessSetting.settingEl.toggle(local);
     this.scopeSetting.settingEl.toggle(local);
     this.budgetSetting.settingEl.toggle(this.runtime === "claude");
     this.earlierSetting?.settingEl.toggle(!code);
@@ -262,6 +273,14 @@ class DelegateModal extends Modal {
     });
   }
 
+  private renderAgentChoices(): void {
+    for (const [runtime, choice] of this.agentChoices) {
+      const selected = runtime === this.runtime;
+      choice.input.checked = selected;
+      choice.option.classList.toggle("is-selected", selected);
+    }
+  }
+
   /** What a code run gets and does: the Project's own words, and one app's repository. */
   private renderCode(): void {
     const summary = this.summaryEl;
@@ -285,6 +304,27 @@ class DelegateModal extends Modal {
       text: "⚠ The Project's text goes to OpenAI. The coding agent's container holds its GitHub, Lamdera and ChatGPT sign-ins, "
         + "and Codex can reach the internet from there. It never merges, and never deploys production.",
     });
+  }
+
+  /** The consequential first choice stays visible; runtime-specific details follow it. */
+  private addAgentChoice(container: HTMLElement, runtime: AgentRuntime, name: string, description: string): void {
+    const option = container.createEl("label", { cls: "dg-delegate-agent-option" });
+    const input = option.createEl("input", {
+      attr: { type: "radio", name: `dg-delegate-agent-${this.agentChoiceId}` },
+    });
+    const text = option.createSpan({ cls: "dg-delegate-agent-copy" });
+    text.createEl("strong", { text: name });
+    text.createSpan({ text: description });
+    input.checked = runtime === this.runtime;
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      this.runtime = runtime;
+      this.renderAgentChoices();
+      // Only a local run may read the whole vault.
+      if (runtime !== "local" && this.plan.wholeVault) void this.replan(false);
+      else this.render();
+    });
+    this.agentChoices.set(runtime, { input, option });
   }
 }
 
