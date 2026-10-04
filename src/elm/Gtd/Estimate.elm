@@ -4,6 +4,8 @@ module Gtd.Estimate exposing
     , fromKey
     , key
     , label
+    , symbol
+    , withSymbol
     )
 
 {-| Roughly how many minutes an Action takes, in the steps `ESTIMATE_MINUTES` lists in
@@ -39,11 +41,40 @@ label minutes =
         String.fromInt (minutes // 60) ++ " h"
 
 
-{-| The estimate on an Action card: a stopwatch and the time, which read on their own.
+{-| One picture per step, so the steps tell apart at a glance: a dash for a quick one,
+a coffee for a short break's worth, a target for one focused block, and clocks for one
+and two hours. The time is always written next to it.
+-}
+symbol : Int -> String
+symbol minutes =
+    if minutes <= 5 then
+        "💨"
+
+    else if minutes <= 15 then
+        "☕"
+
+    else if minutes <= 30 then
+        "🎯"
+
+    else if minutes <= 60 then
+        "🕐"
+
+    else
+        "🕑"
+
+
+{-| The symbol and the time, as menus and column headings show a step.
+-}
+withSymbol : Int -> String
+withSymbol minutes =
+    symbol minutes ++ " " ++ label minutes
+
+
+{-| The estimate on an Action card: its symbol and the time, which read on their own.
 -}
 badge : Int -> Html msg
 badge minutes =
     span [ class "dg-estimate" ]
-        [ span [ attribute "aria-hidden" "true" ] [ text "⏱ " ]
+        [ span [ attribute "aria-hidden" "true" ] [ text (symbol minutes ++ " ") ]
         , text (label minutes)
         ]

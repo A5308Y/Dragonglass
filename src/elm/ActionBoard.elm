@@ -1887,7 +1887,7 @@ groupLabel model key =
             "No estimate"
 
         EstimateGroup (Just minutes) ->
-            "⏱ " ++ Estimate.label minutes
+            Estimate.withSymbol minutes
 
 
 {-| Prefixes a Project name with a symbol for its status, so Actions of a Project
@@ -2201,7 +2201,7 @@ filterValues model =
             ( "", "Normal energy" ) :: List.map (\energy -> ( Energy.key energy, Energy.symbol energy ++ " " ++ Energy.label energy )) Energy.all
 
         FieldEstimate ->
-            List.map (\minutes -> ( Estimate.key minutes, Estimate.label minutes )) Estimate.all ++ [ ( "", "No estimate" ) ]
+            List.map (\minutes -> ( Estimate.key minutes, Estimate.withSymbol minutes )) Estimate.all ++ [ ( "", "No estimate" ) ]
 
         FieldArea ->
             Data.areas model.snapshot.projects |> List.map (\item -> ( item, item ))

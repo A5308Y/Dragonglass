@@ -1365,7 +1365,7 @@ estimateSelect current =
         (select [ tabindex 0, onInput (Estimate.fromKey >> EstimateChanged) ]
             (option [ value "", selected (current == Nothing) ] [ text "None" ]
                 :: List.map
-                    (\minutes -> option [ value (Estimate.key minutes), selected (current == Just minutes) ] [ text (Estimate.label minutes) ])
+                    (\minutes -> option [ value (Estimate.key minutes), selected (current == Just minutes) ] [ text (Estimate.withSymbol minutes) ])
                     Estimate.all
             )
         )

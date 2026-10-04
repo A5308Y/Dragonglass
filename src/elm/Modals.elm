@@ -1807,7 +1807,7 @@ estimateRow current =
         [ statusSelect "Estimate"
             (Nothing :: List.map Just Estimate.all)
             (Maybe.map Estimate.key >> Maybe.withDefault "")
-            (Maybe.map Estimate.label >> Maybe.withDefault "None")
+            (Maybe.map Estimate.withSymbol >> Maybe.withDefault "None")
             EstimateChanged
             current
         ]
