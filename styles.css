@@ -3032,13 +3032,13 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-partner-dismiss:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
 
 /* One inspiration image in a brainstorm, shown whole in a landscape frame of fixed
-   shape, so the page doesn't jump when it changes every three minutes. The fields stay
-   in a readable column; the picture may use the pane's whole width. */
+   shape, so the page doesn't jump when it changes every three minutes. It keeps to the
+   same readable column as the fields around it. */
 .dg-brainstorm-content { width: 100%; }
-.dg-brainstorm-content > * { width: min(952px, 100%); align-self: center; }
-.dg-brainstorm-content > .dg-brainstorm-inspiration { width: min(1800px, 100%); }
+.dg-brainstorm-content > * { width: min(952px, 100%); min-width: 0; align-self: center; }
 .dg-brainstorm-inspiration {
   flex: 0 0 auto;
+  box-sizing: border-box;
   overflow: hidden;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
