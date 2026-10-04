@@ -24,6 +24,7 @@ type Command
     | SetActionContext ActionId String
     | TrashAction ActionId
     | DelegateActionByEmail ActionId
+    | MoveActionToInbox ActionId
     | SetActiveSavedView (Maybe String)
     | UpsertSavedView SavedView Bool
     | DeleteSavedView String
@@ -82,6 +83,9 @@ toBase command =
 
         DelegateActionByEmail actionId ->
             Base.DelegateActionByEmail actionId
+
+        MoveActionToInbox actionId ->
+            Base.MoveActionToInbox actionId
 
         SetActiveSavedView savedId ->
             Base.SetActiveSavedView savedId

@@ -187,6 +187,39 @@ export class GtdRepository {
     await this.app.fileManager.trashFile(action.file);
   }
 
+  /**
+   * Turns an Action back into an Inbox Item, to be clarified again: the note keeps its text and
+   * id, loses what made it an Action (status, Project, context, dates) and moves to the Inbox
+   * folder. Returns how to put the Action back exactly as it was, for Undo.
+   */
+  async moveActionToInbox(id: string): Promise<() => Promise<void>> {
+    const action = this.requireAction(id);
+    const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().inboxDirectory) || "GTD/Inbox");
+    return this.enqueue(action.file.path, async () => {
+      const originalPath = action.file.path;
+      const original = await this.app.vault.read(action.file);
+      await this.app.fileManager.processFrontMatter(action.file, (frontmatter) => {
+        const captured = typeof frontmatter.captured === "string" ? frontmatter.captured : undefined;
+        for (const key of ACTION_ONLY_KEYS) delete frontmatter[key];
+        frontmatter.type = "gtd-inbox-item";
+        frontmatter.title = action.title;
+        // It was captured once already; the Inbox shows when.
+        frontmatter.created = captured ?? action.created;
+      });
+      const target = this.uniqueMarkdownPath(directory, action.title, action.id);
+      if (target !== action.file.path) await this.app.fileManager.renameFile(action.file, target);
+      const moved = action.file;
+      return async () => {
+        if (!this.app.vault.getAbstractFileByPath(moved.path)) throw new Error(`“${action.title}” is no longer in the Inbox.`);
+        if (moved.path !== originalPath) {
+          if (this.app.vault.getAbstractFileByPath(originalPath)) throw new Error(`“${originalPath}” exists again.`);
+          await this.app.fileManager.renameFile(moved, originalPath);
+        }
+        await this.app.vault.modify(moved, original);
+      };
+    });
+  }
+
   async convertActionToSubproject(id: string, title: string, parentProjectId: string): Promise<Project> {
     const action = this.requireAction(id);
     const parent = this.index.getSnapshot().projectsById.get(parentProjectId);
@@ -1222,6 +1255,12 @@ function projectNotesFromAction(content: string, title: string): string {
     "#".repeat(Math.min(6, Math.max(3, hashes.length + 1)))
   );
 }
+
+/** The frontmatter only an Action has, taken off when it goes back to the Inbox. */
+const ACTION_ONLY_KEYS = [
+  "status", "project_id", "project", "context", "energy", "due", "waiting_since", "follow_up", "delegated_to",
+  "scheduled_start", "duration_minutes", "completed", "priority", "captured",
+] as const;
 
 function wikiLink(project: Project): string {
   const path = project.file.path.replace(/\.md$/i, "");

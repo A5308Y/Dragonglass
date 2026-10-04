@@ -57,6 +57,7 @@ type Command
     | SetActionContext ActionId String
     | TrashAction ActionId
     | DelegateActionByEmail ActionId
+    | MoveActionToInbox ActionId
     | CreateAction NewActionInput
     | UpdateAction ActionId ActionChanges
     | ScheduleAction ActionId ScheduleInput
@@ -348,6 +349,9 @@ encode command =
 
         DelegateActionByEmail actionId ->
             object "delegate-action" [ ( "actionId", Encode.string actionId ) ]
+
+        MoveActionToInbox actionId ->
+            object "move-action-to-inbox" [ ( "actionId", Encode.string actionId ) ]
 
         CreateAction input ->
             object "save-new-action"

@@ -130,6 +130,13 @@ export class ElmActionBoardHost {
       case "delegate-action":
         await delegateActionByEmail(this.services, command.actionId);
         return;
+      case "move-action-to-inbox": {
+        const action = this.services.repository.index.getSnapshot().actionsById.get(command.actionId);
+        if (!action) throw new Error("This Action is missing or has a duplicate ID.");
+        const restore = await this.services.repository.moveActionToInbox(action.id);
+        showUndoNotice(`Moved “${action.title}” back to the Inbox.`, restore);
+        return;
+      }
       case "trash-action": {
         const action = this.services.repository.index.getSnapshot().actionsById.get(command.actionId);
         if (!action) throw new Error("This Action is missing or has a duplicate ID.");

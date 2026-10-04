@@ -2406,6 +2406,7 @@ actionMenu x y model action =
             ++ [ MenuSeparator
                , MenuItem "Edit…" (Command.EditActionModal action.id)
                , MenuItem "Delegate by email…" (Command.DelegateActionByEmail action.id)
+               , MenuItem "Move back to Inbox" (Command.MoveActionToInbox action.id)
                , MenuItem "Delete Action…" (Command.TrashAction action.id)
                ]
         )

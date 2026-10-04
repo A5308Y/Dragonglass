@@ -603,6 +603,7 @@ export type ElmNonMenuCommand =
   | { type: "update-action"; actionId: string; projectId?: string; context?: string }
   | { type: "trash-action"; actionId: string }
   | { type: "delegate-action"; actionId: string }
+  | { type: "move-action-to-inbox"; actionId: string }
   | { type: "edit-project"; projectId: string }
   | { type: "set-project-status"; projectId: string; status: Project["status"] }
   | { type: "set-project-area"; projectId: string; area: string }
@@ -737,7 +738,7 @@ interface ElmProjectsMenuCommand {
 export const SURFACE_COMMANDS = {
   actionBoard: [
     "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
-    "set-action-priorities", "trash-action", "delegate-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt",
+    "set-action-priorities", "trash-action", "delegate-action", "move-action-to-inbox", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt",
     "show-menu", "open-file", "open-link", "open-note-link",
   ],
   projects: [
@@ -986,6 +987,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "edit-action":
     case "trash-action":
     case "delegate-action":
+    case "move-action-to-inbox":
       return typeof value.actionId === "string";
     case "edit-project":
     case "trash-project":
