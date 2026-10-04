@@ -604,6 +604,7 @@ export type ElmNonMenuCommand =
   | { type: "trash-action"; actionId: string }
   | { type: "delegate-action"; actionId: string }
   | { type: "move-action-to-inbox"; actionId: string }
+  | { type: "export-project"; projectId: string }
   | { type: "edit-project"; projectId: string }
   | { type: "set-project-status"; projectId: string; status: Project["status"] }
   | { type: "set-project-area"; projectId: string; area: string }
@@ -748,7 +749,7 @@ export const SURFACE_COMMANDS = {
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link", "open-link",
     "set-desired-outcome", "add-diary-entry", "create-support-note", "create-support-folder", "read-support-note",
     "update-support-note", "save-project-preferences", "open-file", "open-someday-review", "open-pomodoro", "show-menu",
-    "delegate-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "update-code-run", "delete-agent-run", "plan-project", "organise-idea",
+    "delegate-project", "export-project", "answer-agent-question", "stop-agent-run", "rerun-agent-run", "update-code-run", "delete-agent-run", "plan-project", "organise-idea",
     "open-note-link",
   ],
   inbox: [
@@ -990,6 +991,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "move-action-to-inbox":
       return typeof value.actionId === "string";
     case "edit-project":
+    case "export-project":
     case "trash-project":
     case "project-dependencies":
     case "import-actions":

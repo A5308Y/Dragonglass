@@ -35,6 +35,7 @@ import { CalendarSecret } from "./calendar/calendar-secret";
 import { parseMiteSettings } from "./domain/mite";
 import { AgentService } from "./agent/agent-service";
 import { checkDeviceCopy } from "./ui/check-device-copy";
+import { exportProjectTree } from "./ui/export-project";
 import { delegateProject } from "./ui/delegate";
 import { confirmDeleteAgentRun } from "./ui/delete-agent-run";
 import type { PomodoroSession } from "./domain/pomodoro";
@@ -437,6 +438,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.addCommand({ id: "import-actions", name: "Import Actions", callback: () => this.importActions() });
     this.addCommand({ id: "import-subprojects", name: "Import Sub-projects", callback: () => this.importSubprojects() });
     this.addCommand({ id: "new-project", name: "New Project", callback: () => this.createProject() });
+    this.addCommand({ id: "export-project", name: "Export Project tree for reading…", callback: () => this.pickProjectToExport() });
     this.addCommand({ id: "check-device-copy", name: "Check this device's copy", callback: () => void checkDeviceCopy(this.app, this.index) });
   }
 
@@ -645,6 +647,12 @@ export default class DragonglassGtdPlugin extends Plugin {
   }
 
   /** Picks the Project for a new session from those still open. */
+  private pickProjectToExport(): void {
+    const projects = this.index.getSnapshot().projects.filter((project) => project.status !== "cancelled");
+    new OpenProjectModal(this.app, projects, (project) =>
+      exportProjectTree(this.app, this.repository, project.id, this.settings.actionsDirectory)).open();
+  }
+
   private pickPomodoroProject(): void {
     const projects = this.index.getSnapshot().projects.filter((project) => project.status !== "completed" && project.status !== "cancelled");
     if (!projects.length) return void new Notice("There are no open Projects to focus on.");

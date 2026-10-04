@@ -95,6 +95,7 @@ type Command
     | OpenSomedayReview
       -- Agent delegation
     | DelegateProject ProjectId
+    | ExportProject ProjectId
     | AnswerAgentQuestion String String String
     | StopAgentRun String
     | RerunAgentRun String
@@ -529,6 +530,9 @@ encode command =
 
         DelegateProject projectId ->
             object "delegate-project" [ ( "projectId", Encode.string projectId ) ]
+
+        ExportProject projectId ->
+            object "export-project" [ ( "projectId", Encode.string projectId ) ]
 
         AnswerAgentQuestion runId questionId answer ->
             object "answer-agent-question"

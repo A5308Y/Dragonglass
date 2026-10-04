@@ -52,6 +52,7 @@ type Command
     | OpenSomedayReview
     | OpenPomodoro ProjectId
     | DelegateProject ProjectId
+    | ExportProject ProjectId
     | AnswerAgentQuestion String String String
     | StopAgentRun String
     | RerunAgentRun String
@@ -180,6 +181,9 @@ toBase command =
 
         DelegateProject projectId ->
             Base.DelegateProject projectId
+
+        ExportProject projectId ->
+            Base.ExportProject projectId
 
         AnswerAgentQuestion runId questionId answer ->
             Base.AnswerAgentQuestion runId questionId answer

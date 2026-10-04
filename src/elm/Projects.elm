@@ -2370,6 +2370,7 @@ projectMenu x y model project =
             ++ [ MenuItem "New Action…" (Command.NewActionModal (Just project.id))
                , MenuItem "New sub-project…" (Command.NewProjectModal (Just project.id) ProjectStatus.Active)
                , MenuItem "Plan Project…" (Command.PlanProject project.id)
+               , MenuItem "Export for reading…" (Command.ExportProject project.id)
                , MenuItem "Open note" (Command.OpenFile project.file.path)
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
                , MenuSeparator
@@ -2452,6 +2453,7 @@ subprojectMenu x y model project =
                , MenuItem "Blocked by…" (Command.ProjectDependenciesModal project.id)
                , MenuItem "Edit…" (Command.EditProjectModal project.id)
                , MenuItem "Plan Project…" (Command.PlanProject project.id)
+               , MenuItem "Export for reading…" (Command.ExportProject project.id)
                , MenuItem "Open note" (Command.OpenFile project.file.path)
                , MenuItem "Start Pomodoro…" (Command.OpenPomodoro project.id)
                ]

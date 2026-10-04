@@ -134,6 +134,15 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   starts a reply's Inbox Item with a link to that Action (`replyAboutLine`). A reply never changes the
   Action: mail is an open channel. Rules: `src/domain/email-delegation.ts`, dialog `src/ui/delegate-action.ts`.
 
+## Exporting a Project tree for reading
+
+- "Export for reading…" (Project menus, command "Export Project tree for reading…") writes one self-contained
+  HTML file into `Exports` next to the Actions folder: the tree as for delegation, without cancelled Projects
+  and Actions, finished ones only on request, support notes optionally. It's a snapshot, never updated.
+- Rules and the page are pure (`src/domain/project-export.ts`), and everything typed in the vault is escaped
+  there. Notes are rendered by Obsidian and cut down in `src/ui/export-project.ts` (no images, scripts,
+  attributes or vault links), so the page loads nothing and links only to the web or mail.
+
 ## Checking this device's copy
 
 - The vault syncs through iCloud, which can leave a device showing an old state. "Check this

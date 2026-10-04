@@ -1,3 +1,4 @@
+import { exportProjectTree } from "../ui/export-project";
 import { delegateActionByEmail } from "../ui/delegate-action";
 import { Menu, Notice } from "obsidian";
 import { trashWithUndo } from "../ui/undo";
@@ -201,6 +202,9 @@ export class ElmProjectsHost {
       }
       case "edit-project":
         this.services.editProject(command.projectId);
+        return;
+      case "export-project":
+        exportProjectTree(this.services.app, this.services.repository, command.projectId, this.services.getSettings().actionsDirectory);
         return;
       case "open-someday-review":
         this.services.openSomedayReview();
