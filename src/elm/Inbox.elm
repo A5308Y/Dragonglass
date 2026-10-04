@@ -8,6 +8,7 @@ import Gtd.Command as Base exposing (ScheduleInput(..))
 import Gtd.Command.Inbox as Command exposing (Command, Disposition(..))
 import Gtd.Data as Data exposing (InboxItem, Project, Snapshot)
 import Gtd.Energy as Energy exposing (Energy)
+import Gtd.Estimate as Estimate
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (InboxItemId, ProjectId)
@@ -79,6 +80,7 @@ type alias Model =
     , waitingSince : String
     , followUp : String
     , energy : Maybe Energy
+    , estimate : Maybe Int
     , schedule : ScheduleFields
     , someday : Bool
     , backlog : Bool
@@ -105,6 +107,7 @@ type Msg
     | WaitingSinceChanged String
     | FollowUpChanged String
     | EnergyChanged (Maybe Energy)
+    | EstimateChanged (Maybe Int)
     | SetAllDay Bool
     | ScheduledStartChanged String
     | ScheduledDurationChanged String
@@ -178,6 +181,7 @@ initialModel snapshot =
     , waitingSince = snapshot.today
     , followUp = ""
     , energy = Nothing
+    , estimate = Nothing
     , schedule = { allDay = False, start = "", duration = String.fromInt snapshot.settings.defaultDurationMinutes }
     , someday = False
     , backlog = False
@@ -287,6 +291,9 @@ update msg model =
 
         EnergyChanged energy ->
             ( { model | energy = energy }, Cmd.none )
+
+        EstimateChanged estimate ->
+            ( { model | estimate = estimate }, Cmd.none )
 
         SetAllDay allDay ->
             let
@@ -492,6 +499,7 @@ resetCurrent model =
                     , waitingSince = model.snapshot.today
                     , followUp = ""
                     , energy = Nothing
+                    , estimate = Nothing
                     , schedule = { allDay = False, start = "", duration = String.fromInt model.snapshot.settings.defaultDurationMinutes }
                     , someday = False
                     , backlog = False
@@ -1324,6 +1332,10 @@ processingForm model =
                             "Energy"
                             "Optional. How much energy the Action takes."
                             [ energySelect model.energy ]
+                        , processingField False
+                            "Estimate"
+                            "Optional. Roughly how long the Action takes."
+                            [ estimateSelect model.estimate ]
                         ]
                    )
                 ++ waitingFields model
@@ -1343,6 +1355,18 @@ energySelect current =
                             [ text (Energy.symbol energy ++ " " ++ Energy.label energy) ]
                     )
                     Energy.all
+            )
+        )
+
+
+estimateSelect : Maybe Int -> Html Msg
+estimateSelect current =
+    Ui.labelled "Estimate"
+        (select [ tabindex 0, onInput (Estimate.fromKey >> EstimateChanged) ]
+            (option [ value "", selected (current == Nothing) ] [ text "None" ]
+                :: List.map
+                    (\minutes -> option [ value (Estimate.key minutes), selected (current == Just minutes) ] [ text (Estimate.label minutes) ])
+                    Estimate.all
             )
         )
 
@@ -1643,6 +1667,12 @@ processingInput model =
 
         else
             model.energy
+    , estimate =
+        if model.actionStatus == ActionStatus.Waiting then
+            Nothing
+
+        else
+            model.estimate
     , schedule = processingSchedule model
     , fileOriginal = model.fileOriginal
     }

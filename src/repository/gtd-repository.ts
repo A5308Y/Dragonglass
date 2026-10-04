@@ -141,6 +141,7 @@ export class GtdRepository {
         frontmatter.project = project ? wikiLink(project) : null;
         frontmatter.context = actionKeepsContext(input.status) ? context || null : null;
         frontmatter.energy = actionKeepsContext(input.status) ? input.energy || null : null;
+        frontmatter.estimate_minutes = actionKeepsContext(input.status) ? input.estimate ?? null : null;
         frontmatter.due = input.due || null;
         frontmatter.waiting_since = waitingSinceFor(input.status, undefined, input.waitingSince);
         frontmatter.follow_up = followUpFor(input.status, undefined, input.followUp);
@@ -463,9 +464,11 @@ export class GtdRepository {
         if (!actionKeepsContext(resolvedStatus)) {
           if (frontmatter.context != null) frontmatter.context = null;
           if (frontmatter.energy != null) frontmatter.energy = null;
+          if (frontmatter.estimate_minutes != null) frontmatter.estimate_minutes = null;
         } else {
           if (changes.context !== undefined) frontmatter.context = changes.context.trim() || null;
           if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
+          if (changes.estimate !== undefined) frontmatter.estimate_minutes = changes.estimate;
         }
         if (changes.due !== undefined) frontmatter.due = changes.due || null;
         if (changes.delegatedTo !== undefined) frontmatter.delegated_to = changes.delegatedTo.trim() || null;
@@ -777,6 +780,7 @@ export class GtdRepository {
       project: project ? wikiLink(project) : null,
       context: actionKeepsContext(status) ? context || null : null,
       energy: actionKeepsContext(status) ? input.energy || null : null,
+      estimate_minutes: actionKeepsContext(status) ? input.estimate ?? null : null,
       due: input.due || null,
       waiting_since: waitingSinceFor(status, undefined, input.waitingSince),
       follow_up: followUpFor(status, undefined, input.followUp),
@@ -1258,7 +1262,7 @@ function projectNotesFromAction(content: string, title: string): string {
 
 /** The frontmatter only an Action has, taken off when it goes back to the Inbox. */
 const ACTION_ONLY_KEYS = [
-  "status", "project_id", "project", "context", "energy", "due", "waiting_since", "follow_up", "delegated_to",
+  "status", "project_id", "project", "context", "energy", "estimate_minutes", "due", "waiting_since", "follow_up", "delegated_to",
   "scheduled_start", "duration_minutes", "completed", "priority", "captured",
 ] as const;
 
@@ -1281,6 +1285,7 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
     "project",
     "context",
     "energy",
+    "estimate_minutes",
     "due",
     // No longer written, but still removed from files that carry it from earlier versions.
     "defer_until",
@@ -1335,6 +1340,7 @@ function processingActionInput(title: string, context: string, input: InboxProce
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
     ...(input.followUp ? { followUp: input.followUp } : {}),
     ...(input.energy ? { energy: input.energy } : {}),
+    ...(input.estimate ? { estimate: input.estimate } : {}),
     ...(input.scheduledStart ? { scheduledStart: input.scheduledStart } : {}),
     ...(input.durationMinutes !== undefined ? { durationMinutes: input.durationMinutes } : {}),
     ...(project ? { projectId: project.id } : {}),

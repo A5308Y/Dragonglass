@@ -54,6 +54,7 @@ type GroupBy
     | GroupByProject
     | GroupByContext
     | GroupByEnergy
+    | GroupByEstimate
 
 
 type SortField
@@ -100,6 +101,7 @@ type Filter
     | ByProject MatchOperator (List (Maybe ProjectId))
     | ByContext MatchOperator (List String)
     | ByEnergy MatchOperator (List String)
+    | ByEstimate MatchOperator (List String)
     | ByArea MatchOperator (List String)
     | ByDue DueRange
 
@@ -237,6 +239,9 @@ groupByLabel groupBy =
         GroupByEnergy ->
             "Energy"
 
+        GroupByEstimate ->
+            "Estimate"
+
 
 sortFieldLabel : SortField -> String
 sortFieldLabel field =
@@ -321,6 +326,9 @@ groupByDecoder =
 
                     "energy" ->
                         Decode.succeed GroupByEnergy
+
+                    "estimate" ->
+                        Decode.succeed GroupByEstimate
 
                     _ ->
                         Decode.succeed GroupByStatus
@@ -423,6 +431,9 @@ valueFilterDecoder =
 
                     "energy" ->
                         Decode.succeed (ByEnergy operator strings)
+
+                    "estimate" ->
+                        Decode.succeed (ByEstimate operator strings)
 
                     "area" ->
                         Decode.succeed (ByArea operator strings)
@@ -603,6 +614,9 @@ groupByKey groupBy =
         GroupByEnergy ->
             "energy"
 
+        GroupByEstimate ->
+            "estimate"
+
 
 sortFieldKey : SortField -> String
 sortFieldKey field =
@@ -647,6 +661,9 @@ encodeFilter filter =
 
         ByEnergy operator values ->
             valueFilter "energy" operator values
+
+        ByEstimate operator values ->
+            valueFilter "estimate" operator values
 
         ByArea operator values ->
             valueFilter "area" operator values

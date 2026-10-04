@@ -42,6 +42,7 @@ type alias InboxInput =
     , waitingSince : String
     , followUp : String
     , energy : Maybe Energy
+    , estimate : Maybe Int
     , schedule : Maybe Base.ScheduleInput
     , fileOriginal : Bool
     }

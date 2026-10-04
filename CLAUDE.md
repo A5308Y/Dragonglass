@@ -125,6 +125,12 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   where this device deliberately took them back (Undo, reopening a mail backlog).
   A new field in a store needs a rule there too, or one device's value silently wins.
 
+## Action estimates
+
+- `estimate_minutes` is optional and comes in steps (`ESTIMATE_MINUTES`: 5, 15, 30, 60, 120), so the board
+  can filter and group by it; a hand-written value reads as the next step up (`estimateStep`). Like energy,
+  Waiting Actions drop it. `Gtd/Estimate.elm` lists the same steps: change both together.
+
 ## Delegating Actions by email
 
 - "Delegate by email…" (Action Board menu, "Delegate" on the Project page's Action rows) makes the Action

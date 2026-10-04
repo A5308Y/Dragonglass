@@ -52,6 +52,7 @@ type alias Action =
     , projectId : Maybe ProjectId
     , context : Maybe String
     , energy : Maybe Energy
+    , estimate : Maybe Int
     , due : Maybe String
     , waitingSince : Maybe String
     , followUp : Maybe String
@@ -284,6 +285,7 @@ actionDecoder =
         |> optional "projectId" (Decode.maybe Decode.string) Nothing
         |> optional "context" (Decode.maybe Decode.string) Nothing
         |> optional "energy" (Decode.maybe Energy.decoder) Nothing
+        |> optional "estimate" (Decode.maybe Decode.int) Nothing
         |> optional "due" (Decode.maybe Decode.string) Nothing
         |> optional "waitingSince" (Decode.maybe Decode.string) Nothing
         |> optional "followUp" (Decode.maybe Decode.string) Nothing

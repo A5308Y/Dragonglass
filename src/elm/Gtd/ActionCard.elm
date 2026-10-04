@@ -7,6 +7,7 @@ the card, or, for a running Pomodoro, completes the Action (`done` then shows it
 
 import Gtd.Data as Data exposing (Action)
 import Gtd.Energy as Energy
+import Gtd.Estimate as Estimate
 import Gtd.Links as Links
 import Gtd.Ui as Ui
 import Html exposing (Html, article, div, input, span, text)
@@ -50,6 +51,7 @@ view config action =
             [ Ui.maybeView (Data.scheduleText config.today action) (\schedule -> span [ class "dg-card-schedule" ] [ text ("🗓 " ++ schedule) ])
             , Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
             , Ui.maybeView action.energy Energy.badge
+            , Ui.maybeView action.estimate Estimate.badge
             , Ui.maybeView action.due
                 (\due ->
                     -- Overdue is said in words and a symbol too, not by colour alone.

@@ -32,6 +32,7 @@ type alias NewActionInput =
     , context : String
     , waitingSince : Maybe String
     , followUp : Maybe String
+    , estimate : Maybe Int
     , schedule : Maybe ScheduleInput
     }
 
@@ -42,6 +43,7 @@ type alias ActionChanges =
     , projectId : Maybe ProjectId
     , context : String
     , energy : Maybe Energy
+    , estimate : Maybe Int
     , due : String
     , waitingSince : Maybe String
     , followUp : String
@@ -157,6 +159,7 @@ newActionToBase input =
     , context = input.context
     , waitingSince = input.waitingSince
     , followUp = input.followUp
+    , estimate = input.estimate
     , schedule = Maybe.map scheduleToBase input.schedule
     }
 
@@ -168,6 +171,7 @@ actionChangesToBase changes =
     , projectId = changes.projectId
     , context = changes.context
     , energy = changes.energy
+    , estimate = changes.estimate
     , due = changes.due
     , waitingSince = changes.waitingSince
     , followUp = changes.followUp

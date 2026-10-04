@@ -17,6 +17,7 @@ import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ProjectId)
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.Energy as Energy exposing (Energy)
+import Gtd.Estimate as Estimate
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ui as Ui
 import Html exposing (Html, button, div, h2, input, option, p, select, span, text, textarea)
@@ -86,6 +87,7 @@ type alias ActionFields =
     , project : Picker Project
     , context : Picker String
     , energy : Maybe Energy
+    , estimate : Maybe Int
     , due : String
     , waitingSince : String
     , followUp : String
@@ -156,6 +158,7 @@ type Msg
     | TextChanged Field String
     | ActionStatusChanged ActionStatus
     | EnergyChanged (Maybe Energy)
+    | EstimateChanged (Maybe Int)
     | ProjectStatusChanged ProjectStatus
     | ToggleAllDay Bool
     | ToggleBlocker ProjectId Bool
@@ -337,6 +340,7 @@ newActionFields snapshot maybeProject =
     , project = projectPickerFor snapshot maybeProject
     , context = Picker.init "" Nothing
     , energy = Nothing
+    , estimate = Nothing
     , due = ""
     , waitingSince = snapshot.today
     , followUp = ""
@@ -362,6 +366,7 @@ editActionFields snapshot action =
                         Picker.init ("Missing Project: " ++ projectId) Nothing
     , context = Picker.init (Maybe.withDefault "" action.context) action.context
     , energy = action.energy
+    , estimate = action.estimate
     , due = Maybe.withDefault "" action.due
     , waitingSince = Maybe.withDefault snapshot.today action.waitingSince
     , followUp = Maybe.withDefault "" action.followUp
@@ -529,6 +534,9 @@ update msg model =
 
         EnergyChanged energy ->
             ( { model | form = mapActionFields (\fields -> { fields | energy = energy }) model.form }, Cmd.none )
+
+        EstimateChanged estimate ->
+            ( { model | form = mapActionFields (\fields -> { fields | estimate = estimate }) model.form }, Cmd.none )
 
         ActionStatusChanged status ->
             ( { model | form = mapActionFields (\fields -> { fields | status = status }) model.form }, Cmd.none )
@@ -992,6 +1000,7 @@ submitAction mode fields model =
                                 , context = contextFor fields
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields
+                                , estimate = estimateFor fields
                                 , schedule = schedule
                                 }
                             )
@@ -1005,6 +1014,7 @@ submitAction mode fields model =
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
                                 , context = contextFor fields
                                 , energy = energyFor fields
+                                , estimate = estimateFor fields
                                 , due = fields.due
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields |> Maybe.withDefault ""
@@ -1033,6 +1043,15 @@ energyFor fields =
 
     else
         fields.energy
+
+
+estimateFor : ActionFields -> Maybe Int
+estimateFor fields =
+    if fields.status == ActionStatus.Waiting then
+        Nothing
+
+    else
+        fields.estimate
 
 
 {-| Only a Waiting Action carries a waiting date, so no date outlives its wait.
@@ -1416,6 +1435,13 @@ actionView model mode fields =
             else
                 []
 
+        estimateRows =
+            if keepsContext then
+                [ estimateRow fields.estimate ]
+
+            else
+                []
+
         conditionalRows =
             (if fields.status == ActionStatus.Waiting then
                 [ settingRow "Waiting since" "The day this Action started waiting." [ dateInput "Waiting since" fields.waitingSince WaitingField ]
@@ -1442,6 +1468,7 @@ actionView model mode fields =
             , statusRow
             ]
                 ++ contextRows
+                ++ estimateRows
                 ++ conditionalRows
                 ++ [ noticeView model, actions model [] (submitButton model "Create Action") ]
 
@@ -1453,6 +1480,7 @@ actionView model mode fields =
             ]
                 ++ contextRows
                 ++ energyRows
+                ++ estimateRows
                 ++ [ settingRow "Due" "" [ dateInput "Due" fields.due DueField ] ]
                 ++ conditionalRows
                 ++ [ noticeView model
@@ -1768,6 +1796,21 @@ dateInput name current field =
 toggle : String -> Bool -> (Bool -> Msg) -> Html Msg
 toggle name current toMessage =
     Ui.labelled name (input [ type_ "checkbox", checked current, onCheck toMessage ] [])
+
+
+{-| The estimate is optional too, and comes in rough steps for filtering.
+-}
+estimateRow : Maybe Int -> Html Msg
+estimateRow current =
+    settingRow "Estimate"
+        "Optional. Roughly how long the Action takes."
+        [ statusSelect "Estimate"
+            (Nothing :: List.map Just Estimate.all)
+            (Maybe.map Estimate.key >> Maybe.withDefault "")
+            (Maybe.map Estimate.label >> Maybe.withDefault "None")
+            EstimateChanged
+            current
+        ]
 
 
 {-| Energy is optional, so the choice starts with none.

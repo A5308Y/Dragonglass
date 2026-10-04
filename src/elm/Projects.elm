@@ -6,6 +6,7 @@ import Gtd.ActionStatus as ActionStatus
 import Gtd.Command.Projects as Command exposing (Command, MenuEntry(..))
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Energy as Energy
+import Gtd.Estimate as Estimate
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ProjectId)
@@ -2033,6 +2034,7 @@ viewActionRow today action =
                     ++ Ui.maybeList (Data.scheduleText today action) (\schedule -> span [ class "dg-action-schedule" ] [ text ("🗓 " ++ schedule) ])
                     ++ Ui.maybeList action.context (\context -> span [] [ text ("@" ++ context) ])
                     ++ Ui.maybeList action.energy Energy.badge
+                    ++ Ui.maybeList action.estimate Estimate.badge
                     ++ Ui.maybeList action.due (\due -> span [] [ text ("Due " ++ due) ])
                     ++ (if action.status == ActionStatus.Waiting then
                             Ui.maybeList action.delegatedTo (\to -> span [] [ text ("✉ " ++ to) ])

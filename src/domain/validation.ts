@@ -1,3 +1,4 @@
+import { estimateStep } from "./estimate";
 import {
   ACTION_STATUSES,
   ENERGY_LEVELS,
@@ -5,6 +6,7 @@ import {
   type Action,
   type ActionStatus,
   type Energy,
+  type Estimate,
   type InboxItem,
   type Project,
   type ProjectStatus,
@@ -84,6 +86,14 @@ function energyLevel(value: string): Energy | undefined {
   return level;
 }
 
+/** Minutes as a number or a numeric text, taken as its step (`estimateStep`); empty is none. */
+function estimateMinutes(value: unknown): Estimate | undefined {
+  if (value === null || value === undefined || value === "") return undefined;
+  const minutes = typeof value === "number" ? value : typeof value === "string" ? Number(value.trim()) : NaN;
+  if (!Number.isFinite(minutes) || minutes <= 0) throw new Error("Invalid 'estimate_minutes': use a number of minutes, or leave it empty");
+  return estimateStep(minutes);
+}
+
 function dateOnly(value: string, key: string): string {
   if (!parseDateOnly(value)) throw new Error(`Invalid '${key}' date`);
   return value;
@@ -127,6 +137,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const projectLink = optionalString(frontmatter, "project");
   const context = optionalString(frontmatter, "context");
   const energy = optionalString(frontmatter, "energy");
+  const estimate = frontmatter.estimate_minutes;
   const due = optionalString(frontmatter, "due");
   const waitingSince = optionalString(frontmatter, "waiting_since");
   const followUp = optionalString(frontmatter, "follow_up");
@@ -142,6 +153,8 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (context && keepsContext) action.context = context;
   const energyValue = energy ? energyLevel(energy) : undefined;
   if (energyValue && keepsContext) action.energy = energyValue;
+  const estimateValue = estimateMinutes(estimate);
+  if (estimateValue && keepsContext) action.estimate = estimateValue;
   if (due) action.due = dateOnly(due, "due");
   if (waitingSince) action.waitingSince = dateOnly(waitingSince, "waiting_since");
   if (followUp) action.followUp = dateOnly(followUp, "follow_up");

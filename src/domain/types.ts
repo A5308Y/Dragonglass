@@ -31,7 +31,11 @@ export const DEFAULT_PROJECT_BOARD_COLUMNS = [
 /** How much energy an Action takes when it is out of the ordinary; no level means normal. */
 export const ENERGY_LEVELS = ["low", "high"] as const;
 
+/** The steps an Action's time estimate takes, in minutes; see `estimate.ts`. */
+export const ESTIMATE_MINUTES = [5, 15, 30, 60, 120] as const;
+
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
+export type Estimate = (typeof ESTIMATE_MINUTES)[number];
 export type Energy = (typeof ENERGY_LEVELS)[number];
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
@@ -58,6 +62,8 @@ export interface Action {
   projectLink?: string;
   context?: string;
   energy?: Energy;
+  /** Roughly how many minutes the Action takes (`estimate_minutes`). */
+  estimate?: Estimate;
   due?: string;
   /** The day a Waiting Action started waiting. Every Waiting Action carries one. */
   waitingSince?: string;
@@ -108,6 +114,7 @@ export interface ActionInput {
   projectId?: string;
   context: string;
   energy?: Energy;
+  estimate?: Estimate;
   due?: string;
   waitingSince?: string;
   followUp?: string;
@@ -136,6 +143,7 @@ export interface InboxProcessingInput {
   status?: ActionStatus;
   context?: string;
   energy?: Energy;
+  estimate?: Estimate;
   waitingSince?: string;
   followUp?: string;
   scheduledStart?: string;
@@ -151,6 +159,8 @@ export type ActionChanges = Partial<
   delegatedTo?: string;
   /** Empty clears the energy level. */
   energy?: Energy | "";
+  /** `null` clears the estimate. */
+  estimate?: Estimate | null;
 };
 
 /** How a Project write treats the tree rules; see `GtdRepository.updateProject`. */
@@ -182,7 +192,7 @@ export interface GtdSnapshot {
   issues: readonly IndexIssue[];
 }
 
-export type ValueFilterField = "status" | "project" | "context" | "energy" | "area";
+export type ValueFilterField = "status" | "project" | "context" | "energy" | "estimate" | "area";
 export interface ValueFilter {
   kind: "value";
   field: ValueFilterField;
@@ -204,7 +214,7 @@ export interface DueFilter {
 }
 
 export type ActionFilter = ValueFilter | DueFilter;
-export type GroupBy = "status" | "project" | "context" | "energy";
+export type GroupBy = "status" | "project" | "context" | "energy" | "estimate";
 /** `manual` is the order set by dragging cards, stored as each Action's `priority`. */
 export type SortField = "manual" | "created" | "due" | "title" | "project";
 export type SortDirection = "asc" | "desc";

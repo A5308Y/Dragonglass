@@ -188,6 +188,7 @@ type alias InboxInput =
     , waitingSince : String
     , followUp : String
     , energy : Maybe Energy
+    , estimate : Maybe Int
     , schedule : Maybe ScheduleInput
     , fileOriginal : Bool
     }
@@ -204,6 +205,7 @@ noInboxInput =
     , waitingSince = ""
     , followUp = ""
     , energy = Nothing
+    , estimate = Nothing
     , schedule = Nothing
     , fileOriginal = False
     }
@@ -227,6 +229,7 @@ type alias NewActionInput =
     , context : String
     , waitingSince : Maybe String
     , followUp : Maybe String
+    , estimate : Maybe Int
     , schedule : Maybe ScheduleInput
     }
 
@@ -237,6 +240,7 @@ type alias ActionChanges =
     , projectId : Maybe ProjectId
     , context : String
     , energy : Maybe Energy
+    , estimate : Maybe Int
     , due : String
     , waitingSince : Maybe String
     , followUp : String
@@ -365,6 +369,7 @@ encode command =
                             ++ maybeIdField "projectId" input.projectId
                             ++ maybeStringField "waitingSince" input.waitingSince
                             ++ maybeStringField "followUp" input.followUp
+                            ++ maybeIntField "estimate" input.estimate
                             ++ scheduleField input.schedule
                         )
                   )
@@ -380,6 +385,7 @@ encode command =
                          , ( "projectId", Encode.string (Maybe.withDefault "" changes.projectId) )
                          , ( "context", Encode.string changes.context )
                          , ( "energy", Encode.string (Maybe.map Energy.key changes.energy |> Maybe.withDefault "") )
+                         , ( "estimate", Encode.int (Maybe.withDefault 0 changes.estimate) )
                          , ( "due", Encode.string changes.due )
                          , ( "followUp", Encode.string changes.followUp )
                          ]
@@ -772,6 +778,16 @@ encodeMenuEntry entry =
             Encode.object [ ( "label", Encode.string label ), ( "command", encode command ) ]
 
 
+maybeIntField : String -> Maybe Int -> List ( String, Encode.Value )
+maybeIntField name value =
+    case value of
+        Just number ->
+            [ ( name, Encode.int number ) ]
+
+        Nothing ->
+            []
+
+
 encodeInboxInput : InboxInput -> Encode.Value
 encodeInboxInput input =
     Encode.object
@@ -782,6 +798,7 @@ encodeInboxInput input =
             ++ presentString "nextAction" input.nextAction
             ++ presentString "context" input.context
             ++ maybeStringField "energy" (Maybe.map Energy.key input.energy)
+            ++ maybeIntField "estimate" input.estimate
             ++ (if input.status == ActionStatus.Waiting then
                     presentString "waitingSince" input.waitingSince ++ presentString "followUp" input.followUp
 

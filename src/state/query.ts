@@ -1,5 +1,6 @@
 import { ACTION_STATUSES, type Action, type ActionFilter, type BoardConfiguration, type GtdSnapshot, type GroupBy, type Project, type SortSpec } from "../domain/types";
 import { addLocalDays, localDate } from "../utils/date";
+import { estimateLabel, estimateStep } from "../domain/estimate";
 import { projectArea, projectBreadcrumb, projectLineage } from "../domain/project-hierarchy";
 
 export interface ActionGroup {
@@ -8,10 +9,11 @@ export interface ActionGroup {
   actions: Action[];
 }
 
-function valueFor(action: Action, field: "status" | "project" | "context" | "energy"): string {
+function valueFor(action: Action, field: "status" | "project" | "context" | "energy" | "estimate"): string {
   if (field === "status") return action.status;
   if (field === "project") return action.projectId ?? "";
   if (field === "context") return action.context ?? "";
+  if (field === "estimate") return action.estimate ? String(action.estimate) : "";
   return action.energy ?? "";
 }
 
@@ -104,6 +106,7 @@ function groupKey(action: Action, groupBy: GroupBy): string {
   if (groupBy === "status") return action.status;
   if (groupBy === "project") return action.projectId ?? "";
   if (groupBy === "context") return action.context ?? "";
+  if (groupBy === "estimate") return action.estimate ? String(action.estimate) : "";
   return action.energy ?? "";
 }
 
@@ -111,8 +114,10 @@ function groupLabel(key: string, groupBy: GroupBy, projectsById: ReadonlyMap<str
   if (!key) {
     if (groupBy === "project") return "No project";
     if (groupBy === "context") return "No context";
+    if (groupBy === "estimate") return "No estimate";
     return "Normal energy";
   }
+  if (groupBy === "estimate") return estimateLabel(estimateStep(Number(key)));
   if (groupBy === "project") {
     const project = projectsById.get(key);
     return project ? projectBreadcrumb(project, projectsById) : `Missing project (${key})`;
@@ -133,6 +138,7 @@ export function groupActions(actions: readonly Action[], groupBy: GroupBy, proje
     if (groupBy === "status") return ACTION_STATUSES.indexOf(left as (typeof ACTION_STATUSES)[number]) - ACTION_STATUSES.indexOf(right as (typeof ACTION_STATUSES)[number]);
     if (!left) return 1;
     if (!right) return -1;
+    if (groupBy === "estimate") return Number(left) - Number(right);
     return groupLabel(left, groupBy, projectsById).localeCompare(groupLabel(right, groupBy, projectsById), undefined, { sensitivity: "base" });
   });
   return keys.map((key) => ({ key, label: groupLabel(key, groupBy, projectsById), actions: groups.get(key) ?? [] }));

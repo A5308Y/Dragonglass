@@ -45,6 +45,7 @@ async function restore(services: GtdServices, before: Action): Promise<void> {
     ...(before.waitingSince ? { waitingSince: before.waitingSince } : {}),
     ...(before.context ? { context: before.context } : {}),
     ...(before.energy ? { energy: before.energy } : {}),
+    ...(before.estimate ? { estimate: before.estimate } : {}),
   });
 }
 

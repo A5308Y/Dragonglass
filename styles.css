@@ -3179,3 +3179,4 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-plan-idea-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .dg-plan-idea-done { padding: 2px 8px; color: var(--text-muted); }
 .dg-plan-idea-done:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
+.dg-estimate { white-space: nowrap; }

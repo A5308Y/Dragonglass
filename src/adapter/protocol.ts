@@ -1,3 +1,4 @@
+import { isEstimate } from "../domain/estimate";
 import type { FeedStoreData } from "../domain/feed";
 import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../domain/pomodoro";
 import {
@@ -546,13 +547,17 @@ export interface ElmNewActionInput {
   context: string;
   waitingSince?: string;
   followUp?: string;
+  /** Minutes, one of `ESTIMATE_MINUTES`. */
+  estimate?: number;
   schedule?: ElmScheduleInput;
 }
 
-export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId" | "followUp"> {
+export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId" | "followUp" | "estimate"> {
   projectId: string;
   /** Empty clears the energy level. */
   energy: Energy | "";
+  /** Minutes, one of `ESTIMATE_MINUTES`; 0 clears the estimate. */
+  estimate: number;
   due: string;
   /** Empty clears the follow-up day. */
   followUp: string;
@@ -1162,6 +1167,7 @@ function isInboxInput(value: unknown): value is ElmInboxProcessingInput {
     && (value.status === undefined || isOneOf(ACTION_STATUSES, value.status))
     && isOptionalString(value.context)
     && (value.energy === undefined || isOneOf(ENERGY_LEVELS, value.energy))
+    && (value.estimate === undefined || isEstimate(value.estimate))
     && isOptionalString(value.waitingSince)
     && isOptionalString(value.followUp)
     && isOptionalSchedule(value.schedule)
@@ -1174,17 +1180,18 @@ function isSavedView(value: unknown): value is SavedView {
     && typeof value.name === "string"
     && Array.isArray(value.filters)
     && value.filters.every(isActionFilter)
-    && ["status", "project", "context", "energy"].includes(String(value.groupBy))
-    && (value.sectionBy === undefined || value.sectionBy === null
-      || ["status", "project", "context", "energy"].includes(String(value.sectionBy)))
+    && GROUP_BY.includes(String(value.groupBy))
+    && (value.sectionBy === undefined || value.sectionBy === null || GROUP_BY.includes(String(value.sectionBy)))
     && isSortSpec(value.sort)
     && (value.visibleColumns === null || isStringArray(value.visibleColumns));
 }
 
+const GROUP_BY = ["status", "project", "context", "energy", "estimate"];
+
 function isActionFilter(value: unknown): boolean {
   if (!isRecord(value) || typeof value.kind !== "string") return false;
   if (value.kind === "value") {
-    return ["status", "project", "context", "energy", "area"].includes(String(value.field))
+    return ["status", "project", "context", "energy", "estimate", "area"].includes(String(value.field))
       && (value.operator === "in" || value.operator === "notIn")
       && isStringArray(value.values);
   }
@@ -1237,6 +1244,7 @@ function isNewActionInput(value: unknown): value is ElmNewActionInput {
     && (value.projectId === undefined || typeof value.projectId === "string")
     && (value.waitingSince === undefined || typeof value.waitingSince === "string")
     && (value.followUp === undefined || typeof value.followUp === "string")
+    && (value.estimate === undefined || value.estimate === 0 || isEstimate(value.estimate))
     && isOptionalSchedule(value.schedule);
 }
 
@@ -1244,6 +1252,7 @@ function isActionChanges(value: unknown): value is ElmActionChanges {
   return isNewActionInput(value)
     && typeof (value as ElmActionChanges).projectId === "string"
     && ((value as ElmActionChanges).energy === "" || isOneOf(ENERGY_LEVELS, (value as ElmActionChanges).energy))
+    && ((value as ElmActionChanges).estimate === 0 || isEstimate((value as ElmActionChanges).estimate))
     && typeof (value as ElmActionChanges).due === "string"
     && typeof (value as ElmActionChanges).followUp === "string";
 }

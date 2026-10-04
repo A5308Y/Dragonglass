@@ -8,6 +8,7 @@ import Gtd.Agenda as Agenda
 import Gtd.Command.ActionBoard as Command exposing (Command, MenuEntry(..))
 import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Energy as Energy exposing (Energy)
+import Gtd.Estimate as Estimate
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ActionId, ProjectId)
@@ -48,6 +49,7 @@ type GroupKey
     | ProjectGroup (Maybe ProjectId)
     | ContextGroup (Maybe String)
     | EnergyGroup (Maybe Energy)
+    | EstimateGroup (Maybe Int)
 
 
 type alias Group =
@@ -61,6 +63,7 @@ type FilterField
     | FieldProject
     | FieldContext
     | FieldEnergy
+    | FieldEstimate
     | FieldArea
     | FieldDue
 
@@ -1131,7 +1134,7 @@ boardControls model =
             SetGroupBy
             model.configuration.groupBy
             (List.map (\groupBy -> ( groupBy, "Columns: " ++ Settings.groupByLabel groupBy ))
-                [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+                [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy, GroupByEstimate ]
             )
         )
     , Ui.labelled "Sections"
@@ -1140,7 +1143,7 @@ boardControls model =
             SetSections
             model.configuration.sections
             (( Nothing, "Sections: None" )
-                :: ([ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy ]
+                :: ([ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy, GroupByEstimate ]
                         |> List.filter ((/=) model.configuration.groupBy)
                         |> List.map (\field -> ( Just field, "Sections: " ++ Settings.groupByLabel field ))
                    )
@@ -1258,6 +1261,7 @@ filterBuilder model =
             , ( FieldProject, "Project" )
             , ( FieldContext, "Context" )
             , ( FieldEnergy, "Energy" )
+            , ( FieldEstimate, "Estimate" )
             , ( FieldArea, "Area" )
             , ( FieldDue, "Due date" )
             ]
@@ -1462,6 +1466,10 @@ sectionRank model key =
         EnergyGroup energy ->
             ( indexIn [ Just Energy.Low, Nothing, Just Energy.High ] energy, "" )
 
+        EstimateGroup estimate ->
+            -- Shortest first, and no estimate last.
+            ( indexIn (List.map Just Estimate.all ++ [ Nothing ]) estimate, "" )
+
         ProjectGroup projectId ->
             alphabetical (projectId == Nothing)
 
@@ -1555,6 +1563,7 @@ cardView model action =
             [ Ui.maybeView (Data.scheduleText model.snapshot.today action) (\schedule -> span [ class "dg-card-schedule" ] [ text ("🗓 " ++ schedule) ])
             , Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
             , Ui.maybeView action.energy Energy.badge
+            , Ui.maybeView action.estimate Estimate.badge
             , Ui.maybeView action.due
                 (\due ->
                     -- Overdue is said in words and a symbol too, not by colour alone.
@@ -1760,6 +1769,12 @@ buildGroups model =
                         |> List.filter present
                         |> applyVisible visible
 
+                GroupByEstimate ->
+                    -- Shortest first, and no estimate last.
+                    (List.map (Just >> EstimateGroup) Estimate.all ++ [ EstimateGroup Nothing ])
+                        |> List.filter present
+                        |> applyVisible visible
+
                 _ ->
                     Dict.values grouped
                         |> List.map Tuple.first
@@ -1817,6 +1832,9 @@ groupKeyOf groupBy action =
         GroupByEnergy ->
             EnergyGroup action.energy
 
+        GroupByEstimate ->
+            EstimateGroup action.estimate
+
 
 {-| The key a column is stored under, in the group buckets and in a saved view.
 -}
@@ -1834,6 +1852,9 @@ groupKeyString key =
 
         EnergyGroup energy ->
             Maybe.map Energy.key energy |> Maybe.withDefault ""
+
+        EstimateGroup estimate ->
+            Maybe.map Estimate.key estimate |> Maybe.withDefault ""
 
 
 groupLabel : Model -> GroupKey -> String
@@ -1861,6 +1882,12 @@ groupLabel model key =
 
         EnergyGroup (Just energy) ->
             Energy.symbol energy ++ " " ++ Energy.label energy
+
+        EstimateGroup Nothing ->
+            "No estimate"
+
+        EstimateGroup (Just minutes) ->
+            "⏱ " ++ Estimate.label minutes
 
 
 {-| Prefixes a Project name with a symbol for its status, so Actions of a Project
@@ -1961,6 +1988,9 @@ matchesFilter model action filter =
 
         ByEnergy operator values ->
             applyOperator operator (List.member (Maybe.map Energy.key action.energy |> Maybe.withDefault "") values)
+
+        ByEstimate operator values ->
+            applyOperator operator (List.member (Maybe.map Estimate.key action.estimate |> Maybe.withDefault "") values)
 
         ByArea operator values ->
             -- Sub-projects share their top-level Project's area.
@@ -2170,6 +2200,9 @@ filterValues model =
         FieldEnergy ->
             ( "", "Normal energy" ) :: List.map (\energy -> ( Energy.key energy, Energy.symbol energy ++ " " ++ Energy.label energy )) Energy.all
 
+        FieldEstimate ->
+            List.map (\minutes -> ( Estimate.key minutes, Estimate.label minutes )) Estimate.all ++ [ ( "", "No estimate" ) ]
+
         FieldArea ->
             Data.areas model.snapshot.projects |> List.map (\item -> ( item, item ))
 
@@ -2208,6 +2241,9 @@ draftFilter model =
 
         FieldEnergy ->
             Just (ByEnergy draft.operator [ draft.value ])
+
+        FieldEstimate ->
+            Just (ByEstimate draft.operator [ draft.value ])
 
         FieldArea ->
             Just (ByArea draft.operator [ draft.value ])
@@ -2258,6 +2294,13 @@ widen existing added =
         ( ByEnergy operator current, ByEnergy other extra ) ->
             if operator == other then
                 Just (ByEnergy operator (union current extra))
+
+            else
+                Nothing
+
+        ( ByEstimate operator current, ByEstimate other extra ) ->
+            if operator == other then
+                Just (ByEstimate operator (union current extra))
 
             else
                 Nothing
@@ -2329,6 +2372,11 @@ describeFilter model filter =
             described "Energy"
                 operator
                 (List.map (\raw -> Energy.fromKey raw |> Maybe.map Energy.label |> Maybe.withDefault "normal") values)
+
+        ByEstimate operator values ->
+            described "Estimate"
+                operator
+                (List.map (\raw -> Estimate.fromKey raw |> Maybe.map Estimate.label |> Maybe.withDefault "none") values)
 
         ByArea operator values ->
             described "Area" operator values
@@ -2440,6 +2488,9 @@ groupByKey groupBy =
         GroupByEnergy ->
             "energy"
 
+        GroupByEstimate ->
+            "estimate"
+
 
 sortFieldKey : SortField -> String
 sortFieldKey field =
@@ -2484,6 +2535,9 @@ filterFieldKey field =
 
         FieldEnergy ->
             "energy"
+
+        FieldEstimate ->
+            "estimate"
 
         FieldArea ->
             "area"
