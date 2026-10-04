@@ -17,6 +17,7 @@ import {
   type ElmActionBoardEvent,
   type ElmActionBoardMenuEntry,
   parseActionBoardCommand,
+  type ElmSnapshotDto,
 } from "./protocol";
 
 interface ElmApp {
@@ -59,7 +60,7 @@ export class ElmActionBoardHost {
     this.unsubscribe();
   }
 
-  private snapshot() {
+  private snapshot(): ElmSnapshotDto {
     return elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate());
   }
 

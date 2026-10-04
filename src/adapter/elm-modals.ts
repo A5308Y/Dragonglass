@@ -8,7 +8,7 @@ import { parseActionList } from "../domain/action-import";
 import { parseSubprojectList } from "../domain/project-import";
 import { ancestorsToActivate } from "../domain/project-tree";
 import { parseProjectTags, planProjectParentChange, projectTagAdditions } from "../domain/project-board";
-import type { Action, ActionInput, Project, ProjectChanges } from "../domain/types";
+import type { Action, ActionInput, Project, ProjectChanges, ActionChanges } from "../domain/types";
 import { confirmCompleteProject } from "../ui/complete-project";
 import { confirmDeleteProject } from "../ui/delete-project";
 import { activationOptions } from "../ui/project-moves";
@@ -364,7 +364,7 @@ function actionInput(input: ElmNewActionInput): ActionInput {
   };
 }
 
-function actionChanges(changes: ElmActionChanges) {
+function actionChanges(changes: ElmActionChanges): ActionChanges {
   return {
     title: changes.title,
     status: changes.status,

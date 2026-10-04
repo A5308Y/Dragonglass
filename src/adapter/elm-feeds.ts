@@ -10,7 +10,7 @@ import { plainTitle } from "../domain/text";
 import type { FeedService } from "../feeds/feed-service";
 import type { GtdServices } from "../ui/services";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
-import { elmFeeds, parseFeedsCommand, type ElmFeedsCommand, type ElmFeedsEvent } from "./protocol";
+import { elmFeeds, parseFeedsCommand, type ElmFeedsCommand, type ElmFeedsEvent, type ElmFeedsDto } from "./protocol";
 
 interface ElmApp {
   ports: {
@@ -52,7 +52,7 @@ export class ElmFeedsHost {
     this.unsubscribe();
   }
 
-  private payload() {
+  private payload(): ElmFeedsDto {
     const status = this.feeds.getStatus();
     return elmFeeds(this.feeds.getStore(), status, {
       enabled: this.services.getSettings().feeds.enabled,

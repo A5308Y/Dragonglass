@@ -15,6 +15,7 @@ import {
   type FeedItem,
   type FeedSource,
   type FeedStoreData,
+  type FeedState,
 } from "../domain/feed";
 import { parseFeed } from "../domain/feed-parse";
 import { SyncedJsonFile } from "../state/synced-json-file";
@@ -319,7 +320,7 @@ export class FeedService {
     return added;
   }
 
-  private currentState(feedId: string) {
+  private currentState(feedId: string): FeedState {
     return this.store.states[feedId] ?? emptyFeedState();
   }
 

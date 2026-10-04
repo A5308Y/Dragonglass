@@ -10,7 +10,7 @@ import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
 import { executeSupportCommand, isSupportCommand, projectDetail } from "./project-detail";
-import { elmSnapshot, parseBrainstormCommand, type ElmBrainstormCommand, type ElmBrainstormEvent } from "./protocol";
+import { elmSnapshot, parseBrainstormCommand, type ElmBrainstormCommand, type ElmBrainstormEvent, type ElmSnapshotDto } from "./protocol";
 
 const WORDS = [
   "alignment", "ambiguity", "attention", "boundary", "breakthrough", "calm", "challenge", "clarity", "coherence", "constraint",
@@ -93,7 +93,7 @@ export class ElmBrainstormHost {
       .map((file) => this.services.app.vault.getResourcePath(file));
   }
 
-  private snapshot() {
+  private snapshot(): ElmSnapshotDto {
     return elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate());
   }
 

@@ -13,6 +13,7 @@ import {
   type ChecklistNoteContent,
   type ElmChecklistsCommand,
   type ElmChecklistsEvent,
+  type ElmChecklistsDto,
 } from "./protocol";
 
 interface ElmApp {
@@ -78,7 +79,7 @@ export class ElmChecklistsHost {
     });
   }
 
-  private async state() {
+  private async state(): Promise<ElmChecklistsDto> {
     const settings = this.services.getSettings().checklists;
     const store = this.checklists.getStore();
     const notes: ChecklistNoteContent[] = [];

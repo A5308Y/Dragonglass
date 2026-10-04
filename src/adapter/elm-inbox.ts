@@ -11,7 +11,7 @@ import type { Action, InboxItem } from "../domain/types";
 import type { GtdServices } from "../ui/services";
 import { localDate, parseDateOnly } from "../utils/date";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
-import { elmSnapshot, parseInboxCommand, type ElmInboxCommand, type ElmInboxEvent, type ElmScheduleInput } from "./protocol";
+import { elmSnapshot, parseInboxCommand, type ElmInboxCommand, type ElmInboxEvent, type ElmScheduleInput, type ElmSnapshotDto } from "./protocol";
 
 interface ElmApp {
   ports: {
@@ -61,7 +61,7 @@ export class ElmInboxHost {
     this.unsubscribe();
   }
 
-  private snapshot() {
+  private snapshot(): ElmSnapshotDto {
     return elmSnapshot(
       this.services.repository.index.getSnapshot(),
       this.services.getSettings(),

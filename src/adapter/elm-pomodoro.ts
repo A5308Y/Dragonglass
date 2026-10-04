@@ -20,6 +20,7 @@ import {
   type ElmPomodoroChecklists,
   type ElmPomodoroCommand,
   type ElmPomodoroEvent,
+  type ElmPomodoroDto, type ElmSnapshotDto,
 } from "./protocol";
 
 /** What a session can be spent on. */
@@ -147,11 +148,11 @@ export class ElmPomodoroHost {
     if (version === this.supportVersion) this.send({ type: "session-support", projects });
   }
 
-  private snapshot() {
+  private snapshot(): ElmSnapshotDto {
     return elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate());
   }
 
-  private state() {
+  private state(): ElmPomodoroDto {
     const settings = this.services.getSettings().pomodoro;
     return elmPomodoro(this.pomodoro.getStore(), settings.focusMinutes, new Date(), this.checklistState, {
       sound: settings.sound,

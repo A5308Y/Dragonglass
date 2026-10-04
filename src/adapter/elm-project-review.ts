@@ -4,14 +4,14 @@ import { trashWithUndo } from "../ui/undo";
 // @ts-expect-error The generated module does not exist in a clean checkout.
 import { Elm } from "../../.generated/elm-runtime.js";
 import { reviewWeekStart } from "../domain/weekly-review";
-import { projectReviewHealth, projectReviewQueue } from "../domain/project-review";
+import { projectReviewHealth, projectReviewQueue, type ProjectReviewHealth } from "../domain/project-review";
 import type { Project } from "../domain/types";
 import { confirmDeleteProject } from "../ui/delete-project";
 import { setProjectStatus } from "../ui/project-moves";
 import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
-import { elmSnapshot, parseProjectReviewCommand, type ElmProjectReviewCommand, type ElmProjectReviewEvent } from "./protocol";
+import { elmSnapshot, parseProjectReviewCommand, type ElmProjectReviewCommand, type ElmProjectReviewEvent, type ElmSnapshotDto } from "./protocol";
 
 interface ElmApp {
   ports: {
@@ -88,12 +88,12 @@ export class ElmProjectReviewHost {
     return reviewWeekStart(localDate(), this.services.getSettings().weeklyReviewDay);
   }
 
-  private health() {
+  private health(): ProjectReviewHealth {
     const snapshot = this.services.repository.index.getSnapshot();
     return projectReviewHealth(snapshot.projects, snapshot.actions, this.queue);
   }
 
-  private snapshot() {
+  private snapshot(): ElmSnapshotDto {
     return elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate());
   }
 

@@ -24,6 +24,7 @@ import {
   type ElmProjectsEvent,
   type ElmProjectsMenuEntry,
   type ElmProjectMetaDto,
+  type ElmSnapshotDto,
 } from "./protocol";
 
 interface ElmApp {
@@ -103,7 +104,7 @@ export class ElmProjectsHost {
     };
   }
 
-  private snapshot() {
+  private snapshot(): ElmSnapshotDto {
     return elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate());
   }
 

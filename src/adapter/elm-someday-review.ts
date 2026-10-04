@@ -10,6 +10,7 @@ import {
   parseSomedayReviewCommand,
   type ElmSomedayReviewCommand,
   type ElmSomedayReviewEvent,
+  type ElmSnapshotDto,
 } from "./protocol";
 
 interface ElmApp {
@@ -51,7 +52,7 @@ export class ElmSomedayReviewHost {
     this.unsubscribe();
   }
 
-  private snapshot() {
+  private snapshot(): ElmSnapshotDto {
     return elmSnapshot(this.services.repository.index.getSnapshot(), this.services.getSettings(), localDate());
   }
 
