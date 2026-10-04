@@ -700,7 +700,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (!this.settings.pomodoro.logToDiary || !this.index.getSnapshot().projectsById.has(session.projectId)) return;
     const outcome = session.outcome === "achieved" ? "achieved" : session.outcome === "partly" ? "partly achieved" : session.outcome === "missed" ? "not achieved" : "";
     const parts = [
-      `🍅 ${Math.round(session.focusedSeconds / 60)} min: ${session.intention}`,
+      `🎯 ${Math.round(session.focusedSeconds / 60)} min: ${session.intention}`,
       outcome,
       session.reflection,
     ].filter(Boolean);

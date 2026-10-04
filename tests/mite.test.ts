@@ -73,7 +73,7 @@ describe("mite time entries", () => {
 
   it("builds the entry with the default service when the Project names none", () => {
     const entry = miteEntry(session("a"), settings().projects.parent!, { breakMinutes: 5, defaultServiceId: 7 });
-    expect(entry).toEqual({ date_at: "2026-09-27", minutes: 30, note: "🍅 Tiles: Compare suppliers — achieved", project_id: 11, service_id: 7 });
+    expect(entry).toEqual({ date_at: "2026-09-27", minutes: 30, note: "🎯 Tiles: Compare suppliers — achieved", project_id: 11, service_id: 7 });
   });
 
   it("sends Project sessions once, from the chosen day on, and skips ones under a minute", () => {

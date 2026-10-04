@@ -66,7 +66,7 @@ export function miteTargetFor(
 
 export function miteEntry(session: PomodoroSession, target: MiteTarget, settings: Pick<MiteSettings, "breakMinutes" | "defaultServiceId">): MiteEntry {
   const outcome = session.outcome === "achieved" ? "achieved" : session.outcome === "partly" ? "partly achieved" : session.outcome === "missed" ? "not achieved" : "";
-  const note = [`🍅 ${session.projectTitle}: ${session.intention}`, outcome, session.status === "stopped" ? "stopped early" : ""]
+  const note = [`🎯 ${session.projectTitle}: ${session.intention}`, outcome, session.status === "stopped" ? "stopped early" : ""]
     .filter(Boolean)
     .join(" — ");
   const serviceId = target.serviceId ?? settings.defaultServiceId;
