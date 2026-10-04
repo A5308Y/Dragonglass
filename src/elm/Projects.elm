@@ -1105,7 +1105,7 @@ viewAreaColumn : Model -> ( Maybe String, List Project ) -> Html Msg
 viewAreaColumn model ( area, projects ) =
     let
         issues =
-            projects |> List.filter (\project -> (projectMeta project.id model).actionIssue /= Nothing) |> List.length
+            issueCount model projects
     in
     section
         [ class "dg-column dg-project-column"
@@ -1249,7 +1249,7 @@ viewProjectColumn model status =
                 |> ranked
 
         issues =
-            projects |> List.filter (\project -> (projectMeta project.id model).actionIssue /= Nothing) |> List.length
+            issueCount model projects
     in
     section
         [ class "dg-column dg-project-column"
@@ -2493,6 +2493,27 @@ statusEntries project toCommand =
 
 
 -- QUERIES
+
+
+{-| Project trees with an issue among these Projects: a top-level Project's issue covers its
+whole tree, so a stuck sub-project counts once, through the Project at its top, whether
+sub-projects are shown or not. `projectsWithIssues` in `attention.ts` counts the same way for
+the Inbox.
+-}
+issueCount : Model -> List Project -> Int
+issueCount model projects =
+    let
+        topLevel project =
+            case project.parentProjectId of
+                Just parentId ->
+                    Data.findProject parentId model.snapshot.projects == Nothing
+
+                Nothing ->
+                    True
+    in
+    projects
+        |> List.filter (\project -> topLevel project && (projectMeta project.id model).actionIssue /= Nothing)
+        |> List.length
 
 
 visibleProjects : Model -> List Project

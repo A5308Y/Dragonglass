@@ -33,6 +33,12 @@ describe("attention dots", () => {
     expect(projectsWithIssues(snapshot([project({ status: "someday" })], []))).toBe(0);
   });
 
+  it("counts a stuck sub-project once, through the Project at the top of its tree", () => {
+    const parent = project({ id: "P2", title: "House", file: file("House.md") });
+    const stuck = project({ id: "P3", title: "Roof", file: file("Roof.md"), parentProjectId: "P2" });
+    expect(projectsWithIssues(snapshot([project(), parent, stuck], [action()]))).toBe(1);
+  });
+
   it("marks the Checklists while the daily checklist is due", () => {
     expect(attention(snapshot([project()], [action()]), 0, weekly, today, true).checklists).toBe(true);
   });

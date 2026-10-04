@@ -38,12 +38,16 @@ export function attention(
 }
 
 /**
- * How many Active Projects have an issue, such as no open Action anywhere in their
- * tree: the Projects view's "Issues only", which the Inbox points to once it is empty.
+ * How many Project trees have an issue, such as no open Action anywhere in them: the
+ * top-level Projects whose issue covers their whole tree, so a stuck sub-project counts once,
+ * through the Project at its top. The Projects view's column counts follow the same rule
+ * (`issueCount` in `Projects.elm`), and the Inbox points there once it is empty.
  */
 export function projectsWithIssues(snapshot: GtdSnapshot): number {
   return snapshot.projects.filter((project) =>
-    project.status === "active" && projectActionIssue(project, snapshot.projects, snapshot.actions) !== null).length;
+    project.status === "active"
+    && !(project.parentProjectId && snapshot.projectsById.has(project.parentProjectId))
+    && projectActionIssue(project, snapshot.projects, snapshot.actions) !== null).length;
 }
 
 /**
