@@ -476,7 +476,7 @@ resetCurrent model =
         Just item ->
             let
                 prefill =
-                    String.left 50 item.title
+                    String.left 100 item.title
             in
             send (LoadBody item.id)
                 (Command.ReadInboxBody item.id)

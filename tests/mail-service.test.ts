@@ -135,6 +135,7 @@ const account = (changes: Partial<MailAccount> = {}): MailAccount => ({
 describe("Mirroring a mailbox into the Inbox", () => {
   let files: Map<string, string>;
   let created: Array<{ title: string; details: string }>;
+  let delegated: unknown[];
   let settings: MailSettingsView;
 
   const build = (mailbox: FakeMailbox, available = true) => {
@@ -158,6 +159,7 @@ describe("Mirroring a mailbox into the Inbox", () => {
         created.push({ title, details });
         return { id: `item-${created.length}` };
       },
+      index: { getSnapshot: () => ({ actions: delegated }) },
     } as unknown as GtdRepository;
 
     const transport: MailTransport = { connect: async () => mailbox.socket(), available: () => available };
@@ -167,6 +169,7 @@ describe("Mirroring a mailbox into the Inbox", () => {
   beforeEach(() => {
     files = new Map();
     created = [];
+    delegated = [];
     settings = {
       enabled: true,
       storePath: "GTD/mail.json",
@@ -201,6 +204,22 @@ describe("Mirroring a mailbox into the Inbox", () => {
     expect(created[0]?.title).toBe("Heat pump quote");
     expect(created[0]?.details).toContain("From: Ada Lovelace <ada@example.com>");
     expect(created[0]?.details).toContain("> Body of message 3");
+  });
+
+  it("links a reply to the Action it was delegated as", async () => {
+    delegated = [{
+      id: "01J9ZZZZZZZZZZZZZZABCDEFGH", title: "Book the plumber", delegatedTo: "ada@example.com",
+      file: { path: "GTD/Actions/Book the plumber.md" },
+    }];
+    const mailbox = new FakeMailbox([message(1)]);
+    const service = build(mailbox);
+    await service.importAll();
+    mailbox.deliver(message(2, "Re: Book the plumber [DG-ABCDEFGH]"), message(3, "Re: Something else"));
+    await service.importAll();
+
+    expect(created[0]?.details.split("\n")[0]).toBe(
+      "Reply about the delegated Action [[GTD/Actions/Book the plumber|Book the plumber]]");
+    expect(created[1]?.details).not.toContain("Reply about");
   });
 
   it("does not import the same message twice", async () => {

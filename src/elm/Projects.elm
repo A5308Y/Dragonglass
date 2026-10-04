@@ -2034,10 +2034,21 @@ viewActionRow today action =
                     ++ Ui.maybeList action.context (\context -> span [] [ text ("@" ++ context) ])
                     ++ Ui.maybeList action.energy Energy.badge
                     ++ Ui.maybeList action.due (\due -> span [] [ text ("Due " ++ due) ])
+                    ++ (if action.status == ActionStatus.Waiting then
+                            Ui.maybeList action.delegatedTo (\to -> span [] [ text ("✉ " ++ to) ])
+
+                        else
+                            []
+                       )
                 )
             ]
         , div [ class "dg-action-row-actions" ]
             [ button [ class "dg-action-row-edit dg-flat-button", onClick (Send IgnoreReply (Command.EditActionModal action.id)) ] [ text "Edit" ]
+            , if done then
+                text ""
+
+              else
+                button [ class "dg-action-row-edit dg-flat-button", onClick (Send IgnoreReply (Command.DelegateActionByEmail action.id)) ] [ text "Delegate" ]
             , button [ class "dg-action-row-delete dg-flat-button", onClick (Send IgnoreReply (Command.TrashAction action.id)) ] [ text "Delete" ]
             ]
         ]

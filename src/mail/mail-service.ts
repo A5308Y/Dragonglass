@@ -18,6 +18,7 @@ import {
   type MailCandidate,
   type MailStoreData,
 } from "../domain/mail";
+import { delegatedActionFor, replyAboutLine } from "../domain/email-delegation";
 import { appleMailLink, mailItemNote, mailItemTitle } from "../domain/mail-note";
 import type { GtdRepository } from "../repository/gtd-repository";
 import { SyncedJsonFile } from "../state/synced-json-file";
@@ -330,7 +331,10 @@ export class MailService {
       hasAttachment: summary.hasAttachment,
     };
     const mailLink = account.appleMailLink ? appleMailLink(message.messageId) : undefined;
-    await this.repository.createIdentifiedInboxItem(mailItemTitle(message), mailItemNote(message, account.label, mailLink), message.messageId);
+    const note = mailItemNote(message, account.label, mailLink);
+    // A reply to a delegated Action links to it; what it says is for you to decide on.
+    const about = delegatedActionFor(message.subject, this.repository.index?.getSnapshot().actions ?? []);
+    await this.repository.createIdentifiedInboxItem(mailItemTitle(message), about ? `${replyAboutLine(about)}\n${note}` : note, message.messageId);
   }
 
   private async openSession(account: MailAccount, password: string): Promise<ImapConnection> {

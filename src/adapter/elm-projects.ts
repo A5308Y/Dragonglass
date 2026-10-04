@@ -1,3 +1,4 @@
+import { delegateActionByEmail } from "../ui/delegate-action";
 import { Menu, Notice } from "obsidian";
 import { trashWithUndo } from "../ui/undo";
 import { openWebLink } from "../ui/open-link";
@@ -187,6 +188,9 @@ export class ElmProjectsHost {
         return;
       case "set-action-status":
         await this.services.repository.setActionStatus(command.actionId, command.status);
+        return;
+      case "delegate-action":
+        await delegateActionByEmail(this.services, command.actionId);
         return;
       case "trash-action": {
         const action = this.services.repository.index.getSnapshot().actionsById.get(command.actionId);

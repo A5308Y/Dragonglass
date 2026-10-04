@@ -602,6 +602,7 @@ export type ElmNonMenuCommand =
   | { type: "set-action-priorities"; actionIds: string[] }
   | { type: "update-action"; actionId: string; projectId?: string; context?: string }
   | { type: "trash-action"; actionId: string }
+  | { type: "delegate-action"; actionId: string }
   | { type: "edit-project"; projectId: string }
   | { type: "set-project-status"; projectId: string; status: Project["status"] }
   | { type: "set-project-area"; projectId: string; area: string }
@@ -736,11 +737,11 @@ interface ElmProjectsMenuCommand {
 export const SURFACE_COMMANDS = {
   actionBoard: [
     "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
-    "set-action-priorities", "trash-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt",
+    "set-action-priorities", "trash-action", "delegate-action", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt",
     "show-menu", "open-file", "open-link", "open-note-link",
   ],
   projects: [
-    "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action",
+    "create-action", "create-project", "set-project-selection", "edit-action", "set-action-status", "trash-action", "delegate-action",
     "edit-project", "set-project-status", "set-project-area", "move-subproject", "trash-project", "trash-projects", "batch-project-tags",
     "batch-project-parent", "project-dependencies", "import-actions", "import-subprojects", "load-project-detail",
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link", "open-link",
@@ -984,6 +985,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.projectId === "string";
     case "edit-action":
     case "trash-action":
+    case "delegate-action":
       return typeof value.actionId === "string";
     case "edit-project":
     case "trash-project":

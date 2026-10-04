@@ -63,6 +63,8 @@ export interface Action {
   waitingSince?: string;
   /** The day to chase up a Waiting Action. Only Waiting Actions carry one, and it is optional. */
   followUp?: string;
+  /** The email address a Waiting Action was delegated to (`delegated_to`); see `email-delegation.ts`. */
+  delegatedTo?: string;
   scheduledStart?: string;
   durationMinutes?: number;
   completed?: string;
@@ -145,6 +147,8 @@ export interface InboxProcessingInput {
 export type ActionChanges = Partial<
   Pick<Action, "title" | "status" | "projectId" | "context" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes">
 > & {
+  /** Empty clears who the Action was delegated to. */
+  delegatedTo?: string;
   /** Empty clears the energy level. */
   energy?: Energy | "";
 };

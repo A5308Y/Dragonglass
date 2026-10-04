@@ -125,6 +125,15 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   where this device deliberately took them back (Undo, reopening a mail backlog).
   A new field in a store needs a rule there too, or one device's value silently wins.
 
+## Delegating Actions by email
+
+- "Delegate by email…" (Action Board menu, "Delegate" on the Project page's Action rows) makes the Action
+  Waiting with `delegated_to` and a follow-up, then opens the message in the mail app via `mailto:`.
+  Dragonglass never sends mail itself, so it needs no SMTP account and works on the phone.
+- The subject carries `[DG-XXXXXXXX]` (the end of the Action's ULID, `delegationKey`). The mail import
+  starts a reply's Inbox Item with a link to that Action (`replyAboutLine`). A reply never changes the
+  Action: mail is an open channel. Rules: `src/domain/email-delegation.ts`, dialog `src/ui/delegate-action.ts`.
+
 ## Checking this device's copy
 
 - The vault syncs through iCloud, which can leave a device showing an old state. "Check this

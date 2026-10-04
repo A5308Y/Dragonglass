@@ -1569,6 +1569,11 @@ cardView model action =
 
               else
                 text ""
+            , if action.status == ActionStatus.Waiting then
+                Ui.maybeView action.delegatedTo (\to -> span [ class "dg-card-delegated" ] [ text ("✉ " ++ to) ])
+
+              else
+                text ""
             , Ui.maybeView followUp
                 (\date ->
                     -- Like overdue, a reached follow-up is said with a symbol and words, not colour alone.
@@ -2400,6 +2405,7 @@ actionMenu x y model action =
                )
             ++ [ MenuSeparator
                , MenuItem "Edit…" (Command.EditActionModal action.id)
+               , MenuItem "Delegate by email…" (Command.DelegateActionByEmail action.id)
                , MenuItem "Delete Action…" (Command.TrashAction action.id)
                ]
         )

@@ -23,6 +23,7 @@ type Command
     | SetActionPriorities (List ActionId)
     | SetActionContext ActionId String
     | TrashAction ActionId
+    | DelegateActionByEmail ActionId
     | SetActiveSavedView (Maybe String)
     | UpsertSavedView SavedView Bool
     | DeleteSavedView String
@@ -78,6 +79,9 @@ toBase command =
 
         TrashAction actionId ->
             Base.TrashAction actionId
+
+        DelegateActionByEmail actionId ->
+            Base.DelegateActionByEmail actionId
 
         SetActiveSavedView savedId ->
             Base.SetActiveSavedView savedId

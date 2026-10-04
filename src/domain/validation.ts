@@ -130,6 +130,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const due = optionalString(frontmatter, "due");
   const waitingSince = optionalString(frontmatter, "waiting_since");
   const followUp = optionalString(frontmatter, "follow_up");
+  const delegatedTo = optionalString(frontmatter, "delegated_to");
   const scheduledStart = optionalString(frontmatter, "scheduled_start");
   const durationMinutes = optionalNumber(frontmatter, "duration_minutes");
   const priority = optionalNumber(frontmatter, "priority");
@@ -144,6 +145,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   if (due) action.due = dateOnly(due, "due");
   if (waitingSince) action.waitingSince = dateOnly(waitingSince, "waiting_since");
   if (followUp) action.followUp = dateOnly(followUp, "follow_up");
+  if (delegatedTo) action.delegatedTo = delegatedTo;
   if (scheduledStart) action.scheduledStart = normalizeScheduledStart(scheduledStart);
   if (durationMinutes !== undefined) {
     if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) throw new Error("Invalid 'duration_minutes'");

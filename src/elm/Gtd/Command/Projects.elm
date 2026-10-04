@@ -18,6 +18,7 @@ type Command
     | EditActionModal ActionId
     | SetActionStatus ActionId ActionStatus
     | TrashAction ActionId
+    | DelegateActionByEmail ActionId
     | EditProjectModal ProjectId
     | SetProjectStatus ProjectId ProjectStatus
     | SetProjectArea ProjectId String
@@ -92,6 +93,9 @@ toBase command =
 
         TrashAction actionId ->
             Base.TrashAction actionId
+
+        DelegateActionByEmail actionId ->
+            Base.DelegateActionByEmail actionId
 
         EditProjectModal projectId ->
             Base.EditProjectModal projectId

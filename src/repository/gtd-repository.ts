@@ -435,6 +435,7 @@ export class GtdRepository {
           if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
         }
         if (changes.due !== undefined) frontmatter.due = changes.due || null;
+        if (changes.delegatedTo !== undefined) frontmatter.delegated_to = changes.delegatedTo.trim() || null;
         if (changes.scheduledStart !== undefined) frontmatter.scheduled_start = changes.scheduledStart || null;
         if (changes.durationMinutes !== undefined) frontmatter.duration_minutes = changes.durationMinutes;
         // An all-day schedule has no length, so a duration from an earlier time of day must not survive.
