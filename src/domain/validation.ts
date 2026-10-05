@@ -184,6 +184,8 @@ export function parseInboxItem(frontmatter: Frontmatter, file: TFile, legacyActi
     file,
   };
   if (legacyAction) item.legacyAction = true;
+  const createdAt = optionalString(frontmatter, "created_at");
+  if (createdAt) item.createdAt = normalizeTimestamp(createdAt, "created_at");
   const messageId = optionalString(frontmatter, "message_id");
   if (messageId) item.messageId = messageId;
   return item;

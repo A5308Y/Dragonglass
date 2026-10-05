@@ -1145,6 +1145,12 @@ mailButton item =
 itemMeta : InboxItem -> String
 itemMeta item =
     item.created
+        ++ (if String.isEmpty item.createdTime then
+                ""
+
+            else
+                " " ++ item.createdTime
+           )
         ++ (if item.legacyAction then
                 " · Legacy Inbox Action"
 

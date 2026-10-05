@@ -1,3 +1,5 @@
+import { localDate } from "../utils/date";
+
 /** Default title used when clarifying an Inbox Item into a Project or Action. */
 export function inboxProcessingPrefill(title: string): string {
   return Array.from(title).slice(0, 100).join("");
@@ -50,4 +52,15 @@ export function inboxPrimaryDisposition(input: {
       : "Create Next Action",
     ready: Boolean(nextAction && context),
   };
+}
+
+/**
+ * The local time of day an Inbox Item was captured, as `HH:mm`, or `""` when it isn't known.
+ * New Items carry `created_at`; older ones fall back on the file's creation time, but only when
+ * that is on the Item's own date, since a file copied or synced later has a later one.
+ */
+export function inboxCreatedTime(item: { created: string; createdAt?: string }, fileCreated?: number): string {
+  const moment = item.createdAt ? new Date(item.createdAt) : fileCreated ? new Date(fileCreated) : null;
+  if (!moment || Number.isNaN(moment.getTime()) || localDate(moment) !== item.created) return "";
+  return `${String(moment.getHours()).padStart(2, "0")}:${String(moment.getMinutes()).padStart(2, "0")}`;
 }

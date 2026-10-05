@@ -1,3 +1,4 @@
+import { inboxCreatedTime } from "../domain/inbox-processing";
 import { isEstimate } from "../domain/estimate";
 import type { FeedStoreData } from "../domain/feed";
 import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../domain/pomodoro";
@@ -132,6 +133,8 @@ export interface ElmReviewProjectDataDto {
 export interface ElmInboxItemDto extends Omit<InboxItem, "file"> {
   file: ElmFileDto;
   resourceUrl: string;
+  /** The local time of day it was captured, `HH:mm`, or `""` when unknown (`inboxCreatedTime`). */
+  createdTime: string;
 }
 
 export interface ElmFeedItemDto {
@@ -494,7 +497,12 @@ export function elmSnapshot(
     protocolVersion: ELM_PROTOCOL_VERSION,
     revision: snapshot.revision,
     today,
-    inboxItems: snapshot.inboxItems.map((item) => ({ ...item, file: fileDto(item.file), resourceUrl: resourceUrl(item.file) })),
+    inboxItems: snapshot.inboxItems.map((item) => ({
+      ...item,
+      file: fileDto(item.file),
+      resourceUrl: resourceUrl(item.file),
+      createdTime: inboxCreatedTime(item, item.file.stat?.ctime),
+    })),
     actions: snapshot.actions.map((action) => ({
       ...action,
       file: fileDto(action.file),

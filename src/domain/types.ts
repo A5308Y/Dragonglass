@@ -45,6 +45,8 @@ export interface InboxItem {
   title: string;
   file: TFile;
   created: string;
+  /** When it was captured, as an ISO timestamp (`created_at`); Items from before it was written have none. */
+  createdAt?: string;
   legacyAction?: boolean;
   raw?: boolean;
   /** The `Message-ID` of the email this Item was imported from, which links back to it. */

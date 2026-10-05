@@ -101,16 +101,21 @@ export class GtdRepository {
     if (!cleanTitle) throw new Error("An Inbox Item title is required.");
     const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().inboxDirectory) || "GTD/Inbox");
     const path = this.uniqueMarkdownPath(directory, cleanTitle, id);
+    const now = new Date();
     const frontmatter: Record<string, unknown> = {
       type: "gtd-inbox-item",
       id,
       title: cleanTitle,
-      created: localDate(),
+      created: localDate(now),
+      created_at: now.toISOString(),
       ...(messageId ? { message_id: messageId } : {}),
     };
     const body = `# ${cleanTitle}\n\n${details.trim()}${details.trim() ? "\n" : ""}`;
     const file = await this.app.vault.create(path, markdown(frontmatter, body));
-    return { type: "gtd-inbox-item", id, title: cleanTitle, created: String(frontmatter.created), file, ...(messageId ? { messageId } : {}) };
+    return {
+      type: "gtd-inbox-item", id, title: cleanTitle, created: String(frontmatter.created), createdAt: String(frontmatter.created_at), file,
+      ...(messageId ? { messageId } : {}),
+    };
   }
 
   private async convertInboxItemToAction(item: InboxItem, input: ActionInput, resolvedProject?: Project): Promise<void> {
@@ -148,6 +153,7 @@ export class GtdRepository {
         frontmatter.scheduled_start = input.scheduledStart || null;
         frontmatter.duration_minutes = scheduledDuration(input);
         frontmatter.captured = item.created;
+        delete frontmatter.created_at;
         frontmatter.created = localDate();
         frontmatter.completed = null;
       });
@@ -1280,6 +1286,7 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
   for (const key of [
     "type",
     "id",
+    "created_at",
     "status",
     "project_id",
     "project",

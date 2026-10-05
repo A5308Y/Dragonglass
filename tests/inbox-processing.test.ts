@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inboxPrimaryDisposition, inboxProcessingPrefill } from "../src/domain/inbox-processing";
+import { inboxCreatedTime, inboxPrimaryDisposition, inboxProcessingPrefill } from "../src/domain/inbox-processing";
 
 describe("Inbox processing prefill", () => {
   it("keeps short titles unchanged", () => {
@@ -72,5 +72,19 @@ describe("Primary processing disposition", () => {
     expect(disposition({ someday: true, nextAction: "Call the plumber", context: "Calls" }).label)
       .toBe("Create Someday/Maybe Project + Next Action");
     expect(disposition({ someday: true, nextAction: "Call the plumber" }).ready).toBe(false);
+  });
+});
+
+describe("Inbox capture time", () => {
+  const at = (hours: number, minutes: number, day = 5) => new Date(2026, 9, day, hours, minutes);
+
+  it("shows the local time an Item was captured", () => {
+    expect(inboxCreatedTime({ created: "2026-10-05", createdAt: at(8, 4).toISOString() })).toBe("08:04");
+  });
+
+  it("falls back on the file's creation time for older Items, but only on the Item's own date", () => {
+    expect(inboxCreatedTime({ created: "2026-10-05" }, at(14, 30).getTime())).toBe("14:30");
+    expect(inboxCreatedTime({ created: "2026-10-05" }, at(14, 30, 7).getTime())).toBe("");
+    expect(inboxCreatedTime({ created: "2026-10-05" })).toBe("");
   });
 });

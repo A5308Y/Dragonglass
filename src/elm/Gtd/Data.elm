@@ -85,6 +85,7 @@ type alias InboxItem =
     { id : InboxItemId
     , title : String
     , created : String
+    , createdTime : String
     , file : File
     , resourceUrl : String
     , legacyAction : Bool
@@ -316,10 +317,11 @@ projectDecoder =
 
 inboxItemDecoder : Decoder InboxItem
 inboxItemDecoder =
-    Decode.map7 InboxItem
+    Decode.map8 InboxItem
         (Decode.field "id" Decode.string)
         (Decode.field "title" Decode.string)
         (Decode.field "created" Decode.string)
+        (optionalField "createdTime" Decode.string "")
         (Decode.field "file" fileDecoder)
         (optionalField "resourceUrl" Decode.string "")
         (optionalField "legacyAction" Decode.bool False)
