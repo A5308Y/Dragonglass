@@ -1778,9 +1778,13 @@ currentItem model =
         List.drop (modBy count model.cursor) items |> List.head
 
 
+{-| Oldest first, in the list and while processing: by day, then by the time of day it was
+captured. An Item whose time isn't known comes first on its day; the id only breaks ties
+within the same minute (new Items' ids grow with time).
+-}
 sortedItems : List InboxItem -> List InboxItem
 sortedItems =
-    List.sortBy (\item -> ( item.created, item.id ))
+    List.sortBy (\item -> ( item.created, item.createdTime, item.id ))
 
 
 indexOf : InboxItemId -> List InboxItem -> Maybe Int
