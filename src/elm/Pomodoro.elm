@@ -75,6 +75,9 @@ type alias Session =
     , outcome : Maybe PomodoroOutcome
     , reflection : String
     , completedActions : Int
+
+    -- Logged afterwards rather than timed.
+    , manual : Bool
     }
 
 
@@ -129,6 +132,29 @@ type Scope
     | ThisSubject
 
 
+{-| A session that happened without the timer, entered afterwards. Only on a Project:
+a checklist session belongs to a run, which a logged one doesn't have.
+-}
+type alias LogForm =
+    { project : Picker Project
+    , day : String
+    , time : String
+    , minutes : String
+    , intention : String
+    , outcome : Maybe PomodoroOutcome
+    , reflection : String
+    , error : Maybe String
+    }
+
+
+type LogField
+    = LogDay
+    | LogTime
+    | LogMinutes
+    | LogIntention
+    | LogReflection
+
+
 type alias Model =
     { snapshot : Snapshot
     , state : PomodoroState
@@ -148,6 +174,7 @@ type alias Model =
     , reflection : String
     , scope : Scope
     , historyLimit : Int
+    , logForm : Maybe LogForm
 
     -- The running session's Support Material, per Project of its tree, and what is unfolded.
     , sessionSupport : List Support.Material
@@ -182,6 +209,12 @@ type Msg
     | CompleteAction ActionId
     | SetScope Scope
     | ShowMore
+    | OpenLog
+    | CloseLog
+    | LogPicker (Picker.PickerMsg Project)
+    | LogChanged LogField String
+    | LogOutcome PomodoroOutcome
+    | SaveLog
     | ToggleSupportBlock ProjectId
     | SupportMsg ProjectId Support.Msg
     | Send Command
@@ -194,6 +227,7 @@ type Pending
     = IgnoreReply
     | ReadSupport ProjectId String
     | OpenNewSupportNote ProjectId
+    | LoggedPast
 
 
 main : Program Decode.Value Model Msg
@@ -244,6 +278,7 @@ initialModel snapshot state nowMs =
     , reflection = ""
     , scope = AllSessions
     , historyLimit = 20
+    , logForm = Nothing
     , sessionSupport = []
     , support = Dict.empty
     , supportOpen = Set.empty
@@ -471,6 +506,77 @@ update msg model =
         ShowMore ->
             ( { model | historyLimit = model.historyLimit + 20 }, Cmd.none )
 
+        OpenLog ->
+            let
+                -- The Project chosen for the next session is the likeliest one.
+                project =
+                    case Picker.selection model.subject of
+                        Just (OnProject chosen) ->
+                            Picker.init (Hierarchy.breadcrumb model.snapshot.projects chosen) (Just chosen)
+
+                        _ ->
+                            Picker.init "" Nothing
+            in
+            ( { model
+                | logForm =
+                    Just
+                        { project = project
+                        , day = model.state.today
+                        , time = ""
+                        , minutes = String.fromInt model.state.focusMinutes
+                        , intention = ""
+                        , outcome = Nothing
+                        , reflection = ""
+                        , error = Nothing
+                        }
+              }
+            , Cmd.none
+            )
+
+        CloseLog ->
+            ( { model | logForm = Nothing }, Cmd.none )
+
+        LogPicker pickerMsg ->
+            withLogForm model
+                (\form ->
+                    ( { form | project = Picker.update pickerMsg (projectSuggestions model (Picker.query form.project)) (Hierarchy.breadcrumb model.snapshot.projects) form.project }
+                    , Cmd.none
+                    )
+                )
+
+        LogChanged field input ->
+            withLogForm model
+                (\form ->
+                    ( case field of
+                        LogDay ->
+                            { form | day = input }
+
+                        LogTime ->
+                            { form | time = input }
+
+                        LogMinutes ->
+                            { form | minutes = input }
+
+                        LogIntention ->
+                            { form | intention = input }
+
+                        LogReflection ->
+                            { form | reflection = input }
+                    , Cmd.none
+                    )
+                )
+
+        LogOutcome outcome ->
+            withLogForm model (\form -> ( { form | outcome = Just outcome }, Cmd.none ))
+
+        SaveLog ->
+            case model.logForm |> Maybe.andThen logCommand of
+                Just command ->
+                    sendFor LoggedPast command model
+
+                Nothing ->
+                    ( model, Cmd.none )
+
         ToggleSupportBlock projectId ->
             ( { model
                 | supportOpen =
@@ -519,9 +625,54 @@ sendFor pending command model =
     ( { model | requests = requests, error = Nothing }, pomodoroToHost (Host.envelope requestId (Command.encode command)) )
 
 
+withLogForm : Model -> (LogForm -> ( LogForm, Cmd Msg )) -> ( Model, Cmd Msg )
+withLogForm model change =
+    case model.logForm of
+        Just form ->
+            let
+                ( next, cmd ) =
+                    change form
+            in
+            ( { model | logForm = Just next }, cmd )
+
+        Nothing ->
+            ( model, Cmd.none )
+
+
+{-| What the log form saves, once it has a Project, a day, a start, a length and an
+intention. The host checks the rest: over already, overlapping nothing.
+-}
+logCommand : LogForm -> Maybe Command
+logCommand form =
+    case ( Picker.selection form.project, validMinutes form.minutes ) of
+        ( Just project, Just minutes ) ->
+            if String.isEmpty form.day || String.length form.time < 5 || String.isEmpty (String.trim form.intention) then
+                Nothing
+
+            else
+                Just
+                    (Command.LogPomodoro
+                        { projectId = project.id
+                        , start = form.day ++ "T" ++ String.left 5 form.time
+                        , minutes = minutes
+                        , intention = String.trim form.intention
+                        , outcome = form.outcome
+                        , reflection = String.trim form.reflection
+                        }
+                    )
+
+        _ ->
+            Nothing
+
+
 plannedMinutes : Model -> Maybe Int
 plannedMinutes model =
-    String.toInt (String.trim model.minutes)
+    validMinutes model.minutes
+
+
+validMinutes : String -> Maybe Int
+validMinutes typed =
+    String.toInt (String.trim typed)
         |> Maybe.andThen
             (\minutes ->
                 if minutes >= 1 && minutes <= 180 then
@@ -602,6 +753,9 @@ finish pending resultValue model =
                 Err _ ->
                     ( model, Cmd.none )
 
+        LoggedPast ->
+            ( { model | logForm = Nothing }, Cmd.none )
+
         OpenNewSupportNote projectId ->
             case Decode.decodeValue Decode.string resultValue of
                 Ok path ->
@@ -643,11 +797,15 @@ receiveHost value model =
                 ( pending, requests ) =
                     Host.resolve outcome.requestId model.requests
             in
-            case outcome.result of
-                Err message ->
+            case ( outcome.result, pending ) of
+                ( Err message, Just LoggedPast ) ->
+                    -- Shown in the form, next to what has to change.
+                    withLogForm { model | requests = requests } (\form -> ( { form | error = Just message }, Cmd.none ))
+
+                ( Err message, _ ) ->
                     ( { model | requests = requests, error = Just message }, Cmd.none )
 
-                Ok resultValue ->
+                ( Ok resultValue, _ ) ->
                     finish (Maybe.withDefault IgnoreReply pending) resultValue { model | requests = requests }
 
         Err error ->
@@ -686,7 +844,7 @@ openProjects model =
 
 subjectSuggestions : Model -> List Subject
 subjectSuggestions model =
-    List.map OnProject (projectSuggestions model)
+    List.map OnProject (projectSuggestions model (Picker.query model.subject))
         ++ (model.state.checklists
                 |> List.filter (\checklist -> Ui.matches (Picker.query model.subject) [ checklist.title, "checklist" ])
                 |> List.take 10
@@ -714,12 +872,12 @@ subjectHint model subject =
             Just "Checklist"
 
 
-projectSuggestions : Model -> List Project
-projectSuggestions model =
+projectSuggestions : Model -> String -> List Project
+projectSuggestions model query =
     openProjects model
         |> List.filter
             (\project ->
-                Ui.matches (Picker.query model.subject)
+                Ui.matches query
                     [ project.title, Hierarchy.breadcrumb model.snapshot.projects project, Maybe.withDefault "" (Hierarchy.area model.snapshot.projects project) ]
             )
         |> List.sortBy
@@ -1366,20 +1524,7 @@ wrapUpView model active =
             , strong [] [ text active.projectTitle ]
             ]
         , blockquote active.intention
-        , span [ id "dg-pomodoro-outcome-label", class "dg-sr-only" ] [ text "Outcome" ]
-        , div [ class "dg-pomodoro-outcomes", attribute "role" "radiogroup", attribute "aria-labelledby" "dg-pomodoro-outcome-label" ]
-            (List.map
-                (\outcome ->
-                    button
-                        [ classList [ ( "dg-pomodoro-outcome", True ), ( "is-active", model.outcome == Just outcome ) ]
-                        , attribute "role" "radio"
-                        , attribute "aria-checked" (Ui.boolAttribute (model.outcome == Just outcome))
-                        , onClick (ChooseOutcome outcome)
-                        ]
-                        [ text (Outcome.symbol outcome ++ " " ++ Outcome.label outcome) ]
-                )
-                Outcome.all
-            )
+        , outcomeChoice "dg-pomodoro-outcome-label" model.outcome ChooseOutcome
         , div [ class "dg-pomodoro-field" ]
             [ label [ class "dg-pomodoro-label", for "dg-pomodoro-reflection" ] [ text "Reflection (optional)" ]
             , textarea
@@ -1403,6 +1548,28 @@ wrapUpView model active =
                 button [ onClick KeepGoing ] [ text "Keep going" ]
             , button [ class "mod-warning", onClick Discard ] [ text "Discard" ]
             ]
+        ]
+
+
+{-| The outcome buttons; `labelId` names the hidden label, so two groups can share a page.
+-}
+outcomeChoice : String -> Maybe PomodoroOutcome -> (PomodoroOutcome -> Msg) -> Html Msg
+outcomeChoice labelId chosen choose =
+    div []
+        [ span [ id labelId, class "dg-sr-only" ] [ text "Outcome" ]
+        , div [ class "dg-pomodoro-outcomes", attribute "role" "radiogroup", attribute "aria-labelledby" labelId ]
+            (List.map
+                (\outcome ->
+                    button
+                        [ classList [ ( "dg-pomodoro-outcome", True ), ( "is-active", chosen == Just outcome ) ]
+                        , attribute "role" "radio"
+                        , attribute "aria-checked" (Ui.boolAttribute (chosen == Just outcome))
+                        , onClick (choose outcome)
+                        ]
+                        [ text (Outcome.symbol outcome ++ " " ++ Outcome.label outcome) ]
+                )
+                Outcome.all
+            )
         ]
 
 
@@ -1459,7 +1626,13 @@ historyView model =
                     (scopeSubject model == Nothing)
                 , scopeButton model AllSessions "All" False
                 ]
+            , if model.logForm == Nothing then
+                button [ onClick OpenLog ] [ text "Log a past session…" ]
+
+              else
+                text ""
             ]
+        , Ui.maybeView model.logForm (logFormView model)
         , div [ class "dg-pomodoro-totals" ]
             [ totalTile "Today" today (total today)
             , totalTile "This week" week (total week)
@@ -1475,6 +1648,89 @@ historyView model =
 
           else
             text ""
+        ]
+
+
+{-| A session that happened without the timer: when, how long, on what, and how it went.
+It counts in the totals like any other but is never sent to mite.
+-}
+logFormView : Model -> LogForm -> Html Msg
+logFormView model form =
+    let
+        save =
+            if logCommand form == Nothing then
+                NoOp
+
+            else
+                SaveLog
+    in
+    section [ class "dg-pomodoro-card dg-pomodoro-log" ]
+        [ h3 [] [ text "Log a past session" ]
+        , p [ class "dg-muted" ] [ text "For time spent without the timer. It counts in the totals but isn't sent to mite." ]
+        , div [ class "dg-pomodoro-field" ]
+            [ span [ class "dg-pomodoro-label" ] [ text "Project" ]
+            , Picker.view
+                (Picker.config
+                    { placeholder = "Search Projects…"
+                    , label = Hierarchy.breadcrumb model.snapshot.projects
+                    , hint = Hierarchy.area model.snapshot.projects
+                    , tag = LogPicker
+                    }
+                )
+                (projectSuggestions model (Picker.query form.project))
+                form.project
+            ]
+        , div [ class "dg-pomodoro-log-when" ]
+            [ div [ class "dg-pomodoro-field" ]
+                [ label [ class "dg-pomodoro-label", for "dg-pomodoro-log-day" ] [ text "Day" ]
+                , input [ id "dg-pomodoro-log-day", type_ "date", Html.Attributes.max model.state.today, value form.day, onInput (LogChanged LogDay) ] []
+                ]
+            , div [ class "dg-pomodoro-field" ]
+                [ label [ class "dg-pomodoro-label", for "dg-pomodoro-log-time" ] [ text "Started at" ]
+                , input [ id "dg-pomodoro-log-time", type_ "time", value form.time, onInput (LogChanged LogTime) ] []
+                ]
+            , div [ class "dg-pomodoro-field" ]
+                [ label [ class "dg-pomodoro-label", for "dg-pomodoro-log-minutes" ] [ text "Minutes" ]
+                , input
+                    [ id "dg-pomodoro-log-minutes"
+                    , type_ "number"
+                    , Html.Attributes.min "1"
+                    , Html.Attributes.max "180"
+                    , value form.minutes
+                    , onInput (LogChanged LogMinutes)
+                    ]
+                    []
+                ]
+            ]
+        , div [ class "dg-pomodoro-field" ]
+            [ label [ class "dg-pomodoro-label", for "dg-pomodoro-log-intention" ] [ text "Intention" ]
+            , textarea
+                [ id "dg-pomodoro-log-intention"
+                , rows 2
+                , value form.intention
+                , placeholder "What was the session for?"
+                , onInput (LogChanged LogIntention)
+                , Ui.onModEnter save
+                ]
+                []
+            ]
+        , outcomeChoice "dg-pomodoro-log-outcome-label" form.outcome LogOutcome
+        , div [ class "dg-pomodoro-field" ]
+            [ label [ class "dg-pomodoro-label", for "dg-pomodoro-log-reflection" ] [ text "Reflection (optional)" ]
+            , textarea
+                [ id "dg-pomodoro-log-reflection"
+                , rows 2
+                , value form.reflection
+                , onInput (LogChanged LogReflection)
+                , Ui.onModEnter save
+                ]
+                []
+            ]
+        , Ui.maybeView form.error (\message -> p [ class "dg-error" ] [ text message ])
+        , div [ class "dg-pomodoro-controls" ]
+            [ button [ class "mod-cta", disabled (save == NoOp), onClick SaveLog ] [ text "Save session" ]
+            , button [ onClick CloseLog ] [ text "Cancel" ]
+            ]
         ]
 
 
@@ -1580,6 +1836,11 @@ sessionView model session =
 
                       else
                         []
+                    , if session.manual then
+                        [ span [] [ text "Logged afterwards" ] ]
+
+                      else
+                        []
                     , if session.completedActions > 0 then
                         [ span [] [ text (Ui.plural session.completedActions "Action" ++ " done") ] ]
 
@@ -1675,6 +1936,7 @@ sessionDecoder =
         |> andMap (Decode.field "outcome" (Decode.nullable Outcome.decoder))
         |> andMap (Decode.field "reflection" Decode.string)
         |> andMap (Decode.field "completedActions" Decode.int)
+        |> andMap (Decode.oneOf [ Decode.field "manual" Decode.bool, Decode.succeed False ])
 
 
 andMap : Decoder a -> Decoder (a -> b) -> Decoder b

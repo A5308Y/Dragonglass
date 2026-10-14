@@ -5,6 +5,7 @@ import {
   mergePomodoroStores,
   endsAt,
   finishPomodoro,
+  logPastPomodoro,
   parsePomodoroStore,
   pausePomodoro,
   recordCompletedAction,
@@ -12,6 +13,7 @@ import {
   restorePomodoro,
   resumePomodoro,
   startPomodoro,
+  type PastPomodoro,
   type PomodoroSession,
   type PomodoroStart,
   type PomodoroStore,
@@ -124,6 +126,15 @@ export class PomodoroService {
     const next = finishPomodoro(this.store, wrapUp, new Date());
     await this.update(next);
     await this.onFinished(next.sessions[0]!);
+  }
+
+  /**
+   * Files a session that wasn't timed. It isn't a finished run: no Diary entry and nothing
+   * sent to mite (`unsentSessions` leaves logged sessions out).
+   */
+  async logPast(past: PastPomodoro): Promise<void> {
+    await this.load();
+    await this.update(logPastPomodoro(this.store, past, new Date()));
   }
 
   /** Throws the running session away, with Undo, since it was never filed. */

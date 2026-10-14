@@ -185,6 +185,23 @@ export class ElmPomodoroHost {
           plannedMinutes: command.minutes,
         });
       }
+      case "log-pomodoro": {
+        const snapshot = this.services.repository.index.getSnapshot();
+        const project = snapshot.projectsById.get(command.projectId);
+        if (!project) throw new Error("This Project no longer exists.");
+        return this.pomodoro.logPast({
+          id: createUlid(),
+          projectId: project.id,
+          projectTitle: project.title,
+          projectPath: projectBreadcrumb(project, snapshot.projectsById),
+          intention: command.intention,
+          // Without an offset, the date and time are read as local wall-clock time.
+          startedAt: new Date(command.start),
+          minutes: command.minutes,
+          outcome: command.outcome,
+          reflection: command.reflection,
+        });
+      }
       case "pause-pomodoro":
         return this.pomodoro.pause();
       case "resume-pomodoro":

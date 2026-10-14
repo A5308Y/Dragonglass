@@ -4,6 +4,8 @@ import {
   endsAt,
   finishPomodoro,
   focusedSeconds,
+  logPastPomodoro,
+  mergePomodoroStores,
   parsePomodoroStore,
   pausePomodoro,
   recordCompletedAction,
@@ -13,6 +15,7 @@ import {
   resumePomodoro,
   startPomodoro,
   toTimeEntry,
+  type PastPomodoro,
   type PomodoroStart,
 } from "../src/domain/pomodoro";
 import { ELM_PROTOCOL_VERSION, elmPomodoro, parsePomodoroCommand } from "../src/adapter/protocol";
@@ -95,6 +98,61 @@ describe("a Pomodoro session", () => {
   });
 });
 
+describe("a session logged afterwards", () => {
+  const past: PastPomodoro = {
+    id: "01PAST",
+    projectId: "P1",
+    projectTitle: "Website",
+    projectPath: "Clients > Website",
+    intention: " Call with the designer ",
+    startedAt: at("08:00"),
+    minutes: 45,
+    outcome: "achieved",
+    reflection: "",
+  };
+
+  it("is filed as a full, manual session in start order", () => {
+    const later = finishPomodoro(startPomodoro(emptyPomodoroStore(), start, at("10:00")), { outcome: null, reflection: "" }, at("10:25"));
+    const store = logPastPomodoro(later, past, at("12:00"));
+    expect(store.sessions.map((session) => session.id)).toEqual(["01POMODORO", "01PAST"]);
+    expect(store.sessions[1]).toMatchObject({
+      intention: "Call with the designer",
+      startedAt: at("08:00").toISOString(),
+      endedAt: at("08:45").toISOString(),
+      plannedMinutes: 45,
+      focusedSeconds: 2700,
+      status: "completed",
+      outcome: "achieved",
+      external: {},
+      manual: true,
+    });
+  });
+
+  it("must be over already and needs a Project and an intention", () => {
+    expect(() => logPastPomodoro(emptyPomodoroStore(), past, at("08:30"))).toThrow(/over already/);
+    expect(() => logPastPomodoro(emptyPomodoroStore(), { ...past, projectId: "" }, at("12:00"))).toThrow(/Project/);
+    expect(() => logPastPomodoro(emptyPomodoroStore(), { ...past, intention: " " }, at("12:00"))).toThrow(/for/);
+    expect(() => logPastPomodoro(emptyPomodoroStore(), { ...past, minutes: 0 }, at("12:00"))).toThrow(/between 1 and 180/);
+    expect(() => logPastPomodoro(emptyPomodoroStore(), { ...past, startedAt: new Date("nope") }, at("12:00"))).toThrow(/valid date/);
+  });
+
+  it("may not overlap a filed session or the one running now", () => {
+    const filed = finishPomodoro(startPomodoro(emptyPomodoroStore(), start, at("08:30")), { outcome: null, reflection: "" }, at("08:55"));
+    expect(() => logPastPomodoro(filed, past, at("12:00"))).toThrow(/overlaps “Draft the landing page copy”/);
+    // Touching ends are fine.
+    expect(logPastPomodoro(filed, { ...past, startedAt: at("07:45") }, at("12:00")).sessions).toHaveLength(2);
+    const running = startPomodoro(emptyPomodoroStore(), start, at("08:40"));
+    expect(() => logPastPomodoro(running, past, at("12:00"))).toThrow(/running now/);
+  });
+
+  it("stays marked as logged through the file and a merge", () => {
+    const store = logPastPomodoro(emptyPomodoroStore(), past, at("12:00"));
+    expect(parsePomodoroStore(JSON.parse(JSON.stringify(store)))).toEqual(store);
+    const synced = { ...store, sessions: [{ ...store.sessions[0]!, external: { other: { id: "1", syncedAt: "x" } } }] };
+    expect(mergePomodoroStores(emptyPomodoroStore(), store, synced).sessions[0]).toMatchObject({ manual: true });
+  });
+});
+
 describe("the Pomodoro log file", () => {
   it("round-trips a store and keeps sync links", () => {
     const finished = finishPomodoro(startPomodoro(emptyPomodoroStore(), start, at("10:00")), { outcome: "achieved", reflection: "" }, at("10:25"));
@@ -130,6 +188,10 @@ describe("the Pomodoro view's data and commands", () => {
     expect(parsePomodoroCommand(envelope({ type: "start-pomodoro", projectId: "P1", intention: "Draft", focusActionIds: [], minutes: 0 }))).toBeNull();
     expect(parsePomodoroCommand(envelope({ type: "start-pomodoro", projectId: "P1", intention: "Draft", focusActionIds: [], minutes: 25.5 }))).toBeNull();
     expect(parsePomodoroCommand(envelope({ type: "finish-pomodoro", outcome: "great", reflection: "" }))).toBeNull();
+    const log = { type: "log-pomodoro", projectId: "P1", start: "2026-09-22T08:00", minutes: 45, intention: "Call", outcome: null, reflection: "" };
+    expect(parsePomodoroCommand(envelope(log))?.command.type).toBe("log-pomodoro");
+    expect(parsePomodoroCommand(envelope({ ...log, start: "2026-09-22" }))).toBeNull();
+    expect(parsePomodoroCommand(envelope({ ...log, minutes: 181 }))).toBeNull();
     expect(parsePomodoroCommand(envelope({ type: "set-project-status", projectId: "P1", status: "active" }))).toBeNull();
   });
 

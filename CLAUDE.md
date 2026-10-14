@@ -69,6 +69,9 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   session, the time-up notice and the status bar, so a session survives closing
   the view. `Pomodoro.elm` only renders and counts down from the times it is sent.
 - The log is `GTD/pomodoros.json` (setting `pomodoro.storePath`).
+- "Log a past session…" (History) files an untimed session on a Project (`logPastPomodoro`):
+  full length, `manual: true`, refused if it isn't over or overlaps a logged or running session.
+  Logged sessions count in the totals but are never sent to mite and never go to a Diary.
 - The running screen shows the session tree's Support Material (its Project and the Active
   sub-projects below, as for its Actions), one folded block per Project. The panels are
   `Gtd.Support`, shared with the Project page's Support tab, and the host side is

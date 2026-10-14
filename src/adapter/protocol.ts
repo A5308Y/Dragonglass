@@ -218,6 +218,8 @@ export interface ElmPomodoroSessionDto {
   outcome: PomodoroOutcome | null;
   reflection: string;
   completedActions: number;
+  /** Logged afterwards rather than timed. */
+  manual: boolean;
 }
 
 export interface ElmPomodoroDto {
@@ -296,6 +298,7 @@ export function elmPomodoro(
       outcome: session.outcome,
       reflection: session.reflection,
       completedActions: session.completedActionIds.length,
+      manual: session.manual === true,
     })),
     today,
     weekStart: addLocalDays(today, -((now.getDay() + 6) % 7)),
@@ -668,6 +671,8 @@ export type ElmNonMenuCommand =
   | { type: "pause-pomodoro" }
   | { type: "resume-pomodoro" }
   | { type: "finish-pomodoro"; outcome: PomodoroOutcome | null; reflection: string }
+  /** `start` is local wall-clock time, `YYYY-MM-DDTHH:MM`. */
+  | { type: "log-pomodoro"; projectId: string; start: string; minutes: number; intention: string; outcome: PomodoroOutcome | null; reflection: string }
   | { type: "discard-pomodoro" }
   | { type: "set-pomodoro-sound"; sound: PomodoroSound }
   | { type: "complete-pomodoro-action"; actionId: string }
@@ -790,7 +795,7 @@ export const SURFACE_COMMANDS = {
   ],
   somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project", "open-file"],
   pomodoro: [
-    "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro",
+    "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro", "log-pomodoro",
     "complete-pomodoro-action", "show-project", "start-checklist-pomodoro", "mark-checklist-item", "open-checklist-run",
     "set-pomodoro-sound", "open-link", "open-note-link",
     // The session's Support Material, as on the Project page (`src/adapter/project-detail.ts`).
@@ -979,6 +984,16 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
         && Number(value.minutes) <= 180;
     case "finish-pomodoro":
       return (value.outcome === null || isOneOf(POMODORO_OUTCOMES, value.outcome)) && typeof value.reflection === "string";
+    case "log-pomodoro":
+      return typeof value.projectId === "string"
+        && typeof value.start === "string"
+        && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value.start)
+        && Number.isInteger(value.minutes)
+        && Number(value.minutes) >= 1
+        && Number(value.minutes) <= 180
+        && typeof value.intention === "string"
+        && (value.outcome === null || isOneOf(POMODORO_OUTCOMES, value.outcome))
+        && typeof value.reflection === "string";
     case "complete-pomodoro-action":
       return typeof value.actionId === "string";
     case "start-checklist-pomodoro":

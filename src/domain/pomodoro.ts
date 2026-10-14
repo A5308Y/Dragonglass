@@ -10,6 +10,7 @@
  */
 
 import { byKey, mergeKeyed, same } from "./merge";
+import { localDate } from "../utils/date";
 
 export const POMODORO_STORE_VERSION = 1;
 
@@ -76,6 +77,8 @@ export interface PomodoroSession extends SessionBasis {
   reflection: string;
   /** Keyed by integration, e.g. `toggl`. Empty until something syncs the session. */
   external: Record<string, ExternalLink>;
+  /** Logged afterwards rather than timed (`logPastPomodoro`); never sent to a time tracker. */
+  manual?: true;
 }
 
 export interface PomodoroStore {
@@ -94,6 +97,19 @@ export interface PomodoroStart {
   intention: string;
   focusActionIds: string[];
   plannedMinutes: number;
+}
+
+/** A session on a Project that was not timed, entered afterwards. */
+export interface PastPomodoro {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  projectPath: string;
+  intention: string;
+  startedAt: Date;
+  minutes: number;
+  outcome: PomodoroOutcome | null;
+  reflection: string;
 }
 
 export interface PomodoroWrapUp {
@@ -189,6 +205,48 @@ export function finishPomodoro(store: PomodoroStore, wrapUp: PomodoroWrapUp, now
     external: {},
   };
   return { ...store, active: null, sessions: [session, ...store.sessions].slice(0, SESSION_LIMIT) };
+}
+
+/**
+ * Files a session that happened without the timer, as if it had run its full length. It must
+ * be over by `now` and may not overlap a session in the log or the one running now, so the
+ * totals never count the same minutes twice.
+ */
+export function logPastPomodoro(store: PomodoroStore, past: PastPomodoro, now: Date): PomodoroStore {
+  if (!past.projectId) throw new Error("Choose a Project first.");
+  if (!past.intention.trim()) throw new Error("Describe what the session was for.");
+  if (!Number.isInteger(past.minutes) || past.minutes < 1 || past.minutes > 180) {
+    throw new Error("A Pomodoro lasts between 1 and 180 minutes.");
+  }
+  const start = past.startedAt.getTime();
+  if (Number.isNaN(start)) throw new Error("Choose a valid date and start time.");
+  const end = start + past.minutes * 60_000;
+  if (end > now.getTime()) throw new Error("A logged session has to be over already.");
+  const clash = store.sessions.find((session) => Date.parse(session.startedAt) < end && Date.parse(session.endedAt) > start);
+  if (clash) {
+    throw new Error(`It overlaps “${clash.intention}” (${localDate(new Date(clash.startedAt))}, ${clock(clash.startedAt)}–${clock(clash.endedAt)}).`);
+  }
+  if (store.active && Date.parse(store.active.startedAt) < end) throw new Error("It overlaps the session running now.");
+  const session: PomodoroSession = {
+    id: past.id,
+    projectId: past.projectId,
+    projectTitle: past.projectTitle,
+    projectPath: past.projectPath,
+    intention: past.intention.trim(),
+    focusActionIds: [],
+    completedActionIds: [],
+    plannedMinutes: past.minutes,
+    startedAt: new Date(start).toISOString(),
+    endedAt: new Date(end).toISOString(),
+    focusedSeconds: past.minutes * 60,
+    status: "completed",
+    outcome: past.outcome,
+    reflection: past.reflection.trim(),
+    external: {},
+    manual: true,
+  };
+  const sessions = [session, ...store.sessions].sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+  return { ...store, sessions: sessions.slice(0, SESSION_LIMIT) };
 }
 
 export function discardPomodoro(store: PomodoroStore): PomodoroStore {
@@ -305,7 +363,14 @@ function parseSession(raw: unknown): PomodoroSession[] {
     outcome: POMODORO_OUTCOMES.includes(raw.outcome as PomodoroOutcome) ? raw.outcome as PomodoroOutcome : null,
     reflection: text(raw.reflection),
     external,
+    ...(raw.manual === true ? { manual: true as const } : {}),
   }];
+}
+
+/** Local wall-clock time, e.g. `14:05`. */
+function clock(timestamp: string): string {
+  const date = new Date(timestamp);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function unique(values: readonly string[]): string[] {

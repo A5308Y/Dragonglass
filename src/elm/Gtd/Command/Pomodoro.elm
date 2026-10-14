@@ -16,6 +16,7 @@ type Command
     | ResumePomodoro
     | FinishPomodoro (Maybe PomodoroOutcome) String
     | DiscardPomodoro
+    | LogPomodoro { projectId : ProjectId, start : String, minutes : Int, intention : String, outcome : Maybe PomodoroOutcome, reflection : String }
       -- "off", "ticking" or "folder".
     | SetSound String
     | OpenLink String
@@ -55,6 +56,9 @@ encode command =
 
             DiscardPomodoro ->
                 Base.DiscardPomodoro
+
+            LogPomodoro fields ->
+                Base.LogPomodoro fields
 
             SetSound sound ->
                 Base.SetPomodoroSound sound

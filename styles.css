@@ -3242,3 +3242,8 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-plan-idea-done { padding: 2px 8px; color: var(--text-muted); }
 .dg-plan-idea-done:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
 .dg-estimate { white-space: nowrap; }
+
+/* Logging a past session: day, start and length side by side. */
+.dg-pomodoro-log-when { display: flex; flex-wrap: wrap; gap: 10px; }
+.dg-pomodoro-log-when input[type="number"] { width: 80px; }
+.dg-pomodoro-log .dg-error { margin: 0; }

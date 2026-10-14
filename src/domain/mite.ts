@@ -81,11 +81,11 @@ export function miteEntry(session: PomodoroSession, target: MiteTarget, settings
 
 /**
  * Finished Project sessions not sent yet, oldest first. Sessions under a minute have
- * nothing to report, and checklist sessions are never sent.
+ * nothing to report, and checklist sessions and sessions logged afterwards are never sent.
  */
 export function unsentSessions(store: PomodoroStore, sendFrom: string): PomodoroSession[] {
   return store.sessions
-    .filter((session) => !session.checklist && !session.external[MITE] && localDate(new Date(session.endedAt)) >= sendFrom && session.focusedSeconds >= 60)
+    .filter((session) => !session.checklist && !session.manual && !session.external[MITE] && localDate(new Date(session.endedAt)) >= sendFrom && session.focusedSeconds >= 60)
     .sort((left, right) => left.startedAt.localeCompare(right.startedAt));
 }
 

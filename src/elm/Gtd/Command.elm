@@ -110,6 +110,8 @@ type Command
     | ResumePomodoro
     | FinishPomodoro (Maybe PomodoroOutcome) String
     | DiscardPomodoro
+      -- A session that wasn't timed; `start` is local `YYYY-MM-DDTHH:MM`.
+    | LogPomodoro { projectId : ProjectId, start : String, minutes : Int, intention : String, outcome : Maybe PomodoroOutcome, reflection : String }
     | SetPomodoroSound String
     | CompletePomodoroAction ActionId
     | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
@@ -595,6 +597,16 @@ encode command =
 
         DiscardPomodoro ->
             object "discard-pomodoro" []
+
+        LogPomodoro fields ->
+            object "log-pomodoro"
+                [ ( "projectId", Encode.string fields.projectId )
+                , ( "start", Encode.string fields.start )
+                , ( "minutes", Encode.int fields.minutes )
+                , ( "intention", Encode.string fields.intention )
+                , ( "outcome", Maybe.map PomodoroOutcome.encode fields.outcome |> Maybe.withDefault Encode.null )
+                , ( "reflection", Encode.string fields.reflection )
+                ]
 
         SetPomodoroSound sound ->
             object "set-pomodoro-sound" [ ( "sound", Encode.string sound ) ]
