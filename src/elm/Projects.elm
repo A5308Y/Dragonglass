@@ -19,6 +19,7 @@ import Gtd.Ui as Ui
 import Html exposing (Html, article, button, div, h2, h3, header, img, input, label, main_, node, option, p, section, select, small, span, strong, text, textarea)
 import Html.Attributes exposing (alt, attribute, checked, class, classList, disabled, draggable, placeholder, rows, selected, src, tabindex, title, type_, value)
 import Html.Events exposing (on, onCheck, onClick, onInput)
+import Html.Lazy
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Set exposing (Set)
@@ -507,11 +508,13 @@ update msg model =
         DragStarted projectId ->
             ( { model | draggedProject = Just projectId, subprojectDropTarget = Nothing }, Cmd.none )
 
+        -- `dragover` repeats every few milliseconds while a card is held, even standing still.
+        -- Handing back the same model lets the lazy `view` skip redrawing the page for it.
         DragOver ->
-            ( { model | subprojectDropTarget = Nothing }, Cmd.none )
+            dropTarget Nothing model
 
         DragOverSubproject status beforeId ->
-            ( { model | subprojectDropTarget = Just { status = status, beforeId = beforeId } }, Cmd.none )
+            dropTarget (Just { status = status, beforeId = beforeId }) model
 
         DragEnded ->
             ( { model | draggedProject = Nothing, subprojectDropTarget = Nothing }, Cmd.none )
@@ -560,6 +563,15 @@ update msg model =
 
         NoOp ->
             ( model, Cmd.none )
+
+
+dropTarget : Maybe SubprojectDropTarget -> Model -> ( Model, Cmd Msg )
+dropTarget target model =
+    if model.subprojectDropTarget == target then
+        ( model, Cmd.none )
+
+    else
+        ( { model | subprojectDropTarget = target }, Cmd.none )
 
 
 {-| Moves a Project within its siblings, showing the result before the host writes it.
@@ -950,8 +962,15 @@ finish pending resultValue model =
 -- VIEW
 
 
+{-| Lazy, so an update that hands back the same model (see `dropTarget`) draws nothing.
+-}
 view : Model -> Html Msg
 view model =
+    Html.Lazy.lazy viewPage model
+
+
+viewPage : Model -> Html Msg
+viewPage model =
     case model.error of
         Just message ->
             div [ class "dg-view dg-projects-view" ] [ div [ class "dg-panel dg-error" ] [ text message ], viewBody model ]
