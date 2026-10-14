@@ -1579,6 +1579,17 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-workflow-complete > span { font-size: 34px; }
 .dg-workflow-complete h3 { margin: 8px 0 0; color: var(--text-normal); }
 .dg-workflow-complete p { margin: 5px 0 0; }
+.dg-review-checklists {
+  width: min(520px, 100%);
+  margin: 28px auto 0;
+  text-align: left;
+}
+.dg-review-checklists h3 { font-size: var(--font-ui-medium); }
+.dg-review-checklists ul { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.dg-review-checklists li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.dg-review-checklist-title { padding: 0; height: auto; color: var(--text-accent); font-weight: var(--font-semibold); }
+.dg-review-checklist-title:hover { text-decoration: underline; }
+.dg-review-checklist-meta { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 
 .dg-review-view,
 .dg-brainstorm-view { overflow: hidden; }
@@ -2555,6 +2566,15 @@ body.is-phone .dg-delegate-agent-options { grid-template-columns: 1fr; }
   font-weight: var(--font-semibold);
 }
 .dg-pomodoro-hint { color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.dg-pomodoro-reset { margin: 0; color: var(--text-muted); font-size: var(--font-ui-small); }
+.dg-pomodoro-reset .dg-pomodoro-project-link { font-size: inherit; }
+.dg-pomodoro-reset.is-prominent {
+  padding: 8px 12px;
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
 .dg-pomodoro-actions { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .dg-pomodoro-actions label { display: flex; align-items: baseline; gap: 8px; cursor: pointer; }
 .dg-pomodoro-actions li.is-done span { color: var(--text-faint); text-decoration: line-through; }

@@ -90,6 +90,7 @@ export function defaultSettings(): GtdSettings {
       directory: "GTD/Checklists",
       storePath: "GTD/checklists.json",
       daily: "",
+      focusReset: "GTD/Checklists/Focus Reset.md",
     },
     agent: {
       runsDirectory: "",

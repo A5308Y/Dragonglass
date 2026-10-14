@@ -113,6 +113,11 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   `projectTitle`. Checklist sessions are never sent to mite and never go to a Diary.
 - Checklists should stay short (`SHORT_CHECKLIST_ITEMS`); the view says so past that,
   and after a run names items skipped in each of the last three runs.
+- The Focus Reset checklist (setting `checklists.focusReset`) is for a moment, not a
+  schedule: the Pomodoro start screen offers it in one line, and more plainly right after
+  a session stopped early. No dot, no notice. The Weekly Review keeps every checklist in
+  mind instead: the Someday/Maybe Review, its last step, ends by listing them with their
+  last run (`checklistOverview`).
 
 ## JSON stores shared between devices
 

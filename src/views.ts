@@ -73,7 +73,7 @@ export class GtdProjectReviewView extends ItemView {
 export class GtdSomedayReviewView extends ItemView {
   private host: ElmSomedayReviewHost | null = null;
 
-  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices) { super(leaf); }
+  constructor(leaf: WorkspaceLeaf, private readonly services: GtdServices, private readonly checklists: ChecklistService) { super(leaf); }
   getViewType(): string { return SOMEDAY_VIEW_TYPE; }
   getDisplayText(): string { return "GTD Someday/Maybe Review"; }
   getIcon(): string { return "cloud"; }
@@ -85,7 +85,7 @@ export class GtdSomedayReviewView extends ItemView {
   refresh(): void {
     if (this.host) return this.host.refresh();
     this.contentEl.empty();
-    this.host = new ElmSomedayReviewHost(this.contentEl, this.services);
+    this.host = new ElmSomedayReviewHost(this.contentEl, this.services, this.checklists);
   }
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checklistItems,
+  checklistOverview,
   dailyChecklistDue,
   emptyChecklistStore,
   finishRun,
@@ -105,6 +106,16 @@ describe("Checklist runs", () => {
     store = run(store, "d", "2026-09-23", ["Water the plants", "Check [[Backups]]"]);
     expect(repeatedlySkipped(store, "Daily.md", items)).toEqual(["Water the plants"]);
     expect(repeatedlySkipped(run(emptyChecklistStore(), "a", "2026-09-20", ["Water the plants"]), "Daily.md", items)).toEqual([]);
+  });
+
+  it("lists each checklist with the day of its last finished run, for the Weekly Review", () => {
+    let store = run(emptyChecklistStore(), "a", "2026-09-20", []);
+    store = run(store, "b", "2026-09-23", []);
+    store = startRun(store, { id: "c", path: "Daily.md", title: "Daily", items }, new Date("2026-09-25T08:00:00"));
+    expect(checklistOverview(store, [{ path: "Daily.md", title: "Daily" }, { path: "Focus Reset.md", title: "Focus Reset" }])).toEqual([
+      { path: "Daily.md", title: "Daily", lastRun: "2026-09-23" },
+      { path: "Focus Reset.md", title: "Focus Reset", lastRun: null },
+    ]);
   });
 
   it("follows a renamed checklist note", () => {

@@ -184,6 +184,21 @@ export function lastFinished(store: ChecklistStore, path: string): ChecklistRun 
   return store.runs.find((run) => run.path === path && run.finishedAt !== null);
 }
 
+/** A checklist as the Weekly Review lists it, to look over. */
+export interface ChecklistOverview {
+  path: string;
+  title: string;
+  /** The local day its last run was finished, or `null` before the first. */
+  lastRun: string | null;
+}
+
+export function checklistOverview(store: ChecklistStore, notes: readonly { path: string; title: string }[]): ChecklistOverview[] {
+  return notes.map((note) => {
+    const finishedAt = lastFinished(store, note.path)?.finishedAt;
+    return { path: note.path, title: note.title, lastRun: finishedAt ? localDate(new Date(finishedAt)) : null };
+  });
+}
+
 /**
  * Items skipped in each of the last `REPEATED_SKIPS` finished runs of the checklist that
  * had them: candidates for taking off it. A run where the item wasn't on the list doesn't count.

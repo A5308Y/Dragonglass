@@ -12,7 +12,7 @@ import { parseCodeAgentSettings } from "./domain/delegation";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { ErrorBar } from "./ui/error-bar";
 import { describeImport, normalizeMailPort } from "./domain/mail";
-import { POMODORO_SOUNDS, type ActionStatus, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
+import { POMODORO_SOUNDS, type ActionStatus, type ChecklistSettings, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { defaultSettings } from "./state/defaults";
@@ -98,8 +98,10 @@ export default class DragonglassGtdPlugin extends Plugin {
       () => void this.openPomodoro(),
     );
     this.checklists = new ChecklistService(this.app, () => this.settings.checklists, async (oldPath, newPath) => {
-      if (this.settings.checklists.daily !== oldPath) return;
-      this.settings.checklists.daily = newPath;
+      const settings = this.settings.checklists;
+      if (settings.daily !== oldPath && settings.focusReset !== oldPath) return;
+      if (settings.daily === oldPath) settings.daily = newPath;
+      if (settings.focusReset === oldPath) settings.focusReset = newPath;
       await this.saveSettings(false);
     });
     this.mite = new MiteSync(this.app, this.pomodoro, () => this.settings.pomodoro.mite, () => this.index.getSnapshot().projects);
@@ -149,7 +151,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.registerView(INBOX_VIEW_TYPE, (leaf) => new GtdInboxView(leaf, this.services));
     this.registerView(PROJECTS_VIEW_TYPE, (leaf) => new GtdProjectsView(leaf, this.services));
     this.registerView(REVIEW_VIEW_TYPE, (leaf) => new GtdProjectReviewView(leaf, this.services));
-    this.registerView(SOMEDAY_VIEW_TYPE, (leaf) => new GtdSomedayReviewView(leaf, this.services));
+    this.registerView(SOMEDAY_VIEW_TYPE, (leaf) => new GtdSomedayReviewView(leaf, this.services, this.checklists));
     this.registerView(POMODORO_VIEW_TYPE, (leaf) => new GtdPomodoroView(leaf, this.services, this.pomodoro, this.checklists));
     this.registerView(CHECKLISTS_VIEW_TYPE, (leaf) => new GtdChecklistsView(leaf, this.services, this.checklists));
     // Uncaught errors from Dragonglass's code show above its views, not only in the console.
@@ -263,11 +265,7 @@ export default class DragonglassGtdPlugin extends Plugin {
           ? defaults.brainstorm.imagesDirectory
           : normalizeVaultPath(saved!.brainstorm!.imagesDirectory),
       },
-      checklists: {
-        directory: normalizeVaultPath(saved?.checklists?.directory ?? "") || defaults.checklists.directory,
-        storePath: normalizeVaultPath(saved?.checklists?.storePath ?? "") || defaults.checklists.storePath,
-        daily: typeof saved?.checklists?.daily === "string" ? normalizeVaultPath(saved.checklists.daily) : "",
-      },
+      checklists: checklistSettings(saved?.checklists, defaults.checklists),
       agent: {
         runsDirectory: typeof saved?.agent?.runsDirectory === "string" ? saved.agent.runsDirectory.trim() : defaults.agent.runsDirectory,
         kitDirectory: typeof saved?.agent?.kitDirectory === "string" ? saved.agent.kitDirectory.trim() : defaults.agent.kitDirectory,
@@ -906,4 +904,20 @@ function migrateSavedViews(views: SavedView[]): SavedView[] {
 
 function quotedTitles(projects: readonly Project[]): string {
   return projects.map((project) => `“${project.title}”`).join(", ");
+}
+
+/**
+ * Reads the checklist settings. Settings saved before there was a Focus Reset checklist get the
+ * one in the checklists folder, which is only offered once that note exists.
+ */
+function checklistSettings(saved: Partial<ChecklistSettings> | undefined, defaults: ChecklistSettings): ChecklistSettings {
+  const directory = normalizeVaultPath(saved?.directory ?? "") || defaults.directory;
+  return {
+    directory,
+    storePath: normalizeVaultPath(saved?.storePath ?? "") || defaults.storePath,
+    daily: typeof saved?.daily === "string" ? normalizeVaultPath(saved.daily) : "",
+    focusReset: typeof saved?.focusReset === "string"
+      ? normalizeVaultPath(saved.focusReset)
+      : normalizeVaultPath(`${directory}/Focus Reset.md`),
+  };
 }

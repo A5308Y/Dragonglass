@@ -86,6 +86,9 @@ type alias PomodoroState =
     , weekStart : String
     , checklists : List ChecklistChoice
     , checklistRun : Maybe Checklist.Run
+
+    -- The Focus Reset checklist's path, offered on the start screen.
+    , focusReset : Maybe String
     , sound : String
     , soundFolder : String
     }
@@ -162,6 +165,7 @@ type Msg
     = GotHost Decode.Value
     | Tick Time.Posix
     | SubjectPicker (Picker.PickerMsg Subject)
+    | ChooseFocusReset String
     | ToggleFocus ActionId Bool
     | SetContextFilter String
     | IntentionChanged String
@@ -251,7 +255,7 @@ initialModel snapshot state nowMs =
 
 emptyState : PomodoroState
 emptyState =
-    { focusMinutes = 25, active = Nothing, sessions = [], today = "", weekStart = "", checklists = [], checklistRun = Nothing, sound = "off", soundFolder = "" }
+    { focusMinutes = 25, active = Nothing, sessions = [], today = "", weekStart = "", checklists = [], checklistRun = Nothing, focusReset = Nothing, sound = "off", soundFolder = "" }
 
 
 selectProject : Maybe ProjectId -> Model -> Model
@@ -353,6 +357,22 @@ update msg model =
 
                     else
                         model.contextFilter
+              }
+            , Cmd.none
+            )
+
+        ChooseFocusReset path ->
+            let
+                chosen =
+                    selectChecklist (Just path) model
+            in
+            ( { chosen
+                | intention =
+                    if String.isEmpty (String.trim model.intention) then
+                        "Clear my head and know what comes next."
+
+                    else
+                        model.intention
               }
             , Cmd.none
             )
@@ -853,6 +873,7 @@ setupView model =
     in
     section [ class "dg-pomodoro-card" ]
         [ h3 [] [ text "New Pomodoro" ]
+        , focusResetOffer model
         , div [ class "dg-pomodoro-field" ]
             [ span [ class "dg-pomodoro-label" ] [ text "Project or checklist" ]
             , Picker.view
@@ -909,6 +930,55 @@ setupView model =
             , button [ class "mod-cta", disabled (not ready), onClick Start ] [ text "Start Pomodoro" ]
             ]
         ]
+
+
+{-| The Focus Reset checklist, one click from being chosen. Usually a quiet line; right
+after a session stopped early, when scattered focus is the likeliest reason, it says so.
+Nothing while it is already chosen.
+-}
+focusResetOffer : Model -> Html Msg
+focusResetOffer model =
+    let
+        checklist =
+            model.state.focusReset
+                |> Maybe.andThen (\path -> List.filter (\choice -> choice.path == path) model.state.checklists |> List.head)
+
+        chosen path =
+            Maybe.map subjectKey (Picker.selection model.subject) == Just (ChecklistKey path)
+
+        stoppedEarly path =
+            case List.head model.state.sessions of
+                Just session ->
+                    session.stoppedEarly && session.day == model.state.today && session.checklistPath /= Just path
+
+                Nothing ->
+                    False
+    in
+    case checklist of
+        Just reset ->
+            if chosen reset.path then
+                text ""
+
+            else
+                let
+                    choose =
+                        button [ class "dg-pomodoro-project-link dg-flat-button", onClick (ChooseFocusReset reset.path) ]
+                in
+                if stoppedEarly reset.path then
+                    p [ class "dg-pomodoro-reset is-prominent" ]
+                        [ text "The last session ended early. If your focus is scattered, regroup first: "
+                        , choose [ text ("run " ++ reset.title) ]
+                        , text "."
+                        ]
+
+                else
+                    p [ class "dg-pomodoro-reset" ]
+                        [ text "Scattered? "
+                        , choose [ text (reset.title ++ " first") ]
+                        ]
+
+        Nothing ->
+            text ""
 
 
 {-| The Next Actions of the Project and its active sub-projects, as the Action Board's
@@ -1559,6 +1629,7 @@ stateDecoder =
                 )
             )
         |> andMap (Decode.field "checklistRun" (Decode.nullable Checklist.runDecoder))
+        |> andMap (Decode.oneOf [ Decode.field "focusReset" (Decode.nullable Decode.string), Decode.succeed Nothing ])
         |> andMap (Decode.oneOf [ Decode.field "sound" Decode.string, Decode.succeed "off" ])
         |> andMap (Decode.oneOf [ Decode.field "soundFolder" Decode.string, Decode.succeed "" ])
 

@@ -374,6 +374,11 @@ export interface ChecklistSettings {
   storePath: string;
   /** The path of the checklist to work through every day, or `""` for none. */
   daily: string;
+  /**
+   * The path of the checklist for regaining focus, or `""` for none. The Pomodoro view offers it
+   * on its start screen, and more plainly after a session stopped early.
+   */
+  focusReset: string;
 }
 
 export interface FeedSettings {

@@ -447,6 +447,21 @@ export class GtdSettingTab extends PluginSettingTab {
       });
 
     new Setting(sectionEl)
+      .setName("Focus Reset checklist")
+      .setDesc("For when your focus is scattered. The Pomodoro view offers it before a session, and more plainly after one stopped early. "
+        + (settings.focusReset && !notes.some((note) => note.path === settings.focusReset) ? "⚠ The chosen note is not in the checklists folder." : ""))
+      .addDropdown((dropdown) => {
+        dropdown.addOption("", "None");
+        for (const note of notes) dropdown.addOption(note.path, note.title);
+        if (settings.focusReset && !notes.some((note) => note.path === settings.focusReset)) dropdown.addOption(settings.focusReset, settings.focusReset);
+        dropdown.setValue(settings.focusReset).onChange(async (value) => {
+          settings.focusReset = value;
+          await save();
+          this.display();
+        });
+      });
+
+    new Setting(sectionEl)
       .setName("Run log")
       .setDesc("Vault-relative JSON file holding every run. It syncs with the vault. Changes apply after reloading the plugin.")
       .addText((text) => text.setValue(settings.storePath).onChange(async (value) => {

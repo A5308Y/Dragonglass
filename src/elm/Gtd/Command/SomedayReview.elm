@@ -14,6 +14,7 @@ type Command
     | MoveSubproject ProjectId ProjectStatus (Maybe ProjectId)
     | ReviewSomedayProject ProjectId String
     | ShowProject ProjectId
+    | OpenFile String
 
 
 encode : Command -> Encode.Value
@@ -31,4 +32,7 @@ encode command =
 
             ShowProject projectId ->
                 Base.ShowProject projectId
+
+            OpenFile path ->
+                Base.OpenFile path
         )

@@ -41,7 +41,7 @@ export class ElmPomodoroHost {
   private readonly unsubscribeChecklists: () => void;
   private readonly unsubscribePort: () => void;
   /** Checklists as last read; the notes are read asynchronously, so the first state has none. */
-  private checklistState: ElmPomodoroChecklists = { choices: [], run: null };
+  private checklistState: ElmPomodoroChecklists = { choices: [], run: null, focusReset: null };
   private version = 0;
   private supportVersion = 0;
   /** The Project the support material was last sent for, so a session that stays put isn't re-sent needlessly. */
@@ -123,7 +123,12 @@ export class ElmPomodoroHost {
     const runId = this.pomodoro.getStore().active?.checklist?.runId;
     const store = this.checklists.getStore();
     const run = runId ? findRun(store, runId) : undefined;
-    const state = { choices, run: run ? elmChecklistRun(run, await this.checklists.read(run.path), store) : null };
+    const focusReset = this.services.getSettings().checklists.focusReset;
+    const state = {
+      choices,
+      run: run ? elmChecklistRun(run, await this.checklists.read(run.path), store) : null,
+      focusReset: choices.some((choice) => choice.path === focusReset) ? focusReset : null,
+    };
     if (version !== this.version) return;
     this.checklistState = state;
     this.send({ type: "pomodoro", pomodoro: this.state() });

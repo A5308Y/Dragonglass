@@ -231,6 +231,8 @@ export interface ElmPomodoroDto {
   checklists: ElmChecklistChoiceDto[];
   /** The run the running session is spent on, if it is a checklist session. */
   checklistRun: ElmChecklistRunDto | null;
+  /** The Focus Reset checklist's path, when it is one of `checklists` (setting `checklists.focusReset`). */
+  focusReset: string | null;
   /** What plays while a session runs (setting `pomodoro.sound`). */
   sound: PomodoroSound;
   /** The sound folder's name, for the timer's choice. */
@@ -247,6 +249,7 @@ export interface ElmChecklistChoiceDto {
 export interface ElmPomodoroChecklists {
   choices: ElmChecklistChoiceDto[];
   run: ElmChecklistRunDto | null;
+  focusReset: string | null;
 }
 
 /** How many finished sessions the view is sent; the log itself keeps more. */
@@ -256,7 +259,7 @@ export function elmPomodoro(
   store: PomodoroStore,
   focusMinutes: number,
   now = new Date(),
-  checklists: ElmPomodoroChecklists = { choices: [], run: null },
+  checklists: ElmPomodoroChecklists = { choices: [], run: null, focusReset: null },
   sound: { sound: PomodoroSound; folder: string } = { sound: "off", folder: "" },
 ): ElmPomodoroDto {
   const today = localDate(now);
@@ -298,6 +301,7 @@ export function elmPomodoro(
     weekStart: addLocalDays(today, -((now.getDay() + 6) % 7)),
     checklists: checklists.choices,
     checklistRun: checklists.run,
+    focusReset: checklists.focusReset,
     sound: sound.sound,
     soundFolder: sound.folder.slice(sound.folder.lastIndexOf("/") + 1),
   };
@@ -784,7 +788,7 @@ export const SURFACE_COMMANDS = {
     "create-support-note", "create-support-folder", "read-support-note", "update-support-note",
     "link-project-file", "unlink-project-file", "add-project-link", "remove-project-link",
   ],
-  somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project"],
+  somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project", "open-file"],
   pomodoro: [
     "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro",
     "complete-pomodoro-action", "show-project", "start-checklist-pomodoro", "mark-checklist-item", "open-checklist-run",
@@ -1334,7 +1338,20 @@ export type ElmBrainstormEvent =
   | ElmCommandResultEvent;
 export type ElmFeedsEvent = { type: "feeds"; feeds: ElmFeedsDto } | ElmCommandResultEvent;
 export type ElmModalEvent = ElmCommandResultEvent;
-export type ElmSomedayReviewEvent = { type: "snapshot"; snapshot: ElmSnapshotDto } | ElmCommandResultEvent;
+export type ElmSomedayReviewEvent =
+  | { type: "snapshot"; snapshot: ElmSnapshotDto }
+  | { type: "checklists"; checklists: ElmReviewChecklistDto[] }
+  | ElmCommandResultEvent;
+
+/** A checklist to look over at the end of the Weekly Review. */
+export interface ElmReviewChecklistDto {
+  path: string;
+  title: string;
+  /** Local `YYYY-MM-DD` of the last finished run, or `null`. */
+  lastRun: string | null;
+  /** What the settings use it for, if anything. */
+  role: "daily" | "focus-reset" | null;
+}
 export type ElmPomodoroEvent =
   | ElmClosedEvent
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
