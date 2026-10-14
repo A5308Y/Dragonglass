@@ -1,4 +1,4 @@
-import { Notice, TFile } from "obsidian";
+import { Notice, Platform, TFile } from "obsidian";
 import { trashWithUndo } from "../ui/undo";
 import { appleMailLink } from "../domain/mail-note";
 import { findPullRequest, linksPullRequest, pullRequestLabel, reviewActionTitle } from "../domain/pull-request";
@@ -31,7 +31,7 @@ export class ElmInboxHost {
     if (!module) throw new Error("The Elm Inbox module was not compiled.");
     this.app = module.init({
       node,
-      flags: { snapshot: this.snapshot(), initialProcessing, projectIssues: this.projectIssues() },
+      flags: { snapshot: this.snapshot(), initialProcessing, projectIssues: this.projectIssues(), mac: Platform.isMacOS || Platform.isIosApp },
     }) as ElmApp;
     this.unsubscribePort = subscribeElmCommands({
       port: this.app.ports.inboxToHost,

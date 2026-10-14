@@ -57,6 +57,9 @@ type alias Model =
 
     -- Active Projects with an issue: Inbox zero waits until there are none.
     , projectIssues : Int
+
+    -- Shortcuts are shown with ⌘ on Apple devices and Ctrl elsewhere.
+    , mac : Bool
     , hostSnapshot : Snapshot
     , setAside : Dict InboxItemId String
     , search : String
@@ -135,7 +138,7 @@ main =
 
 
 type alias Flags =
-    { snapshot : Snapshot, initialProcessing : Bool, projectIssues : Int }
+    { snapshot : Snapshot, initialProcessing : Bool, projectIssues : Int, mac : Bool }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -144,7 +147,7 @@ init flagsValue =
         Ok flags ->
             let
                 model =
-                    initialModel flags.snapshot |> (\initial -> { initial | projectIssues = flags.projectIssues })
+                    initialModel flags.snapshot |> (\initial -> { initial | projectIssues = flags.projectIssues, mac = flags.mac })
             in
             if flags.initialProcessing && not (List.isEmpty flags.snapshot.inboxItems) then
                 enterProcessing Nothing model
@@ -161,6 +164,7 @@ initialModel snapshot =
     { snapshot = snapshot
     , hostSnapshot = snapshot
     , projectIssues = 0
+    , mac = False
     , setAside = Dict.empty
     , search = ""
     , processing = False
@@ -1159,9 +1163,37 @@ itemMeta item =
            )
 
 
-chordLabel : String
-chordLabel =
-    "⌘/Ctrl"
+{-| A processor shortcut as its button shows it, and as `aria-keyshortcuts` names it.
+-}
+shortcut : Model -> Chord -> { label : String, keys : String }
+shortcut model chord =
+    case ( chord, model.mac ) of
+        ( ProcessChord, True ) ->
+            { label = "⌘↵", keys = "Meta+Enter" }
+
+        ( ProcessChord, False ) ->
+            { label = "Ctrl+Enter", keys = "Control+Enter" }
+
+        ( DeleteChord, True ) ->
+            { label = "⌘⇧⌫", keys = "Meta+Shift+Backspace" }
+
+        ( DeleteChord, False ) ->
+            { label = "Ctrl+Shift+Backspace", keys = "Control+Shift+Backspace" }
+
+
+{-| A button's label with its shortcut beside it. The shortcut is hidden from screen
+readers, which hear it through `aria-keyshortcuts` instead.
+-}
+withShortcut : Model -> Chord -> String -> List (Html.Attribute Msg) -> Html Msg
+withShortcut model chord label attributes =
+    let
+        keys =
+            shortcut model chord
+    in
+    button (attribute "aria-keyshortcuts" keys.keys :: attributes)
+        [ span [] [ text label ]
+        , Html.kbd [ class "dg-shortcut", attribute "aria-hidden" "true" ] [ text keys.label ]
+        ]
 
 
 processorView : Model -> Html Msg
@@ -1215,36 +1247,38 @@ processorView model =
                 , div [ class "dg-progress-track" ] [ span [ style "width" (String.fromFloat progress ++ "%") ] [] ]
                 , itemCard model item
                 , processingForm model
-                , section [ class "dg-processor-action" ]
-                    [ p [ class "dg-processor-outcome", attribute "aria-live" "polite" ]
-                        [ span [] [ text "Outcome" ], strong [] [ text decision.label ] ]
-                    , div [ class "dg-processor-buttons" ]
-                        [ button
-                            [ class "mod-warning"
-
-                            , Html.Attributes.disabled busy
-                            , onClick (DeleteItem item.id)
-                            ]
-                            [ text "Delete & Next" ]
-                        , Ui.maybeView pullRequest
-                            (\label ->
-                                button [ Html.Attributes.disabled busy, onClick (ReviewPullRequest item.id) ]
-                                    [ text ("+ Review " ++ label) ]
-                            )
-                        , button
-                            [ class "mod-cta"
-
-                            , Html.Attributes.disabled (not decision.ready || busy)
-                            , onClick ProcessItem
-                            ]
-                            [ text "Process" ]
-                        ]
-                    ]
                 , if model.seconds == 0 then
                     div [ class "dg-warning" ] [ text "Two minutes elapsed. Make the smallest clear decision and keep moving." ]
 
                   else
                     text ""
+
+                -- Stays at the bottom of the view while the form scrolls, so the outcome is always in sight.
+                , section [ class "dg-processor-action" ]
+                    [ p [ classList [ ( "dg-processor-outcome", True ), ( "is-ready", decision.ready ) ], attribute "aria-live" "polite" ]
+                        [ span [] [ text "Outcome" ], strong [] [ text decision.label ] ]
+                    , div [ class "dg-processor-buttons" ]
+                        [ withShortcut model
+                            DeleteChord
+                            "Delete & Next"
+                            [ class "mod-warning"
+                            , Html.Attributes.disabled busy
+                            , onClick (DeleteItem item.id)
+                            ]
+                        , Ui.maybeView pullRequest
+                            (\label ->
+                                button [ Html.Attributes.disabled busy, onClick (ReviewPullRequest item.id) ]
+                                    [ text ("+ Review " ++ label) ]
+                            )
+                        , withShortcut model
+                            ProcessChord
+                            "Process"
+                            [ class "mod-cta"
+                            , Html.Attributes.disabled (not decision.ready || busy)
+                            , onClick ProcessItem
+                            ]
+                        ]
+                    ]
                 ]
 
 
@@ -1808,10 +1842,11 @@ isAudio extension =
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map3 Flags
+    Decode.map4 Flags
         (Decode.field "snapshot" Data.snapshotDecoder)
         (Decode.field "initialProcessing" Decode.bool)
         (Decode.oneOf [ Decode.field "projectIssues" Decode.int, Decode.succeed 0 ])
+        (Decode.oneOf [ Decode.field "mac" Decode.bool, Decode.succeed False ])
 
 
 hostEventDecoder : Decoder HostEvent
