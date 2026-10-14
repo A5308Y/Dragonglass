@@ -5,7 +5,7 @@ import { MailService, type MailImportResult, type MailSyncStatus } from "./mail/
 import { isActionStatus, isProjectStatus } from "./domain/validation";
 import { projectsDueForActivation } from "./domain/project-activation";
 import { ancestorsToActivate } from "./domain/project-tree";
-import { attention } from "./domain/attention";
+import { attention, feedsDue, latestFeedCheck, nextFeedCheck, parseFeedCheckTimes } from "./domain/attention";
 import { weeklyReviewFinished } from "./domain/weekly-review";
 import { unreadItems } from "./domain/feed";
 import { parseCodeAgentSettings } from "./domain/delegation";
@@ -60,6 +60,7 @@ export default class DragonglassGtdPlugin extends Plugin {
   private calendarSync!: GoogleCalendarSync;
   private feeds!: FeedService;
   private ribbonAttention!: RibbonAttention;
+  private feedCheckTimer: number | null = null;
   private mail!: MailService;
   private pomodoro!: PomodoroService;
   checklists!: ChecklistService;
@@ -167,7 +168,13 @@ export default class DragonglassGtdPlugin extends Plugin {
     const checklists = this.addRibbonIcon("clipboard-list", "Open GTD Checklists", () => void this.openChecklists());
     const feeds = this.addRibbonIcon("rss", "Open RSS Feeds", () => void this.activateView(FEEDS_VIEW_TYPE));
     this.ribbonAttention = new RibbonAttention({ board, inbox, projects, review, feeds, checklists }, () =>
-      attention(this.index.getSnapshot(), unreadItems(this.feeds.getStore()).length, this.settings, localDate(), this.checklists.dailyDue()));
+      attention(
+        this.index.getSnapshot(),
+        feedsDue(unreadItems(this.feeds.getStore()).length, this.settings.feeds.lastViewed, this.settings.feeds.checkTimes),
+        this.settings,
+        localDate(),
+        this.checklists.dailyDue(),
+      ));
     this.register(() => this.ribbonAttention.stop());
     this.addSettingTab(new GtdSettingTab(this.app, this));
     this.registerCommands();
@@ -312,6 +319,8 @@ export default class DragonglassGtdPlugin extends Plugin {
         readingContext: typeof saved?.feeds?.readingContext === "string" && saved.feeds.readingContext.trim()
           ? saved.feeds.readingContext.trim()
           : defaults.feeds.readingContext,
+        checkTimes: parseFeedCheckTimes(saved?.feeds?.checkTimes),
+        lastViewed: typeof saved?.feeds?.lastViewed === "string" ? saved.feeds.lastViewed : "",
       },
       googleCalendar: {
         ...defaults.googleCalendar,
@@ -512,6 +521,14 @@ export default class DragonglassGtdPlugin extends Plugin {
       void this.recordFinishedWeeklyReview();
     }, "Ribbon dots"));
     this.register(this.feeds.subscribe(() => this.ribbonAttention.schedule()));
+    // The feeds dot comes on only at the check times and goes off once the Feeds view is seen.
+    this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
+      if (leaf?.view.getViewType() === FEEDS_VIEW_TYPE) void this.markFeedsViewed();
+    }));
+    this.scheduleFeedCheck();
+    this.register(() => {
+      if (this.feedCheckTimer !== null) window.clearTimeout(this.feedCheckTimer);
+    });
     this.register(this.checklists.subscribe(() => this.ribbonAttention.schedule()));
     this.registerInterval(window.setInterval(() => {
       this.ribbonAttention.schedule();
@@ -734,6 +751,28 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.ribbonAttention.schedule();
   }
 
+  /** Records that the Feeds view was seen, which turns its dot off until the next check time. */
+  private async markFeedsViewed(): Promise<void> {
+    const viewed = Date.parse(this.settings.feeds.lastViewed);
+    // Only the check times matter, so this writes the settings at most once per check time.
+    if (!Number.isNaN(viewed) && viewed >= latestFeedCheck(this.settings.feeds.checkTimes).getTime()) return;
+    this.settings.feeds.lastViewed = new Date().toISOString();
+    // Not `saveSettings`, which would also start a fetch of every feed.
+    await this.saveData(this.settings);
+    this.ribbonAttention.schedule();
+  }
+
+  /** Wakes at each feed check time to put the dot on, unless the Feeds view is the one in front. */
+  scheduleFeedCheck(): void {
+    if (this.feedCheckTimer !== null) window.clearTimeout(this.feedCheckTimer);
+    this.feedCheckTimer = window.setTimeout(() => {
+      this.feedCheckTimer = null;
+      if (this.app.workspace.getActiveViewOfType(GtdFeedsView)) void this.markFeedsViewed();
+      this.scheduleFeedCheck();
+    }, nextFeedCheck(this.settings.feeds.checkTimes).getTime() - Date.now() + 1_000);
+    this.ribbonAttention.schedule();
+  }
+
   private async activateView(type: string): Promise<WorkspaceLeaf> {
     let leaf = this.app.workspace.getLeavesOfType(type)[0];
     if (!leaf) {
@@ -741,6 +780,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       await leaf.setViewState({ type, active: true });
     }
     await this.app.workspace.revealLeaf(leaf);
+    if (type === FEEDS_VIEW_TYPE) await this.markFeedsViewed();
     return leaf;
   }
 

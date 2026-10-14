@@ -384,6 +384,10 @@ export interface FeedSettings {
   refreshMinutes: number;
   /** The context of reading Actions made straight from a feed Item. */
   readingContext: string;
+  /** Local `HH:MM` times at which the ribbon dot may come on for unread Items. */
+  checkTimes: string[];
+  /** When the Feeds view was last opened (ISO), or `""`; it turns the dot off until the next check time. */
+  lastViewed: string;
 }
 
 export interface MailSettings {

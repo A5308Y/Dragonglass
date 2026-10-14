@@ -1,6 +1,7 @@
 import { parseMiteSettings } from "../domain/mite";
 import { localDate } from "../utils/date";
 import { DEFAULT_WEEKLY_REVIEW_DAY } from "../domain/weekly-review";
+import { DEFAULT_FEED_CHECK_TIMES } from "../domain/attention";
 import { DEFAULT_PROJECT_BOARD_COLUMNS } from "../domain/types";
 import type { GtdSettings, SavedView } from "../domain/types";
 
@@ -122,6 +123,8 @@ export function defaultSettings(): GtdSettings {
       storePath: "GTD/feeds.json",
       refreshMinutes: 30,
       readingContext: "Read/Review",
+      checkTimes: [...DEFAULT_FEED_CHECK_TIMES],
+      lastViewed: "",
     },
     mail: {
       enabled: false,

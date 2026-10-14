@@ -5,6 +5,7 @@ import { codeRepositoryLabel, type CodeRepository } from "./domain/delegation";
 import { projectBreadcrumbs } from "./domain/project-hierarchy";
 import type { MiteChoice } from "./pomodoro/mite-sync";
 import { localDate, localDateTime } from "./utils/date";
+import { parseFeedCheckTimes } from "./domain/attention";
 import { BUILD_TIME } from "./build-info";
 import { CodexLoginModal } from "./ui/codex-login";
 import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
@@ -1033,6 +1034,16 @@ export class GtdSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings(false);
         });
       });
+
+    new Setting(sectionEl)
+      .setName("Dot times")
+      .setDesc("Local times, comma-separated, at which the RSS ribbon icon gets a dot while Items are unread. "
+        + "Opening the Feeds view takes it off until the next of these times.")
+      .addText((text) => text.setValue(this.plugin.settings.feeds.checkTimes.join(", ")).onChange(async (value) => {
+        this.plugin.settings.feeds.checkTimes = parseFeedCheckTimes(value);
+        await this.plugin.saveSettings(false);
+        this.plugin.scheduleFeedCheck();
+      }));
 
     new Setting(sectionEl)
       .setName("Feed store")

@@ -14,7 +14,7 @@ export interface Attention {
   projects: boolean;
   /** This week's review is due and not finished yet (see `weeklyReviewDue`). */
   review: boolean;
-  /** Unread feed Items. */
+  /** Unread feed Items left since the last feed check time (see `feedsDue`). */
   feeds: boolean;
   /** The daily checklist has no finished run today. */
   checklists: boolean;
@@ -22,7 +22,7 @@ export interface Attention {
 
 export function attention(
   snapshot: GtdSnapshot,
-  unreadFeedItems: number,
+  feedsWaiting: boolean,
   review: WeeklyReviewSettings,
   today = localDate(),
   dailyChecklistDue = false,
@@ -32,9 +32,51 @@ export function attention(
     board: snapshot.actions.some((action) => actionNeedsAttention(action, today)),
     projects: projectsWithIssues(snapshot) > 0,
     review: weeklyReviewDue(snapshot, review, today),
-    feeds: unreadFeedItems > 0,
+    feeds: feedsWaiting,
     checklists: dailyChecklistDue,
   };
+}
+
+/** When the feeds dot may come on, as local `HH:MM` times. */
+export const DEFAULT_FEED_CHECK_TIMES = ["08:00", "16:00"];
+
+/**
+ * Feeds only ask for attention at a few check times a day: the dot comes on at a
+ * check time while Items are unread, and goes off once the Feeds view has been
+ * opened, staying off until the next check time however many Items arrive meanwhile.
+ * `lastViewed` is when the view was last opened (ISO, `""` for never).
+ */
+export function feedsDue(unreadFeedItems: number, lastViewed: string, times: readonly string[], now = new Date()): boolean {
+  if (unreadFeedItems === 0) return false;
+  const viewed = Date.parse(lastViewed);
+  return Number.isNaN(viewed) || viewed < latestFeedCheck(times, now).getTime();
+}
+
+/** The last check time at or before `now`, yesterday's if none has come yet today. */
+export function latestFeedCheck(times: readonly string[], now = new Date()): Date {
+  const today = feedChecksOn(times, now, 0).filter((check) => check <= now);
+  return today.length ? today[today.length - 1]! : feedChecksOn(times, now, -1).at(-1)!;
+}
+
+/** The first check time after `now`, tomorrow's if today's have all passed. */
+export function nextFeedCheck(times: readonly string[], now = new Date()): Date {
+  return feedChecksOn(times, now, 0).find((check) => check > now) ?? feedChecksOn(times, now, 1)[0]!;
+}
+
+/** Reads check times from settings, keeping valid `HH:MM` times, sorted; the defaults if none is valid. */
+export function parseFeedCheckTimes(value: unknown): string[] {
+  const times = (Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [])
+    .map((time) => (typeof time === "string" ? /^\s*(\d{1,2}):(\d{2})\s*$/.exec(time) : null))
+    .filter((match): match is RegExpExecArray => match !== null && Number(match[1]) < 24 && Number(match[2]) < 60)
+    .map((match) => `${match[1]!.padStart(2, "0")}:${match[2]}`);
+  return times.length ? [...new Set(times)].sort() : [...DEFAULT_FEED_CHECK_TIMES];
+}
+
+function feedChecksOn(times: readonly string[], now: Date, dayOffset: number): Date[] {
+  return parseFeedCheckTimes(times).map((time) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset, hours, minutes);
+  });
 }
 
 /**

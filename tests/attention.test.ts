@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
-import { attention, projectsWithIssues } from "../src/domain/attention";
+import { attention, feedsDue, latestFeedCheck, nextFeedCheck, parseFeedCheckTimes, projectsWithIssues } from "../src/domain/attention";
 import type { Action, GtdSnapshot, InboxItem, Project } from "../src/domain/types";
 
 const file = (path: string) => ({ path }) as TFile;
@@ -23,7 +23,7 @@ const snapshot = (projects: Project[], actions: Action[], inboxItems: InboxItem[
 
 describe("attention dots", () => {
   it("stays quiet when nothing waits", () => {
-    expect(attention(snapshot([project()], [action()]), 0, weekly, today))
+    expect(attention(snapshot([project()], [action()]), false, weekly, today))
       .toEqual({ inbox: false, board: false, projects: false, review: false, feeds: false, checklists: false });
   });
 
@@ -40,19 +40,48 @@ describe("attention dots", () => {
   });
 
   it("marks the Checklists while the daily checklist is due", () => {
-    expect(attention(snapshot([project()], [action()]), 0, weekly, today, true).checklists).toBe(true);
+    expect(attention(snapshot([project()], [action()]), false, weekly, today, true).checklists).toBe(true);
   });
 
   it("marks the Inbox, the feeds, and a Project with an issue", () => {
     const item = { type: "gtd-inbox-item", id: "I1", title: "Note", created: today, file: file("I1.md") } as InboxItem;
-    const result = attention(snapshot([project()], [], [item]), 3, weekly, today);
+    const result = attention(snapshot([project()], [], [item]), true, weekly, today);
     expect(result.inbox).toBe(true);
     expect(result.feeds).toBe(true);
     expect(result.projects).toBe(true);
   });
+  it("puts the feeds dot on only at the check times, until the Feeds view is opened", () => {
+    const times = ["08:00", "16:00"];
+    const at = (time: string) => new Date(`2026-09-24T${time}:00`);
+    const viewedAt = (time: string) => at(time).toISOString();
+    expect(feedsDue(0, "", times, at("09:00"))).toBe(false);
+    expect(feedsDue(3, "", times, at("09:00"))).toBe(true);
+    expect(feedsDue(3, viewedAt("08:30"), times, at("09:00"))).toBe(false);
+    // Items arriving after the visit wait for the next check time.
+    expect(feedsDue(5, viewedAt("08:30"), times, at("15:59"))).toBe(false);
+    expect(feedsDue(5, viewedAt("08:30"), times, at("16:00"))).toBe(true);
+    // Before the first check time, yesterday's last one counts.
+    expect(feedsDue(5, new Date("2026-09-23T17:00:00").toISOString(), times, at("07:00"))).toBe(false);
+    expect(feedsDue(5, new Date("2026-09-23T15:00:00").toISOString(), times, at("07:00"))).toBe(true);
+  });
+
+  it("finds the check times around now", () => {
+    const times = ["16:00", "08:00"];
+    expect(latestFeedCheck(times, new Date("2026-09-24T07:00:00"))).toEqual(new Date("2026-09-23T16:00:00"));
+    expect(latestFeedCheck(times, new Date("2026-09-24T12:00:00"))).toEqual(new Date("2026-09-24T08:00:00"));
+    expect(nextFeedCheck(times, new Date("2026-09-24T12:00:00"))).toEqual(new Date("2026-09-24T16:00:00"));
+    expect(nextFeedCheck(times, new Date("2026-09-24T16:00:00"))).toEqual(new Date("2026-09-25T08:00:00"));
+  });
+
+  it("reads check times from settings, falling back to the defaults", () => {
+    expect(parseFeedCheckTimes("17:30, 7:05, nonsense, 25:00")).toEqual(["07:05", "17:30"]);
+    expect(parseFeedCheckTimes(["08:00", "08:00"])).toEqual(["08:00"]);
+    expect(parseFeedCheckTimes("")).toEqual(["08:00", "16:00"]);
+    expect(parseFeedCheckTimes(undefined)).toEqual(["08:00", "16:00"]);
+  });
 
   it("marks the board for overdue work, due follow-ups and Calendar Actions left from earlier days", () => {
-    const board = (changes: Partial<Action>) => attention(snapshot([project()], [action(changes)]), 0, weekly, today).board;
+    const board = (changes: Partial<Action>) => attention(snapshot([project()], [action(changes)]), false, weekly, today).board;
     expect(board({ due: "2026-09-23" })).toBe(true);
     expect(board({ due: today })).toBe(false);
     expect(board({ status: "waiting", followUp: today })).toBe(true);
@@ -66,16 +95,16 @@ describe("attention dots", () => {
 
   it("asks for the Weekly Review while a tree is unreviewed since the review day", () => {
     // Today is a Thursday, so this review week began on Friday 2026-09-18.
-    const review = (changes: Partial<Project>) => attention(snapshot([project(changes)], [action()]), 0, weekly, today).review;
+    const review = (changes: Partial<Project>) => attention(snapshot([project(changes)], [action()]), false, weekly, today).review;
     expect(review({ reviewed: "2026-09-18" })).toBe(false);
     expect(review({ reviewed: "2026-09-17" })).toBe(true);
     const { reviewed: _reviewed, ...neverReviewed } = project();
-    expect(attention(snapshot([neverReviewed], [action()]), 0, weekly, today).review).toBe(true);
+    expect(attention(snapshot([neverReviewed], [action()]), false, weekly, today).review).toBe(true);
     expect(review({ reviewed: "2026-09-01", status: "someday" })).toBe(false);
   });
 
   it("stays quiet for the rest of the week once the review is finished", () => {
     const { reviewed: _reviewed, ...addedLater } = project();
-    expect(attention(snapshot([addedLater], [action()]), 0, { ...weekly, lastWeeklyReview: "2026-09-19" }, today).review).toBe(false);
+    expect(attention(snapshot([addedLater], [action()]), false, { ...weekly, lastWeeklyReview: "2026-09-19" }, today).review).toBe(false);
   });
 });
