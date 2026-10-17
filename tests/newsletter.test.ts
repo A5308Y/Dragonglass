@@ -16,15 +16,28 @@ describe("Newsletters in Inbox Items", () => {
 
   it("finds any newsletter's web version by what its link says", () => {
     expect(findNewsletter("Hi\n[View this email in your browser](https://mailchi.mp/acme/issue-12?e=abc&utm_campaign=x)"))
-      .toEqual({ url: "https://mailchi.mp/acme/issue-12?e=abc", source: "mailchi.mp" });
-    expect(findNewsletter("[Web version](https://www.acme.com/news/12)")?.source).toBe("acme.com");
+      .toEqual({ url: "https://mailchi.mp/acme/issue-12?e=abc", source: "newsletter" });
+    expect(findNewsletter("[Web version](https://www.acme.com/news/12)")?.url).toBe("https://www.acme.com/news/12");
     expect(findNewsletter("[Read online](https://acme.com/12#top)")?.url).toBe("https://acme.com/12");
   });
 
   it("ignores ordinary links and other pages of a known newsletter", () => {
     expect(findNewsletter("[Our website](https://acme.com) and [Unsubscribe](https://acme.com/u)")).toBeNull();
     expect(findNewsletter("[Subscribe](https://www.theneurondaily.com/subscribe)")).toBeNull();
-    expect(findNewsletter("https://www.theneurondaily.com/p/bare-text")).toBeNull();
+  });
+
+  it("reads the plain-text version the mail import keeps", () => {
+    const plain = [
+      "> Read Online (https://www.theneurondaily.com/p/openai-ships-agents?utm_source=newsletter)",
+      ">",
+      "> Welcome, humans. More at https://partner.example/offer.",
+    ].join("\n");
+    expect(findNewsletter(plain)?.url).toBe("https://www.theneurondaily.com/p/openai-ships-agents");
+    // Tracked links hide the address, so the label decides.
+    expect(findNewsletter("Sign up | Advertise | Read Online <https://link.mail.beehiiv.com/ss/c/abc?utm_medium=email>"))
+      .toEqual({ url: "https://link.mail.beehiiv.com/ss/c/abc", source: "newsletter" });
+    expect(findNewsletter("View this email in your browser:\n\nhttps://acme.com/issue/12")?.url).toBe("https://acme.com/issue/12");
+    expect(findNewsletter("Our site: https://acme.com\nUnsubscribe: https://acme.com/u")).toBeNull();
   });
 
   it("titles the Action after the subject and recognises it again", () => {
