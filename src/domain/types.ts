@@ -262,6 +262,10 @@ export interface GtdSettings {
   defaultActionStatus: ActionStatus;
   showDoneColumn: boolean;
   projectBoardColumns: ProjectStatus[];
+  /**
+   * The Action Board's saved views and the one open on this device, as `SavedViewService`
+   * holds them (`GTD/views.json`, the open one per device). Not written to the settings file.
+   */
   savedViews: SavedView[];
   activeSavedViewId: string | null;
   googleCalendar: GoogleCalendarSettings;

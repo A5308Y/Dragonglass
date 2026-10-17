@@ -2,6 +2,7 @@ import { inboxCreatedTime } from "../domain/inbox-processing";
 import { isEstimate } from "../domain/estimate";
 import type { FeedStoreData } from "../domain/feed";
 import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../domain/pomodoro";
+import { isSavedView } from "../domain/saved-views";
 import {
   MARK_STATES,
   SHORT_CHECKLIST_ITEMS,
@@ -1201,43 +1202,6 @@ function isInboxInput(value: unknown): value is ElmInboxProcessingInput {
     && isOptionalString(value.followUp)
     && isOptionalSchedule(value.schedule)
     && isOptionalBoolean(value.fileOriginal);
-}
-
-function isSavedView(value: unknown): value is SavedView {
-  return isRecord(value)
-    && typeof value.id === "string"
-    && typeof value.name === "string"
-    && Array.isArray(value.filters)
-    && value.filters.every(isActionFilter)
-    && GROUP_BY.includes(String(value.groupBy))
-    && (value.sectionBy === undefined || value.sectionBy === null || GROUP_BY.includes(String(value.sectionBy)))
-    && isSortSpec(value.sort)
-    && (value.visibleColumns === null || isStringArray(value.visibleColumns));
-}
-
-const GROUP_BY = ["status", "project", "context", "energy", "estimate"];
-
-function isActionFilter(value: unknown): boolean {
-  if (!isRecord(value) || typeof value.kind !== "string") return false;
-  if (value.kind === "value") {
-    return ["status", "project", "context", "energy", "estimate", "area"].includes(String(value.field))
-      && (value.operator === "in" || value.operator === "notIn")
-      && isStringArray(value.values);
-  }
-  if (value.kind === "due") {
-    if (["before", "onOrBefore", "after", "onOrAfter"].includes(String(value.operator))) {
-      return typeof value.value === "string";
-    }
-    if (value.operator === "withinNextDays") return Number.isInteger(value.value) && Number(value.value) >= 0;
-    return (value.operator === "isEmpty" || value.operator === "isNotEmpty") && value.value === undefined;
-  }
-  return false;
-}
-
-function isSortSpec(value: unknown): boolean {
-  return isRecord(value)
-    && ["manual", "created", "due", "title", "project"].includes(String(value.field))
-    && (value.direction === "asc" || value.direction === "desc");
 }
 
 function isOptionalString(value: unknown): boolean {

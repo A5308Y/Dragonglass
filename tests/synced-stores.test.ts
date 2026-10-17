@@ -11,6 +11,8 @@ import {
   type FeedItem,
   type FeedStoreData,
 } from "../src/domain/feed";
+import { deleteSavedView, emptySavedViewStore, mergeSavedViewStores, upsertSavedView } from "../src/domain/saved-views";
+import type { SavedView } from "../src/domain/types";
 import { emptyMailStore, emptyMailboxState, mergeMailStores, openBacklog, recordHandled, withMailboxState } from "../src/domain/mail";
 import {
   emptyPomodoroStore,
@@ -249,5 +251,30 @@ describe("A store file written by two devices", () => {
     phone.store = resolve(phone.store, ["a"]);
     await phone.file.write(phone.store);
     expect(unreadKeys(parseFeedStore(JSON.parse(files.get("GTD/feeds.json")!)))).toEqual(["b"]);
+  });
+});
+
+describe("merging saved views", () => {
+  const view = (id: string, name = id): SavedView => ({
+    id, name, filters: [], groupBy: "status", sort: { field: "manual", direction: "asc" }, visibleColumns: null,
+  });
+  const base = upsertSavedView(upsertSavedView(emptySavedViewStore(), view("a")), view("b"));
+
+  it("keeps views added on either device and drops views deleted on either", () => {
+    const mine = deleteSavedView(upsertSavedView(base, view("mac")), "a");
+    const theirs = upsertSavedView(base, view("phone"));
+    expect(mergeSavedViewStores(base, mine, theirs).views.map((entry) => entry.id)).toEqual(["b", "phone", "mac"]);
+  });
+
+  it("takes an edit from either device, and this device's when both edited one", () => {
+    const mine = upsertSavedView(base, view("a", "Mac name"));
+    const theirs = upsertSavedView(upsertSavedView(base, view("a", "Phone name")), view("b", "Phone b"));
+    expect(mergeSavedViewStores(base, mine, theirs).views.map((entry) => entry.name)).toEqual(["Mac name", "Phone b"]);
+  });
+
+  it("doesn't bring back a view an older copy still has", () => {
+    // The phone deleted "b"; the Mac's copy predates that and changed nothing.
+    const theirs = deleteSavedView(base, "b");
+    expect(mergeSavedViewStores(base, base, theirs).views.map((entry) => entry.id)).toEqual(["a"]);
   });
 });

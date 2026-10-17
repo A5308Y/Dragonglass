@@ -145,33 +145,14 @@ export class ElmActionBoardHost {
           () => this.services.repository.trashAction(action.id));
         return;
       }
+      // Views are shared through `GTD/views.json`; the open one is this device's own.
       case "set-active-saved-view":
-        await this.services.saveSettings({
-          ...this.services.getSettings(),
-          activeSavedViewId: command.savedViewId,
-        });
+        this.services.savedViews.setActive(command.savedViewId);
         return;
-      case "upsert-saved-view": {
-        const settings = this.services.getSettings();
-        const exists = settings.savedViews.some((view) => view.id === command.view.id);
-        await this.services.saveSettings({
-          ...settings,
-          savedViews: exists
-            ? settings.savedViews.map((view) => view.id === command.view.id ? command.view : view)
-            : [...settings.savedViews, command.view],
-          activeSavedViewId: command.activate ? command.view.id : settings.activeSavedViewId,
-        });
-        return;
-      }
-      case "delete-saved-view": {
-        const settings = this.services.getSettings();
-        await this.services.saveSettings({
-          ...settings,
-          savedViews: settings.savedViews.filter((view) => view.id !== command.savedViewId),
-          activeSavedViewId: settings.activeSavedViewId === command.savedViewId ? null : settings.activeSavedViewId,
-        });
-        return;
-      }
+      case "upsert-saved-view":
+        return this.services.savedViews.upsert(command.view, command.activate);
+      case "delete-saved-view":
+        return this.services.savedViews.delete(command.savedViewId);
       case "prompt":
         return new Promise<string>((resolve) => {
           new ElmModal(

@@ -124,14 +124,19 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 
 ## JSON stores shared between devices
 
-- `GTD/feeds.json`, `GTD/mail.json`, `GTD/pomodoros.json` and `GTD/checklists.json` are written by every
+- `GTD/feeds.json`, `GTD/mail.json`, `GTD/pomodoros.json`, `GTD/checklists.json` and `GTD/views.json` are written by every
   device through `SyncedJsonFile` (`src/state/synced-json-file.ts`): each write is a
   three-way merge of the file as last seen, this device's copy and the file now, and a
   change from sync is merged into the copy in memory. Never write these files directly.
 - The merges are pure (`mergeFeedStores`, `mergeMailStores`, `mergePomodoroStores`,
-  `mergeChecklistStores`, tested in `tests/synced-stores.test.ts`): resolved and handled keys only grow, except
+  `mergeChecklistStores`, `mergeSavedViewStores`, tested in `tests/synced-stores.test.ts`): resolved and handled keys only grow, except
   where this device deliberately took them back (Undo, reopening a mail backlog).
   A new field in a store needs a rule there too, or one device's value silently wins.
+- The plugin settings file is written whole by each device, so anything several devices edit
+  doesn't belong there. The Action Board's saved views moved out for that reason
+  (`SavedViewService`, `src/domain/saved-views.ts`); the open view is per device
+  (`app.saveLocalStorage`). `settings.savedViews` / `activeSavedViewId` only mirror the
+  service in memory and aren't saved.
 
 ## Action estimates
 

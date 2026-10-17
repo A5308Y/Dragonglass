@@ -2,6 +2,7 @@ import type { App, TFile } from "obsidian";
 import type { ActionStatus, GtdSettings, ProjectStatus } from "../domain/types";
 import type { AgentService } from "../agent/agent-service";
 import type { GtdRepository } from "../repository/gtd-repository";
+import type { SavedViewService } from "../state/saved-view-service";
 
 export interface GtdServices {
   app: App;
@@ -9,6 +10,8 @@ export interface GtdServices {
   /** Runs delegated Project trees in the agent sandbox. */
   agent: AgentService;
   getSettings: () => GtdSettings;
+  /** The Action Board's saved views, shared between devices, and the one open on this device. */
+  savedViews: SavedViewService;
   saveSettings: (settings: GtdSettings, refreshViews?: boolean) => Promise<void>;
   openFile: (file: TFile) => Promise<void>;
   quickCapture: () => void;

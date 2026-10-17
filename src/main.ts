@@ -12,10 +12,12 @@ import { parseCodeAgentSettings } from "./domain/delegation";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { ErrorBar } from "./ui/error-bar";
 import { describeImport, normalizeMailPort } from "./domain/mail";
+import { SavedViewService } from "./state/saved-view-service";
+import { migrateSavedViews } from "./domain/saved-views";
 import { POMODORO_SOUNDS, type ActionStatus, type ChecklistSettings, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
-import { defaultSettings } from "./state/defaults";
+import { createDefaultViews, defaultSettings } from "./state/defaults";
 import { GtdSettingTab } from "./settings";
 import { ElmModal } from "./adapter/elm-modals";
 import { OpenProjectModal } from "./ui/open-project";
@@ -70,10 +72,23 @@ export default class DragonglassGtdPlugin extends Plugin {
   agent!: AgentService;
   private services!: GtdServices;
   private activationRun: Promise<void> | null = null;
+  savedViews!: SavedViewService;
+  /**
+   * The views and open view this device still had in its settings, from before they moved
+   * to `GTD/views.json`; `null` when there were none. Kept in the settings file until the
+   * views file has them.
+   */
+  private legacyViews: { views: SavedView[]; activeId: string | null } | null = null;
+  private viewsMoved = false;
 
   async onload(): Promise<void> {
     await this.loadSettings();
     setTimingLog(this.settings.logTimings);
+    this.savedViews = new SavedViewService(this.app, () => this.savedViewsChanged(), {
+      views: this.settings.savedViews,
+      activeId: this.legacyViews?.activeId ?? null,
+    });
+    this.mirrorSavedViews();
     this.mailPasswords = new MailPasswords(this.app, () => this.settings.mail);
     this.mailPasswords.migrate();
     this.calendarSecret = new CalendarSecret(this.app, () => this.settings.googleCalendar);
@@ -111,6 +126,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       repository: this.repository,
       agent: this.agent,
       getSettings: () => this.settings,
+      savedViews: this.savedViews,
       saveSettings: async (settings, refreshViews = true) => {
         this.settings = settings;
         await this.saveSettings(refreshViews);
@@ -203,6 +219,9 @@ export default class DragonglassGtdPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const defaults = defaultSettings();
     const saved = (await this.loadData()) as Partial<GtdSettings> | null;
+    this.legacyViews = Array.isArray(saved?.savedViews)
+      ? { views: migrateSavedViews(saved.savedViews), activeId: typeof saved.activeSavedViewId === "string" ? saved.activeSavedViewId : null }
+      : null;
     this.settings = {
       ...defaults,
       ...(saved ?? {}),
@@ -213,6 +232,7 @@ export default class DragonglassGtdPlugin extends Plugin {
         ? normalizeVaultPath(saved.defaultProjectImage)
         : defaults.defaultProjectImage,
       savedViews: Array.isArray(saved?.savedViews) ? migrateSavedViews(saved.savedViews) : defaults.savedViews,
+      activeSavedViewId: typeof saved?.activeSavedViewId === "string" ? saved.activeSavedViewId : null,
       defaultActionStatus: isActionStatus(saved?.defaultActionStatus) ? saved.defaultActionStatus : defaults.defaultActionStatus,
       projectBoardColumnsBy: saved?.projectBoardColumnsBy === "area" ? "area" : "status",
       // "Group by area" was the first form of area sections.
@@ -335,9 +355,51 @@ export default class DragonglassGtdPlugin extends Plugin {
     if (!saved?.googleCalendar?.sourceId) await this.saveData(this.settings);
   }
 
+  /**
+   * Reads the shared views file, adds the views this device kept in its settings, and
+   * only then drops them from the settings file, so a failed start loses nothing.
+   */
+  private async startSavedViews(): Promise<void> {
+    try {
+      const { refs, moved } = await this.savedViews.start(this.legacyViews?.views ?? null, createDefaultViews);
+      for (const ref of refs) this.registerEvent(ref);
+      // A views file still arriving from sync is read later; the settings keep their copy till then.
+      if (!moved) return;
+      this.viewsMoved = true;
+      if (this.legacyViews) {
+        this.legacyViews = null;
+        await this.saveData(this.persistedSettings());
+      }
+    } catch (error) {
+      new Notice(`Dragonglass could not read the saved views: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /** The settings as written to the settings file: the views live in `GTD/views.json` once moved. */
+  private persistedSettings(): Partial<GtdSettings> {
+    if (!this.viewsMoved) return this.settings;
+    const { savedViews: _views, activeSavedViewId: _active, ...rest } = this.settings;
+    return rest;
+  }
+
+  /** `settings.savedViews` and `activeSavedViewId` are what the views service holds, for the board to read. */
+  private mirrorSavedViews(): void {
+    if (!this.savedViews) return;
+    this.settings.savedViews = this.savedViews.views();
+    this.settings.activeSavedViewId = this.savedViews.activeId();
+  }
+
+  private savedViewsChanged(): void {
+    this.mirrorSavedViews();
+    for (const leaf of this.app.workspace.getLeavesOfType(BOARD_VIEW_TYPE)) {
+      if (leaf.view instanceof ActionBoardView) leaf.view.refresh();
+    }
+  }
+
   async saveSettings(refreshViews = true): Promise<void> {
     setTimingLog(this.settings.logTimings);
-    await this.saveData(this.settings);
+    this.mirrorSavedViews();
+    await this.saveData(this.persistedSettings());
     this.calendarSync?.schedule(0);
     this.feeds?.schedule(0);
     this.mail?.schedule(0);
@@ -511,6 +573,7 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.register(this.calendarSync.start());
     this.register(this.feeds.start());
     this.register(this.checklists.start());
+    void this.startSavedViews();
     this.register(this.mail.start());
     this.register(this.agent.start());
     // Dots on the ribbon icons for views with something to do; the hourly pass catches a new day.
@@ -877,29 +940,6 @@ function migrateMailAccount(account: MailAccountSettings): MailAccountSettings {
 function isStringMap(value: unknown): value is Record<string, string> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
     && Object.values(value as Record<string, unknown>).every((entry) => typeof entry === "string");
-}
-
-function migrateSavedViews(views: SavedView[]): SavedView[] {
-  return views
-    .filter((view) => view.id !== "default-inbox" && view.id !== "default-someday" && !view.filters.some((filter) =>
-      filter.kind === "value"
-      && filter.field === "status"
-      && filter.operator === "in"
-      && filter.values.length > 0
-      && filter.values.every((value) => value === "inbox" || value === "someday")
-    ) && !(view.visibleColumns?.length && view.visibleColumns.every((column) => column === "inbox" || column === "someday")))
-    .map((view) => ({
-      ...view,
-      filters: view.filters.flatMap((filter) => {
-        // Deferring Actions and the work flag were removed, and their filters with them.
-        const kind = (filter as { kind: string }).kind;
-        if (kind === "availability" || kind === "work") return [];
-        if (filter.kind !== "value" || filter.field !== "status") return [filter];
-        const values = filter.values.filter((value) => value !== "inbox" && value !== "someday");
-        return values.length ? [{ ...filter, values }] : [];
-      }),
-      visibleColumns: view.visibleColumns?.filter((column) => column !== "inbox" && column !== "someday") ?? null,
-    }));
 }
 
 function quotedTitles(projects: readonly Project[]): string {
