@@ -28,7 +28,7 @@ import { createUlid } from "./utils/ulid";
 import { setTimingLog } from "./utils/timing";
 import { ActionBoardView, BOARD_VIEW_TYPE, BRAINSTORM_VIEW_TYPE, CHECKLISTS_VIEW_TYPE, FEEDS_VIEW_TYPE, GtdBrainstormView, GtdChecklistsView, GtdFeedsView, GtdInboxView, GtdProjectReviewView, GtdProjectsView, GtdPomodoroView, GtdSomedayReviewView, INBOX_VIEW_TYPE, POMODORO_VIEW_TYPE, PROJECTS_VIEW_TYPE, REVIEW_VIEW_TYPE, SOMEDAY_VIEW_TYPE } from "./views";
 import { registerObsidianMarkdown } from "./adapter/obsidian-markdown";
-import { VIEW_LINK_ACTION, VIEW_LINK_NAMES, viewLinkName, type ViewLinkName } from "./domain/view-links";
+import { VIEW_LINK_ACTION, VIEW_LINK_NAMES, captureRequest, viewLinkName, type ViewLinkName } from "./domain/view-links";
 import { PomodoroService } from "./pomodoro/pomodoro-service";
 import { ChecklistService } from "./checklists/checklist-service";
 import { MiteSync } from "./pomodoro/mite-sync";
@@ -159,8 +159,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     };
 
     // `obsidian://dragonglass?view=inbox` opens a view, from a note, a checklist or outside Obsidian.
-    registerObsidianMarkdown(this.app, (view) => this.openViewLink(view));
-    this.registerObsidianProtocolHandler(VIEW_LINK_ACTION, (params) => this.openViewLink(params.view));
+    registerObsidianMarkdown(this.app, (link) => void this.followLink(link));
+    this.registerObsidianProtocolHandler(VIEW_LINK_ACTION, (params) => void this.followLink(params));
     this.registerView(BOARD_VIEW_TYPE, (leaf) => new ActionBoardView(leaf, this.services));
     this.registerView(BRAINSTORM_VIEW_TYPE, (leaf) => new GtdBrainstormView(leaf, this.services));
     this.registerView(FEEDS_VIEW_TYPE, (leaf) => new GtdFeedsView(leaf, this.services, this.feeds));
@@ -179,6 +179,8 @@ export default class DragonglassGtdPlugin extends Plugin {
     this.register(this.pomodoro.start(this.addStatusBarItem()));
     const board = this.addRibbonIcon("list-checks", "Open GTD Action Board", () => void this.activateView(BOARD_VIEW_TYPE));
     const inbox = this.addRibbonIcon("inbox", "Open GTD Inbox", () => void this.activateView(INBOX_VIEW_TYPE));
+    // On the phone, Obsidian can put one ribbon item on the navigation bar: this one makes capture one tap.
+    this.addRibbonIcon("pencil-line", "Quick Capture to Inbox", () => this.quickCapture());
     const projects = this.addRibbonIcon("folder-kanban", "Open GTD Projects", () => void this.activateView(PROJECTS_VIEW_TYPE));
     const review = this.addRibbonIcon("clipboard-check", "Start GTD Project Review", () => void this.activateView(REVIEW_VIEW_TYPE));
     this.addRibbonIcon("lightbulb", "Open GTD Brainstorm", () => void this.activateView(BRAINSTORM_VIEW_TYPE));
@@ -693,6 +695,19 @@ export default class DragonglassGtdPlugin extends Plugin {
   }
 
   /** Opens the view a Dragonglass link names, or says which names there are. */
+  /** An `obsidian://dragonglass` link: a capture when it has `capture`, else a view. */
+  private async followLink(params: Readonly<Record<string, string | undefined>>): Promise<void> {
+    const capture = captureRequest(params.capture);
+    if (!capture) return this.openViewLink(params.view);
+    if (capture.kind === "dialog") return this.quickCapture();
+    try {
+      await this.repository.createInboxItem(capture.title, capture.details);
+      new Notice(`Captured to Inbox: “${capture.title}”`);
+    } catch (error) {
+      new Notice(`Dragonglass could not capture “${capture.title}”: ${error instanceof Error ? error.message : String(error)}`, 10_000);
+    }
+  }
+
   private openViewLink(view: unknown): void {
     const name = viewLinkName(view);
     if (!name) {
