@@ -152,6 +152,7 @@ type Command
     | TrashInboxItem InboxItemId
     | OpenMail InboxItemId
     | ReviewPullRequest InboxItemId
+    | ReadNewsletter InboxItemId
     | ProcessInbox InboxItemId Disposition InboxInput
     | CaptureInboxItem String
       -- Pasted lists
@@ -739,6 +740,9 @@ encode command =
 
         ReviewPullRequest itemId ->
             object "review-pull-request" [ ( "itemId", Encode.string itemId ) ]
+
+        ReadNewsletter itemId ->
+            object "read-newsletter" [ ( "itemId", Encode.string itemId ) ]
 
         ProcessInbox itemId disposition input ->
             object "process-inbox"

@@ -1355,6 +1355,15 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   line-height: var(--line-height-normal);
 }
 .dg-inbox-preview.is-empty { color: var(--text-muted); font-style: italic; }
+/* Obsidian makes its interface unselectable; the Item being processed, often an email, should be copyable. */
+.dg-processor-heading h3,
+.dg-processor-heading span,
+.dg-inbox-preview {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+.dg-inbox-preview a { cursor: pointer; }
 .dg-inbox-file-toggle {
   margin-top: 14px;
   padding-top: 14px;
@@ -1440,6 +1449,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 .dg-processing-field.is-wide { grid-column: 1 / -1; }
 .dg-processing-field > span,
 .dg-processing-field-heading > span,
+.dg-processing-field-heading > label,
 .dg-inbox-file-toggle > span {
   font-size: var(--font-ui-small);
   font-weight: var(--font-semibold);
@@ -1466,6 +1476,15 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
 /* Backlog and Someday/Maybe sit together: both park the Project, and at most one is on. */
 .dg-processing-field > .dg-processing-toggles { display: flex; flex-wrap: wrap; gap: 6px 16px; align-self: flex-start; }
 .dg-processor-heading-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Fills the Action from the Item's title on request; a link-sized aside to the label. */
+.dg-processing-use-title {
+  padding: 0 !important;
+  height: auto;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+.dg-processing-use-title:hover { text-decoration: underline; }
 .dg-processing-field > small,
 .dg-inbox-file-toggle > small {
   color: var(--text-faint);

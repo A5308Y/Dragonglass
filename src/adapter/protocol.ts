@@ -701,6 +701,7 @@ export type ElmNonMenuCommand =
   | { type: "process-inbox"; itemId: string; operation: "next-action" | "file" | "someday" | "backlog"; input: ElmInboxProcessingInput }
   | { type: "open-mail"; itemId: string }
   | { type: "review-pull-request"; itemId: string }
+  | { type: "read-newsletter"; itemId: string }
   | { type: "read-desired-outcome"; projectId: string }
   | { type: "show-project-issues" }
   | { type: "save-new-action"; input: ElmNewActionInput }
@@ -775,7 +776,7 @@ export const SURFACE_COMMANDS = {
     "open-note-link",
   ],
   inbox: [
-    "quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail", "review-pull-request",
+    "quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail", "review-pull-request", "read-newsletter",
     "read-desired-outcome", "show-project-issues",
   ],
   feeds: [
@@ -1122,6 +1123,7 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "trash-inbox-item":
     case "open-mail":
     case "review-pull-request":
+    case "read-newsletter":
       return typeof value.itemId === "string";
     case "process-inbox":
       return typeof value.itemId === "string"

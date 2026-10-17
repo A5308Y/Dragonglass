@@ -15,7 +15,7 @@ import Gtd.Id exposing (InboxItemId, ProjectId)
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, node, option, p, section, select, small, span, strong, text, textarea)
-import Html.Attributes exposing (attribute, checked, class, classList, controls, id, placeholder, preload, selected, src, style, tabindex, title, type_, value)
+import Html.Attributes exposing (attribute, checked, class, classList, controls, for, id, placeholder, preload, selected, src, style, tabindex, title, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput)
 import Html.Keyed
 import Json.Decode as Decode exposing (Decoder)
@@ -106,6 +106,7 @@ type Msg
     | ContextPicker (Picker.PickerMsg String)
     | DesiredOutcomeChanged String
     | NextActionChanged String
+    | UseTitleAsAction
     | ActionStatusChanged ActionStatus
     | WaitingSinceChanged String
     | FollowUpChanged String
@@ -119,6 +120,7 @@ type Msg
     | SetFileOriginal Bool
     | DeleteItem InboxItemId
     | ReviewPullRequest InboxItemId
+    | ReadNewsletter InboxItemId
     | ProcessItem
     | RowKey InboxItemId Key
     | SelectRow InboxItemId
@@ -284,6 +286,14 @@ update msg model =
         NextActionChanged nextAction ->
             ( { model | nextAction = nextAction }, Cmd.none )
 
+        UseTitleAsAction ->
+            case currentItem model of
+                Just item ->
+                    ( { model | nextAction = titlePrefill item }, focus nextActionId )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
         ActionStatusChanged actionStatus ->
             ( { model | actionStatus = actionStatus }, Cmd.none )
 
@@ -350,6 +360,9 @@ update msg model =
 
         ReviewPullRequest itemId ->
             sendForItem itemId (Command.ReviewPullRequest itemId) model
+
+        ReadNewsletter itemId ->
+            sendForItem itemId (Command.ReadNewsletter itemId) model
 
         DeleteItem itemId ->
             let
@@ -486,8 +499,10 @@ resetCurrent model =
 
         Just item ->
             let
+                -- A new Project is often named after the Item; the Action starts empty
+                -- ("Use title" fills it in), since the title is seldom the next physical step.
                 prefill =
-                    String.left 100 item.title
+                    titlePrefill item
             in
             send (LoadBody item.id)
                 (Command.ReadInboxBody item.id)
@@ -498,7 +513,7 @@ resetCurrent model =
                     , context = Picker.init "" Nothing
                     , desiredOutcome = ""
                     , loadedOutcome = Nothing
-                    , nextAction = prefill
+                    , nextAction = ""
                     , actionStatus = ActionStatus.Next
                     , waitingSince = model.snapshot.today
                     , followUp = ""
@@ -511,6 +526,11 @@ resetCurrent model =
                     , error = Nothing
                 }
                 |> Tuple.mapSecond (\loadCmd -> Cmd.batch [ loadCmd, focus nextActionId ])
+
+
+titlePrefill : InboxItem -> String
+titlePrefill item =
+    String.left 100 item.title
 
 
 {-| The two shortcuts the processor answers from anywhere inside it.
@@ -920,22 +940,24 @@ receiveHost value model =
             ( { model | error = Just (Decode.errorToString error) }, Cmd.none )
 
 
-{-| An Item's text as the host read it, and the GitHub pull request it links, named
-like `dragonglass#123`, which offers + Review while processing.
+{-| An Item's text as the host read it, the GitHub pull request it links, named like
+`dragonglass#123`, which offers + Review while processing, and where a newsletter
+issue it links is from, which offers + Read.
 -}
 type alias LoadedBody =
-    { itemId : InboxItemId, text : String, pullRequest : Maybe String }
+    { itemId : InboxItemId, text : String, pullRequest : Maybe String, newsletter : Maybe String }
 
 
 loadedBody : InboxItemId -> Decode.Value -> LoadedBody
 loadedBody itemId value =
     Decode.decodeValue
-        (Decode.map2 (LoadedBody itemId)
+        (Decode.map3 (LoadedBody itemId)
             (Decode.field "text" Decode.string)
             (Decode.field "pullRequest" (Decode.nullable Decode.string))
+            (Decode.oneOf [ Decode.field "newsletter" (Decode.nullable Decode.string), Decode.succeed Nothing ])
         )
         value
-        |> Result.withDefault { itemId = itemId, text = "", pullRequest = Nothing }
+        |> Result.withDefault { itemId = itemId, text = "", pullRequest = Nothing, newsletter = Nothing }
 
 
 
@@ -1213,17 +1235,25 @@ processorView model =
                 busy =
                     Set.member item.id (busyItems model)
 
-                -- The GitHub pull request the Item links, once its text has loaded.
-                pullRequest =
+                -- The Item's text, once it has loaded.
+                current =
                     model.body
                         |> Maybe.andThen
                             (\loaded ->
                                 if loaded.itemId == item.id then
-                                    loaded.pullRequest
+                                    Just loaded
 
                                 else
                                     Nothing
                             )
+
+                -- The GitHub pull request the Item links.
+                pullRequest =
+                    current |> Maybe.andThen .pullRequest
+
+                -- Where a newsletter issue the Item links is from.
+                newsletter =
+                    current |> Maybe.andThen .newsletter
 
                 progress =
                     if model.sessionTotal == 0 then
@@ -1269,6 +1299,11 @@ processorView model =
                             (\label ->
                                 button [ Html.Attributes.disabled busy, onClick (ReviewPullRequest item.id) ]
                                     [ text ("+ Review " ++ label) ]
+                            )
+                        , Ui.maybeView newsletter
+                            (\source ->
+                                button [ Html.Attributes.disabled busy, onClick (ReadNewsletter item.id) ]
+                                    [ text ("+ Read " ++ source) ]
                             )
                         , withShortcut model
                             ProcessChord
@@ -1349,10 +1384,14 @@ processingForm model =
                 "Project Vision"
                 "Loaded from an existing Project when you choose it, and saved back if you change it. A new Project starts with it."
                 [ textarea [ value model.desiredOutcome, placeholder "What will be true when this Project is complete?", onInput DesiredOutcomeChanged ] [] ]
-            , processingField False
-                "Action"
-                (actionHint model.actionStatus)
-                [ input [ id nextActionId, value model.nextAction, placeholder "What is the next physical Action?", onInput NextActionChanged ] [] ]
+            , div [ class "dg-processing-field" ]
+                [ div [ class "dg-processing-field-heading" ]
+                    [ label [ for nextActionId ] [ text "Action" ]
+                    , button [ class "dg-flat-button dg-processing-use-title", onClick UseTitleAsAction ] [ text "Use title" ]
+                    ]
+                , input [ id nextActionId, value model.nextAction, placeholder "What is the next physical Action?", onInput NextActionChanged ] []
+                , small [] [ text (actionHint model.actionStatus) ]
+                ]
             , processingField False
                 "Action status"
                 "Choose Next, Waiting, or Calendar."
