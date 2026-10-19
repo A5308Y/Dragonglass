@@ -130,7 +130,8 @@ export class ElmInboxHost {
       }
       case "suggest-processing": {
         const settings = this.services.getSettings();
-        return askProcessingPartner(settings.processingPartner, settings.agent, this.partnerKeys(), command.request);
+        return askProcessingPartner(settings.processingPartner, settings.agent, this.partnerKeys(), command.request,
+          (prompt, schema) => this.services.agent.askCodex(prompt, schema));
       }
       case "trash-inbox-item": {
         const item = this.item(command.itemId);

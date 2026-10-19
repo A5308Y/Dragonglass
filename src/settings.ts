@@ -428,13 +428,19 @@ export class GtdSettingTab extends PluginSettingTab {
       .setName("Model")
       .setDesc(partner.provider === "local"
         ? "The local model server set under Agent delegation, on this Mac only. Nothing leaves the Mac; not available on a phone."
-        : "OpenAI's API. The Item and the names above are sent to OpenAI and billed to your key.")
+        : partner.provider === "codex"
+          ? "Codex on your ChatGPT plan, with the sign-in and model set under Agent delegation. Each question starts the Codex "
+            + "container, which takes a while, and counts against the plan's limits; it is refused while a Codex run works. "
+            + "The Item and the names above go to OpenAI. On this Mac only, with Docker."
+            + (this.plugin.settings.agent.codexModel.trim() ? "" : " With no Codex model set, Codex picks its default.")
+          : "OpenAI's API. The Item and the names above are sent to OpenAI and billed to your key.")
       .addDropdown((dropdown) => dropdown
         .addOption("local", "Local model")
-        .addOption("openai", "OpenAI")
+        .addOption("codex", "ChatGPT (Codex)")
+        .addOption("openai", "OpenAI API")
         .setValue(partner.provider)
         .onChange(async (value) => {
-          partner.provider = value === "openai" ? "openai" : "local";
+          partner.provider = value === "openai" || value === "codex" ? value : "local";
           await this.plugin.saveSettings();
           this.display();
         }));

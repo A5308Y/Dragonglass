@@ -366,12 +366,12 @@ export interface PomodoroSettings {
   mite: MiteSettings;
 }
 
-export const PROCESSING_PARTNER_PROVIDERS = ["local", "openai"] as const;
+export const PROCESSING_PARTNER_PROVIDERS = ["local", "openai", "codex"] as const;
 export type ProcessingPartnerProvider = (typeof PROCESSING_PARTNER_PROVIDERS)[number];
 
 /** The Inbox's processing partner; see `src/domain/processing-partner.ts`. */
 export interface ProcessingPartnerSettings {
-  /** The local model server of the agent settings, or OpenAI. */
+  /** The local model server of the agent settings, OpenAI's API, or Codex on the ChatGPT plan. */
   provider: ProcessingPartnerProvider;
   /** Empty uses `agent.codexModel`. */
   openaiModel: string;

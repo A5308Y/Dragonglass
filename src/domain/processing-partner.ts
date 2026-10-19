@@ -107,6 +107,60 @@ export function processingMessages(request: ProcessingRequest): ChatMessage[] {
 }
 
 /**
+ * The question as one text, for Codex, which takes a prompt rather than chat messages.
+ * It is told to answer from the text alone: it starts in an empty folder anyway.
+ */
+export function processingPrompt(request: ProcessingRequest): string {
+  const [system, user] = processingMessages(request);
+  return `${system!.content}\nAnswer from this message alone: don't run commands or look for files.\n\n${user!.content}\n`;
+}
+
+const nullableString = { type: ["string", "null"] };
+
+/** The answer's shape, as a strict JSON schema: Codex keeps its final message to it. */
+export const PROCESSING_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["actionable", "nonActionable", "summary", "suggestions", "check"],
+  properties: {
+    actionable: { type: "string", enum: ["yes", "no", "unclear"] },
+    nonActionable: { type: ["string", "null"], enum: ["trash", "reference", "someday", null] },
+    summary: { type: "string" },
+    suggestions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["action", "project", "newProject", "desiredOutcome", "context", "why"],
+        properties: {
+          action: { type: "string" },
+          project: nullableString,
+          newProject: { type: "boolean" },
+          desiredOutcome: nullableString,
+          context: nullableString,
+          why: { type: "string" },
+        },
+      },
+    },
+    check: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["verdict", "note", "better"],
+          properties: {
+            verdict: { type: "string", enum: [...VERDICTS] },
+            note: { type: "string" },
+            better: nullableString,
+          },
+        },
+      ],
+    },
+  },
+} as const;
+
+/**
  * Reads the model's answer, found even after thinking or inside a code fence. Project
  * names are matched to the list (a name not on it is a new Project), contexts to their
  * existing spelling; a judgement is kept only when the form had an Action to judge.

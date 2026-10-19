@@ -29,8 +29,53 @@ if (process.argv[2] === "login") {
   // No browser in the container: Codex prints a URL and a code to confirm on openai.com.
   const login = spawn(CODEX, ["login", "--device-auth"], { stdio: "inherit" });
   login.on("exit", (code) => process.exit(code ?? 1));
+} else if (process.argv[2] === "ask") {
+  await ask();
 } else {
   await run();
+}
+
+// `node run.mjs ask` answers one question for a partner in Dragonglass (the Inbox's
+// processing partner): input/prompt.md is the question, input/schema.json the shape of the
+// answer, which goes to exchange/answer.md. It needs no tools: Codex starts in an empty
+// folder in its read-only sandbox, never asks for approval, has no web search or MCP
+// servers, and a few minutes at most.
+async function ask() {
+  const answer = path.join(EXCHANGE, "answer.md");
+  await fs.rm(answer, { force: true });
+  let prompt;
+  try {
+    prompt = await fs.readFile(path.join(INPUT, "prompt.md"), "utf8");
+  } catch {
+    console.error("No question: put it in input/prompt.md.");
+    process.exit(2);
+  }
+  const schema = path.join(INPUT, "schema.json");
+  const hasSchema = await fs.access(schema).then(() => true, () => false);
+  const empty = await fs.mkdtemp(path.join("/tmp", "ask-"));
+  const args = [
+    "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config",
+    "--sandbox", "read-only",
+    "--config", 'approval_policy="never"',
+    "--cd", empty,
+    "--output-last-message", answer,
+    ...(hasSchema ? ["--output-schema", schema] : []),
+    "--config", 'web_search="disabled"',
+    // A partner answers while the person waits.
+    "--config", 'model_reasoning_effort="low"',
+    "--config", "analytics.enabled=false",
+    "--config", "check_for_update_on_startup=false",
+    ...(MODEL ? ["--model", MODEL] : []),
+    "-",
+  ];
+  const codex = spawn(CODEX, args, { stdio: ["pipe", "ignore", "inherit"], env: process.env });
+  const exited = new Promise((resolve) => codex.on("close", resolve));
+  codex.stdin.end(prompt);
+  const timer = setTimeout(() => codex.kill("SIGTERM"), Math.min(MAX_MINUTES, 5) * 60_000);
+  const code = await exited;
+  clearTimeout(timer);
+  const written = await fs.access(answer).then(() => true, () => false);
+  process.exit(code === 0 && written ? 0 : 1);
 }
 
 async function run() {

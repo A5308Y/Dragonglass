@@ -236,6 +236,12 @@ CODEX_HOME_DIR=./codex-home RUN_DIR=./runs/demo docker compose run --rm --build 
 stops a run (default 60). Dragonglass runs one Codex run at a time and queues the next, since
 all of them share one sign-in. Codex is pinned in `runner-codex/Dockerfile`.
 
+`agent-codex ask` answers one question for the Inbox's processing partner instead of running a
+task: `input/prompt.md` in, `exchange/answer.md` out, shaped by `input/schema.json`. It starts in
+an empty folder with Codex's read-only sandbox, no approvals, no web search and no MCP servers,
+and stops after five minutes. Dragonglass asks one at a time, in the Compose project
+`dg-codex-partner`, and not while a Codex run works.
+
 ## The contract, for other agents later
 
 Dragonglass only relies on the folder layout above: `input/brief.md` plus read-only

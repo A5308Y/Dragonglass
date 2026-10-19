@@ -106,6 +106,9 @@ const CLEANUP_INTERVAL_MS = 10 * 60_000;
 /** How much of a run's activity log is shown, and how much of the file is read to find it. */
 const ACTIVITY_ENTRIES = 25;
 const ACTIVITY_TAIL_BYTES = 64 * 1024;
+/** The Compose project of partner questions to Codex (`askCodex`); one at a time, so one name. */
+const PARTNER_PROJECT = "dg-codex-partner";
+
 const DOCKER_CANDIDATES = ["/usr/local/bin/docker", "/opt/homebrew/bin/docker", "/Applications/Docker.app/Contents/Resources/bin/docker"];
 
 export interface DelegationOptions {
@@ -189,6 +192,9 @@ export class AgentService {
   /** Activity already read, per run, by the log's size; a finished run's log is read once. */
   private readonly activityCache = new Map<string, { size: number; entries: AgentActivity[] }>();
   private lastCleanup = 0;
+  /** Partner questions to Codex wait for the one before them. */
+  private partnerQueue: Promise<unknown> = Promise.resolve();
+  private partnerAsking = false;
   private timer: number | null = null;
   private scanning: Promise<void> | null = null;
 
@@ -290,6 +296,73 @@ export class AgentService {
         resolve(code === 0 && await this.codexSignedIn());
       });
     });
+  }
+
+  /**
+   * Asks Codex one question for a partner, on the ChatGPT plan, in the Codex container
+   * (`run.mjs ask`): the prompt and the answer's JSON schema are all it is given, and the
+   * answer is what it returns. Questions go one at a time; one is refused while a Codex run
+   * works, since the runs and the partner share one sign-in that each renews.
+   */
+  askCodex(prompt: string, schema: object): Promise<string> {
+    const asked = this.partnerQueue.then(() => this.askCodexNow(prompt, schema));
+    this.partnerQueue = asked.catch(() => undefined);
+    return asked;
+  }
+
+  private async askCodexNow(prompt: string, schema: object): Promise<string> {
+    const node = requireNode();
+    if (!(await this.codexSignedIn())) {
+      throw new Error("Sign in to ChatGPT for Codex first: Settings → Agent delegation → Sign in to ChatGPT.");
+    }
+    if (this.laneBusy("codex")) {
+      throw new Error("A Codex run is working, and it shares Codex's sign-in; ask again once it has ended.");
+    }
+    const composeFile = await this.composeFile();
+    const docker = await this.dockerPath();
+    // Compose needs a run folder for the service's mounts; the question is its only input.
+    const runDir = node.path.join(this.runsDirectory(), "codex-partner");
+    for (const folder of ["input", "outbox", "exchange", "logs"]) await node.fs.mkdir(node.path.join(runDir, folder), { recursive: true });
+    await node.fs.writeFile(node.path.join(runDir, "input", "prompt.md"), prompt);
+    await node.fs.writeFile(node.path.join(runDir, "input", "schema.json"), JSON.stringify(schema));
+    const answer = node.path.join(runDir, "exchange", "answer.md");
+    await node.fs.rm(answer, { force: true });
+    const path = [node.path.dirname(docker), "/usr/local/bin", "/opt/homebrew/bin", "/Applications/Docker.app/Contents/Resources/bin", process.env.PATH ?? ""].join(":");
+    this.partnerAsking = true;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        // Built like a run's, so a changed runner is picked up (cached, it takes a moment). The proxy
+        // stays up between questions, so the next one starts sooner; the cleanup pass removes it later.
+        const child = node.child.spawn(docker, ["compose", "-f", composeFile, "-p", PARTNER_PROJECT, "run", "--rm", "--build", "-T", "agent-codex", "ask"], {
+          env: {
+            ...process.env,
+            PATH: path,
+            RUN_DIR: runDir,
+            CODEX_HOME_DIR: this.codexHome(),
+            CODEX_MODEL: this.getSettings().codexModel,
+            AGENT_MAX_MINUTES: "5",
+            AGENT_OFFLINE: "0",
+          },
+        });
+        let errors = "";
+        child.stderr.on("data", (chunk: Buffer) => {
+          errors = (errors + chunk.toString()).slice(-1_000);
+        });
+        const timer = setTimeout(() => child.kill("SIGTERM"), 6 * 60_000);
+        child.on("error", (error) => {
+          clearTimeout(timer);
+          reject(new Error(`Docker couldn't start Codex: ${error.message}`));
+        });
+        child.on("close", (code) => {
+          clearTimeout(timer);
+          if (code === 0) resolve();
+          else reject(new Error(`Codex didn't answer${errors.trim() ? `: ${lastLine(errors)}` : "."}`));
+        });
+      });
+      return await node.fs.readFile(answer, "utf8");
+    } finally {
+      this.partnerAsking = false;
+    }
   }
 
   // CODE RUNS
@@ -1230,6 +1303,7 @@ export class AgentService {
         .filter((run) => run.starting || this.launching.has(run.id) || this.running.has(containerName(run.id))
           || (run.importedTo === undefined && !run.startError && !run.queued))
         .map((run) => composeProject(run.id)));
+      if (this.partnerAsking) active.add(PARTNER_PROJECT);
       // Docker's name filters match anywhere in the name, so the prefix is checked here. Compose
       // names a project's networks "<project>_<network>" and its containers "<project>-<service>-<n>";
       // a run's proxy that is still running keeps its networks in use.

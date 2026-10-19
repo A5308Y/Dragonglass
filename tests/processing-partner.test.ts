@@ -94,6 +94,9 @@ describe("Reading the partner's advice", () => {
 
 describe("Asking the processing partner", () => {
   const settings = defaultSettings();
+  const noCodex = async (): Promise<string> => {
+    throw new Error("Codex isn't the provider here.");
+  };
   const answer = (content: string) => JSON.stringify({ choices: [{ message: { content } }] });
   const advice = '{"actionable": "yes", "summary": "", "suggestions": [{"action": "Call Acme", "why": ""}]}';
 
@@ -104,7 +107,7 @@ describe("Asking the processing partner", () => {
       return { status: 200, text: answer(advice) };
     };
     const agent = { ...settings.agent, localModel: "qwen/qwen3", localModelUrl: "http://host.docker.internal:1234", localMaxReplyTokens: 1024 };
-    const result = await askProcessingPartner(settings.processingPartner, agent, { local: async () => "", openai: () => "unused" }, request, post);
+    const result = await askProcessingPartner(settings.processingPartner, agent, { local: async () => "", openai: () => "unused" }, request, noCodex, post);
     expect(result.suggestions).toEqual([{ action: "Call Acme", newProject: false, why: "" }]);
     expect(sent[0]!.url).toBe("http://127.0.0.1:1234/v1/chat/completions");
     expect(sent[0]!.headers).toEqual({});
@@ -118,7 +121,7 @@ describe("Asking the processing partner", () => {
       return { status: 200, text: answer(advice) };
     };
     const partner = { provider: "openai" as const, openaiModel: "some-model", openaiKeySecret: "openai" };
-    await askProcessingPartner(partner, settings.agent, { local: async () => "", openai: () => "sk-test" }, request, post);
+    await askProcessingPartner(partner, settings.agent, { local: async () => "", openai: () => "sk-test" }, request, noCodex, post);
     expect(sent[0]!.url).toBe("https://api.openai.com/v1/chat/completions");
     expect(sent[0]!.headers.Authorization).toBe("Bearer sk-test");
     const body = JSON.parse(sent[0]!.body) as Record<string, unknown>;
@@ -135,21 +138,39 @@ describe("Asking the processing partner", () => {
     };
     const partner = { provider: "openai" as const, openaiModel: "", openaiKeySecret: "openai" };
     const agent = { ...settings.agent, codexModel: "codex-model" };
-    await askProcessingPartner(partner, agent, { local: async () => "", openai: () => "sk" }, request, post);
+    await askProcessingPartner(partner, agent, { local: async () => "", openai: () => "sk" }, request, noCodex, post);
     expect(JSON.parse(sent[0]!.body)).toMatchObject({ model: "codex-model" });
-    await askProcessingPartner({ ...partner, openaiModel: "own-model" }, agent, { local: async () => "", openai: () => "sk" }, request, post);
+    await askProcessingPartner({ ...partner, openaiModel: "own-model" }, agent, { local: async () => "", openai: () => "sk" }, request, noCodex, post);
     expect(JSON.parse(sent[1]!.body)).toMatchObject({ model: "own-model" });
-    await expect(askProcessingPartner(partner, settings.agent, { local: async () => "", openai: () => "sk" }, request, post))
+    await expect(askProcessingPartner(partner, settings.agent, { local: async () => "", openai: () => "sk" }, request, noCodex, post))
       .rejects.toThrow("No OpenAI model is set");
+  });
+
+  it("asks Codex with one prompt and the answer's schema", async () => {
+    const asked: Array<{ prompt: string; schema: object }> = [];
+    const partner = { ...settings.processingPartner, provider: "codex" as const };
+    const result = await askProcessingPartner(partner, settings.agent, { local: async () => "", openai: () => "" }, request, async (prompt, schema) => {
+      asked.push({ prompt, schema });
+      return '{"actionable": "no", "nonActionable": "reference", "summary": "Terms.", "suggestions": [], "check": null}';
+    }, async () => {
+      throw new Error("Codex doesn't go through the chat endpoint.");
+    });
+    expect(result).toEqual({ actionable: "no", nonActionable: "reference", summary: "Terms.", suggestions: [] });
+    expect(asked[0]!.prompt).toContain("JSON only");
+    expect(asked[0]!.prompt).toContain("don't run commands");
+    expect(asked[0]!.prompt).toContain("Inbox item (an email): Contract from Acme");
+    expect(asked[0]!.schema).toMatchObject({ required: ["actionable", "nonActionable", "summary", "suggestions", "check"] });
+    expect(processingPartnerAvailable(partner, settings.agent, true, { openai: () => "" })).toBe(true);
+    expect(processingPartnerAvailable(partner, settings.agent, false, { openai: () => "" })).toBe(false);
   });
 
   it("says what is missing or went wrong in words", async () => {
     const openai = { provider: "openai" as const, openaiModel: "some-model", openaiKeySecret: "" };
-    await expect(askProcessingPartner(openai, settings.agent, { local: async () => "", openai: () => "" }, request, async () => ({ status: 200, text: "" })))
+    await expect(askProcessingPartner(openai, settings.agent, { local: async () => "", openai: () => "" }, request, noCodex, async () => ({ status: 200, text: "" })))
       .rejects.toThrow("No OpenAI API key is set on this device.");
-    await expect(askProcessingPartner(openai, settings.agent, { local: async () => "", openai: () => "sk" }, request, async () => ({ status: 401, text: "" })))
+    await expect(askProcessingPartner(openai, settings.agent, { local: async () => "", openai: () => "sk" }, request, noCodex, async () => ({ status: 401, text: "" })))
       .rejects.toThrow("OpenAI answered 401: the API key was refused.");
-    await expect(askProcessingPartner(openai, settings.agent, { local: async () => "", openai: () => "sk" }, request, async () => { throw new Error("offline"); }))
+    await expect(askProcessingPartner(openai, settings.agent, { local: async () => "", openai: () => "sk" }, request, noCodex, async () => { throw new Error("offline"); }))
       .rejects.toThrow("Is this device online?");
   });
 

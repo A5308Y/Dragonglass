@@ -246,7 +246,11 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   shows. It only suggests; "Use" fills the form, and nothing is written until the person processes.
 - It is off for every Item until asked, asks only then and on "Check again", and `resetCurrent` drops
   it (with a new generation, so a late reply is ignored), so the next Item starts without it.
-- Providers (`settings.processingPartner`): the local model server (this Mac only) or OpenAI. The
+- Providers (`settings.processingPartner`): the local model server (this Mac only), Codex on the ChatGPT
+  plan, or OpenAI's API. Codex is asked in its container (`AgentService.askCodex`, `run.mjs ask`): one
+  question at a time, refused while a Codex run works (they share the sign-in), with only the prompt and
+  the answer's schema (`PROCESSING_SCHEMA`), an empty folder, its read-only sandbox, no approvals, no web
+  search. Never run Codex with the sign-in outside the container to make it faster. The
   OpenAI key is in secret storage like mite's; settings hold the secret's name. An empty model uses
   `agent.codexModel` (`partnerOpenAiModel`), but never the Codex sign-in, which stays in its container. OpenAI is allowed
   without the sandbox because the partner sees the page and nothing more and can't act; giving it
