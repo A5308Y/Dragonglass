@@ -1,15 +1,8 @@
-import { requestUrl } from "obsidian";
-import { localChatEndpoint, parsePartnerReply, partnerMessages, type PartnerRequest, type PartnerSuggestions } from "../domain/brainstorm-partner";
+import { askChatModel, localTarget, type ChatPost } from "../ai/chat-model";
+import { parsePartnerReply, partnerMessages, type PartnerRequest, type PartnerSuggestions } from "../domain/brainstorm-partner";
 import type { AgentSettings } from "../domain/types";
 
-export type PartnerPost = (request: {
-  url: string;
-  method: string;
-  contentType: string;
-  headers: Record<string, string>;
-  body: string;
-  throw: boolean;
-}) => Promise<{ status: number; text: string }>;
+export type PartnerPost = ChatPost;
 
 /** Keeps a thinking model from spending minutes on one turn of a five-minute session. */
 const REPLY_TOKENS = 2_048;
@@ -23,38 +16,9 @@ export async function askLocalPartner(
   settings: AgentSettings,
   key: () => Promise<string>,
   request: PartnerRequest,
-  post: PartnerPost = requestUrl as unknown as PartnerPost,
+  post?: PartnerPost,
 ): Promise<PartnerSuggestions> {
-  const url = localChatEndpoint(settings.localModelUrl);
-  const apiKey = await key();
-  let response: { status: number; text: string };
-  try {
-    response = await post({
-      url,
-      method: "POST",
-      contentType: "application/json",
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-      body: JSON.stringify({
-        ...(settings.localModel ? { model: settings.localModel } : {}),
-        messages: partnerMessages(request),
-        temperature: 0.9,
-        max_tokens: Math.min(REPLY_TOKENS, settings.localMaxReplyTokens || REPLY_TOKENS),
-      }),
-      throw: false,
-    });
-  } catch {
-    throw new Error("The local model server isn't reachable. Is LM Studio running with its server on?");
-  }
-  if (response.status < 200 || response.status >= 300) {
-    throw new Error(`The local model server answered ${response.status}.`);
-  }
-  let content = "";
-  try {
-    const body = JSON.parse(response.text) as { choices?: Array<{ message?: { content?: unknown } }> };
-    const value = body.choices?.[0]?.message?.content;
-    content = typeof value === "string" ? value : "";
-  } catch {
-    throw new Error("The local model server's answer couldn't be read.");
-  }
+  const target = localTarget(settings, await key());
+  const content = await askChatModel(target, partnerMessages(request), { maxTokens: REPLY_TOKENS, temperature: 0.9 }, post);
   return parsePartnerReply(content, request);
 }

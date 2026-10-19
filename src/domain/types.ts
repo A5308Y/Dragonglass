@@ -274,6 +274,7 @@ export interface GtdSettings {
   pomodoro: PomodoroSettings;
   checklists: ChecklistSettings;
   brainstorm: BrainstormSettings;
+  processingPartner: ProcessingPartnerSettings;
   agent: AgentSettings;
   /** The weekday the Weekly Review falls due, as `Date.getDay()` counts: 0 is Sunday. */
   weeklyReviewDay: number;
@@ -363,6 +364,18 @@ export interface PomodoroSettings {
   soundVolume: number;
   /** Sending finished sessions to mite as time entries. */
   mite: MiteSettings;
+}
+
+export const PROCESSING_PARTNER_PROVIDERS = ["local", "openai"] as const;
+export type ProcessingPartnerProvider = (typeof PROCESSING_PARTNER_PROVIDERS)[number];
+
+/** The Inbox's processing partner; see `src/domain/processing-partner.ts`. */
+export interface ProcessingPartnerSettings {
+  /** The local model server of the agent settings, or OpenAI. */
+  provider: ProcessingPartnerProvider;
+  openaiModel: string;
+  /** The name of the secret holding the OpenAI API key in this device's secret storage. */
+  openaiKeySecret: string;
 }
 
 export interface BrainstormSettings {

@@ -13,8 +13,9 @@ import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (InboxItemId, ProjectId)
 import Gtd.Picker as Picker exposing (Picker)
+import Gtd.ProjectStatus as ProjectStatus
 import Gtd.Ui as Ui exposing (Key(..))
-import Html exposing (Html, article, audio, button, div, h2, h3, header, input, label, node, option, p, section, select, small, span, strong, text, textarea)
+import Html exposing (Html, article, audio, button, div, h2, h3, h4, header, input, label, li, node, option, p, section, select, small, span, strong, text, textarea, ul)
 import Html.Attributes exposing (attribute, checked, class, classList, controls, for, id, placeholder, preload, selected, src, style, tabindex, title, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput)
 import Html.Keyed
@@ -46,10 +47,52 @@ type Pending
     | LoadPreview InboxItemId
     | Working InboxItemId
     | LoadOutcome ProjectId
+      -- The partner's advice on an Item, for the partner switched on with that generation.
+    | PartnerReply InboxItemId Int
 
 
 type alias ScheduleFields =
     { allDay : Bool, start : String, duration : String }
+
+
+{-| The processing partner, switched on for one Item (see `src/domain/processing-partner.ts`).
+It asks when switched on and on "Check again", never by itself.
+-}
+type alias Partner =
+    { itemId : InboxItemId
+    , generation : Int
+    , asking : Bool
+    , advice : Maybe Advice
+    , problem : Maybe String
+
+    -- The Action as it read when last asked: the judgement is of that text.
+    , askedAction : String
+    }
+
+
+type alias Advice =
+    { actionable : String
+    , nonActionable : Maybe String
+    , summary : String
+    , suggestions : List Suggestion
+    , check : Maybe Check
+    }
+
+
+type alias Suggestion =
+    { action : String
+    , project : Maybe String
+    , newProject : Bool
+    , desiredOutcome : Maybe String
+    , context : Maybe String
+    , why : String
+    }
+
+
+{-| The partner's judgement of the Action in the form.
+-}
+type alias Check =
+    { verdict : String, note : String, better : Maybe String }
 
 
 type alias Model =
@@ -91,6 +134,11 @@ type alias Model =
     , requests : Requests Pending
     , error : Maybe String
 
+    -- The processing partner: whether it can be asked here, and the one for the current Item.
+    , partnerAvailable : Bool
+    , partner : Maybe Partner
+    , partnerGeneration : Int
+
     -- The tab was closed: timers off (see `Host.isClosing`).
     , closed : Bool
     }
@@ -126,6 +174,11 @@ type Msg
     | SelectRow InboxItemId
     | ProcessorChord Chord
     | Focused
+    | StartPartner
+    | AskPartnerAgain
+    | StopPartner
+    | UseSuggestion Suggestion
+    | UseBetterAction String
     | Send Pending Command
 
 
@@ -140,7 +193,7 @@ main =
 
 
 type alias Flags =
-    { snapshot : Snapshot, initialProcessing : Bool, projectIssues : Int, mac : Bool }
+    { snapshot : Snapshot, initialProcessing : Bool, projectIssues : Int, mac : Bool, partner : Bool }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -149,7 +202,8 @@ init flagsValue =
         Ok flags ->
             let
                 model =
-                    initialModel flags.snapshot |> (\initial -> { initial | projectIssues = flags.projectIssues, mac = flags.mac })
+                    initialModel flags.snapshot
+                        |> (\initial -> { initial | projectIssues = flags.projectIssues, mac = flags.mac, partnerAvailable = flags.partner })
             in
             if flags.initialProcessing && not (List.isEmpty flags.snapshot.inboxItems) then
                 enterProcessing Nothing model
@@ -194,6 +248,9 @@ initialModel snapshot =
     , fileOriginal = False
     , requests = Host.noRequests
     , error = Nothing
+    , partnerAvailable = False
+    , partner = Nothing
+    , partnerGeneration = 0
     , closed = False
     }
 
@@ -244,7 +301,7 @@ update msg model =
             enterProcessing maybeId model
 
         ShowList ->
-            ( { model | processing = False }, Cmd.none )
+            ( withoutPartner { model | processing = False }, Cmd.none )
 
         ProjectPicker pickerMsg ->
             let
@@ -449,8 +506,211 @@ update msg model =
                     else
                         processAndMoveOn item.id (Command.ProcessInbox item.id decision.operation (processingInput model)) model
 
+        StartPartner ->
+            case currentItem model of
+                Just item ->
+                    askPartner item
+                        { model
+                            | partner = Just { itemId = item.id, generation = model.partnerGeneration, asking = False, advice = Nothing, problem = Nothing, askedAction = "" }
+                        }
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        AskPartnerAgain ->
+            case ( currentItem model, model.partner ) of
+                ( Just item, Just partner ) ->
+                    if partner.itemId == item.id && not partner.asking then
+                        askPartner item model
+
+                    else
+                        ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        StopPartner ->
+            ( withoutPartner model, Cmd.none )
+
+        UseSuggestion suggestion ->
+            useSuggestion suggestion model
+
+        UseBetterAction action ->
+            ( { model | nextAction = action }, focus nextActionId )
+
         Send pending command ->
             send pending command model
+
+
+{-| Switches the partner off; a reply still on its way is then ignored.
+-}
+withoutPartner : Model -> Model
+withoutPartner model =
+    { model | partner = Nothing, partnerGeneration = model.partnerGeneration + 1 }
+
+
+{-| Applies a reply to the partner it was asked by; one switched off or moved on since gets nothing.
+-}
+updatePartner : InboxItemId -> Int -> (Partner -> Partner) -> Model -> Model
+updatePartner itemId generation change model =
+    case model.partner of
+        Just partner ->
+            if partner.itemId == itemId && partner.generation == generation then
+                { model | partner = Just (change partner) }
+
+            else
+                model
+
+        Nothing ->
+            model
+
+
+{-| Sends the partner what the processor shows of the Item, and nothing else.
+-}
+askPartner : InboxItem -> Model -> ( Model, Cmd Msg )
+askPartner item model =
+    case model.partner of
+        Just partner ->
+            send (PartnerReply item.id partner.generation)
+                (Command.SuggestProcessing (partnerRequest item model))
+                { model | partner = Just { partner | asking = True, problem = Nothing, askedAction = model.nextAction } }
+
+        Nothing ->
+            ( model, Cmd.none )
+
+
+partnerRequest : InboxItem -> Model -> Encode.Value
+partnerRequest item model =
+    let
+        body =
+            case model.body of
+                Just loaded ->
+                    if loaded.itemId == item.id then
+                        loaded.text
+
+                    else
+                        ""
+
+                Nothing ->
+                    ""
+
+        kind =
+            if isAudio item.file.extension then
+                "audio"
+
+            else if item.messageId /= Nothing then
+                "mail"
+
+            else
+                "note"
+
+        ( project, projectIsNew ) =
+            case selectedProject model of
+                Just chosen ->
+                    ( Hierarchy.breadcrumb model.snapshot.projects chosen, False )
+
+                Nothing ->
+                    ( Picker.query model.project, not (String.isEmpty (Picker.query model.project)) )
+
+        -- The Projects the picker finds, without the finished ones nobody files into.
+        projects =
+            model.snapshot.projects
+                |> List.filter (\candidate -> not (List.member (ProjectStatus.key candidate.status) [ "completed", "cancelled" ]))
+                |> List.map (\candidate -> ( Hierarchy.breadcrumb model.snapshot.projects candidate, ProjectStatus.key candidate.status ))
+                |> List.sortBy Tuple.first
+    in
+    Encode.object
+        [ ( "item"
+          , Encode.object
+                [ ( "title", Encode.string item.title )
+                , ( "body", Encode.string body )
+                , ( "kind", Encode.string kind )
+                ]
+          )
+        , ( "form"
+          , Encode.object
+                [ ( "project", Encode.string project )
+                , ( "projectIsNew", Encode.bool projectIsNew )
+                , ( "vision", Encode.string model.desiredOutcome )
+                , ( "action", Encode.string model.nextAction )
+                , ( "status", Encode.string (ActionStatus.key model.actionStatus) )
+                , ( "context", Encode.string (Picker.query model.context) )
+                ]
+          )
+        , ( "projects"
+          , Encode.list
+                (\( name, status ) -> Encode.object [ ( "name", Encode.string name ), ( "status", Encode.string status ) ])
+                projects
+          )
+        , ( "contexts", Encode.list Encode.string (Data.contexts model.snapshot.actions) )
+        ]
+
+
+{-| Fills the form with a suggestion: the Action, its Project (an existing one is
+chosen as in the picker, so its vision loads) and its context. Without a Project the
+field is emptied, or the Item's title, prefilled there, would become one.
+-}
+useSuggestion : Suggestion -> Model -> ( Model, Cmd Msg )
+useSuggestion suggestion model =
+    let
+        existing =
+            if suggestion.newProject then
+                Nothing
+
+            else
+                suggestion.project
+                    |> Maybe.andThen
+                        (\name ->
+                            List.filter (\project -> Hierarchy.breadcrumb model.snapshot.projects project == name) model.snapshot.projects
+                                |> List.head
+                        )
+
+        filled =
+            { model
+                | nextAction = suggestion.action
+                , context =
+                    case suggestion.context of
+                        Just context ->
+                            Picker.choose context context model.context
+
+                        Nothing ->
+                            model.context
+            }
+
+        ( withProject, cmd ) =
+            case ( existing, suggestion.project ) of
+                ( Just project, _ ) ->
+                    update (ProjectPicker (Picker.Chose project)) filled
+
+                ( Nothing, Just name ) ->
+                    ( { filled
+                        | project = Picker.init name Nothing
+                        , desiredOutcome =
+                            if String.isEmpty (String.trim filled.desiredOutcome) || Maybe.map .text filled.loadedOutcome == Just filled.desiredOutcome then
+                                Maybe.withDefault "" suggestion.desiredOutcome
+
+                            else
+                                filled.desiredOutcome
+                        , loadedOutcome = Nothing
+                      }
+                    , Cmd.none
+                    )
+
+                ( Nothing, Nothing ) ->
+                    ( { filled
+                        | project = Picker.init "" Nothing
+                        , desiredOutcome =
+                            if Maybe.map .text filled.loadedOutcome == Just filled.desiredOutcome then
+                                ""
+
+                            else
+                                filled.desiredOutcome
+                        , loadedOutcome = Nothing
+                      }
+                    , Cmd.none
+                    )
+    in
+    ( withProject, Cmd.batch [ cmd, focus nextActionId ] )
 
 
 {-| Moves the selection and focus together, so the row that shows as selected is
@@ -492,7 +752,12 @@ enterProcessing maybeId model =
 
 
 resetCurrent : Model -> ( Model, Cmd Msg )
-resetCurrent model =
+resetCurrent current =
+    let
+        -- The partner is for one Item: the next one starts without it.
+        model =
+            withoutPartner current
+    in
     case currentItem model of
         Nothing ->
             ( { model | body = Nothing }, Cmd.none )
@@ -812,6 +1077,7 @@ type HostEvent
     = SnapshotEvent Snapshot
     | StartProcessingEvent (Maybe InboxItemId)
     | ProjectIssuesEvent Int
+    | PartnerAvailableEvent Bool
     | Replied Host.Outcome
 
 
@@ -861,6 +1127,13 @@ receiveHost value model =
         Ok (ProjectIssuesEvent count) ->
             ( { model | projectIssues = count }, Cmd.none )
 
+        Ok (PartnerAvailableEvent available) ->
+            if available then
+                ( { model | partnerAvailable = True }, Cmd.none )
+
+            else
+                ( withoutPartner { model | partnerAvailable = False }, Cmd.none )
+
         Ok (StartProcessingEvent maybeId) ->
             -- Opening the processor again is a no-op, but naming an Item always moves to it.
             if model.processing && maybeId == Nothing then
@@ -898,8 +1171,23 @@ receiveHost value model =
                     , Cmd.none
                     )
 
+                ( Err message, PartnerReply itemId generation ) ->
+                    ( updatePartner itemId generation (\partner -> { partner | asking = False, problem = Just message }) next, Cmd.none )
+
                 ( Err message, _ ) ->
                     ( { next | error = Just message }, Cmd.none )
+
+                ( Ok resultValue, PartnerReply itemId generation ) ->
+                    case Decode.decodeValue adviceDecoder resultValue of
+                        Ok advice ->
+                            ( updatePartner itemId generation (\partner -> { partner | asking = False, advice = Just advice }) next, Cmd.none )
+
+                        Err _ ->
+                            ( updatePartner itemId generation
+                                (\partner -> { partner | asking = False, problem = Just "The partner's answer couldn't be read." })
+                                next
+                            , Cmd.none
+                            )
 
                 ( Ok resultValue, LoadBody itemId ) ->
                     if (currentItem model |> Maybe.map .id) == Just itemId then
@@ -1276,6 +1564,7 @@ processorView model =
                     ]
                 , div [ class "dg-progress-track" ] [ span [ style "width" (String.fromFloat progress ++ "%") ] [] ]
                 , itemCard model item
+                , partnerPanel model item
                 , processingForm model
                 , if model.seconds == 0 then
                     div [ class "dg-warning" ] [ text "Two minutes elapsed. Make the smallest clear decision and keep moving." ]
@@ -1315,6 +1604,165 @@ processorView model =
                         ]
                     ]
                 ]
+
+
+{-| The processing partner for this Item: a button until it is asked, then its advice.
+-}
+partnerPanel : Model -> InboxItem -> Html Msg
+partnerPanel model item =
+    let
+        -- Asked before the Item's text has loaded, the partner would see only its title.
+        partnerOff =
+            div [ class "dg-inbox-partner is-off" ]
+                [ button [ Html.Attributes.disabled (Maybe.map .itemId model.body /= Just item.id), onClick StartPartner ]
+                    [ text "Ask partner about this Item" ]
+                ]
+    in
+    case ( model.partnerAvailable, model.partner ) of
+        ( False, _ ) ->
+            text ""
+
+        ( True, Just partner ) ->
+            -- A partner for another Item is on its way out; this one starts off.
+            if partner.itemId == item.id then
+                partnerView partner
+
+            else
+                partnerOff
+
+        ( True, Nothing ) ->
+            partnerOff
+
+
+partnerView : Partner -> Html Msg
+partnerView partner =
+    section [ class "dg-inbox-partner", attribute "aria-labelledby" "dg-inbox-partner-heading" ]
+        [ div [ class "dg-inbox-partner-heading" ]
+            [ h3 [ id "dg-inbox-partner-heading" ] [ text "Partner" ]
+            , div [ class "dg-inbox-partner-buttons" ]
+                [ button [ Html.Attributes.disabled partner.asking, onClick AskPartnerAgain ] [ text "Check again" ]
+                , button [ onClick StopPartner ] [ text "Stop" ]
+                ]
+            ]
+        , p [ class "dg-inbox-partner-status", attribute "aria-live" "polite" ]
+            [ text
+                (case ( partner.asking, partner.problem ) of
+                    ( True, _ ) ->
+                        "Thinking…"
+
+                    ( False, Just problem ) ->
+                        "⚠ " ++ problem
+
+                    ( False, Nothing ) ->
+                        ""
+                )
+            ]
+        , Ui.maybeView partner.advice (adviceView partner.askedAction)
+        ]
+
+
+adviceView : String -> Advice -> Html Msg
+adviceView askedAction advice =
+    let
+        verdict =
+            case ( advice.actionable, advice.nonActionable ) of
+                ( "no", Just where_ ) ->
+                    "Not actionable: " ++ where_ ++ ". "
+
+                ( "no", Nothing ) ->
+                    "Not actionable. "
+
+                ( "unclear", _ ) ->
+                    "Unclear whether it's actionable. "
+
+                _ ->
+                    ""
+    in
+    div [ class "dg-inbox-partner-advice" ]
+        [ if String.isEmpty (verdict ++ advice.summary) then
+            text ""
+
+          else
+            p [] [ text (verdict ++ advice.summary) ]
+        , if List.isEmpty advice.suggestions then
+            text ""
+
+          else
+            ul [ class "dg-inbox-partner-suggestions" ] (List.map suggestionView advice.suggestions)
+        , Ui.maybeView advice.check (checkView askedAction)
+        ]
+
+
+suggestionView : Suggestion -> Html Msg
+suggestionView suggestion =
+    let
+        details =
+            [ suggestion.project
+                |> Maybe.map
+                    (\name ->
+                        if suggestion.newProject then
+                            "New Project: " ++ name
+
+                        else
+                            "Project: " ++ name
+                    )
+            , suggestion.context |> Maybe.map (\context -> "Context: " ++ context)
+            ]
+                |> List.filterMap identity
+    in
+    li [ class "dg-inbox-partner-suggestion" ]
+        [ div []
+            [ strong [] [ text suggestion.action ]
+            , if List.isEmpty details then
+                text ""
+
+              else
+                small [] [ text (String.join " · " details) ]
+            , if String.isEmpty suggestion.why then
+                text ""
+
+              else
+                small [] [ text suggestion.why ]
+            ]
+        , button [ class "dg-partner-add", onClick (UseSuggestion suggestion) ] (Ui.iconLabel "Use" ("Use “" ++ suggestion.action ++ "”"))
+        ]
+
+
+checkView : String -> Check -> Html Msg
+checkView askedAction check =
+    let
+        verdict =
+            case check.verdict of
+                "good" ->
+                    "✓ Small and real progress"
+
+                "too-big" ->
+                    "⚠ Too big"
+
+                "no-progress" ->
+                    "⚠ No progress when done"
+
+                _ ->
+                    "⚠ Vague"
+    in
+    div [ classList [ ( "dg-inbox-partner-check", True ), ( "is-good", check.verdict == "good" ) ] ]
+        [ h4 [] [ text ("Your Action: “" ++ askedAction ++ "”") ]
+        , p []
+            [ strong [] [ text verdict ]
+            , if String.isEmpty check.note then
+                text ""
+
+              else
+                text (" — " ++ check.note)
+            ]
+        , Ui.maybeView check.better
+            (\better ->
+                div [ class "dg-inbox-partner-suggestion" ]
+                    [ div [] [ strong [] [ text better ] ]
+                    , button [ class "dg-partner-add", onClick (UseBetterAction better) ] (Ui.iconLabel "Use" ("Use “" ++ better ++ "”"))
+                    ]
+            )
+        ]
 
 
 itemCard : Model -> InboxItem -> Html Msg
@@ -1883,11 +2331,41 @@ isAudio extension =
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map4 Flags
+    Decode.map5 Flags
         (Decode.field "snapshot" Data.snapshotDecoder)
         (Decode.field "initialProcessing" Decode.bool)
         (Decode.oneOf [ Decode.field "projectIssues" Decode.int, Decode.succeed 0 ])
         (Decode.oneOf [ Decode.field "mac" Decode.bool, Decode.succeed False ])
+        (Decode.oneOf [ Decode.field "partner" Decode.bool, Decode.succeed False ])
+
+
+adviceDecoder : Decoder Advice
+adviceDecoder =
+    Decode.map5 Advice
+        (Decode.field "actionable" Decode.string)
+        (Decode.maybe (Decode.field "nonActionable" Decode.string))
+        (Decode.field "summary" Decode.string)
+        (Decode.field "suggestions" (Decode.list suggestionDecoder))
+        (Decode.maybe (Decode.field "check" checkDecoder))
+
+
+suggestionDecoder : Decoder Suggestion
+suggestionDecoder =
+    Decode.map6 Suggestion
+        (Decode.field "action" Decode.string)
+        (Decode.maybe (Decode.field "project" Decode.string))
+        (Decode.field "newProject" Decode.bool)
+        (Decode.maybe (Decode.field "desiredOutcome" Decode.string))
+        (Decode.maybe (Decode.field "context" Decode.string))
+        (Decode.field "why" Decode.string)
+
+
+checkDecoder : Decoder Check
+checkDecoder =
+    Decode.map3 Check
+        (Decode.field "verdict" Decode.string)
+        (Decode.field "note" Decode.string)
+        (Decode.maybe (Decode.field "better" Decode.string))
 
 
 hostEventDecoder : Decoder HostEvent
@@ -1904,6 +2382,9 @@ hostEventDecoder =
 
                     "project-issues" ->
                         Decode.map ProjectIssuesEvent (Decode.field "count" Decode.int)
+
+                    "partner-available" ->
+                        Decode.map PartnerAvailableEvent (Decode.field "available" Decode.bool)
 
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder

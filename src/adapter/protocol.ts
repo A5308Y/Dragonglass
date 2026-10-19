@@ -3,6 +3,7 @@ import { isEstimate } from "../domain/estimate";
 import type { FeedStoreData } from "../domain/feed";
 import { POMODORO_OUTCOMES, type PomodoroOutcome, type PomodoroStore } from "../domain/pomodoro";
 import { isSavedView } from "../domain/saved-views";
+import { ITEM_KINDS, type ProcessingRequest } from "../domain/processing-partner";
 import {
   MARK_STATES,
   SHORT_CHECKLIST_ITEMS,
@@ -705,6 +706,7 @@ export type ElmNonMenuCommand =
   | { type: "read-newsletter"; itemId: string }
   | { type: "read-desired-outcome"; projectId: string }
   | { type: "show-project-issues" }
+  | { type: "suggest-processing"; request: ProcessingRequest }
   | { type: "save-new-action"; input: ElmNewActionInput }
   | { type: "save-action"; actionId: string; changes: ElmActionChanges }
   | { type: "schedule-action"; actionId: string; schedule: ElmScheduleInput }
@@ -778,7 +780,7 @@ export const SURFACE_COMMANDS = {
   ],
   inbox: [
     "quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail", "review-pull-request", "read-newsletter",
-    "read-desired-outcome", "show-project-issues",
+    "read-desired-outcome", "show-project-issues", "suggest-processing",
   ],
   feeds: [
     "refresh-feeds", "add-feed", "keep-feed-items", "read-feed-item", "discard-feed-items", "undo-feed-discard", "open-link",
@@ -883,6 +885,19 @@ function isActionBoardMenuItemCommand(value: unknown): value is Exclude<ElmActio
 
 function isProjectsMenuItemCommand(value: unknown): value is Exclude<ElmProjectsCommand, { type: "show-menu" }> {
   return isSurfaceCommand(value, PROJECTS_MENU_COMMANDS);
+}
+
+function isProcessingRequest(value: unknown): value is ProcessingRequest {
+  if (!isRecord(value) || !isRecord(value.item) || !isRecord(value.form)) return false;
+  const { item, form } = value;
+  return typeof item.title === "string"
+    && typeof item.body === "string"
+    && ITEM_KINDS.includes(item.kind as ProcessingRequest["item"]["kind"])
+    && ["project", "vision", "action", "status", "context"].every((key) => typeof form[key] === "string")
+    && typeof form.projectIsNew === "boolean"
+    && Array.isArray(value.projects)
+    && value.projects.every((project) => isRecord(project) && typeof project.name === "string" && typeof project.status === "string")
+    && isStringArray(value.contexts);
 }
 
 function isInboxCommand(value: unknown): value is ElmInboxCommand {
@@ -1099,6 +1114,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.topic === "string" && typeof value.ideas === "string";
     case "shuffle-brainstorm-words":
       return true;
+    case "suggest-processing":
+      return isProcessingRequest(value.request);
     case "suggest-brainstorm-ideas":
       return typeof value.topic === "string"
         && typeof value.desiredOutcome === "string"
@@ -1300,6 +1317,8 @@ export type ElmInboxEvent =
   | { type: "snapshot"; snapshot: ElmSnapshotDto }
   | { type: "start-processing"; itemId?: string }
   | { type: "project-issues"; count: number }
+  /** Whether the processing partner can be asked on this device with the current settings. */
+  | { type: "partner-available"; available: boolean }
   | ElmCommandResultEvent;
 export type ElmProjectReviewEvent =
   | ElmClosedEvent

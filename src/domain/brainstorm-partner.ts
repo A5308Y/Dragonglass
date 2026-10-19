@@ -62,7 +62,7 @@ export function partnerMessages(request: PartnerRequest): ChatMessage[] {
  * Suggestions already offered or already written are dropped.
  */
 export function parsePartnerReply(text: string, request: Pick<PartnerRequest, "ideas" | "offered">): PartnerSuggestions {
-  const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const answer = withoutThinking(text);
   const parsed = jsonObject(answer);
   const suggestions = parsed
     ? { ideas: strings(parsed.ideas), considerations: strings(parsed.considerations) }
@@ -95,13 +95,19 @@ export function localChatEndpoint(serverUrl: string): string {
   }
   if (url.hostname === "host.docker.internal") url.hostname = "127.0.0.1";
   if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
-    throw new Error("The brainstorm partner only talks to a model server on this Mac; the agent settings name another host.");
+    throw new Error("The partner only talks to a model server on this Mac; the agent settings name another host.");
   }
   const base = url.pathname.replace(/\/+$/, "").replace(/\/v1$/, "");
   return `${url.protocol}//${url.host}${base}/v1/chat/completions`;
 }
 
-function jsonObject(text: string): Record<string, unknown> | null {
+/** The reply without a thinking model's `<think>` blocks. */
+export function withoutThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
+/** The JSON object in a reply, found even inside a code fence or after other text. */
+export function jsonObject(text: string): Record<string, unknown> | null {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
@@ -113,7 +119,7 @@ function jsonObject(text: string): Record<string, unknown> | null {
   }
 }
 
-function strings(value: unknown): string[] {
+export function strings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map(tidy).filter(Boolean) : [];
 }
 
@@ -122,16 +128,16 @@ function listLines(text: string): string[] {
 }
 
 /** One line, without list markers or surrounding quotes, and not endless. */
-function tidy(item: string): string {
+export function tidy(item: string): string {
   const line = item.replace(/\s+/g, " ").trim().replace(/^["“]|["”]$/g, "").trim();
   return line.length > 200 ? `${line.slice(0, 199)}…` : line;
 }
 
-function normalise(item: string): string {
+export function normalise(item: string): string {
   return item.toLowerCase().replace(/^[-*•\s]+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-function clip(text: string): string {
+export function clip(text: string, limit = FIELD_LIMIT): string {
   const trimmed = text.trim();
-  return trimmed.length > FIELD_LIMIT ? `…${trimmed.slice(-FIELD_LIMIT)}` : trimmed;
+  return trimmed.length > limit ? `…${trimmed.slice(-limit)}` : trimmed;
 }

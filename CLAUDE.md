@@ -235,6 +235,22 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - Active Projects below an inactive one ("stranded") count as parked for the
   missing-Action rule and show up as index issues until fixed by hand.
 
+## Processing partner
+
+- While processing, "Ask partner about this Item" asks a model what the Item could become and judges
+  the Action in the form: small enough for one sitting, and progress, not "open the file". Rules and
+  prompt: `src/domain/processing-partner.ts` (tested in `tests/processing-partner.test.ts`); the call:
+  `src/inbox/processing-partner.ts` over `src/ai/chat-model.ts`, which the Brainstorm partner shares.
+- It sees only the processing page: the Item, the form, and the names of the Projects (not finished
+  ones) and contexts the pickers search. `partnerRequest` in `Inbox.elm` builds that from what the view
+  shows. It only suggests; "Use" fills the form, and nothing is written until the person processes.
+- It is off for every Item until asked, asks only then and on "Check again", and `resetCurrent` drops
+  it (with a new generation, so a late reply is ignored), so the next Item starts without it.
+- Providers (`settings.processingPartner`): the local model server (this Mac only) or OpenAI. The
+  OpenAI key is in secret storage like mite's; settings hold the secret's name. OpenAI is allowed
+  without the sandbox because the partner sees the page and nothing more and can't act; giving it
+  more to read means the sandbox.
+
 ## Agent delegation
 
 - `agent/` holds the sandbox (compose file, runner, proxy); `agent/README.md` explains it.
@@ -258,7 +274,8 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   the local model server directly (rules in `src/domain/brainstorm-partner.ts`), with only
   the session's topic, desired outcome and ideas, and only a server on this Mac
   (`localChatEndpoint` refuses other hosts). Give it more to read, or a remote server, and
-  it needs the sandbox like the runs do.
+  it needs the sandbox like the runs do. The Inbox's processing partner is the one exception
+  (see below).
 - Local runs have three harnesses behind the same contract: our loop (`agent/runner-local`),
   smolagents' CodeAgent (`agent/runner-smol`) and Qwen-Agent (`agent/runner-qwen`), both
   pinned. `run.json` records `harness`; `localHarnessService` picks the compose service.

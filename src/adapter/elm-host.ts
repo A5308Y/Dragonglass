@@ -13,7 +13,8 @@ interface CommandBridgeOptions<C> {
   execute(command: C): Promise<unknown>;
   reply(event: ElmCommandResultEvent): void;
   failureMessage: string;
-  notifyErrors?: boolean;
+  /** Whether a failure also shows a notice; per command, for views that report some failures themselves. */
+  notifyErrors?: boolean | ((command: C) => boolean);
   /** The view's name in the timing log. */
   surface: string;
 }
@@ -51,7 +52,8 @@ async function receiveElmCommand<C>(value: unknown, options: CommandBridgeOption
     if (start) logTiming(`${options.surface}: ${String(type)} failed`, performance.now() - start);
     const message = error instanceof Error ? error.message : options.failureMessage;
     options.reply({ type: "command-result", requestId: envelope.requestId, ok: false, error: message });
-    if (options.notifyErrors !== false) new Notice(message);
+    const notify = typeof options.notifyErrors === "function" ? options.notifyErrors(envelope.command) : options.notifyErrors !== false;
+    if (notify) new Notice(message);
   }
 }
 

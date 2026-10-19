@@ -3115,6 +3115,46 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-partner-dismiss { flex: 0 0 auto; height: auto; padding: 0 6px; color: var(--text-faint); }
 .dg-partner-dismiss:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
 
+/* The Inbox processor's partner, between the Item and the form: off until asked for
+   this Item, then its suggestions, each one click from the form, and its judgement of
+   the Action. */
+.dg-inbox-partner { margin-top: 12px; }
+.dg-inbox-partner.is-off { display: flex; justify-content: flex-end; }
+.dg-inbox-partner:not(.is-off) {
+  padding: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.dg-inbox-partner-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dg-inbox-partner-heading h3 { margin: 0; font-size: var(--font-ui-medium); }
+.dg-inbox-partner-buttons { display: flex; gap: 6px; }
+.dg-inbox-partner-status { margin: 6px 0 0; color: var(--text-muted); font-size: var(--font-ui-small); }
+.dg-inbox-partner-status:empty { display: none; }
+.dg-inbox-partner-advice > p { margin: 8px 0 0; font-size: var(--font-ui-small); }
+.dg-inbox-partner-suggestions { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; }
+.dg-inbox-partner-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+}
+.dg-inbox-partner-suggestion > div { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.dg-inbox-partner-suggestion small { display: block; margin-top: 2px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.dg-inbox-partner-check { margin-top: 12px; }
+.dg-inbox-partner-check h4 {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  overflow-wrap: anywhere;
+}
+.dg-inbox-partner-check > p { margin: 0 0 6px; font-size: var(--font-ui-small); }
+.dg-inbox-partner-check:not(.is-good) > p > strong { color: var(--text-warning); }
+
 /* One inspiration image in a brainstorm, shown whole in a landscape frame of fixed
    shape, so the page doesn't jump when it changes every three minutes. It keeps to the
    same readable column as the fields around it. */

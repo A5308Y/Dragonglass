@@ -86,6 +86,11 @@ export function defaultSettings(): GtdSettings {
     brainstorm: {
       imagesDirectory: "Dragonglass/Brainstorm Inspiration",
     },
+    processingPartner: {
+      provider: "local",
+      openaiModel: "",
+      openaiKeySecret: "",
+    },
     checklists: {
       directory: "GTD/Checklists",
       storePath: "GTD/checklists.json",

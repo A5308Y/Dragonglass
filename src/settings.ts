@@ -29,6 +29,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private mailExpanded = false;
   private calendarExpanded = false;
   private checklistsExpanded = false;
+  private partnerExpanded = false;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
@@ -151,6 +152,7 @@ export class GtdSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings(false);
       }));
 
+    this.displayProcessingPartner(containerEl);
     this.displayPomodoro(containerEl);
     this.displayChecklists(containerEl);
     this.displayFeeds(containerEl);
@@ -401,6 +403,60 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     this.displayMite(sectionEl);
+  }
+
+  /**
+   * The Inbox's processing partner. An OpenAI key lives in Obsidian's secret storage on
+   * each device; the settings, which sync with the vault, hold only the secret's name.
+   */
+  private displayProcessingPartner(containerEl: HTMLElement): void {
+    const partner = this.plugin.settings.processingPartner;
+    const section = containerEl.createEl("details", { cls: "dg-settings-section" });
+    section.open = this.partnerExpanded;
+    section.createEl("summary", { text: "Processing partner", cls: "dg-settings-section-summary" });
+    section.addEventListener("toggle", () => {
+      this.partnerExpanded = section.open;
+    });
+    const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
+    sectionEl.createEl("p", {
+      text: "While processing the Inbox, ask a model about one Item: what it could become, and whether your Action is "
+        + "small and real progress. It sees only the processing page: the Item, the form, and your Projects' and contexts' "
+        + "names. It is off for every new Item until you ask.",
+    });
+
+    new Setting(sectionEl)
+      .setName("Model")
+      .setDesc(partner.provider === "local"
+        ? "The local model server set under Agent delegation, on this Mac only. Nothing leaves the Mac; not available on a phone."
+        : "OpenAI's API. The Item and the names above are sent to OpenAI and billed to your key.")
+      .addDropdown((dropdown) => dropdown
+        .addOption("local", "Local model")
+        .addOption("openai", "OpenAI")
+        .setValue(partner.provider)
+        .onChange(async (value) => {
+          partner.provider = value === "openai" ? "openai" : "local";
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+    if (partner.provider !== "openai") return;
+
+    new Setting(sectionEl)
+      .setName("OpenAI model")
+      .setDesc("The model id, as OpenAI's model list writes it." + (partner.openaiModel ? "" : " ⚠ Not set; the partner is off until it is."))
+      .addText((text) => text.setValue(partner.openaiModel).onChange(async (value) => {
+        partner.openaiModel = value.trim();
+        await this.plugin.saveSettings();
+      }));
+
+    const key = partner.openaiKeySecret ? this.app.secretStorage.getSecret(partner.openaiKeySecret) : "";
+    new Setting(sectionEl)
+      .setName("OpenAI API key")
+      .setDesc("Pick or create a secret holding the key. Secrets stay on this device; on each other device, create one with the same name."
+        + (key ? "" : " ⚠ Not set on this device."))
+      .addComponent((el) => new SecretComponent(this.app, el).setValue(partner.openaiKeySecret).onChange(async (value) => {
+        partner.openaiKeySecret = value;
+        await this.plugin.saveSettings();
+      }));
   }
 
   /** Checklist notes, and the one to work through every day. */

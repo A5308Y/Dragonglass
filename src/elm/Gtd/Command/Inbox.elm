@@ -24,6 +24,8 @@ type Command
     | ReviewPullRequest InboxItemId
     | ReadNewsletter InboxItemId
     | ProcessInbox InboxItemId Disposition InboxInput
+      -- Asks the processing partner; the request is what the processor shows.
+    | SuggestProcessing Encode.Value
 
 
 type Disposition
@@ -82,6 +84,9 @@ encode command =
 
             ProcessInbox itemId disposition input ->
                 Base.ProcessInbox itemId (dispositionToBase disposition) input
+
+            SuggestProcessing request ->
+                Base.SuggestProcessing request
         )
 
 

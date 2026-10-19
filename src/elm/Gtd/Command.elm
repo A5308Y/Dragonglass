@@ -154,6 +154,8 @@ type Command
     | ReviewPullRequest InboxItemId
     | ReadNewsletter InboxItemId
     | ProcessInbox InboxItemId Disposition InboxInput
+      -- The processing partner's question about one Item, built by the Inbox from what it shows.
+    | SuggestProcessing Encode.Value
     | CaptureInboxItem String
       -- Pasted lists
     | ParseImportList ImportKind String
@@ -731,6 +733,9 @@ encode command =
 
         ShowProjectIssues ->
             object "show-project-issues" []
+
+        SuggestProcessing request ->
+            object "suggest-processing" [ ( "request", request ) ]
 
         TrashInboxItem itemId ->
             object "trash-inbox-item" [ ( "itemId", Encode.string itemId ) ]

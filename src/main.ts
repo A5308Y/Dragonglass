@@ -14,7 +14,7 @@ import { ErrorBar } from "./ui/error-bar";
 import { describeImport, normalizeMailPort } from "./domain/mail";
 import { SavedViewService } from "./state/saved-view-service";
 import { migrateSavedViews } from "./domain/saved-views";
-import { POMODORO_SOUNDS, type ActionStatus, type ChecklistSettings, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
+import { POMODORO_SOUNDS, PROCESSING_PARTNER_PROVIDERS, type ActionStatus, type ChecklistSettings, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
 import { GtdIndex } from "./repository/gtd-index";
 import { GtdRepository } from "./repository/gtd-repository";
 import { createDefaultViews, defaultSettings } from "./state/defaults";
@@ -288,6 +288,16 @@ export default class DragonglassGtdPlugin extends Plugin {
           : normalizeVaultPath(saved!.brainstorm!.imagesDirectory),
       },
       checklists: checklistSettings(saved?.checklists, defaults.checklists),
+      processingPartner: {
+        provider: PROCESSING_PARTNER_PROVIDERS.find((provider) => provider === saved?.processingPartner?.provider)
+          ?? defaults.processingPartner.provider,
+        openaiModel: typeof saved?.processingPartner?.openaiModel === "string"
+          ? saved.processingPartner.openaiModel.trim()
+          : defaults.processingPartner.openaiModel,
+        openaiKeySecret: typeof saved?.processingPartner?.openaiKeySecret === "string"
+          ? saved.processingPartner.openaiKeySecret
+          : defaults.processingPartner.openaiKeySecret,
+      },
       agent: {
         runsDirectory: typeof saved?.agent?.runsDirectory === "string" ? saved.agent.runsDirectory.trim() : defaults.agent.runsDirectory,
         kitDirectory: typeof saved?.agent?.kitDirectory === "string" ? saved.agent.kitDirectory.trim() : defaults.agent.kitDirectory,
