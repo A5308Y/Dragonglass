@@ -91,7 +91,8 @@ export class ElmInboxHost {
   }
 
   private partnerAvailable(): boolean {
-    return processingPartnerAvailable(this.services.getSettings().processingPartner, Platform.isDesktopApp, this.partnerKeys());
+    const settings = this.services.getSettings();
+    return processingPartnerAvailable(settings.processingPartner, settings.agent, Platform.isDesktopApp, this.partnerKeys());
   }
 
   private send(event: ElmInboxEvent): void {

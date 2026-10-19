@@ -373,6 +373,7 @@ export type ProcessingPartnerProvider = (typeof PROCESSING_PARTNER_PROVIDERS)[nu
 export interface ProcessingPartnerSettings {
   /** The local model server of the agent settings, or OpenAI. */
   provider: ProcessingPartnerProvider;
+  /** Empty uses `agent.codexModel`. */
   openaiModel: string;
   /** The name of the secret holding the OpenAI API key in this device's secret storage. */
   openaiKeySecret: string;

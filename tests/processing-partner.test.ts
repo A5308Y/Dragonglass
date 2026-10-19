@@ -127,6 +127,22 @@ describe("Asking the processing partner", () => {
     expect(body).not.toHaveProperty("max_tokens");
   });
 
+  it("uses the Codex runs' model when its own is empty", async () => {
+    const sent: Parameters<ChatPost>[0][] = [];
+    const post: ChatPost = async (sentRequest) => {
+      sent.push(sentRequest);
+      return { status: 200, text: answer(advice) };
+    };
+    const partner = { provider: "openai" as const, openaiModel: "", openaiKeySecret: "openai" };
+    const agent = { ...settings.agent, codexModel: "codex-model" };
+    await askProcessingPartner(partner, agent, { local: async () => "", openai: () => "sk" }, request, post);
+    expect(JSON.parse(sent[0]!.body)).toMatchObject({ model: "codex-model" });
+    await askProcessingPartner({ ...partner, openaiModel: "own-model" }, agent, { local: async () => "", openai: () => "sk" }, request, post);
+    expect(JSON.parse(sent[1]!.body)).toMatchObject({ model: "own-model" });
+    await expect(askProcessingPartner(partner, settings.agent, { local: async () => "", openai: () => "sk" }, request, post))
+      .rejects.toThrow("No OpenAI model is set");
+  });
+
   it("says what is missing or went wrong in words", async () => {
     const openai = { provider: "openai" as const, openaiModel: "some-model", openaiKeySecret: "" };
     await expect(askProcessingPartner(openai, settings.agent, { local: async () => "", openai: () => "" }, request, async () => ({ status: 200, text: "" })))
@@ -140,10 +156,12 @@ describe("Asking the processing partner", () => {
   it("is offered where it can be reached", () => {
     const local = settings.processingPartner;
     const openai = { provider: "openai" as const, openaiModel: "some-model", openaiKeySecret: "openai" };
-    expect(processingPartnerAvailable(local, true, { openai: () => "" })).toBe(true);
-    expect(processingPartnerAvailable(local, false, { openai: () => "sk" })).toBe(false);
-    expect(processingPartnerAvailable(openai, false, { openai: () => "sk" })).toBe(true);
-    expect(processingPartnerAvailable(openai, true, { openai: () => "" })).toBe(false);
-    expect(processingPartnerAvailable({ ...openai, openaiModel: "" }, true, { openai: () => "sk" })).toBe(false);
+    const agent = settings.agent;
+    expect(processingPartnerAvailable(local, agent, true, { openai: () => "" })).toBe(true);
+    expect(processingPartnerAvailable(local, agent, false, { openai: () => "sk" })).toBe(false);
+    expect(processingPartnerAvailable(openai, agent, false, { openai: () => "sk" })).toBe(true);
+    expect(processingPartnerAvailable(openai, agent, true, { openai: () => "" })).toBe(false);
+    expect(processingPartnerAvailable({ ...openai, openaiModel: "" }, agent, true, { openai: () => "sk" })).toBe(false);
+    expect(processingPartnerAvailable({ ...openai, openaiModel: "" }, { ...agent, codexModel: "codex-model" }, true, { openai: () => "sk" })).toBe(true);
   });
 });

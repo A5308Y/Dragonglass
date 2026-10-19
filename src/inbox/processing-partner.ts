@@ -12,12 +12,22 @@ export interface PartnerKeys {
   openai(): string;
 }
 
+/** The OpenAI model the partner asks: its own setting, or else the one Codex runs use. */
+export function partnerOpenAiModel(settings: ProcessingPartnerSettings, agent: AgentSettings): string {
+  return settings.openaiModel.trim() || agent.codexModel.trim();
+}
+
 /**
  * Whether the partner can be asked here: the local server is on the Mac, so a phone
  * can't reach it; OpenAI needs a model and this device's key.
  */
-export function processingPartnerAvailable(settings: ProcessingPartnerSettings, desktop: boolean, keys: Pick<PartnerKeys, "openai">): boolean {
-  return settings.provider === "local" ? desktop : Boolean(settings.openaiModel && keys.openai());
+export function processingPartnerAvailable(
+  settings: ProcessingPartnerSettings,
+  agent: AgentSettings,
+  desktop: boolean,
+  keys: Pick<PartnerKeys, "openai">,
+): boolean {
+  return settings.provider === "local" ? desktop : Boolean(partnerOpenAiModel(settings, agent) && keys.openai());
 }
 
 /** Asks the chosen model about one Inbox Item (see `src/domain/processing-partner.ts`). */
@@ -30,7 +40,7 @@ export async function askProcessingPartner(
 ): Promise<ProcessingAdvice> {
   const target = settings.provider === "local"
     ? localTarget(agent, await keys.local())
-    : openAiTarget(settings.openaiModel, keys.openai());
+    : openAiTarget(partnerOpenAiModel(settings, agent), keys.openai());
   const reply = await askChatModel(target, processingMessages(request), { maxTokens: REPLY_TOKENS, temperature: 0.3 }, post);
   return parseProcessingReply(reply, request);
 }

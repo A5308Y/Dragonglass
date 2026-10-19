@@ -30,7 +30,7 @@ export function localTarget(settings: AgentSettings, key: string): ChatTarget {
 }
 
 export function openAiTarget(model: string, key: string): ChatTarget {
-  if (!model.trim()) throw new Error("No OpenAI model is set in the processing partner settings.");
+  if (!model.trim()) throw new Error("No OpenAI model is set for the processing partner, nor for Codex runs.");
   if (!key) throw new Error("No OpenAI API key is set on this device.");
   return { kind: "openai", model: model.trim(), key };
 }

@@ -440,10 +440,16 @@ export class GtdSettingTab extends PluginSettingTab {
         }));
     if (partner.provider !== "openai") return;
 
+    const codexModel = this.plugin.settings.agent.codexModel.trim();
     new Setting(sectionEl)
       .setName("OpenAI model")
-      .setDesc("The model id, as OpenAI's model list writes it." + (partner.openaiModel ? "" : " ⚠ Not set; the partner is off until it is."))
-      .addText((text) => text.setValue(partner.openaiModel).onChange(async (value) => {
+      .setDesc("The model id, as OpenAI's model list writes it. "
+        + (partner.openaiModel
+          ? ""
+          : codexModel
+            ? `Empty uses the Codex runs' model, ${codexModel}.`
+            : "Empty uses the Codex runs' model, which isn't set either. ⚠ The partner is off until one is."))
+      .addText((text) => text.setPlaceholder(codexModel).setValue(partner.openaiModel).onChange(async (value) => {
         partner.openaiModel = value.trim();
         await this.plugin.saveSettings();
       }));
