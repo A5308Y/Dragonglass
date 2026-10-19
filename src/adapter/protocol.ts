@@ -789,7 +789,7 @@ export const SURFACE_COMMANDS = {
   projectReview: [
     "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
     "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action", "set-project-status",
-    "open-someday-review",
+    "open-someday-review", "show-project",
   ],
   brainstorm: [
     "load-project-detail", "save-brainstorm", "save-project-brainstorm", "save-standalone-brainstorm", "shuffle-brainstorm-words",

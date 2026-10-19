@@ -20,6 +20,8 @@ type Command
     | SetProjectStatus ProjectId ProjectStatus
     | NewProjectModal (Maybe ProjectId) ProjectStatus
     | OpenFile String
+      -- The Project's page, as the Projects view shows it.
+    | ShowProject ProjectId
     | EditActionModal ActionId
     | SetActionStatus ActionId ActionStatus
     | TrashAction ActionId
@@ -56,6 +58,9 @@ encode command =
 
             OpenFile path ->
                 Base.OpenFile path
+
+            ShowProject projectId ->
+                Base.ShowProject projectId
 
             EditActionModal actionId ->
                 Base.EditActionModal actionId

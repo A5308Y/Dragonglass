@@ -604,7 +604,7 @@ viewProject model project =
                 [ div [ class "dg-review-hero-copy" ]
                     [ span [ class "dg-review-eyebrow" ]
                         [ text ("Project tree " ++ String.fromInt (model.total - List.length model.queue + 1) ++ " of " ++ String.fromInt model.total) ]
-                    , button [ class "dg-project-title dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile project.file.path)) ] [ text project.title ]
+                    , button [ class "dg-project-title dg-flat-button", onClick (Send IgnoreReply (Command.ShowProject project.id)) ] [ text project.title ]
                     , div [ class "dg-review-project-meta" ]
                         [ span [ class "dg-status" ] [ text (Maybe.withDefault (ProjectStatus.label project.status) project.area) ]
                         , span [] [ text (Ui.plural (List.length members) "Project") ]
@@ -657,7 +657,7 @@ viewTreeRow model root actions project =
         [ button
             [ class "dg-flat-button"
 
-            , onClick (Send IgnoreReply (Command.OpenFile project.file.path))
+            , onClick (Send IgnoreReply (Command.ShowProject project.id))
             ]
             [ text (relativeLabel model root project) ]
         , span [] [ text (ProjectStatus.label project.status) ]

@@ -146,6 +146,9 @@ export class ElmProjectReviewHost {
       case "create-project":
         this.services.createProject(false, command.parentProjectId, command.status);
         return;
+      case "show-project":
+        this.services.showProjectDetail(command.projectId);
+        return;
       case "open-file": {
         const file = this.services.app.vault.getAbstractFileByPath(command.path);
         if (!(file instanceof TFile)) throw new Error(`File '${command.path}' no longer exists.`);

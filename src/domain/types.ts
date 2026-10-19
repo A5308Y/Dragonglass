@@ -405,7 +405,7 @@ export interface FeedSettings {
   storePath: string;
   /** Minutes between automatic fetches. Five is the floor. */
   refreshMinutes: number;
-  /** The context of reading Actions made straight from a feed Item. */
+  /** The context of reading Actions made straight from a feed Item, or from a newsletter while processing. */
   readingContext: string;
   /** Local `HH:MM` times at which the ribbon dot may come on for unread Items. */
   checkTimes: string[];

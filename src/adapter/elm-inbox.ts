@@ -175,21 +175,26 @@ export class ElmInboxHost {
   private async reviewPullRequest(item: InboxItem): Promise<void> {
     const pr = findPullRequest(await this.services.repository.readInboxBody(item));
     if (!pr) throw new Error("This Inbox Item doesn't link a GitHub pull request.");
-    await this.actionFromLink(item, reviewActionTitle(pr, item.title), (title) => linksPullRequest(title, pr));
-  }
-
-  /** The same for a newsletter: a Next Action to read the issue online, then the email goes. */
-  private async readNewsletter(item: InboxItem): Promise<void> {
-    const link = findNewsletter(await this.services.repository.readInboxBody(item));
-    if (!link) throw new Error("This Inbox Item doesn't link a newsletter issue.");
-    await this.actionFromLink(item, readActionTitle(link, item.title), (title) => linksNewsletter(title, link));
+    const context = this.services.getSettings().mail.reviewContext.trim() || "Laptop";
+    await this.actionFromLink(item, reviewActionTitle(pr, item.title), context, (title) => linksPullRequest(title, pr));
   }
 
   /**
-   * Makes a Next Action titled `title`, without a Project, unless an open Action already
+   * The same for a newsletter: a Next Action to read the issue online, then the email goes.
+   * It is reading, like a feed Item kept to read, so it takes the feeds' reading context.
+   */
+  private async readNewsletter(item: InboxItem): Promise<void> {
+    const link = findNewsletter(await this.services.repository.readInboxBody(item));
+    if (!link) throw new Error("This Inbox Item doesn't link a newsletter issue.");
+    const context = this.services.getSettings().feeds.readingContext.trim() || "Read/Review";
+    await this.actionFromLink(item, readActionTitle(link, item.title), context, (title) => linksNewsletter(title, link));
+  }
+
+  /**
+   * Makes a Next Action titled `title` in `context`, without a Project, unless an open Action already
    * `links` the same thing, and deletes the Item with Undo.
    */
-  private async actionFromLink(item: InboxItem, title: string, links: (title: string) => boolean): Promise<void> {
+  private async actionFromLink(item: InboxItem, title: string, context: string, links: (title: string) => boolean): Promise<void> {
     const repository = this.services.repository;
     const existing = repository.index.getSnapshot().actions
       .find((action) => action.status !== "done" && action.status !== "cancelled" && links(action.title));
@@ -197,7 +202,6 @@ export class ElmInboxHost {
     if (existing) {
       message = `“${plainTitle(existing.title)}” is already on your list; deleted “${item.title}”.`;
     } else {
-      const context = this.services.getSettings().mail.reviewContext.trim() || "Laptop";
       await repository.createAction({ title, status: "next", context });
       message = `Added the Next Action “${plainTitle(title)}” (@${context}) and deleted “${item.title}”.`;
     }
