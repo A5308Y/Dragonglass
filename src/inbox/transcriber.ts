@@ -60,8 +60,9 @@ export class Transcriber {
 
     const folder = await node.fs.mkdtemp(node.path.join(node.os.tmpdir(), "dragonglass-transcribe-"));
     try {
-      const input = node.path.join(folder, `memo.${file.extension}`);
-      const wav = node.path.join(folder, "memo.wav");
+      // Named apart: a WAV recording would otherwise be both ffmpeg's input and its output.
+      const input = node.path.join(folder, `recording.${file.extension}`);
+      const wav = node.path.join(folder, "for-whisper.wav");
       await node.fs.writeFile(input, new Uint8Array(await this.app.vault.readBinary(file)));
       await run(node, ffmpeg, ffmpegArgs(input, wav), FFMPEG_TIMEOUT_MS, "ffmpeg couldn't read the recording");
       const transcript = cleanTranscript(await run(node, whisper, whisperArgs(model, wav, settings.language), WHISPER_TIMEOUT_MS, "whisper.cpp failed"));
@@ -111,7 +112,8 @@ function run(node: NodeModules, file: string, args: string[], timeout: number, f
         resolve(String(stdout));
         return;
       }
-      const detail = String(stderr).trim().split("\n").map((line) => line.trim()).filter(Boolean).at(-1);
+      // The last line is often only the consequence ("Error opening output files"); the cause comes before it.
+      const detail = String(stderr).trim().split("\n").map((line) => line.trim()).filter(Boolean).slice(-4).join(" · ");
       reject(new Error(error.killed ? `${failure}: it took too long.` : `${failure}${detail ? `: ${detail}` : "."}`));
     });
   });
