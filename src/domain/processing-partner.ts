@@ -82,7 +82,7 @@ export function processingMessages(request: ProcessingRequest): ChatMessage[] {
   const { item, form } = request;
   const field = (name: string, value: string) => `${name}: ${value.trim() ? clip(value, 1_000) : "(empty)"}`;
   const lines = [
-    `Inbox item${item.kind === "note" ? "" : ` (${item.kind === "mail" ? "an email" : "a voice memo, not transcribed"})`}: ${clip(item.title, 500)}`,
+    `Inbox item${itemKindNote(item)}: ${clip(item.title, 500)}`,
     "",
     item.body.trim() ? clip(item.body) : "(no text)",
     "",
@@ -104,6 +104,13 @@ export function processingMessages(request: ProcessingRequest): ChatMessage[] {
     { role: "system", content: SYSTEM },
     { role: "user", content: lines.join("\n") },
   ];
+}
+
+/** What kind of Item it is, when not a note; a voice memo's text is its transcript, if it has one. */
+function itemKindNote(item: ProcessingRequest["item"]): string {
+  if (item.kind === "mail") return " (an email)";
+  if (item.kind === "audio") return item.body.trim() ? " (a voice memo; its transcript follows)" : " (a voice memo, not transcribed)";
+  return "";
 }
 
 /**

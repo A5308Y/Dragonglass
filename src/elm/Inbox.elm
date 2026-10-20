@@ -49,10 +49,21 @@ type Pending
     | LoadOutcome ProjectId
       -- The partner's advice on an Item, for the partner switched on with that generation.
     | PartnerReply InboxItemId Int
+      -- A recording's transcript.
+    | Transcribe InboxItemId
 
 
 type alias ScheduleFields =
     { allDay : Bool, start : String, duration : String }
+
+
+{-| A recording's transcript, made on request while processing. It is only shown: kept
+here until the view closes, never written to the vault.
+-}
+type Transcript
+    = Transcribing
+    | Transcribed String
+    | TranscribeFailed String
 
 
 {-| The processing partner, switched on for one Item (see `src/domain/processing-partner.ts`).
@@ -139,6 +150,10 @@ type alias Model =
     , partner : Maybe Partner
     , partnerGeneration : Int
 
+    -- Recordings can be transcribed on this device; the transcripts made so far.
+    , transcribeAvailable : Bool
+    , transcripts : Dict InboxItemId Transcript
+
     -- The tab was closed: timers off (see `Host.isClosing`).
     , closed : Bool
     }
@@ -179,6 +194,7 @@ type Msg
     | StopPartner
     | UseSuggestion Suggestion
     | UseBetterAction String
+    | TranscribeItem InboxItemId
     | Send Pending Command
 
 
@@ -193,7 +209,7 @@ main =
 
 
 type alias Flags =
-    { snapshot : Snapshot, initialProcessing : Bool, projectIssues : Int, mac : Bool, partner : Bool }
+    { snapshot : Snapshot, initialProcessing : Bool, projectIssues : Int, mac : Bool, partner : Bool, transcribe : Bool }
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -203,7 +219,13 @@ init flagsValue =
             let
                 model =
                     initialModel flags.snapshot
-                        |> (\initial -> { initial | projectIssues = flags.projectIssues, mac = flags.mac, partnerAvailable = flags.partner })
+                        |> (\initial -> { initial
+                                | projectIssues = flags.projectIssues
+                                , mac = flags.mac
+                                , partnerAvailable = flags.partner
+                                , transcribeAvailable = flags.transcribe
+                               }
+                           )
             in
             if flags.initialProcessing && not (List.isEmpty flags.snapshot.inboxItems) then
                 enterProcessing Nothing model
@@ -251,6 +273,8 @@ initialModel snapshot =
     , partnerAvailable = False
     , partner = Nothing
     , partnerGeneration = 0
+    , transcribeAvailable = False
+    , transcripts = Dict.empty
     , closed = False
     }
 
@@ -538,6 +562,16 @@ update msg model =
         UseBetterAction action ->
             ( { model | nextAction = action }, focus nextActionId )
 
+        TranscribeItem itemId ->
+            case Dict.get itemId model.transcripts of
+                Just Transcribing ->
+                    ( model, Cmd.none )
+
+                _ ->
+                    send (Transcribe itemId)
+                        (Command.TranscribeInboxItem itemId)
+                        { model | transcripts = Dict.insert itemId Transcribing model.transcripts }
+
         Send pending command ->
             send pending command model
 
@@ -582,17 +616,27 @@ askPartner item model =
 partnerRequest : InboxItem -> Model -> Encode.Value
 partnerRequest item model =
     let
+        -- A recording's text is its transcript, once there is one; the host's text only names the file.
         body =
-            case model.body of
-                Just loaded ->
-                    if loaded.itemId == item.id then
-                        loaded.text
+            if isAudio item.file.extension then
+                case Dict.get item.id model.transcripts of
+                    Just (Transcribed transcript) ->
+                        transcript
 
-                    else
+                    _ ->
                         ""
 
-                Nothing ->
-                    ""
+            else
+                case model.body of
+                    Just loaded ->
+                        if loaded.itemId == item.id then
+                            loaded.text
+
+                        else
+                            ""
+
+                    Nothing ->
+                        ""
 
         kind =
             if isAudio item.file.extension then
@@ -1078,6 +1122,7 @@ type HostEvent
     | StartProcessingEvent (Maybe InboxItemId)
     | ProjectIssuesEvent Int
     | PartnerAvailableEvent Bool
+    | TranscribeAvailableEvent Bool
     | Replied Host.Outcome
 
 
@@ -1127,6 +1172,9 @@ receiveHost value model =
         Ok (ProjectIssuesEvent count) ->
             ( { model | projectIssues = count }, Cmd.none )
 
+        Ok (TranscribeAvailableEvent available) ->
+            ( { model | transcribeAvailable = available }, Cmd.none )
+
         Ok (PartnerAvailableEvent available) ->
             if available then
                 ( { model | partnerAvailable = True }, Cmd.none )
@@ -1167,6 +1215,22 @@ receiveHost value model =
                         | error = Just (title ++ message)
                         , setAside = setAside
                         , snapshot = withoutSetAside setAside next.hostSnapshot
+                      }
+                    , Cmd.none
+                    )
+
+                ( Err message, Transcribe itemId ) ->
+                    ( { next | transcripts = Dict.insert itemId (TranscribeFailed message) next.transcripts }, Cmd.none )
+
+                ( Ok resultValue, Transcribe itemId ) ->
+                    ( { next
+                        | transcripts =
+                            Dict.insert itemId
+                                (Decode.decodeValue Decode.string resultValue
+                                    |> Result.map Transcribed
+                                    |> Result.withDefault (TranscribeFailed "The transcript couldn't be read.")
+                                )
+                                next.transcripts
                       }
                     , Cmd.none
                     )
@@ -1765,6 +1829,41 @@ checkView askedAction check =
         ]
 
 
+{-| A recording's transcript, or the button that makes one. It is only shown, never saved.
+-}
+transcriptView : Model -> InboxItem -> Html Msg
+transcriptView model item =
+    let
+        transcribeButton label =
+            button [ class "dg-inbox-transcribe", onClick (TranscribeItem item.id) ] [ text label ]
+    in
+    case ( Dict.get item.id model.transcripts, model.transcribeAvailable ) of
+        ( Just Transcribing, _ ) ->
+            p [ class "dg-inbox-transcript-status", attribute "aria-live" "polite" ] [ text "Transcribing…" ]
+
+        ( Just (Transcribed transcript), _ ) ->
+            section [ class "dg-inbox-transcript", attribute "aria-labelledby" "dg-inbox-transcript-heading" ]
+                [ h4 [ id "dg-inbox-transcript-heading" ] [ text "Transcript (not saved)" ]
+                , p [] [ text transcript ]
+                ]
+
+        ( Just (TranscribeFailed problem), available ) ->
+            div [ class "dg-inbox-transcript-status", attribute "aria-live" "polite" ]
+                [ span [] [ text ("⚠ " ++ problem) ]
+                , if available then
+                    transcribeButton "Try again"
+
+                  else
+                    text ""
+                ]
+
+        ( Nothing, True ) ->
+            div [ class "dg-inbox-transcript-status" ] [ transcribeButton "Transcribe" ]
+
+        ( Nothing, False ) ->
+            text ""
+
+
 itemCard : Model -> InboxItem -> Html Msg
 itemCard model item =
     let
@@ -1798,7 +1897,10 @@ itemCard model item =
                 )
             ]
         , if isAudio item.file.extension then
-            audio [ class "dg-inbox-audio", controls True, preload "metadata", src item.resourceUrl ] []
+            div [ class "dg-inbox-recording" ]
+                [ audio [ class "dg-inbox-audio", controls True, preload "metadata", src item.resourceUrl ] []
+                , transcriptView model item
+                ]
 
           else if String.isEmpty body then
             div [ class "dg-inbox-preview is-empty" ] [ text "No additional notes." ]
@@ -2322,7 +2424,7 @@ indexOf wanted items =
 isAudio : String -> Bool
 isAudio extension =
     List.member (String.toLower extension)
-        [ "3gp", "flac", "m4a", "mp3", "oga", "ogg", "opus", "wav", "webm" ]
+        [ "3gp", "aac", "flac", "m4a", "mp3", "oga", "ogg", "opus", "wav", "webm" ]
 
 
 
@@ -2331,12 +2433,13 @@ isAudio extension =
 
 flagsDecoder : Decoder Flags
 flagsDecoder =
-    Decode.map5 Flags
+    Decode.map6 Flags
         (Decode.field "snapshot" Data.snapshotDecoder)
         (Decode.field "initialProcessing" Decode.bool)
         (Decode.oneOf [ Decode.field "projectIssues" Decode.int, Decode.succeed 0 ])
         (Decode.oneOf [ Decode.field "mac" Decode.bool, Decode.succeed False ])
         (Decode.oneOf [ Decode.field "partner" Decode.bool, Decode.succeed False ])
+        (Decode.oneOf [ Decode.field "transcribe" Decode.bool, Decode.succeed False ])
 
 
 adviceDecoder : Decoder Advice
@@ -2385,6 +2488,9 @@ hostEventDecoder =
 
                     "partner-available" ->
                         Decode.map PartnerAvailableEvent (Decode.field "available" Decode.bool)
+
+                    "transcribe-available" ->
+                        Decode.map TranscribeAvailableEvent (Decode.field "available" Decode.bool)
 
                     "command-result" ->
                         Decode.map Replied Host.outcomeDecoder

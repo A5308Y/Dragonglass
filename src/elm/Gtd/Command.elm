@@ -156,6 +156,7 @@ type Command
     | ProcessInbox InboxItemId Disposition InboxInput
       -- The processing partner's question about one Item, built by the Inbox from what it shows.
     | SuggestProcessing Encode.Value
+    | TranscribeInboxItem InboxItemId
     | CaptureInboxItem String
       -- Pasted lists
     | ParseImportList ImportKind String
@@ -736,6 +737,9 @@ encode command =
 
         SuggestProcessing request ->
             object "suggest-processing" [ ( "request", request ) ]
+
+        TranscribeInboxItem itemId ->
+            object "transcribe-inbox-item" [ ( "itemId", Encode.string itemId ) ]
 
         TrashInboxItem itemId ->
             object "trash-inbox-item" [ ( "itemId", Encode.string itemId ) ]

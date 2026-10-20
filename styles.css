@@ -3115,6 +3115,23 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 .dg-partner-dismiss { flex: 0 0 auto; height: auto; padding: 0 6px; color: var(--text-faint); }
 .dg-partner-dismiss:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
 
+/* A recording in the Inbox processor: its player, then its transcript, which is only
+   shown (never saved), or the button that makes one. */
+.dg-inbox-recording { display: flex; flex-direction: column; gap: 8px; }
+.dg-inbox-transcript-status { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-muted); font-size: var(--font-ui-small); }
+.dg-inbox-transcript {
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+}
+.dg-inbox-transcript h4 {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+}
+.dg-inbox-transcript p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+
 /* The Inbox processor's partner, between the Item and the form: off until asked for
    this Item, then its suggestions, each one click from the form, and its judgement of
    the Action. */

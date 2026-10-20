@@ -26,6 +26,8 @@ type Command
     | ProcessInbox InboxItemId Disposition InboxInput
       -- Asks the processing partner; the request is what the processor shows.
     | SuggestProcessing Encode.Value
+      -- A recording's transcript, only to show.
+    | TranscribeInboxItem InboxItemId
 
 
 type Disposition
@@ -87,6 +89,9 @@ encode command =
 
             SuggestProcessing request ->
                 Base.SuggestProcessing request
+
+            TranscribeInboxItem itemId ->
+                Base.TranscribeInboxItem itemId
         )
 
 

@@ -41,6 +41,8 @@ import { exportProjectTree } from "./ui/export-project";
 import { delegateProject } from "./ui/delegate";
 import { confirmDeleteAgentRun } from "./ui/delete-agent-run";
 import type { PomodoroSession } from "./domain/pomodoro";
+import { parseTranscriptionSettings } from "./domain/transcription";
+import { Transcriber } from "./inbox/transcriber";
 
 /** The view each Dragonglass link name opens. */
 const LINKED_VIEWS: Record<ViewLinkName, string> = {
@@ -125,6 +127,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       app: this.app,
       repository: this.repository,
       agent: this.agent,
+      transcriber: new Transcriber(this.app, () => this.settings.transcription),
       getSettings: () => this.settings,
       savedViews: this.savedViews,
       saveSettings: async (settings, refreshViews = true) => {
@@ -288,6 +291,7 @@ export default class DragonglassGtdPlugin extends Plugin {
           : normalizeVaultPath(saved!.brainstorm!.imagesDirectory),
       },
       checklists: checklistSettings(saved?.checklists, defaults.checklists),
+      transcription: parseTranscriptionSettings(saved?.transcription),
       processingPartner: {
         provider: PROCESSING_PARTNER_PROVIDERS.find((provider) => provider === saved?.processingPartner?.provider)
           ?? defaults.processingPartner.provider,

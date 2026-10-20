@@ -39,6 +39,7 @@ export class ElmInboxHost {
         projectIssues: this.projectIssues(),
         mac: Platform.isMacOS || Platform.isIosApp,
         partner: this.partnerAvailable(),
+        transcribe: services.transcriber.available(Platform.isDesktopApp),
       },
     }) as ElmApp;
     this.unsubscribePort = subscribeElmCommands({
@@ -48,8 +49,8 @@ export class ElmInboxHost {
       reply: (event) => this.send(event),
       surface: "Inbox",
       failureMessage: "The Inbox operation failed.",
-      // The partner reports its own trouble in its panel.
-      notifyErrors: (command) => command.type !== "suggest-processing",
+      // The partner and transcribing report their own trouble in the processor.
+      notifyErrors: (command) => command.type !== "suggest-processing" && command.type !== "transcribe-inbox-item",
     });
     this.unsubscribe = services.repository.index.subscribe(() => {
       this.send({ type: "snapshot", snapshot: this.snapshot() });
@@ -62,6 +63,7 @@ export class ElmInboxHost {
     this.send({ type: "project-issues", count: this.projectIssues() });
     // The settings may have changed the partner's provider, model or key.
     this.send({ type: "partner-available", available: this.partnerAvailable() });
+    this.send({ type: "transcribe-available", available: this.services.transcriber.available(Platform.isDesktopApp) });
     if (startProcessing) this.send({ type: "start-processing", ...(itemId ? { itemId } : {}) });
   }
 
@@ -128,6 +130,9 @@ export class ElmInboxHost {
         if (!project) throw new Error("This Project no longer exists.");
         return this.services.repository.readDesiredOutcome(project);
       }
+      case "transcribe-inbox-item":
+        // Only shown in the processor, never written: closing the view forgets it.
+        return this.services.transcriber.transcribe(this.item(command.itemId).file);
       case "suggest-processing": {
         const settings = this.services.getSettings();
         return askProcessingPartner(settings.processingPartner, settings.agent, this.partnerKeys(), command.request,

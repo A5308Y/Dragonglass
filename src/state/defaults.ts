@@ -1,4 +1,5 @@
 import { parseMiteSettings } from "../domain/mite";
+import { DEFAULT_TRANSCRIPTION } from "../domain/transcription";
 import { localDate } from "../utils/date";
 import { DEFAULT_WEEKLY_REVIEW_DAY } from "../domain/weekly-review";
 import { DEFAULT_FEED_CHECK_TIMES } from "../domain/attention";
@@ -86,6 +87,7 @@ export function defaultSettings(): GtdSettings {
     brainstorm: {
       imagesDirectory: "Dragonglass/Brainstorm Inspiration",
     },
+    transcription: { ...DEFAULT_TRANSCRIPTION },
     processingPartner: {
       provider: "local",
       openaiModel: "",

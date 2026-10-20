@@ -1,4 +1,5 @@
 import { App, Notice, PluginSettingTab, SecretComponent, Setting } from "obsidian";
+import { languageCode } from "./domain/transcription";
 import { confirmDialog } from "./ui/confirm";
 import { miteAccount } from "./domain/mite";
 import { codeRepositoryLabel, type CodeRepository } from "./domain/delegation";
@@ -30,6 +31,7 @@ export class GtdSettingTab extends PluginSettingTab {
   private calendarExpanded = false;
   private checklistsExpanded = false;
   private partnerExpanded = false;
+  private transcriptionExpanded = false;
 
   constructor(app: App, private readonly plugin: DragonglassGtdPlugin) {
     super(app, plugin);
@@ -153,6 +155,7 @@ export class GtdSettingTab extends PluginSettingTab {
       }));
 
     this.displayProcessingPartner(containerEl);
+    this.displayTranscription(containerEl);
     this.displayPomodoro(containerEl);
     this.displayChecklists(containerEl);
     this.displayFeeds(containerEl);
@@ -468,6 +471,56 @@ export class GtdSettingTab extends PluginSettingTab {
       .addComponent((el) => new SecretComponent(this.app, el).setValue(partner.openaiKeySecret).onChange(async (value) => {
         partner.openaiKeySecret = value;
         await this.plugin.saveSettings();
+      }));
+  }
+
+  /** Transcribing voice memos in the Inbox processor, with whisper.cpp on this Mac. */
+  private displayTranscription(containerEl: HTMLElement): void {
+    const settings = this.plugin.settings.transcription;
+    const section = containerEl.createEl("details", { cls: "dg-settings-section" });
+    section.open = this.transcriptionExpanded;
+    section.createEl("summary", { text: "Transcribing voice memos", cls: "dg-settings-section-summary" });
+    section.addEventListener("toggle", () => {
+      this.transcriptionExpanded = section.open;
+    });
+    const sectionEl = section.createDiv({ cls: "dg-settings-section-content" });
+    sectionEl.createEl("p", {
+      text: "While processing, a recording in the Inbox gets a Transcribe button. whisper.cpp turns it into text on this Mac; "
+        + "the text is only shown there, never saved, and is gone when the Inbox closes. Needs the desktop app, "
+        + "“brew install whisper-cpp ffmpeg” and a model file from huggingface.co/ggerganov/whisper.cpp "
+        + "(e.g. ggml-large-v3-turbo.bin).",
+    });
+
+    new Setting(sectionEl)
+      .setName("Model file")
+      .setDesc("The full path of the ggml model file; ~/ is your home folder. Empty turns transcribing off.")
+      .addText((text) => text.setPlaceholder("~/Models/ggml-large-v3-turbo.bin").setValue(settings.modelPath).onChange(async (value) => {
+        settings.modelPath = value.trim();
+        await this.plugin.saveSettings();
+      }));
+
+    new Setting(sectionEl)
+      .setName("Language")
+      .setDesc("A language code such as de or en, or auto to let whisper.cpp detect it per recording.")
+      .addText((text) => text.setValue(settings.language).onChange(async (value) => {
+        settings.language = languageCode(value);
+        await this.plugin.saveSettings(false);
+      }));
+
+    new Setting(sectionEl)
+      .setName("whisper-cli")
+      .setDesc("Empty looks where Homebrew installs it.")
+      .addText((text) => text.setPlaceholder("/opt/homebrew/bin/whisper-cli").setValue(settings.whisperPath).onChange(async (value) => {
+        settings.whisperPath = value.trim();
+        await this.plugin.saveSettings(false);
+      }));
+
+    new Setting(sectionEl)
+      .setName("ffmpeg")
+      .setDesc("Converts the recording to what whisper.cpp reads. Empty looks where Homebrew installs it.")
+      .addText((text) => text.setPlaceholder("/opt/homebrew/bin/ffmpeg").setValue(settings.ffmpegPath).onChange(async (value) => {
+        settings.ffmpegPath = value.trim();
+        await this.plugin.saveSettings(false);
       }));
   }
 

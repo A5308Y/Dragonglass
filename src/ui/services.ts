@@ -1,6 +1,7 @@
 import type { App, TFile } from "obsidian";
 import type { ActionStatus, GtdSettings, ProjectStatus } from "../domain/types";
 import type { AgentService } from "../agent/agent-service";
+import type { Transcriber } from "../inbox/transcriber";
 import type { GtdRepository } from "../repository/gtd-repository";
 import type { SavedViewService } from "../state/saved-view-service";
 
@@ -9,6 +10,8 @@ export interface GtdServices {
   repository: GtdRepository;
   /** Runs delegated Project trees in the agent sandbox. */
   agent: AgentService;
+  /** Transcribes voice memos with whisper.cpp on this Mac, for the Inbox processor to show. */
+  transcriber: Transcriber;
   getSettings: () => GtdSettings;
   /** The Action Board's saved views, shared between devices, and the one open on this device. */
   savedViews: SavedViewService;

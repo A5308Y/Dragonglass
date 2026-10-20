@@ -1,5 +1,6 @@
 import type { TFile } from "obsidian";
 import type { MiteSettings } from "./mite";
+import type { TranscriptionSettings } from "./transcription";
 
 export const ACTION_STATUSES = [
   "next",
@@ -275,6 +276,8 @@ export interface GtdSettings {
   checklists: ChecklistSettings;
   brainstorm: BrainstormSettings;
   processingPartner: ProcessingPartnerSettings;
+  /** Voice memos in the Inbox, transcribed with whisper.cpp while processing; see `transcription.ts`. */
+  transcription: TranscriptionSettings;
   agent: AgentSettings;
   /** The weekday the Weekly Review falls due, as `Date.getDay()` counts: 0 is Sunday. */
   weeklyReviewDay: number;

@@ -256,6 +256,17 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   without the sandbox because the partner sees the page and nothing more and can't act; giving it
   more to read means the sandbox.
 
+## Transcribing voice memos
+
+- A recording in the Inbox processor gets "Transcribe": whisper.cpp on this Mac (`src/inbox/transcriber.ts`,
+  rules in `src/domain/transcription.ts`, tested in `tests/transcription.test.ts`). The recording is copied to
+  a temporary folder, converted by ffmpeg to 16 kHz mono WAV and transcribed; nothing leaves the Mac.
+- The transcript is only shown: `transcripts` in `Inbox.elm` keeps it until the view closes. It is never
+  written to the Item, the vault or any store, and fills no field; the user asked for exactly that. The
+  processing partner reads it as the memo's text, since it is on the page.
+- Settings (`settings.transcription`): the model file (empty turns it off), a language or `auto`, and the
+  `whisper-cli` / `ffmpeg` paths (empty: Homebrew's folders). Desktop only; one recording at a time.
+
 ## Agent delegation
 
 - `agent/` holds the sandbox (compose file, runner, proxy); `agent/README.md` explains it.

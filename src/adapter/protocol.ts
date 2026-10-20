@@ -707,6 +707,7 @@ export type ElmNonMenuCommand =
   | { type: "read-desired-outcome"; projectId: string }
   | { type: "show-project-issues" }
   | { type: "suggest-processing"; request: ProcessingRequest }
+  | { type: "transcribe-inbox-item"; itemId: string }
   | { type: "save-new-action"; input: ElmNewActionInput }
   | { type: "save-action"; actionId: string; changes: ElmActionChanges }
   | { type: "schedule-action"; actionId: string; schedule: ElmScheduleInput }
@@ -780,7 +781,7 @@ export const SURFACE_COMMANDS = {
   ],
   inbox: [
     "quick-capture", "open-file", "read-inbox-body", "trash-inbox-item", "process-inbox", "open-mail", "review-pull-request", "read-newsletter",
-    "read-desired-outcome", "show-project-issues", "suggest-processing",
+    "read-desired-outcome", "show-project-issues", "suggest-processing", "transcribe-inbox-item",
   ],
   feeds: [
     "refresh-feeds", "add-feed", "keep-feed-items", "read-feed-item", "discard-feed-items", "undo-feed-discard", "open-link",
@@ -1116,6 +1117,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return true;
     case "suggest-processing":
       return isProcessingRequest(value.request);
+    case "transcribe-inbox-item":
+      return typeof value.itemId === "string";
     case "suggest-brainstorm-ideas":
       return typeof value.topic === "string"
         && typeof value.desiredOutcome === "string"
@@ -1319,6 +1322,8 @@ export type ElmInboxEvent =
   | { type: "project-issues"; count: number }
   /** Whether the processing partner can be asked on this device with the current settings. */
   | { type: "partner-available"; available: boolean }
+  /** Whether voice memos can be transcribed on this device with the current settings. */
+  | { type: "transcribe-available"; available: boolean }
   | ElmCommandResultEvent;
 export type ElmProjectReviewEvent =
   | ElmClosedEvent
