@@ -1111,13 +1111,18 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   padding-top: 10px;
   border-top: 1px solid var(--background-modifier-border);
 }
+/* One toggle per status, each opening its own column below. */
+.dg-subproject-secondary-toggles { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .dg-subproject-secondary-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 3px 2px;
   color: var(--text-muted);
   font-size: var(--font-ui-small);
 }
-.dg-subproject-secondary.is-open .dg-subproject-secondary-toggle { color: var(--text-normal); }
-.dg-subproject-columns-secondary { margin-top: 10px; }
+.dg-subproject-secondary-toggle.is-open { color: var(--text-normal); }
+.dg-subproject-columns-secondary { margin-top: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .dg-subproject-toolbar {
   display: flex;
   align-items: center;

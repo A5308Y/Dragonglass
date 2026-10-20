@@ -116,7 +116,8 @@ type alias Model =
     , selecting : Bool
     , selectedIds : Set ProjectId
     , showCompleted : Bool
-    , showSecondary : Bool
+    -- The Someday/Maybe, Completed and Cancelled sub-project columns opened, by status key.
+    , openSecondary : Set String
     , detailTab : DetailTab
     , expandedColumns : List ProjectStatus
     , tagFilters : Set String
@@ -201,7 +202,7 @@ type Msg
     | SelectProject ProjectId
     | BackToBoard
     | ToggleCompleted
-    | ToggleSecondary
+    | ToggleSecondary ProjectStatus
     | SelectTab DetailTab
     | ToggleColumnExpanded ProjectStatus
     | ToggleTag String
@@ -276,7 +277,7 @@ init flags =
                     , selecting = False
                     , selectedIds = Set.empty
                     , showCompleted = False
-                    , showSecondary = False
+                    , openSecondary = Set.empty
                     , detailTab = OverviewTab
                     , expandedColumns = []
                     , tagFilters = Set.empty
@@ -409,8 +410,21 @@ update msg model =
         ToggleCompleted ->
             ( { model | showCompleted = not model.showCompleted }, Cmd.none )
 
-        ToggleSecondary ->
-            ( { model | showSecondary = not model.showSecondary }, Cmd.none )
+        ToggleSecondary status ->
+            let
+                key =
+                    ProjectStatus.key status
+            in
+            ( { model
+                | openSecondary =
+                    if Set.member key model.openSecondary then
+                        Set.remove key model.openSecondary
+
+                    else
+                        Set.insert key model.openSecondary
+              }
+            , Cmd.none
+            )
 
         SelectTab tab ->
             ( { model | detailTab = tab }, Cmd.none )
@@ -731,7 +745,7 @@ selectProject projectId model =
                 | selectedProjectId = Just projectId
                 , detail = Nothing
                 , showCompleted = False
-                , showSecondary = False
+                , openSecondary = Set.empty
                 , detailTab = OverviewTab
                 , showAllDiary = False
                 , tagFilters = Set.empty
@@ -2146,17 +2160,37 @@ viewSubprojects model project =
                 )
         , div [ class "dg-subproject-columns dg-subproject-columns-primary" ]
             (List.map (viewSubprojectColumn model project primary) [ ProjectStatus.Active, ProjectStatus.Backlog ])
-        , div [ classList [ ( "dg-subproject-secondary", True ), ( "is-open", model.showSecondary ) ] ]
-            [ button [ class "dg-disclosure dg-subproject-secondary-toggle dg-flat-button", onClick ToggleSecondary ]
-                [ span [] [ text (disclosure model.showSecondary ++ " Someday/Maybe, Completed and Cancelled") ]
-                , span [ class "dg-detail-count" ] [ text (String.fromInt (List.length secondary)) ]
-                ]
-            , if model.showSecondary then
-                div [ class "dg-subproject-columns dg-subproject-columns-secondary" ]
-                    (List.map (viewSubprojectColumn model project secondary) secondaryStatuses)
+        , let
+            opened =
+                List.filter (\status -> Set.member (ProjectStatus.key status) model.openSecondary) secondaryStatuses
+          in
+          -- One toggle and count per status, each opening its own column.
+          div [ class "dg-subproject-secondary" ]
+            [ div [ class "dg-subproject-secondary-toggles" ]
+                (List.map
+                    (\status ->
+                        let
+                            open =
+                                List.member status opened
+                        in
+                        button
+                            [ classList [ ( "dg-disclosure dg-subproject-secondary-toggle dg-flat-button", True ), ( "is-open", open ) ]
+                            , attribute "aria-expanded" (Ui.boolAttribute open)
+                            , onClick (ToggleSecondary status)
+                            ]
+                            [ span [] [ text (disclosure open ++ " " ++ ProjectStatus.label status) ]
+                            , span [ class "dg-detail-count" ]
+                                [ text (String.fromInt (List.length (List.filter (\child -> child.status == status) secondary))) ]
+                            ]
+                    )
+                    secondaryStatuses
+                )
+            , if List.isEmpty opened then
+                text ""
 
               else
-                text ""
+                div [ class "dg-subproject-columns dg-subproject-columns-secondary" ]
+                    (List.map (viewSubprojectColumn model project secondary) opened)
             ]
         ]
 
@@ -2822,7 +2856,7 @@ emptyModel message =
     , selecting = False
     , selectedIds = Set.empty
     , showCompleted = False
-    , showSecondary = False
+    , openSecondary = Set.empty
     , detailTab = OverviewTab
     , expandedColumns = []
     , tagFilters = Set.empty
