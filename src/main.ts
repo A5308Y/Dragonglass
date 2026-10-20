@@ -101,7 +101,7 @@ export default class DragonglassGtdPlugin extends Plugin {
       new Notice(`Created “${title}” as Active, so ${quotedTitles(parents)} above it ${parents.length === 1 ? "is" : "are"} Active now too.`);
     };
     this.repository.onProjectsReopened = (actionTitle, projects) => {
-      new Notice(`“${actionTitle}” is a Next Action, so ${quotedTitles(projects)} ${projects.length === 1 ? "is" : "are"} Active again.`);
+      new Notice(`“${actionTitle}” is still to do, so ${quotedTitles(projects)} ${projects.length === 1 ? "is" : "are"} Active again.`);
     };
     this.calendarSync = new GoogleCalendarSync(this.app, this.index, () => this.calendarSecret.settings());
     this.feeds = new FeedService(this.app, () => this.settings.feeds);

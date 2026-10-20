@@ -232,9 +232,10 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 - Writes that nobody was asked about report instead: creating an Active
   sub-project calls `repository.onParentsActivated` (a notice from `main.ts`), and
   scheduled activation reopens finished parents and names them in its notice.
-- A Next Action added to a Completed Project (created, imported, processed, moved there, or made Next
-  again) reopens it and the Projects above it that aren't Active (`projectsReopenedByNextAction`,
-  `GtdRepository.reopenForNextAction`), reported by `onProjectsReopened`. Cancelled Projects stay as they are.
+- An open Action (Next, Waiting or Scheduled) added to a Completed or Cancelled Project (created,
+  imported, processed, moved there, or opened again) reopens it and the Projects above it that aren't
+  Active (`projectsReopenedByOpenAction`, `GtdRepository.reopenForOpenAction`), reported by
+  `onProjectsReopened`.
 - Active Projects below an inactive one ("stranded") count as parked for the
   missing-Action rule and show up as index issues until fixed by hand.
 

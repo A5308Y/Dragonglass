@@ -48,20 +48,23 @@ export function ancestorsToActivate(parentId: string | undefined, projectsById: 
 }
 
 /**
- * The Projects a Next Action added to a Completed Project reopens, topmost first: the
- * Projects above it that aren't Active, then the Project itself. A Next Action is work
- * still to do, so its Project isn't finished after all. Cancelled Projects, and Actions
- * that aren't Next, change nothing.
+ * The Projects an open Action (Next, Waiting or Scheduled) added to a Completed or
+ * Cancelled Project reopens, topmost first: the Projects above it that aren't Active,
+ * then the Project itself. An open Action is work still to do, so its Project isn't
+ * finished after all. Done and cancelled Actions change nothing.
  */
-export function projectsReopenedByNextAction(
+export function projectsReopenedByOpenAction(
   projectId: string | undefined,
   status: ActionStatus,
   projectsById: ReadonlyMap<string, Project>,
 ): Project[] {
   const project = projectId ? projectsById.get(projectId) : undefined;
-  if (status !== "next" || project?.status !== "completed") return [];
+  if (!project || !OPEN_ACTION_STATUSES.includes(status)) return [];
+  if (project.status !== "completed" && project.status !== "cancelled") return [];
   return [...ancestorsToActivate(project.parentProjectId, projectsById), project];
 }
+
+const OPEN_ACTION_STATUSES: readonly ActionStatus[] = ["next", "waiting", "scheduled"];
 
 /** Those of `ancestorsToActivate` that are finished, which only a deliberate reopen may activate. */
 export function finishedAncestors(parentId: string | undefined, projectsById: ReadonlyMap<string, Project>): Project[] {

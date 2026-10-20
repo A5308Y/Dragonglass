@@ -6,7 +6,7 @@ import {
   finishedAncestors,
   nearestMapped,
   projectDescendants,
-  projectsReopenedByNextAction,
+  projectsReopenedByOpenAction,
   statusChangeProblem,
   strandedProjects,
 } from "../src/domain/project-tree";
@@ -80,22 +80,29 @@ describe("Project tree rule", () => {
   });
 });
 
-describe("A Next Action in a Completed Project", () => {
+describe("An open Action in a finished Project", () => {
   const parent = project("P", "Garden", { status: "completed" });
   const child = project("C", "Fence", { parentProjectId: parent.id, status: "completed" });
   const tree = byId([parent, child]);
 
   it("reopens the Project, and the finished Projects above it first", () => {
-    expect(projectsReopenedByNextAction(child.id, "next", tree).map((item) => item.id)).toEqual(["P", "C"]);
-    expect(projectsReopenedByNextAction(parent.id, "next", tree).map((item) => item.id)).toEqual(["P"]);
+    expect(projectsReopenedByOpenAction(child.id, "next", tree).map((item) => item.id)).toEqual(["P", "C"]);
+    expect(projectsReopenedByOpenAction(parent.id, "next", tree).map((item) => item.id)).toEqual(["P"]);
   });
 
-  it("leaves Active and Cancelled Projects, and Actions that aren't Next, alone", () => {
-    expect(projectsReopenedByNextAction(child.id, "waiting", tree)).toEqual([]);
-    expect(projectsReopenedByNextAction(child.id, "done", tree)).toEqual([]);
-    expect(projectsReopenedByNextAction(undefined, "next", tree)).toEqual([]);
-    expect(projectsReopenedByNextAction("C", "next", byId([{ ...child, status: "cancelled" }]))).toEqual([]);
-    expect(projectsReopenedByNextAction("C", "next", byId([{ ...child, status: "active" }]))).toEqual([]);
+  it("counts Waiting and Scheduled Actions, and Cancelled Projects, too", () => {
+    expect(projectsReopenedByOpenAction(child.id, "waiting", tree).map((item) => item.id)).toEqual(["P", "C"]);
+    expect(projectsReopenedByOpenAction(parent.id, "scheduled", tree).map((item) => item.id)).toEqual(["P"]);
+    expect(projectsReopenedByOpenAction("C", "next", byId([{ ...child, status: "cancelled" }])).map((item) => item.id)).toEqual(["C"]);
+  });
+
+  it("leaves Projects that aren't finished, and done or cancelled Actions, alone", () => {
+    expect(projectsReopenedByOpenAction(child.id, "done", tree)).toEqual([]);
+    expect(projectsReopenedByOpenAction(child.id, "cancelled", tree)).toEqual([]);
+    expect(projectsReopenedByOpenAction(undefined, "next", tree)).toEqual([]);
+    for (const status of ["active", "backlog", "someday"] as const) {
+      expect(projectsReopenedByOpenAction("C", "next", byId([{ ...child, status }]))).toEqual([]);
+    }
   });
 });
 
