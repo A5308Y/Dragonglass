@@ -51,9 +51,22 @@ export function ffmpegArgs(input: string, output: string): string[] {
   return ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", input, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", output];
 }
 
-/** whisper-cli's arguments: the text alone on its output, without timestamps or progress. */
+/**
+ * whisper-cli's arguments: the text alone on its output, without timestamps. Its loading
+ * messages go to the error output, which names the reason when it fails.
+ */
 export function whisperArgs(model: string, wav: string, language: string): string[] {
-  return ["-m", model, "-f", wav, "-l", languageCode(language), "-nt", "-np"];
+  return ["-m", model, "-f", wav, "-l", languageCode(language), "-nt"];
+}
+
+/** Plain words for whisper.cpp failures with a known cause, from its error output. */
+export function whisperProblem(errors: string): string | null {
+  if (/bad magic|invalid model data/i.test(errors)) {
+    return "The model file isn't a whisper.cpp model. Download a ggml-….bin file again (the whole file, often over 1 GB) "
+      + "and choose it in the settings.";
+  }
+  if (/failed to read audio|failed to open/i.test(errors)) return "whisper.cpp couldn't read the converted recording.";
+  return null;
 }
 
 /**

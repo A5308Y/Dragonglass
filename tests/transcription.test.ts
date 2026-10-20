@@ -6,6 +6,7 @@ import {
   languageCode,
   parseTranscriptionSettings,
   whisperArgs,
+  whisperProblem,
 } from "../src/domain/transcription";
 import { processingMessages } from "../src/domain/processing-partner";
 
@@ -17,13 +18,19 @@ describe("Transcribing voice memos", () => {
   });
 
   it("asks whisper.cpp for the text alone, in the chosen language", () => {
-    expect(whisperArgs("/models/ggml.bin", "/tmp/a/memo.wav", "DE")).toEqual(["-m", "/models/ggml.bin", "-f", "/tmp/a/memo.wav", "-l", "de", "-nt", "-np"]);
+    expect(whisperArgs("/models/ggml.bin", "/tmp/a/memo.wav", "DE")).toEqual(["-m", "/models/ggml.bin", "-f", "/tmp/a/memo.wav", "-l", "de", "-nt"]);
     expect(whisperArgs("/models/ggml.bin", "/tmp/a/memo.wav", "German")).toContain("auto");
   });
 
   it("joins the segments and leaves out markers for silence and sounds", () => {
     expect(cleanTranscript("\n [BLANK_AUDIO]\n Call Anna about the offer.\n (music)\n  And book the train.  \n")).toBe("Call Anna about the offer. And book the train.");
     expect(cleanTranscript("[BLANK_AUDIO]\n")).toBe("");
+  });
+
+  it("says in words when the model file isn't one", () => {
+    expect(whisperProblem("whisper_model_load: invalid model data (bad magic)\nerror: failed to initialize whisper context"))
+      .toContain("isn't a whisper.cpp model");
+    expect(whisperProblem("something else")).toBeNull();
   });
 
   it("knows recordings by their extension", () => {

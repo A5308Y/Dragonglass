@@ -9,6 +9,7 @@ import {
   ffmpegArgs,
   isAudioExtension,
   whisperArgs,
+  whisperProblem,
   type TranscriptionSettings,
 } from "../domain/transcription";
 
@@ -65,7 +66,7 @@ export class Transcriber {
       const wav = node.path.join(folder, "for-whisper.wav");
       await node.fs.writeFile(input, new Uint8Array(await this.app.vault.readBinary(file)));
       await run(node, ffmpeg, ffmpegArgs(input, wav), FFMPEG_TIMEOUT_MS, "ffmpeg couldn't read the recording");
-      const transcript = cleanTranscript(await run(node, whisper, whisperArgs(model, wav, settings.language), WHISPER_TIMEOUT_MS, "whisper.cpp failed"));
+      const transcript = cleanTranscript(await run(node, whisper, whisperArgs(model, wav, settings.language), WHISPER_TIMEOUT_MS, "whisper.cpp failed", whisperProblem));
       if (!transcript) throw new Error("whisper.cpp heard no speech in this recording.");
       return transcript;
     } finally {
@@ -105,11 +106,23 @@ async function program(node: NodeModules, configured: string, name: string, inst
   throw new Error(configured.trim() ? `${name} isn't at ${configured.trim()}.` : `${name} wasn't found. Install it with “${install}”.`);
 }
 
-function run(node: NodeModules, file: string, args: string[], timeout: number, failure: string): Promise<string> {
+function run(
+  node: NodeModules,
+  file: string,
+  args: string[],
+  timeout: number,
+  failure: string,
+  explain: (errors: string) => string | null = () => null,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     node.child.execFile(file, args, { timeout, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (!error) {
         resolve(String(stdout));
+        return;
+      }
+      const known = explain(String(stderr));
+      if (known && !error.killed) {
+        reject(new Error(known));
         return;
       }
       // The last line is often only the consequence ("Error opening output files"); the cause comes before it.
