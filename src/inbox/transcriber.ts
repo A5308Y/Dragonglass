@@ -8,6 +8,7 @@ import {
   cleanTranscript,
   ffmpegArgs,
   isAudioExtension,
+  modelFileProblem,
   whisperArgs,
   whisperProblem,
   type TranscriptionSettings,
@@ -51,11 +52,7 @@ export class Transcriber {
     const settings = this.getSettings();
     const model = expandHome(node, settings.modelPath);
     if (!model) throw new Error("Choose a whisper.cpp model in Dragonglass's settings first (Transcribing voice memos).");
-    try {
-      await node.fs.access(model);
-    } catch {
-      throw new Error(`The whisper.cpp model isn't at ${model}.`);
-    }
+    await checkModel(node, model);
     const whisper = await program(node, settings.whisperPath, "whisper-cli", "brew install whisper-cpp");
     const ffmpeg = await program(node, settings.ffmpegPath, "ffmpeg", "brew install ffmpeg");
 
@@ -85,6 +82,25 @@ function nodeModules(): NodeModules | null {
     os: load("os") as typeof NodeOs,
     child: load("child_process") as typeof ChildProcess,
   };
+}
+
+/** Reads the model file's size and first bytes, to say plainly what is wrong before whisper.cpp tries. */
+async function checkModel(node: NodeModules, model: string): Promise<void> {
+  let handle: Awaited<ReturnType<typeof node.fs.open>>;
+  try {
+    handle = await node.fs.open(model, "r");
+  } catch {
+    throw new Error(`The whisper.cpp model isn't at ${model}.`);
+  }
+  try {
+    const { size } = await handle.stat();
+    const head = new Uint8Array(32);
+    const { bytesRead } = await handle.read(head, 0, head.length, 0);
+    const problem = modelFileProblem(size, head.slice(0, bytesRead));
+    if (problem) throw new Error(`${problem} (${model})`);
+  } finally {
+    await handle.close();
+  }
 }
 
 function expandHome(node: NodeModules, path: string): string {

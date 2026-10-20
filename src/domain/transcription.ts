@@ -59,6 +59,21 @@ export function whisperArgs(model: string, wav: string, language: string): strin
   return ["-m", model, "-f", wav, "-l", languageCode(language), "-nt"];
 }
 
+/**
+ * What is wrong with a model file, judged from its size and first bytes, or null when it
+ * looks like a whisper.cpp model: those start with the magic number "ggml", which is
+ * stored with its bytes reversed ("lmgg").
+ */
+export function modelFileProblem(size: number, head: Uint8Array): string | null {
+  const start = String.fromCharCode(...head.slice(0, 32));
+  if (start.startsWith("lmgg")) return null;
+  const amount = size >= 1024 * 1024 ? `${Math.round(size / 1024 / 1024)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`;
+  if (/^\s*</.test(start)) return `The model file (${amount}) is a web page, not the model: download the file itself with Hugging Face's download button.`;
+  if (start.startsWith("version https://git-lfs")) return `The model file (${amount}) is only a Git LFS pointer, not the model: download the file itself.`;
+  if (start.startsWith("GGUF")) return `The model file (${amount}) is a GGUF model, which whisper.cpp can't read: choose a ggml-….bin file.`;
+  return `The model file (${amount}) isn't a whisper.cpp model: it doesn't start like one. Choose a ggml-….bin file from huggingface.co/ggerganov/whisper.cpp.`;
+}
+
 /** Plain words for whisper.cpp failures with a known cause, from its error output. */
 export function whisperProblem(errors: string): string | null {
   if (/bad magic|invalid model data/i.test(errors)) {

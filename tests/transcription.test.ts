@@ -7,6 +7,7 @@ import {
   parseTranscriptionSettings,
   whisperArgs,
   whisperProblem,
+  modelFileProblem,
 } from "../src/domain/transcription";
 import { processingMessages } from "../src/domain/processing-partner";
 
@@ -31,6 +32,15 @@ describe("Transcribing voice memos", () => {
     expect(whisperProblem("whisper_model_load: invalid model data (bad magic)\nerror: failed to initialize whisper context"))
       .toContain("isn't a whisper.cpp model");
     expect(whisperProblem("something else")).toBeNull();
+  });
+
+  it("tells a model file from a web page, a pointer or another format", () => {
+    const bytes = (text: string) => new TextEncoder().encode(text);
+    expect(modelFileProblem(1_624_555_275, bytes("lmgg\u0000\u0001"))).toBeNull();
+    expect(modelFileProblem(30_000, bytes("<!DOCTYPE html><html>"))).toContain("(29 KB) is a web page");
+    expect(modelFileProblem(134, bytes("version https://git-lfs.github.com/spec/v1"))).toContain("Git LFS pointer");
+    expect(modelFileProblem(900 * 1024 * 1024, bytes("GGUF\u0003"))).toContain("(900 MB) is a GGUF model");
+    expect(modelFileProblem(5, bytes("PK\u0003\u0004"))).toContain("doesn't start like one");
   });
 
   it("knows recordings by their extension", () => {
