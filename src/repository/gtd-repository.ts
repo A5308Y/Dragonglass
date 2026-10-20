@@ -25,7 +25,7 @@ import { externalLinksInNote, formatExternalLink, parseExternalLink } from "../d
 import { mailProcessingBody } from "../domain/mail-note";
 import { actionKeepsContext, actionRequiresContext, followUpFor, waitingSinceFor } from "../domain/action-status";
 import { parseProjectPath, projectBreadcrumb, projectHierarchyIssue, wouldCreateProjectCycle } from "../domain/project-hierarchy";
-import { ancestorsToActivate, projectStatusLabel, statusChangeProblem } from "../domain/project-tree";
+import { ancestorsToActivate, projectStatusLabel, projectsReopenedByNextAction, statusChangeProblem } from "../domain/project-tree";
 import { linkedFileEntry, normalizeScheduledStart } from "../domain/validation";
 import { isAllDaySchedule } from "../domain/schedule";
 import { plainTitle } from "../domain/text";
@@ -43,6 +43,11 @@ export class GtdRepository {
    * no view asked about; the plugin reports it. Status changes report their own.
    */
   onParentsActivated: ((title: string, parents: readonly Project[]) => void) | undefined;
+  /**
+   * Told when a Next Action reopened a Completed Project (and the Projects above it that
+   * weren't Active), which no view asked about; the plugin reports it.
+   */
+  onProjectsReopened: ((actionTitle: string, projects: readonly Project[]) => void) | undefined;
 
   private queues = new Map<string, Promise<unknown>>();
 
@@ -73,6 +78,7 @@ export class GtdRepository {
     const project = input.projectId ? this.requireProject(input.projectId) : undefined;
     const id = createUlid();
     await this.createActionFile(input.title, input, localDate(), project, id);
+    await this.reopenForNextAction(input.projectId, input.status, input.title);
     return id;
   }
 
@@ -84,14 +90,18 @@ export class GtdRepository {
     for (const input of inputs) validateActionSchedule(input.status, input.scheduledStart, input.durationMinutes);
     const captured = localDate();
     let created = 0;
+    const reopening = new Map<string, string>();
     for (const input of inputs) {
       const title = input.title.trim();
       if (!title) continue;
       const project = input.projectId ? this.index.getSnapshot().projectsById.get(input.projectId) : undefined;
       if (input.projectId && !project) throw new Error("The selected Project no longer exists.");
       await this.createActionFile(title, input, captured, project);
+      if (input.projectId && input.status === "next" && !reopening.has(input.projectId)) reopening.set(input.projectId, title);
       created += 1;
     }
+    // Once per Project, after the list: the index may not show the first reopen yet.
+    for (const [projectId, title] of reopening) await this.reopenForNextAction(projectId, "next", title);
     return created;
   }
 
@@ -300,6 +310,7 @@ export class GtdRepository {
     const context = actionRequiresContext(status) ? requiredProcessingValue(input.context, "A context is required.") : input.context?.trim() ?? "";
     const project = await this.prepareProcessingProject(item, input, "active");
     await this.convertInboxItemToAction(item, processingActionInput(title, context, input, project), project);
+    await this.reopenForNextAction(project?.id, status, title);
   }
 
   async processInboxAsReference(itemOrId: InboxItem | string, input: InboxProcessingInput): Promise<void> {
@@ -309,7 +320,10 @@ export class GtdRepository {
     if (title && actionRequiresContext(input.status ?? "next") && !context) throw new Error("A context is required when creating an Action.");
     const project = await this.prepareProcessingProject(item, input, "active");
 
-    if (title) await this.createActionFile(title, processingActionInput(title, context, input, project), item.created, project);
+    if (title) {
+      await this.createActionFile(title, processingActionInput(title, context, input, project), item.created, project);
+      await this.reopenForNextAction(project?.id, input.status ?? "next", title);
+    }
     if (project) await this.fileInboxItemToProject(item, project);
     else await this.fileInboxItemToGeneralReference(item);
   }
@@ -489,6 +503,19 @@ export class GtdRepository {
         await this.renameMarkdownFile(action.file, changes.title.trim(), action.id);
       }
     });
+    // A Next Action moved into a Completed Project, or one there made Next again, reopens it.
+    const projectId = changes.projectId !== undefined ? changes.projectId || undefined : action.projectId;
+    const moved = changes.projectId !== undefined && (changes.projectId || undefined) !== action.projectId;
+    if (moved || resolvedStatus !== action.status) {
+      await this.reopenForNextAction(projectId, resolvedStatus, changes.title?.trim() || action.title);
+    }
+  }
+
+  /** Reopens what `projectsReopenedByNextAction` names, and reports it. */
+  private async reopenForNextAction(projectId: string | undefined, status: Action["status"], actionTitle: string): Promise<void> {
+    const reopening = projectsReopenedByNextAction(projectId, status, this.index.getSnapshot().projectsById);
+    for (const project of reopening) await this.activateProjectFile(project);
+    if (reopening.length) this.onProjectsReopened?.(actionTitle, reopening);
   }
 
   async setActionStatus(id: string, status: Action["status"]): Promise<void> {

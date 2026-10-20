@@ -10,7 +10,7 @@
  * parent.
  */
 
-import type { Project, ProjectStatus } from "./types";
+import type { ActionStatus, Project, ProjectStatus } from "./types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   active: "Active",
@@ -45,6 +45,22 @@ export function projectAncestors(parentId: string | undefined, projectsById: Rea
  */
 export function ancestorsToActivate(parentId: string | undefined, projectsById: ReadonlyMap<string, Project>): Project[] {
   return projectAncestors(parentId, projectsById).filter((ancestor) => ancestor.status !== "active").reverse();
+}
+
+/**
+ * The Projects a Next Action added to a Completed Project reopens, topmost first: the
+ * Projects above it that aren't Active, then the Project itself. A Next Action is work
+ * still to do, so its Project isn't finished after all. Cancelled Projects, and Actions
+ * that aren't Next, change nothing.
+ */
+export function projectsReopenedByNextAction(
+  projectId: string | undefined,
+  status: ActionStatus,
+  projectsById: ReadonlyMap<string, Project>,
+): Project[] {
+  const project = projectId ? projectsById.get(projectId) : undefined;
+  if (status !== "next" || project?.status !== "completed") return [];
+  return [...ancestorsToActivate(project.parentProjectId, projectsById), project];
 }
 
 /** Those of `ancestorsToActivate` that are finished, which only a deliberate reopen may activate. */
