@@ -2164,16 +2164,16 @@ viewSubprojects model project =
             opened =
                 List.filter (\status -> Set.member (ProjectStatus.key status) model.openSecondary) secondaryStatuses
           in
-          -- One toggle and count per status, each opening its own column.
+          -- One block per status: its toggle and count, with its column right below once opened.
           div [ class "dg-subproject-secondary" ]
-            [ div [ class "dg-subproject-secondary-toggles" ]
-                (List.map
-                    (\status ->
-                        let
-                            open =
-                                List.member status opened
-                        in
-                        button
+            (List.map
+                (\status ->
+                    let
+                        open =
+                            List.member status opened
+                    in
+                    div [ classList [ ( "dg-subproject-secondary-block", True ), ( "is-open", open ) ] ]
+                        [ button
                             [ classList [ ( "dg-disclosure dg-subproject-secondary-toggle dg-flat-button", True ), ( "is-open", open ) ]
                             , attribute "aria-expanded" (Ui.boolAttribute open)
                             , onClick (ToggleSecondary status)
@@ -2182,16 +2182,15 @@ viewSubprojects model project =
                             , span [ class "dg-detail-count" ]
                                 [ text (String.fromInt (List.length (List.filter (\child -> child.status == status) secondary))) ]
                             ]
-                    )
-                    secondaryStatuses
-                )
-            , if List.isEmpty opened then
-                text ""
+                        , if open then
+                            viewSubprojectColumn model project secondary status
 
-              else
-                div [ class "dg-subproject-columns dg-subproject-columns-secondary" ]
-                    (List.map (viewSubprojectColumn model project secondary) opened)
-            ]
+                          else
+                            text ""
+                        ]
+                )
+                secondaryStatuses
+            )
         ]
 
 

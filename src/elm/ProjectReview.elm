@@ -13,8 +13,8 @@ import Gtd.Id exposing (ProjectId)
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.ProjectStatus as ProjectStatus
 import Gtd.Ui as Ui
-import Html exposing (Html, button, div, h2, h3, header, input, label, p, section, span, strong, text, textarea)
-import Html.Attributes exposing (checked, class, classList, disabled, placeholder, style, title, type_, value)
+import Html exposing (Html, button, div, h2, h3, h4, header, input, label, p, section, span, strong, text, textarea)
+import Html.Attributes exposing (attribute, checked, class, classList, disabled, placeholder, style, title, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -81,6 +81,9 @@ type alias Model =
     , saving : Bool
     , error : Maybe String
 
+    -- The tree's Completed sub-projects, folded away at the bottom until opened; closed for each new tree.
+    , showCompleted : Bool
+
     -- The tab was closed: timers off (see `Host.isClosing`).
     , closed : Bool
     }
@@ -100,6 +103,7 @@ type Msg
     | MoveToSomeday
     | CompleteProject
     | DeleteProject
+    | ToggleCompleted
     | Send Pending Command
     | NoOp
 
@@ -149,6 +153,7 @@ init flags =
                 , requests = Host.noRequests
                 , saving = False
                 , error = Nothing
+                , showCompleted = False
                 , closed = False
                 }
 
@@ -240,6 +245,9 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        ToggleCompleted ->
+            ( { model | showCompleted = not model.showCompleted }, Cmd.none )
 
         Send pending command ->
             send pending command model
@@ -388,6 +396,7 @@ resetProjectForm model =
                     Picker.init "" Nothing
         , context = Picker.init "" Nothing
         , error = Nothing
+        , showCompleted = False
     }
 
 
@@ -639,6 +648,10 @@ viewProject model project =
 
 viewTree : Model -> Project -> List Project -> List Action -> Html Msg
 viewTree model root subprojects actions =
+    let
+        ( completed, current ) =
+            List.partition (\project -> project.status == ProjectStatus.Completed) subprojects
+    in
     section [ class "dg-review-panel dg-review-tree-panel" ]
         [ div [ class "dg-review-panel-heading dg-review-panel-heading-row" ]
             [ span [ class "dg-review-panel-icon" ] [ text "⌘" ]
@@ -646,11 +659,52 @@ viewTree model root subprojects actions =
             , span [ class "dg-review-count" ] [ text (String.fromInt (List.length subprojects)) ]
             , button [ class "dg-review-tree-add", onClick (Send IgnoreReply (Command.NewProjectModal (Just root.id) ProjectStatus.Active)) ] [ text "New sub-project" ]
             ]
-        , if List.isEmpty subprojects then
-            div [ class "dg-review-tree-empty" ] [ text "No sub-projects yet." ]
+        , if List.isEmpty current then
+            div [ class "dg-review-tree-empty" ]
+                [ text
+                    (if List.isEmpty completed then
+                        "No sub-projects yet."
+
+                     else
+                        "No sub-projects still open."
+                    )
+                ]
 
           else
-            div [ class "dg-review-tree-list" ] (List.map (viewTreeRow model root actions) subprojects)
+            div [ class "dg-review-tree-list" ] (List.map (viewTreeRow model root actions) current)
+
+        -- What is finished stays in reach, below and folded, so it doesn't crowd what is still open.
+        , if List.isEmpty completed then
+            text ""
+
+          else
+            div [ class "dg-review-tree-completed" ]
+                [ h4 []
+                    [ button
+                        [ class "dg-disclosure dg-flat-button"
+                        , attribute "aria-expanded" (Ui.boolAttribute model.showCompleted)
+                        , onClick ToggleCompleted
+                        ]
+                        [ span []
+                            [ text
+                                ((if model.showCompleted then
+                                    "▾"
+
+                                  else
+                                    "▸"
+                                 )
+                                    ++ " Completed sub-projects"
+                                )
+                            ]
+                        , span [ class "dg-review-count" ] [ text (String.fromInt (List.length completed)) ]
+                        ]
+                    ]
+                , if model.showCompleted then
+                    div [ class "dg-review-tree-list" ] (List.map (viewTreeRow model root actions) completed)
+
+                  else
+                    text ""
+                ]
         ]
 
 
@@ -1160,5 +1214,6 @@ emptyModel message =
     , requests = Host.noRequests
     , saving = False
     , error = Just message
+    , showCompleted = False
     , closed = False
     }
