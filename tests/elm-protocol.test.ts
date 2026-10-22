@@ -229,6 +229,9 @@ describe("Elm adapter protocol", () => {
     expect(parseBrainstormCommand(envelope({ type: "read-support-note", projectId: "P1", path: "Project Support Material/Plan.md" }))?.command.type)
       .toBe("read-support-note");
     expect(parseProjectReviewCommand(envelope({ type: "complete-project-review", projectId: "P1", desiredOutcome: "", activeProjectIds: [4] }))).toBeNull();
+    expect(parseProjectReviewCommand(envelope({ type: "complete-review-project", projectId: "P1", desiredOutcome: "Done" }))?.command.type)
+      .toBe("complete-review-project");
+    expect(parseProjectReviewCommand(envelope({ type: "complete-review-project", projectId: "P1" }))).toBeNull();
     expect(parseBrainstormCommand(envelope({ type: "read-support-note", projectId: "P1" }))).toBeNull();
     expect(parseBrainstormCommand(envelope({ type: "focus-brainstorm-ideas", start: 1.5, end: 2 }))).toBeNull();
     expect(parseBrainstormCommand(envelope({ type: "focus-brainstorm-ideas", start: 4, end: 2 }))).toBeNull();

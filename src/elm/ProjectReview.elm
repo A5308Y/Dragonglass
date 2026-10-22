@@ -48,7 +48,8 @@ type alias ReviewData =
 type Pending
     = IgnoreReply
     | Reviewed ProjectId
-    | DeleteAndAdvance ProjectId
+    -- Deleting or completing the tree, which the host may decline after asking; moves on only once done.
+    | AdvanceIfDone ProjectId
     | AppendDiary
     | ClearCapture
 
@@ -97,6 +98,7 @@ type Msg
     | AddActionNow
     | CompleteReview
     | MoveToSomeday
+    | CompleteProject
     | DeleteProject
     | Send Pending Command
     | NoOp
@@ -223,10 +225,18 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
+        CompleteProject ->
+            case currentProject model of
+                Just project ->
+                    send (AdvanceIfDone project.id) (Command.CompleteReviewProject project.id model.desiredOutcome) { model | saving = True }
+
+                Nothing ->
+                    ( model, Cmd.none )
+
         DeleteProject ->
             case currentProject model of
                 Just project ->
-                    send (DeleteAndAdvance project.id) (Command.TrashProject project.id) { model | saving = True }
+                    send (AdvanceIfDone project.id) (Command.TrashProject project.id) { model | saving = True }
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -258,7 +268,7 @@ hasSavingRequest requests =
                     Reviewed _ ->
                         False
 
-                    DeleteAndAdvance _ ->
+                    AdvanceIfDone _ ->
                         True
 
                     ClearCapture ->
@@ -303,7 +313,7 @@ continueWhenDone model =
                             Reviewed _ ->
                                 True
 
-                            DeleteAndAdvance _ ->
+                            AdvanceIfDone _ ->
                                 True
 
                             _ ->
@@ -457,7 +467,7 @@ finish pending resultValue model =
         Reviewed _ ->
             continueWhenDone model
 
-        DeleteAndAdvance projectId ->
+        AdvanceIfDone projectId ->
             case Decode.decodeValue Decode.bool resultValue of
                 Ok True ->
                     advance projectId model |> andThen continueWhenDone
@@ -665,17 +675,30 @@ viewTreeRow model root actions project =
         , if needsAction model project then
             strong [] [ text "No Next Action" ]
 
-          else if project.status == ProjectStatus.Backlog then
-            -- The review is where planned work gets pulled in.
-            button
-                [ class "dg-review-activate dg-flat-button"
-
-                , onClick (Send IgnoreReply (Command.SetProjectStatus project.id ProjectStatus.Active))
-                ]
-                [ text "Activate" ]
-
           else
             text ""
+        , div [ class "dg-review-row-actions" ]
+            [ if project.status == ProjectStatus.Backlog then
+                -- The review is where planned work gets pulled in.
+                button
+                    [ class "dg-review-activate dg-flat-button"
+                    , onClick (Send IgnoreReply (Command.SetProjectStatus project.id ProjectStatus.Active))
+                    ]
+                    [ text "Activate" ]
+
+              else
+                text ""
+            , if List.member project.status [ ProjectStatus.Active, ProjectStatus.Backlog, ProjectStatus.Someday ] then
+                -- The host checks its sub-projects first and offers Undo.
+                button
+                    [ class "dg-review-activate dg-flat-button"
+                    , onClick (Send IgnoreReply (Command.SetProjectStatus project.id ProjectStatus.Completed))
+                    ]
+                    (Ui.iconLabel "✓ Complete" ("Complete " ++ project.title))
+
+              else
+                text ""
+            ]
         ]
 
 
@@ -844,16 +867,10 @@ viewFooter model blockers =
         , div [ class "dg-review-footer-actions" ]
             [ button [ class "mod-warning", disabled model.saving, onClick DeleteProject ] [ text "Delete Project" ]
             , button [ disabled model.saving, onClick MoveToSomeday ] [ text "Move to Someday/Maybe" ]
+            , button [ disabled model.saving, onClick CompleteProject ] [ text "✓ Complete Project" ]
             , button
                 [ class "mod-cta"
                 , disabled (model.saving || not (List.isEmpty blockers))
-                , title
-                    (if List.isEmpty blockers then
-                        ""
-
-                     else
-                        "Every active sub-project needs a Next Action."
-                    )
                 , onClick CompleteReview
                 ]
                 [ text "Mark reviewed and continue →" ]

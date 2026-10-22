@@ -1812,8 +1812,8 @@ body.is-phone .dg-shortcut { display: none; }
 }
 .dg-review-tree-list span { color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .dg-review-tree-list strong { color: var(--text-warning); font-size: var(--font-ui-smaller); }
+.dg-review-row-actions { display: flex; gap: 6px; margin-left: auto; }
 .dg-review-tree-list button.dg-review-activate {
-  margin-left: auto;
   padding: 2px 10px;
   border: 1px solid var(--background-modifier-border) !important;
   border-radius: var(--radius-s);

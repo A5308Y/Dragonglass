@@ -691,6 +691,7 @@ export type ElmNonMenuCommand =
   | { type: "create-review-action"; title: string; projectId: string; context: string }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
   | { type: "move-review-to-someday"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
+  | { type: "complete-review-project"; projectId: string; desiredOutcome: string }
   | { type: "save-brainstorm"; actionId: string; ideas: string; desiredOutcome?: string; purpose?: string }
   | { type: "save-project-brainstorm"; projectId: string; purpose: string; desiredOutcome: string; ideas: string }
   | { type: "save-standalone-brainstorm"; topic: string; ideas: string }
@@ -788,7 +789,7 @@ export const SURFACE_COMMANDS = {
     "open-inbox",
   ],
   projectReview: [
-    "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday",
+    "load-review-project", "create-review-action", "add-diary-entry", "complete-project-review", "move-review-to-someday", "complete-review-project",
     "trash-project", "create-project", "open-file", "edit-action", "set-action-status", "trash-action", "set-project-status",
     "open-someday-review", "show-project",
   ],
@@ -1095,6 +1096,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.title === "string"
         && typeof value.projectId === "string"
         && typeof value.context === "string";
+    case "complete-review-project":
+      return typeof value.projectId === "string" && typeof value.desiredOutcome === "string";
     case "complete-project-review":
     case "move-review-to-someday":
       return typeof value.projectId === "string"

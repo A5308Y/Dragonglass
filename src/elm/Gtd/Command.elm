@@ -129,6 +129,8 @@ type Command
     | CreateReviewAction { title : String, projectId : ProjectId, context : String }
     | CompleteProjectReview ProjectId String (List ProjectId)
     | MoveReviewToSomeday ProjectId String (List ProjectId)
+      -- Completes a reviewed tree's root Project, after the host's checks; replies whether it did.
+    | CompleteReviewProject ProjectId String
       -- Brainstorm
     | SaveBrainstorm ActionId String (Maybe String) (Maybe String)
     | SaveProjectBrainstorm { projectId : String, purpose : String, desiredOutcome : String, ideas : String }
@@ -665,6 +667,12 @@ encode command =
 
         CompleteProjectReview projectId desiredOutcome activeIds ->
             reviewCommand "complete-project-review" projectId desiredOutcome activeIds
+
+        CompleteReviewProject projectId desiredOutcome ->
+            object "complete-review-project"
+                [ ( "projectId", Encode.string projectId )
+                , ( "desiredOutcome", Encode.string desiredOutcome )
+                ]
 
         MoveReviewToSomeday projectId desiredOutcome activeIds ->
             reviewCommand "move-review-to-someday" projectId desiredOutcome activeIds

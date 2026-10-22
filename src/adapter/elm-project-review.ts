@@ -136,6 +136,13 @@ export class ElmProjectReviewHost {
         await this.services.repository.markProjectsReviewed(command.activeProjectIds.filter((id) => id !== command.projectId));
         new Notice(`Moved “${this.project(command.projectId).title}” to Someday/Maybe.`);
         return;
+      case "complete-review-project": {
+        // The same checks and Undo as completing anywhere else; the review moves on only if it happened.
+        if (!await setProjectStatus(this.services, command.projectId, "completed")) return false;
+        await this.services.repository.setDesiredOutcome(command.projectId, command.desiredOutcome);
+        await this.services.repository.updateProject(command.projectId, { reviewed: localDate() });
+        return true;
+      }
       case "trash-project":
         return confirmDeleteProject(this.services, command.projectId);
       case "set-project-status":

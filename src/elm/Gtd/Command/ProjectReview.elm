@@ -16,6 +16,7 @@ type Command
     | AddDiaryEntry ProjectId String
     | CompleteProjectReview ProjectId String (List ProjectId)
     | MoveReviewToSomeday ProjectId String (List ProjectId)
+    | CompleteReviewProject ProjectId String
     | TrashProject ProjectId
     | SetProjectStatus ProjectId ProjectStatus
     | NewProjectModal (Maybe ProjectId) ProjectStatus
@@ -46,6 +47,9 @@ encode command =
 
             MoveReviewToSomeday projectId outcome activeIds ->
                 Base.MoveReviewToSomeday projectId outcome activeIds
+
+            CompleteReviewProject projectId outcome ->
+                Base.CompleteReviewProject projectId outcome
 
             TrashProject projectId ->
                 Base.TrashProject projectId

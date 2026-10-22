@@ -9,18 +9,22 @@ import { showUndoNotice } from "./undo";
 /**
  * Changes a Project's status the way every surface should: completing one checks
  * its sub-projects first, activating one activates the Projects above it (asking
- * before reopening a finished one), and cancelling or activating offers Undo.
+ * before reopening a finished one), and completing, cancelling or activating offers
+ * Undo. Resolves to whether the change was made: false when a check refused it or the
+ * person declined.
  */
-export async function setProjectStatus(services: GtdServices, projectId: string, status: Project["status"]): Promise<void> {
-  if (status === "completed" && !await confirmCompleteProject(services, projectId)) return;
+export async function setProjectStatus(services: GtdServices, projectId: string, status: Project["status"]): Promise<boolean> {
+  if (status === "completed" && !await confirmCompleteProject(services, projectId)) return false;
   const snapshot = services.repository.index.getSnapshot();
   const before = snapshot.projectsById.get(projectId);
   const activating = activatedAbove(services, before, status);
   const options = await activationOptions(services, before, status);
-  if (!options) return;
+  if (!options) return false;
   await services.repository.setProjectStatus(projectId, status, options);
   if (status === "cancelled" && before && before.status !== "cancelled") offerRestore(services, before, "Cancelled");
+  if (status === "completed" && before && before.status !== "completed") offerRestore(services, before, "Completed");
   if (before && activating.length) offerUndoActivation(services, before, activating);
+  return true;
 }
 
 /**
