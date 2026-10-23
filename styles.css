@@ -2867,6 +2867,30 @@ body.is-phone .dg-delegate-agent-options { grid-template-columns: 1fr; }
 }
 .dg-attention-summary.is-active .dg-attention-dot { background: var(--text-on-accent); }
 
+/* The Actions in focus: pressed, the board shows only them (per device). */
+.dg-focus-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+}
+.dg-view-header .dg-focus-summary.is-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+.dg-focus-clear {
+  margin-left: 6px;
+  padding: 2px 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.dg-focus-clear:hover { color: var(--text-normal); background: var(--background-modifier-hover) !important; }
+.dg-focus-badge { color: var(--text-accent); font-weight: var(--font-semibold); }
+
 /* A dot on a ribbon icon whose view has something to do (see `src/domain/attention.ts`). */
 .dg-ribbon-attention { position: relative; }
 .dg-ribbon-attention::after {
@@ -2999,8 +3023,8 @@ body.is-phone .dg-delegate-agent-options { grid-template-columns: 1fr; }
 .dg-toolbar > .dg-board-controls-toggle { display: none; }
 body.is-phone .dg-toolbar > .dg-board-controls-toggle { display: inline-flex; }
 body.is-phone .dg-board-view:not(.is-controls-open) :is(
-  .dg-view-header > :not(.dg-header-actions):not(:has(.dg-attention-summary)),
-  .dg-view-header > :not(.dg-header-actions) > :not(.dg-attention-summary),
+  .dg-view-header > :not(.dg-header-actions):not(:has(.dg-attention-summary, .dg-focus-summary)),
+  .dg-view-header > :not(.dg-header-actions) > :not(.dg-attention-summary, .dg-focus-summary),
   .dg-header-actions > button:not(.dg-quick-capture),
   .dg-view-picker > button,
   .dg-board-controls,
@@ -3008,7 +3032,7 @@ body.is-phone .dg-board-view:not(.is-controls-open) :is(
 ) { display: none; }
 body.is-phone .dg-board-view:not(.is-controls-open) .dg-header-actions { flex: 1 1 100%; order: -1; }
 /* What needs attention stays in reach on a phone, below Quick Capture. */
-body.is-phone .dg-board-view:not(.is-controls-open) .dg-attention-summary { margin-left: 0; }
+body.is-phone .dg-board-view:not(.is-controls-open) :is(.dg-attention-summary, .dg-focus-summary) { margin-left: 0; }
 body.is-phone .dg-board-view:not(.is-controls-open) .dg-quick-capture { flex: 1 1 auto; }
 body.is-phone .dg-view-picker { flex: 1 1 auto; }
 body.is-phone .dg-view-picker select { flex: 1 1 auto; min-width: 0; }
@@ -3348,6 +3372,7 @@ body.is-phone .dg-today-list { max-height: 35vh; overflow-y: auto; }
 /* The Pomodoro start screen's Next Actions, as the Action Board's cards. A card picked
    as the session's focus says so with its ticked box and an accent edge. */
 .dg-pomodoro-field-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dg-pomodoro-filters { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .dg-pomodoro-cards { display: flex; flex-direction: column; gap: 6px; }
 .dg-pomodoro-subproject > .dg-pomodoro-cards { padding-left: 16px; }
 .dg-choice-card.is-selected {

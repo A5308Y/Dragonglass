@@ -96,6 +96,7 @@ type alias Suggestion =
     , newProject : Bool
     , desiredOutcome : Maybe String
     , context : Maybe String
+    , mode : Maybe String
     , why : String
     }
 
@@ -685,6 +686,7 @@ partnerRequest item model =
                 , ( "action", Encode.string model.nextAction )
                 , ( "status", Encode.string (ActionStatus.key model.actionStatus) )
                 , ( "context", Encode.string (Picker.query model.context) )
+                , ( "mode", Encode.string (Picker.query model.mode) )
                 ]
           )
         , ( "projects"
@@ -693,11 +695,12 @@ partnerRequest item model =
                 projects
           )
         , ( "contexts", Encode.list Encode.string (Data.contexts model.snapshot.actions) )
+        , ( "modes", Encode.list Encode.string (Data.modes model.snapshot.actions) )
         ]
 
 
 {-| Fills the form with a suggestion: the Action, its Project (an existing one is
-chosen as in the picker, so its vision loads) and its context. Without a Project the
+chosen as in the picker, so its vision loads), its context and its mode. Without a Project the
 field is emptied, or the Item's title, prefilled there, would become one.
 -}
 useSuggestion : Suggestion -> Model -> ( Model, Cmd Msg )
@@ -725,6 +728,13 @@ useSuggestion suggestion model =
 
                         Nothing ->
                             model.context
+                , mode =
+                    case suggestion.mode of
+                        Just mode ->
+                            Picker.choose mode mode model.mode
+
+                        Nothing ->
+                            model.mode
             }
 
         ( withProject, cmd ) =
@@ -1778,6 +1788,7 @@ suggestionView suggestion =
                             "Project: " ++ name
                     )
             , suggestion.context |> Maybe.map (\context -> "Context: " ++ context)
+            , suggestion.mode |> Maybe.map (\mode -> "Mode: " ++ mode)
             ]
                 |> List.filterMap identity
     in
@@ -2493,12 +2504,13 @@ adviceDecoder =
 
 suggestionDecoder : Decoder Suggestion
 suggestionDecoder =
-    Decode.map6 Suggestion
+    Decode.map7 Suggestion
         (Decode.field "action" Decode.string)
         (Decode.maybe (Decode.field "project" Decode.string))
         (Decode.field "newProject" Decode.bool)
         (Decode.maybe (Decode.field "desiredOutcome" Decode.string))
         (Decode.maybe (Decode.field "context" Decode.string))
+        (Decode.maybe (Decode.field "mode" Decode.string))
         (Decode.field "why" Decode.string)
 
 

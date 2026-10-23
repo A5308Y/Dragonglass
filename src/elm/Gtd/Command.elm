@@ -56,6 +56,9 @@ type Command
     | SetActionPriorities (List ActionId)
     | SetActionContext ActionId String
     | SetActionMode ActionId String
+    | SetActionFocus ActionId Bool
+    | ClearFocus
+    | SetFocusOnly Bool
     | TrashAction ActionId
     | DelegateActionByEmail ActionId
     | MoveActionToInbox ActionId
@@ -127,7 +130,7 @@ type Command
     | CaptureFromChecklist { path : String, text : String }
       -- Review
     | LoadReviewProject ProjectId
-    | CreateReviewAction { title : String, projectId : ProjectId, context : String }
+    | CreateReviewAction { title : String, projectId : ProjectId, context : String, mode : String }
     | CompleteProjectReview ProjectId String (List ProjectId)
     | MoveReviewToSomeday ProjectId String (List ProjectId)
       -- Completes a reviewed tree's root Project, after the host's checks; replies whether it did.
@@ -252,6 +255,7 @@ type alias ActionChanges =
     , projectId : Maybe ProjectId
     , context : String
     , mode : String
+    , focus : Bool
     , energy : Maybe Energy
     , estimate : Maybe Int
     , due : String
@@ -366,6 +370,16 @@ encode command =
             object "update-action"
                 [ ( "actionId", Encode.string actionId ), ( "mode", Encode.string mode ) ]
 
+        SetActionFocus actionId focus ->
+            object "update-action"
+                [ ( "actionId", Encode.string actionId ), ( "focus", Encode.bool focus ) ]
+
+        ClearFocus ->
+            object "clear-focus" []
+
+        SetFocusOnly on ->
+            object "set-focus-only" [ ( "on", Encode.bool on ) ]
+
         TrashAction actionId ->
             object "trash-action" [ ( "actionId", Encode.string actionId ) ]
 
@@ -403,6 +417,7 @@ encode command =
                          , ( "projectId", Encode.string (Maybe.withDefault "" changes.projectId) )
                          , ( "context", Encode.string changes.context )
                          , ( "mode", Encode.string changes.mode )
+                         , ( "focus", Encode.bool changes.focus )
                          , ( "energy", Encode.string (Maybe.map Energy.key changes.energy |> Maybe.withDefault "") )
                          , ( "estimate", Encode.int (Maybe.withDefault 0 changes.estimate) )
                          , ( "due", Encode.string changes.due )
@@ -674,6 +689,7 @@ encode command =
                 [ ( "title", Encode.string fields.title )
                 , ( "projectId", Encode.string fields.projectId )
                 , ( "context", Encode.string fields.context )
+                , ( "mode", Encode.string fields.mode )
                 ]
 
         CompleteProjectReview projectId desiredOutcome activeIds ->

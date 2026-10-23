@@ -72,6 +72,15 @@ describe("Context, mode and energy on Waiting Actions", () => {
   });
 });
 
+describe("Focus", () => {
+  it("is read only from `focus: true`, and kept by every status", () => {
+    expect(parseAction(frontmatter({ focus: true }), file).focus).toBe(true);
+    expect(parseAction(frontmatter({ status: "done", focus: true }), file).focus).toBe(true);
+    expect(parseAction(frontmatter({ focus: "yes" }), file).focus).toBeUndefined();
+    expect(parseAction(frontmatter(), file).focus).toBeUndefined();
+  });
+});
+
 describe("Follow-up", () => {
   it("is optional and kept while an Action stays Waiting", () => {
     expect(followUpFor("waiting")).toBeNull();

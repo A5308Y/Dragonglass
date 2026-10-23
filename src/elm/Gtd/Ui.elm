@@ -1,6 +1,7 @@
 module Gtd.Ui exposing
     ( Key(..)
     , boolAttribute
+    , focusBadge
     , issuesView
     , iconLabel
     , keyDecoder
@@ -250,6 +251,17 @@ tooltip, so accessible names are given as hidden text instead.
 srOnly : String -> Html msg
 srOnly name =
     span [ class "dg-sr-only" ] [ text name ]
+
+
+{-| The mark of an Action in focus, said in words to screen readers; nothing otherwise.
+-}
+focusBadge : { a | focus : Bool } -> Html msg
+focusBadge action =
+    if action.focus then
+        span [ class "dg-focus-badge" ] [ span [ attribute "aria-hidden" "true" ] [ text "★ Focus" ], srOnly "In focus" ]
+
+    else
+        text ""
 
 
 {-| The content of an icon-only button: the icon, hidden from screen readers,

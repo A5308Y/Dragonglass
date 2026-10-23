@@ -372,6 +372,7 @@ function actionChanges(changes: ElmActionChanges): ActionChanges {
     projectId: changes.projectId,
     context: changes.context,
     ...(changes.mode !== undefined ? { mode: changes.mode } : {}),
+    ...(changes.focus !== undefined ? { focus: changes.focus } : {}),
     energy: changes.energy,
     estimate: isEstimate(changes.estimate) ? changes.estimate : null,
     due: changes.due,

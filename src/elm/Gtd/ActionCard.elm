@@ -52,6 +52,7 @@ view config action =
             [ Ui.maybeView (Data.scheduleText config.today action) (\schedule -> span [ class "dg-card-schedule" ] [ text ("🗓 " ++ schedule) ])
             , Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
             , Ui.maybeView action.mode Mode.badge
+            , Ui.focusBadge action
             , Ui.maybeView action.energy Energy.badge
             , Ui.maybeView action.estimate Estimate.badge
             , Ui.maybeView action.due

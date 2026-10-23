@@ -2,11 +2,11 @@ import { clip, jsonObject, normalise, tidy, withoutThinking, type ChatMessage } 
 
 /**
  * A partner for processing the Inbox: asked about one Item, it suggests what the Item
- * could become (an Action, with a Project and context) and judges the Action written so
+ * could become (an Action, with a Project, context and mode) and judges the Action written so
  * far: small enough to do in one sitting, and real progress, not just "open the file".
  *
- * It sees only what the processing page shows: the Item, the form, and the Projects and
- * contexts the pickers search. It only suggests; the person applies a suggestion or not.
+ * It sees only what the processing page shows: the Item, the form, and the Projects,
+ * contexts and modes the pickers search. It only suggests; the person applies a suggestion or not.
  * The view switches it on per Item and drops it once the Item is processed.
  */
 
@@ -24,10 +24,13 @@ export interface ProcessingRequest {
     /** `next`, `waiting` or `scheduled`. */
     status: string;
     context: string;
+    /** The inner state the Action suits; optional, like the field. */
+    mode?: string;
   };
   /** The Projects the picker offers, as breadcrumbs with their status. */
   projects: Array<{ name: string; status: string }>;
   contexts: string[];
+  modes?: string[];
 }
 
 export const VERDICTS = ["good", "too-big", "no-progress", "vague"] as const;
@@ -41,6 +44,7 @@ export interface ProcessingSuggestion {
   /** For a new Project: what will be true when it is done. */
   desiredOutcome?: string;
   context?: string;
+  mode?: string;
   why: string;
 }
 
@@ -65,13 +69,14 @@ const SYSTEM = [
   "(not \"Open the contract\" but \"Mark the three clauses to renegotiate in the contract\").",
   "An outcome that needs more than one action is a project: suggest an existing project from the list by its exact name,",
   "or a new project name with a desired outcome, and give its first action. A single action needs no project.",
-  "Use a context from the list when one fits.",
+  "Use a context from the list when one fits. A mode is the inner state the action suits (focused, creative, restless…):",
+  "give one from the list only when one clearly fits, and otherwise null.",
   "If the form has an action, judge it: good, too-big (several steps or more than an hour), no-progress",
   "(nothing changes when it's done) or vague (unclear what to do), with a short note and, unless it's good, a better wording.",
   "Write in the language of the item.",
   "Answer with JSON only:",
   '{"actionable": "yes|no|unclear", "nonActionable": "trash|reference|someday|null", "summary": "one line",',
-  '"suggestions": [{"action": "…", "project": "existing or new name, or null", "newProject": false, "desiredOutcome": "… or null", "context": "… or null", "why": "one line"}],',
+  '"suggestions": [{"action": "…", "project": "existing or new name, or null", "newProject": false, "desiredOutcome": "… or null", "context": "… or null", "mode": "… or null", "why": "one line"}],',
   '"check": {"verdict": "good|too-big|no-progress|vague", "note": "…", "better": "… or null"} or null}',
 ].join(" ");
 
@@ -92,6 +97,7 @@ export function processingMessages(request: ProcessingRequest): ChatMessage[] {
     field("Action", form.action),
     `Action status: ${form.status}`,
     field("Context", form.context),
+    field("Mode", form.mode ?? ""),
     "",
     "Projects:",
     ...(request.projects.length
@@ -99,6 +105,7 @@ export function processingMessages(request: ProcessingRequest): ChatMessage[] {
       : ["(none)"]),
     "",
     `Contexts: ${request.contexts.length ? request.contexts.join(", ") : "(none)"}`,
+    `Modes: ${request.modes?.length ? request.modes.join(", ") : "(none)"}`,
   ];
   return [
     { role: "system", content: SYSTEM },
@@ -138,13 +145,14 @@ export const PROCESSING_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["action", "project", "newProject", "desiredOutcome", "context", "why"],
+        required: ["action", "project", "newProject", "desiredOutcome", "context", "mode", "why"],
         properties: {
           action: { type: "string" },
           project: nullableString,
           newProject: { type: "boolean" },
           desiredOutcome: nullableString,
           context: nullableString,
+          mode: nullableString,
           why: { type: "string" },
         },
       },
@@ -170,7 +178,7 @@ export const PROCESSING_SCHEMA = {
 /**
  * Reads the model's answer, found even after thinking or inside a code fence. Project
  * names are matched to the list (a name not on it is a new Project), contexts to their
- * existing spelling; a judgement is kept only when the form had an Action to judge.
+ * existing spelling, and a mode is kept only when it is one already in use; a judgement is kept only when the form had an Action to judge.
  */
 export function parseProcessingReply(text: string, request: ProcessingRequest): ProcessingAdvice {
   const parsed = jsonObject(withoutThinking(text));
@@ -207,6 +215,10 @@ function suggestion(value: unknown, request: ProcessingRequest): ProcessingSugge
     const key = normalise(context.replace(/^@/, ""));
     result.context = request.contexts.find((known) => normalise(known.replace(/^@/, "")) === key) ?? context;
   }
+  // Modes are the person's own words for an inner state, so the partner only picks from them.
+  const mode = line(record.mode);
+  const knownMode = mode ? request.modes?.find((known) => normalise(known) === normalise(mode)) : undefined;
+  if (knownMode) result.mode = knownMode;
   return result;
 }
 

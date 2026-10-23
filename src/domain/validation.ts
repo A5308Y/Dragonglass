@@ -137,6 +137,8 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const projectLink = optionalString(frontmatter, "project");
   const context = optionalString(frontmatter, "context");
   const mode = optionalString(frontmatter, "mode");
+  // Only `true` marks it; anything else, a hand-written "yes" included, reads as not in focus.
+  if (frontmatter.focus === true) action.focus = true;
   const energy = optionalString(frontmatter, "energy");
   const estimate = frontmatter.estimate_minutes;
   const due = optionalString(frontmatter, "due");

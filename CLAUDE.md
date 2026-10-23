@@ -148,8 +148,18 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 
 - `mode` is the inner state an Action fits (focused, creative, restless…), next to `context`, which names
   the surroundings it needs. It works like a context (free text, picker of the modes in use, board filter,
-  columns and sections, card menu) but is optional, and like energy, Waiting Actions drop it. Elm shows it
-  with `Gtd.Mode` (◐) so it doesn't read as a context.
+  columns and sections, card menu, Project Review capture, Pomodoro filter, processing partner) but is
+  optional, and like energy, Waiting Actions drop it. Elm shows it with `Gtd.Mode` (◐) so it doesn't read
+  as a context.
+
+## Focus
+
+- `focus: true` marks an Action to work on for now (`Ui.focusBadge`, ★). Set it with F on a board card,
+  the card menu or the Edit dialog. The board's "in focus" button shows only those, among what the
+  view shows (the Today strip stays); that switch is per device (`app.saveLocalStorage`).
+- "Clear focus" takes it off every Action after `confirmDialog`, since it writes one file each.
+- `updateAction` checks the context rule only when status or context change, so marking an Action
+  that lacks a context doesn't fail.
 
 ## Delegating Actions by email
 
@@ -253,7 +263,7 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   prompt: `src/domain/processing-partner.ts` (tested in `tests/processing-partner.test.ts`); the call:
   `src/inbox/processing-partner.ts` over `src/ai/chat-model.ts`, which the Brainstorm partner shares.
 - It sees only the processing page: the Item, the form, and the names of the Projects (not finished
-  ones) and contexts the pickers search. `partnerRequest` in `Inbox.elm` builds that from what the view
+  ones), contexts and modes the pickers search. It suggests a mode only from those in use. `partnerRequest` in `Inbox.elm` builds that from what the view
   shows. It only suggests; "Use" fills the form, and nothing is written until the person processes.
 - It is off for every Item until asked, asks only then and on "Check again", and `resetCurrent` drops
   it (with a new generation, so a late reply is ignored), so the next Item starts without it.

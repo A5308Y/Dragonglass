@@ -580,6 +580,8 @@ export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId" | 
   due: string;
   /** Empty clears the follow-up day. */
   followUp: string;
+  /** Missing leaves the focus mark as it is. */
+  focus?: boolean;
 }
 
 /** Inbox processing adds an editor-local schedule which the desktop host resolves to vault time. */
@@ -624,7 +626,9 @@ export type ElmNonMenuCommand =
   | { type: "edit-action"; actionId: string }
   | { type: "set-action-status"; actionId: string; status: Action["status"] }
   | { type: "set-action-priorities"; actionIds: string[] }
-  | { type: "update-action"; actionId: string; projectId?: string; context?: string; mode?: string }
+  | { type: "update-action"; actionId: string; projectId?: string; context?: string; mode?: string; focus?: boolean }
+  | { type: "clear-focus" }
+  | { type: "set-focus-only"; on: boolean }
   | { type: "trash-action"; actionId: string }
   | { type: "delegate-action"; actionId: string }
   | { type: "move-action-to-inbox"; actionId: string }
@@ -690,7 +694,7 @@ export type ElmNonMenuCommand =
   | { type: "discard-checklist-run"; runId: string }
   | { type: "capture-from-checklist"; path: string; text: string }
   | { type: "load-review-project"; projectId: string }
-  | { type: "create-review-action"; title: string; projectId: string; context: string }
+  | { type: "create-review-action"; title: string; projectId: string; context: string; mode?: string }
   | { type: "complete-project-review"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
   | { type: "move-review-to-someday"; projectId: string; desiredOutcome: string; activeProjectIds: string[] }
   | { type: "complete-review-project"; projectId: string; desiredOutcome: string }
@@ -770,6 +774,7 @@ export const SURFACE_COMMANDS = {
   actionBoard: [
     "create-action", "quick-capture", "open-inbox", "show-project", "edit-action", "set-action-status", "update-action",
     "set-action-priorities", "trash-action", "delegate-action", "move-action-to-inbox", "set-active-saved-view", "upsert-saved-view", "delete-saved-view", "prompt",
+    "clear-focus", "set-focus-only",
     "show-menu", "open-file", "open-link", "open-note-link",
   ],
   projects: [
@@ -898,10 +903,12 @@ function isProcessingRequest(value: unknown): value is ProcessingRequest {
     && typeof item.body === "string"
     && ITEM_KINDS.includes(item.kind as ProcessingRequest["item"]["kind"])
     && ["project", "vision", "action", "status", "context"].every((key) => typeof form[key] === "string")
+    && isOptionalString(form.mode)
     && typeof form.projectIsNew === "boolean"
     && Array.isArray(value.projects)
     && value.projects.every((project) => isRecord(project) && typeof project.name === "string" && typeof project.status === "string")
-    && isStringArray(value.contexts);
+    && isStringArray(value.contexts)
+    && (value.modes === undefined || isStringArray(value.modes));
 }
 
 function isInboxCommand(value: unknown): value is ElmInboxCommand {
@@ -1097,7 +1104,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "create-review-action":
       return typeof value.title === "string"
         && typeof value.projectId === "string"
-        && typeof value.context === "string";
+        && typeof value.context === "string"
+        && isOptionalString(value.mode);
     case "complete-review-project":
       return typeof value.projectId === "string" && typeof value.desiredOutcome === "string";
     case "complete-project-review":
@@ -1143,7 +1151,12 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
       return typeof value.actionId === "string"
         && (value.projectId === undefined || typeof value.projectId === "string")
         && (value.context === undefined || typeof value.context === "string")
-        && (value.mode === undefined || typeof value.mode === "string");
+        && (value.mode === undefined || typeof value.mode === "string")
+        && isOptionalBoolean(value.focus);
+    case "clear-focus":
+      return true;
+    case "set-focus-only":
+      return typeof value.on === "boolean";
     case "open-file":
       return typeof value.path === "string";
     case "read-inbox-body":
@@ -1275,7 +1288,8 @@ function isActionChanges(value: unknown): value is ElmActionChanges {
     && ((value as ElmActionChanges).energy === "" || isOneOf(ENERGY_LEVELS, (value as ElmActionChanges).energy))
     && ((value as ElmActionChanges).estimate === 0 || isEstimate((value as ElmActionChanges).estimate))
     && typeof (value as ElmActionChanges).due === "string"
-    && typeof (value as ElmActionChanges).followUp === "string";
+    && typeof (value as ElmActionChanges).followUp === "string"
+    && isOptionalBoolean((value as ElmActionChanges).focus);
 }
 
 function isNewProjectInput(value: unknown): value is ElmNewProjectInput {

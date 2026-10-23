@@ -23,6 +23,9 @@ type Command
     | SetActionPriorities (List ActionId)
     | SetActionContext ActionId String
     | SetActionMode ActionId String
+    | SetActionFocus ActionId Bool
+    | ClearFocus
+    | SetFocusOnly Bool
     | TrashAction ActionId
     | DelegateActionByEmail ActionId
     | MoveActionToInbox ActionId
@@ -81,6 +84,15 @@ toBase command =
 
         SetActionMode actionId mode ->
             Base.SetActionMode actionId mode
+
+        SetActionFocus actionId focus ->
+            Base.SetActionFocus actionId focus
+
+        ClearFocus ->
+            Base.ClearFocus
+
+        SetFocusOnly on ->
+            Base.SetFocusOnly on
 
         TrashAction actionId ->
             Base.TrashAction actionId

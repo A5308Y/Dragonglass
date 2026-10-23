@@ -121,6 +121,7 @@ export class ElmProjectReviewHost {
           status: "next",
           projectId: command.projectId,
           context: command.context.trim(),
+          ...(command.mode?.trim() ? { mode: command.mode.trim() } : {}),
         });
         new Notice("Next Action created.");
         return;

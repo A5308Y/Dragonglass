@@ -55,6 +55,9 @@ type alias Action =
 
     -- The inner state the Action fits, next to the context's surroundings.
     , mode : Maybe String
+
+    -- Marked to work on for now, so the board can show only these for a while.
+    , focus : Bool
     , energy : Maybe Energy
     , estimate : Maybe Int
     , due : Maybe String
@@ -297,6 +300,7 @@ actionDecoder =
         |> optional "projectId" (Decode.maybe Decode.string) Nothing
         |> optional "context" (Decode.maybe Decode.string) Nothing
         |> optional "mode" (Decode.maybe Decode.string) Nothing
+        |> optional "focus" Decode.bool False
         |> optional "energy" (Decode.maybe Energy.decoder) Nothing
         |> optional "estimate" (Decode.maybe Decode.int) Nothing
         |> optional "due" (Decode.maybe Decode.string) Nothing

@@ -87,6 +87,7 @@ type alias ActionFields =
     , project : Picker Project
     , context : Picker String
     , mode : Picker String
+    , focus : Bool
     , energy : Maybe Energy
     , estimate : Maybe Int
     , due : String
@@ -162,6 +163,7 @@ type Msg
     | EstimateChanged (Maybe Int)
     | ProjectStatusChanged ProjectStatus
     | ToggleAllDay Bool
+    | ToggleFocus Bool
     | ToggleBlocker ProjectId Bool
     | ProjectPicker (Picker.PickerMsg Project)
     | ContextPicker (Picker.PickerMsg String)
@@ -342,6 +344,7 @@ newActionFields snapshot maybeProject =
     , project = projectPickerFor snapshot maybeProject
     , context = Picker.init "" Nothing
     , mode = Picker.init "" Nothing
+    , focus = False
     , energy = Nothing
     , estimate = Nothing
     , due = ""
@@ -369,6 +372,7 @@ editActionFields snapshot action =
                         Picker.init ("Missing Project: " ++ projectId) Nothing
     , context = Picker.init (Maybe.withDefault "" action.context) action.context
     , mode = Picker.init (Maybe.withDefault "" action.mode) action.mode
+    , focus = action.focus
     , energy = action.energy
     , estimate = action.estimate
     , due = Maybe.withDefault "" action.due
@@ -550,6 +554,9 @@ update msg model =
 
         ToggleAllDay allDay ->
             ( { model | form = mapSchedule (toggleAllDay allDay) model.form }, Cmd.none )
+
+        ToggleFocus focus ->
+            ( { model | form = mapActionFields (\fields -> { fields | focus = focus }) model.form }, Cmd.none )
 
         ToggleBlocker projectId blocked ->
             case model.form of
@@ -1040,6 +1047,7 @@ submitAction mode fields model =
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
                                 , context = contextFor fields
                                 , mode = modeFor fields
+                                , focus = fields.focus
                                 , energy = energyFor fields
                                 , estimate = estimateFor fields
                                 , due = fields.due
@@ -1520,7 +1528,9 @@ actionView model mode fields =
                 ++ contextRows
                 ++ energyRows
                 ++ estimateRows
-                ++ [ settingRow "Due" "" [ dateInput "Due" fields.due DueField ] ]
+                ++ [ settingRow "Due" "" [ dateInput "Due" fields.due DueField ]
+                   , settingRow "Focus" "One of the Actions to work on for now; the board can show only these." [ toggle "Focus" fields.focus ToggleFocus ]
+                   ]
                 ++ conditionalRows
                 ++ [ noticeView model
                    , actions model

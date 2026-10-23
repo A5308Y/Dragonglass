@@ -44,6 +44,7 @@ type alias ActionChanges =
     , projectId : Maybe ProjectId
     , context : String
     , mode : String
+    , focus : Bool
     , energy : Maybe Energy
     , estimate : Maybe Int
     , due : String
@@ -174,6 +175,7 @@ actionChangesToBase changes =
     , projectId = changes.projectId
     , context = changes.context
     , mode = changes.mode
+    , focus = changes.focus
     , energy = changes.energy
     , estimate = changes.estimate
     , due = changes.due

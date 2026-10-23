@@ -284,6 +284,13 @@ describe("Elm adapter protocol", () => {
       .toBe("set-action-priorities");
     expect(parseActionBoardCommand(envelope({ type: "set-action-priorities", actionIds: [] }))).toBeNull();
 
+    expect(parseActionBoardCommand(envelope({ type: "update-action", actionId: "A1", focus: true, mode: "Focused" }))?.command.type)
+      .toBe("update-action");
+    expect(parseActionBoardCommand(envelope({ type: "update-action", actionId: "A1", focus: "yes" }))).toBeNull();
+    expect(parseActionBoardCommand(envelope({ type: "clear-focus" }))?.command.type).toBe("clear-focus");
+    expect(parseActionBoardCommand(envelope({ type: "set-focus-only", on: true }))?.command.type).toBe("set-focus-only");
+    expect(parseActionBoardCommand(envelope({ type: "set-focus-only" }))).toBeNull();
+
     expect(parseActionBoardCommand(envelope({ type: "upsert-saved-view", view, activate: true }))?.command.type)
       .toBe("upsert-saved-view");
     expect(parseActionBoardCommand(envelope({ type: "upsert-saved-view", view: { ...view, sort: {} }, activate: true })))

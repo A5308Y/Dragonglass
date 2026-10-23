@@ -132,6 +132,9 @@ type alias Model =
     -- Shows only the Actions that need attention, whatever the view filters or hides.
     , attentionOnly : Bool
 
+    -- Shows only the Actions in focus, among those the view shows; kept per device by the host.
+    , focusOnly : Bool
+
     -- The local day and minute, for today's Calendar Actions; `Nothing` until first read.
     , zone : Time.Zone
     , now : Maybe Time.Posix
@@ -156,6 +159,7 @@ type Msg
     | ToggleFilters
     | ToggleControls
     | ToggleAttentionOnly
+    | ToggleFocusOnly
     | GotZone Time.Zone
     | Tick Time.Posix
     | ToggleViewMenu
@@ -219,7 +223,13 @@ init flags =
                         |> Maybe.map .configuration
                         |> Maybe.withDefault (Settings.defaultConfiguration snapshot.settings)
             in
-            ( initialModel snapshot active configuration, Task.perform GotZone Time.here )
+            let
+                model =
+                    initialModel snapshot active configuration
+            in
+            ( { model | focusOnly = Decode.decodeValue (Decode.field "focusOnly" Decode.bool) flags |> Result.withDefault False }
+            , Task.perform GotZone Time.here
+            )
 
         Err error ->
             let
@@ -240,6 +250,7 @@ initialModel snapshot active configuration =
     , viewMenuOpen = False
     , controlsOpen = False
     , attentionOnly = False
+    , focusOnly = False
     , zone = Time.utc
     , now = Nothing
     , draft = initialDraft snapshot.today
@@ -288,6 +299,9 @@ update msg model =
 
         ToggleAttentionOnly ->
             ( { model | attentionOnly = not model.attentionOnly }, Cmd.none )
+
+        ToggleFocusOnly ->
+            send IgnoreReply (Command.SetFocusOnly (not model.focusOnly)) { model | focusOnly = not model.focusOnly }
 
         GotZone zone ->
             ( { model | zone = zone }, Task.perform Tick Time.now )
@@ -565,6 +579,14 @@ update msg model =
 
                 Character "e" ->
                     send IgnoreReply (Command.EditActionModal actionId) model
+
+                Character "f" ->
+                    case Data.findAction actionId model.snapshot.actions of
+                        Just action ->
+                            send IgnoreReply (Command.SetActionFocus actionId (not action.focus)) model
+
+                        Nothing ->
+                            ( model, Cmd.none )
 
                 Enter ->
                     send IgnoreReply (Command.EditActionModal actionId) model
@@ -966,6 +988,16 @@ boardView model =
 
         needingShown =
             (groups |> List.concatMap .actions) ++ today |> List.filter (needsAttention model.snapshot.today) |> List.length
+
+        -- Open Actions in focus, against those this view shows.
+        inFocus =
+            model.snapshot.actions |> List.map (effectiveAction model) |> List.filter (\action -> action.focus && ActionStatus.isOpen action.status) |> List.length
+
+        inFocusShown =
+            (groups |> List.concatMap .actions) |> List.filter (\action -> action.focus && ActionStatus.isOpen action.status) |> List.length
+
+        anyFocus =
+            List.any .focus model.snapshot.actions
     in
     div [ classList [ ( "dg-view dg-board-view", True ), ( "is-controls-open", model.controlsOpen ) ] ]
         [ header [ class "dg-view-header" ]
@@ -1017,6 +1049,42 @@ boardView model =
 
                   else
                     text ""
+                , if anyFocus || model.focusOnly then
+                    -- Pressed, the board shows only the Actions in focus, until pressed again.
+                    button
+                        [ classList [ ( "dg-focus-summary", True ), ( "is-active", model.focusOnly ) ]
+                        , attribute "aria-pressed" (Ui.boolAttribute model.focusOnly)
+                        , onClick ToggleFocusOnly
+                        ]
+                        [ span [ attribute "aria-hidden" "true" ] [ text "★" ]
+                        , text
+                            (if model.focusOnly then
+                                (if inFocus == 0 then
+                                    "Nothing in focus"
+
+                                 else
+                                    "Only the " ++ String.fromInt inFocus ++ " in focus"
+                                )
+                                    ++ (if inFocusShown < inFocus then
+                                            " · " ++ String.fromInt (inFocus - inFocusShown) ++ " not in this view"
+
+                                        else
+                                            ""
+                                       )
+                                    ++ " · Show all"
+
+                             else
+                                String.fromInt inFocus ++ " in focus · Show only them"
+                            )
+                        ]
+
+                  else
+                    text ""
+                , if anyFocus then
+                    button [ class "dg-focus-clear dg-flat-button", onClick (Send IgnoreReply Command.ClearFocus) ] [ text "Clear focus" ]
+
+                  else
+                    text ""
                 ]
             , div [ class "dg-header-actions" ]
                 [ button [ class "mod-cta", onClick (Send IgnoreReply (Command.NewActionModal Nothing)) ] [ text "New Action" ]
@@ -1036,13 +1104,16 @@ boardView model =
             ]
         , todayView model today
         , div [ class "dg-shortcut-bar" ]
-            [ span [ class "dg-shortcut-hint" ] [ text "On a focused card: ↑↓ move · N Next · W Waiting · C Calendar · D Done · E or Enter edit" ] ]
+            [ span [ class "dg-shortcut-hint" ] [ text "On a selected card: ↑↓ move · N Next · W Waiting · C Calendar · D Done · F Focus · E or Enter edit" ] ]
         , div [ classList [ ( "dg-board", True ), ( "is-single-column", List.length groups == 1 ) ], attribute "role" "list" ]
             (if List.isEmpty groups then
                 [ div [ class "dg-empty" ]
                     [ text
                         (if model.attentionOnly then
                             "Nothing needs attention."
+
+                         else if model.focusOnly then
+                            "No Actions in focus here. Press F on a card, or use its menu, to put one in focus."
 
                          else
                             "No Actions match this view."
@@ -1570,6 +1641,7 @@ cardView model action =
             [ Ui.maybeView (Data.scheduleText model.snapshot.today action) (\schedule -> span [ class "dg-card-schedule" ] [ text ("🗓 " ++ schedule) ])
             , Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
             , Ui.maybeView action.mode Mode.badge
+            , Ui.focusBadge action
             , Ui.maybeView action.energy Energy.badge
             , Ui.maybeView action.estimate Estimate.badge
             , Ui.maybeView action.due
@@ -1728,6 +1800,9 @@ buildGroups model =
                 |> List.filter
                     (if model.attentionOnly then
                         needsAttention model.snapshot.today
+
+                     else if model.focusOnly then
+                        \action -> action.focus && matchesAll model action
 
                      else
                         matchesAll model
@@ -2519,6 +2594,11 @@ actionMenu x y model action =
                     MenuSeparator :: modeEntries
                )
             ++ [ MenuSeparator
+               , if action.focus then
+                    MenuItem "Take out of focus" (Command.SetActionFocus action.id False)
+
+                 else
+                    MenuItem "★ Put in focus" (Command.SetActionFocus action.id True)
                , MenuItem "Edit…" (Command.EditActionModal action.id)
                , MenuItem "Delegate by email…" (Command.DelegateActionByEmail action.id)
                , MenuItem "Move back to Inbox" (Command.MoveActionToInbox action.id)

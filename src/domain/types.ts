@@ -66,6 +66,8 @@ export interface Action {
   context?: string;
   /** The inner state the Action fits (`mode`), next to the context's surroundings; optional. */
   mode?: string;
+  /** Marked to work on for now (`focus: true`), so the board can show only these for a while. */
+  focus?: boolean;
   energy?: Energy;
   /** Roughly how many minutes the Action takes (`estimate_minutes`). */
   estimate?: Estimate;
@@ -160,7 +162,7 @@ export interface InboxProcessingInput {
 }
 
 export type ActionChanges = Partial<
-  Pick<Action, "title" | "status" | "projectId" | "context" | "mode" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes">
+  Pick<Action, "title" | "status" | "projectId" | "context" | "mode" | "focus" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes">
 > & {
   /** Empty clears who the Action was delegated to. */
   delegatedTo?: string;

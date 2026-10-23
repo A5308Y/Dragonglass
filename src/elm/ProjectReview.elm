@@ -10,6 +10,7 @@ import Gtd.Estimate as Estimate
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ProjectId)
+import Gtd.Mode as Mode
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.ProjectStatus as ProjectStatus
 import Gtd.Ui as Ui
@@ -75,6 +76,7 @@ type alias Model =
     , actionTitle : String
     , project : Picker Project
     , context : Picker String
+    , mode : Picker String
     , sessionSeconds : Int
     , projectSeconds : Int
     , requests : Requests Pending
@@ -98,6 +100,7 @@ type Msg
     | ActionTitleChanged String
     | ProjectPicker (Picker.PickerMsg Project)
     | ContextPicker (Picker.PickerMsg String)
+    | ModePicker (Picker.PickerMsg String)
     | AddActionNow
     | CompleteReview
     | MoveToSomeday
@@ -148,6 +151,7 @@ init flags =
                 , actionTitle = ""
                 , project = Picker.init "" Nothing
                 , context = Picker.init "" Nothing
+                , mode = Picker.init "" Nothing
                 , sessionSeconds = 0
                 , projectSeconds = budget (List.length decoded.queue)
                 , requests = Host.noRequests
@@ -201,6 +205,9 @@ update msg model =
 
         ContextPicker pickerMsg ->
             ( { model | context = Picker.update pickerMsg (contextSuggestions model) identity model.context }, Cmd.none )
+
+        ModePicker pickerMsg ->
+            ( { model | mode = Picker.update pickerMsg (modeSuggestions model) identity model.mode }, Cmd.none )
 
         AddActionNow ->
             case capture model of
@@ -395,6 +402,7 @@ resetProjectForm model =
                 Nothing ->
                     Picker.init "" Nothing
         , context = Picker.init "" Nothing
+        , mode = Picker.init "" Nothing
         , error = Nothing
         , showCompleted = False
     }
@@ -498,7 +506,7 @@ finish pending resultValue model =
                     ( model, Cmd.none )
 
         ClearCapture ->
-            ( { model | actionTitle = "", context = Picker.init "" Nothing }, Cmd.none )
+            ( { model | actionTitle = "", context = Picker.init "" Nothing, mode = Picker.init "" Nothing }, Cmd.none )
 
         IgnoreReply ->
             ( model, Cmd.none )
@@ -820,6 +828,7 @@ viewActions model actions =
                 []
             , Picker.view (projectPicker model) (projectSuggestions model) model.project
             , Picker.view (contextPicker model) (contextSuggestions model) model.context
+            , Picker.view modePicker (modeSuggestions model) model.mode
             , button [ class "mod-cta", disabled (capture model == Nothing || model.saving), onClick AddActionNow ] [ text "Add" ]
             ]
         ]
@@ -845,6 +854,8 @@ viewActionRow model action =
                     )
                     ++ Ui.maybeList (Data.scheduleText model.snapshot.today action) (\schedule -> span [ class "dg-action-schedule" ] [ text ("🗓 " ++ schedule) ])
                     ++ Ui.maybeList action.context (\context -> span [] [ text ("@" ++ context) ])
+                    ++ Ui.maybeList action.mode Mode.badge
+                    ++ [ Ui.focusBadge action ]
                     ++ Ui.maybeList action.energy Energy.badge
                     ++ Ui.maybeList action.estimate Estimate.badge
                     ++ Ui.maybeList action.due (\due -> span [] [ text ("Due " ++ due) ])
@@ -977,6 +988,16 @@ contextPicker _ =
         }
 
 
+modePicker : Picker.Config String Msg
+modePicker =
+    Picker.config
+        { placeholder = "Mode (optional)"
+        , label = identity
+        , hint = always Nothing
+        , tag = ModePicker
+        }
+
+
 {-| Only the Projects in the tree under review can receive a captured Action.
 -}
 projectSuggestions : Model -> List Project
@@ -993,6 +1014,13 @@ contextSuggestions model =
         |> List.take 8
 
 
+modeSuggestions : Model -> List String
+modeSuggestions model =
+    Data.modes model.snapshot.actions
+        |> List.filter (\candidate -> Ui.matches model.mode.query [ candidate ])
+        |> List.take 8
+
+
 projectLabel : Model -> Project -> String
 projectLabel model project =
     Hierarchy.breadcrumb model.snapshot.projects project
@@ -1003,8 +1031,9 @@ projectLabel model project =
 
 
 {-| The Action the capture row would create, once it names all three required parts.
+The mode is optional.
 -}
-capture : Model -> Maybe { title : String, projectId : ProjectId, context : String }
+capture : Model -> Maybe { title : String, projectId : ProjectId, context : String, mode : String }
 capture model =
     case ( String.trim model.actionTitle, Picker.selection model.project, Picker.query model.context ) of
         ( "", _, _ ) ->
@@ -1017,7 +1046,7 @@ capture model =
             Nothing
 
         ( actionTitle, Just project, context ) ->
-            Just { title = actionTitle, projectId = project.id, context = context }
+            Just { title = actionTitle, projectId = project.id, context = context, mode = String.trim (Picker.query model.mode) }
 
 
 {-| Open Actions without a Project, including those whose Project is gone.
@@ -1209,6 +1238,7 @@ emptyModel message =
     , actionTitle = ""
     , project = Picker.init "" Nothing
     , context = Picker.init "" Nothing
+    , mode = Picker.init "" Nothing
     , sessionSeconds = 0
     , projectSeconds = 0
     , requests = Host.noRequests

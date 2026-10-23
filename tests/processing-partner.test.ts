@@ -6,17 +6,18 @@ import { defaultSettings } from "../src/state/defaults";
 
 const request: ProcessingRequest = {
   item: { title: "Contract from Acme", body: "Please review the attached contract by Friday.", kind: "mail" },
-  form: { project: "Acme onboarding", projectIsNew: true, vision: "", action: "Open the contract", status: "next", context: "" },
+  form: { project: "Acme onboarding", projectIsNew: true, vision: "", action: "Open the contract", status: "next", context: "", mode: "" },
   projects: [
     { name: "Clients > Acme", status: "active" },
     { name: "Clients > Beta > Website", status: "someday" },
     { name: "Home > Website", status: "active" },
   ],
   contexts: ["@Computer", "Phone"],
+  modes: ["Focused", "Restless"],
 };
 
 describe("The processing partner's question", () => {
-  it("sends the Item, the form, the Projects and the contexts, and nothing else", () => {
+  it("sends the Item, the form, the Projects, the contexts and the modes, and nothing else", () => {
     const [system, user] = processingMessages(request);
     expect(system?.content).toContain("JSON only");
     expect(system?.content).toContain("is not progress");
@@ -31,6 +32,7 @@ describe("The processing partner's question", () => {
       "Action: Open the contract",
       "Action status: next",
       "Context: (empty)",
+      "Mode: (empty)",
       "",
       "Projects:",
       "- Clients > Acme",
@@ -38,6 +40,7 @@ describe("The processing partner's question", () => {
       "- Home > Website",
       "",
       "Contexts: @Computer, Phone",
+      "Modes: Focused, Restless",
     ].join("\n"));
   });
 });
@@ -70,6 +73,19 @@ describe("Reading the partner's advice", () => {
       ],
       check: { verdict: "no-progress", note: "Opening it changes nothing.", better: "Mark the three clauses to renegotiate" },
     });
+  });
+
+  it("keeps a mode only when it is one already in use, written as it is here", () => {
+    const advice = parseProcessingReply(reply({
+      actionable: "yes",
+      summary: "",
+      suggestions: [
+        { action: "Draft the reply", context: null, mode: "focused", why: "" },
+        { action: "Sort the clauses", context: null, mode: "Calm", why: "" },
+      ],
+      check: null,
+    }), request);
+    expect(advice.suggestions.map((suggestion) => suggestion.mode)).toEqual(["Focused", undefined]);
   });
 
   it("says where a non-actionable Item belongs", () => {

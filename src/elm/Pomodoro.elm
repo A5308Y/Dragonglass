@@ -21,6 +21,7 @@ import Gtd.Data as Data exposing (Action, Project, Snapshot)
 import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ActionId, ProjectId)
+import Gtd.Mode as Mode
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.PomodoroOutcome as Outcome exposing (PomodoroOutcome)
 import Gtd.ProjectStatus as ProjectStatus
@@ -165,8 +166,9 @@ type alias Model =
     , pendingChecklist : Maybe String
     , focusIds : Set ActionId
 
-    -- Narrows the start screen's cards to one context; `Nothing` shows them all.
+    -- Narrows the start screen's cards to one context and one mode; `Nothing` shows them all.
     , contextFilter : Maybe String
+    , modeFilter : Maybe String
     , intention : String
     , minutes : String
     , wrappingUp : Bool
@@ -195,6 +197,7 @@ type Msg
     | ChooseFocusReset String
     | ToggleFocus ActionId Bool
     | SetContextFilter String
+    | SetModeFilter String
     | IntentionChanged String
     | MinutesChanged String
     | Start
@@ -271,6 +274,7 @@ initialModel snapshot state nowMs =
     , pendingChecklist = Nothing
     , focusIds = Set.empty
     , contextFilter = Nothing
+    , modeFilter = Nothing
     , intention = ""
     , minutes = String.fromInt state.focusMinutes
     , wrappingUp = False
@@ -392,6 +396,12 @@ update msg model =
 
                     else
                         model.contextFilter
+                , modeFilter =
+                    if changed then
+                        Nothing
+
+                    else
+                        model.modeFilter
               }
             , Cmd.none
             )
@@ -420,6 +430,18 @@ update msg model =
 
                     else
                         Just context
+              }
+            , Cmd.none
+            )
+
+        SetModeFilter mode ->
+            ( { model
+                | modeFilter =
+                    if String.isEmpty mode then
+                        Nothing
+
+                    else
+                        Just mode
               }
             , Cmd.none
             )
@@ -1152,19 +1174,33 @@ focusPicker model project =
         contexts =
             levels |> List.concatMap .actions |> List.filterMap .context |> Ui.uniqueSorted
 
+        modes =
+            levels |> List.concatMap .actions |> List.filterMap .mode |> Ui.uniqueSorted
+
+        narrowed =
+            model.contextFilter /= Nothing || model.modeFilter /= Nothing
+
         matches action =
-            case model.contextFilter of
+            (case model.contextFilter of
                 Just context ->
                     action.context == Just context
 
                 Nothing ->
                     True
+            )
+                && (case model.modeFilter of
+                        Just mode ->
+                            action.mode == Just mode
+
+                        Nothing ->
+                            True
+                   )
 
         shown =
             levels
                 |> List.map (\level -> { level | actions = List.filter matches level.actions })
-                -- Narrowed to a context, a sub-project without such Actions has nothing to offer here.
-                |> List.filter (\level -> level.depth == 0 || model.contextFilter == Nothing || not (List.isEmpty level.actions))
+                -- Narrowed to a context or mode, a sub-project without such Actions has nothing to offer here.
+                |> List.filter (\level -> level.depth == 0 || not narrowed || not (List.isEmpty level.actions))
 
         none =
             List.all (.actions >> List.isEmpty) shown
@@ -1204,27 +1240,47 @@ focusPicker model project =
     div [ class "dg-pomodoro-field" ]
         (div [ class "dg-pomodoro-field-heading" ]
             [ span [ class "dg-pomodoro-label" ] [ text "Next Actions" ]
-            , if List.isEmpty contexts then
-                text ""
+            , div [ class "dg-pomodoro-filters" ]
+                [ if List.isEmpty contexts then
+                    text ""
 
-              else
-                Ui.labelled "Context"
-                    (Html.select [ class "dropdown", onInput SetContextFilter ]
-                        (Html.option [ value "", Html.Attributes.selected (model.contextFilter == Nothing) ] [ text "All contexts" ]
-                            :: List.map
-                                (\context -> Html.option [ value context, Html.Attributes.selected (model.contextFilter == Just context) ] [ text ("@" ++ context) ])
-                                contexts
+                  else
+                    Ui.labelled "Context"
+                        (Html.select [ class "dropdown", onInput SetContextFilter ]
+                            (Html.option [ value "", Html.Attributes.selected (model.contextFilter == Nothing) ] [ text "All contexts" ]
+                                :: List.map
+                                    (\context -> Html.option [ value context, Html.Attributes.selected (model.contextFilter == Just context) ] [ text ("@" ++ context) ])
+                                    contexts
+                            )
                         )
-                    )
+                , if List.isEmpty modes then
+                    text ""
+
+                  else
+                    Ui.labelled "Mode"
+                        (Html.select [ class "dropdown", onInput SetModeFilter ]
+                            (Html.option [ value "", Html.Attributes.selected (model.modeFilter == Nothing) ] [ text "All modes" ]
+                                :: List.map
+                                    (\mode -> Html.option [ value mode, Html.Attributes.selected (model.modeFilter == Just mode) ] [ text (Mode.label mode) ])
+                                    modes
+                            )
+                        )
+                ]
             ]
             :: (if none then
                     [ p [ class "dg-muted" ]
                         [ text
-                            (case model.contextFilter of
-                                Just context ->
+                            (case ( model.contextFilter, model.modeFilter ) of
+                                ( Just context, Nothing ) ->
                                     "No Next Actions @" ++ context ++ " in this Project."
 
-                                Nothing ->
+                                ( Nothing, Just mode ) ->
+                                    "No Next Actions in the mode " ++ mode ++ " in this Project."
+
+                                ( Just context, Just mode ) ->
+                                    "No Next Actions @" ++ context ++ " in the mode " ++ mode ++ " in this Project."
+
+                                ( Nothing, Nothing ) ->
                                     "This Project has no Next Actions. The intention can say what the session is for."
                             )
                         ]

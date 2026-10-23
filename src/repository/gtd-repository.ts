@@ -458,7 +458,10 @@ export class GtdRepository {
     const action = this.requireAction(id);
     const resolvedStatus = changes.status ?? action.status;
     const resolvedContext = changes.context !== undefined ? changes.context.trim() : action.context?.trim() ?? "";
-    if (actionRequiresContext(resolvedStatus) && !resolvedContext) throw new Error("A context is required.");
+    // Only a change of status or context is held to the rule: marking an Action that lacks one
+    // (focus, a title) shouldn't fail on what the change didn't touch.
+    const touchesContext = changes.status !== undefined || changes.context !== undefined;
+    if (touchesContext && actionRequiresContext(resolvedStatus) && !resolvedContext) throw new Error("A context is required.");
     validateActionSchedule(
       changes.status ?? action.status,
       changes.scheduledStart ?? action.scheduledStart,
@@ -495,6 +498,7 @@ export class GtdRepository {
           if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
           if (changes.estimate !== undefined) frontmatter.estimate_minutes = changes.estimate;
         }
+        if (changes.focus !== undefined) frontmatter.focus = changes.focus ? true : null;
         if (changes.due !== undefined) frontmatter.due = changes.due || null;
         if (changes.delegatedTo !== undefined) frontmatter.delegated_to = changes.delegatedTo.trim() || null;
         if (changes.scheduledStart !== undefined) frontmatter.scheduled_start = changes.scheduledStart || null;
@@ -1301,7 +1305,7 @@ function projectNotesFromAction(content: string, title: string): string {
 
 /** The frontmatter only an Action has, taken off when it goes back to the Inbox. */
 const ACTION_ONLY_KEYS = [
-  "status", "project_id", "project", "context", "mode", "energy", "estimate_minutes", "due", "waiting_since", "follow_up", "delegated_to",
+  "status", "project_id", "project", "context", "mode", "focus", "energy", "estimate_minutes", "due", "waiting_since", "follow_up", "delegated_to",
   "scheduled_start", "duration_minutes", "completed", "priority", "captured",
 ] as const;
 
@@ -1325,6 +1329,7 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
     "project",
     "context",
     "mode",
+    "focus",
     "energy",
     "estimate_minutes",
     "due",
