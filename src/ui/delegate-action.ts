@@ -44,6 +44,7 @@ async function restore(services: GtdServices, before: Action): Promise<void> {
     delegatedTo: before.delegatedTo ?? "",
     ...(before.waitingSince ? { waitingSince: before.waitingSince } : {}),
     ...(before.context ? { context: before.context } : {}),
+    ...(before.mode ? { mode: before.mode } : {}),
     ...(before.energy ? { energy: before.energy } : {}),
     ...(before.estimate ? { estimate: before.estimate } : {}),
   });

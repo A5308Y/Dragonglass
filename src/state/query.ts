@@ -9,10 +9,11 @@ export interface ActionGroup {
   actions: Action[];
 }
 
-function valueFor(action: Action, field: "status" | "project" | "context" | "energy" | "estimate"): string {
+function valueFor(action: Action, field: "status" | "project" | "context" | "mode" | "energy" | "estimate"): string {
   if (field === "status") return action.status;
   if (field === "project") return action.projectId ?? "";
   if (field === "context") return action.context ?? "";
+  if (field === "mode") return action.mode ?? "";
   if (field === "estimate") return action.estimate ? String(action.estimate) : "";
   return action.energy ?? "";
 }
@@ -106,6 +107,7 @@ function groupKey(action: Action, groupBy: GroupBy): string {
   if (groupBy === "status") return action.status;
   if (groupBy === "project") return action.projectId ?? "";
   if (groupBy === "context") return action.context ?? "";
+  if (groupBy === "mode") return action.mode ?? "";
   if (groupBy === "estimate") return action.estimate ? String(action.estimate) : "";
   return action.energy ?? "";
 }
@@ -114,6 +116,7 @@ function groupLabel(key: string, groupBy: GroupBy, projectsById: ReadonlyMap<str
   if (!key) {
     if (groupBy === "project") return "No project";
     if (groupBy === "context") return "No context";
+    if (groupBy === "mode") return "No mode";
     if (groupBy === "estimate") return "No estimate";
     return "Normal energy";
   }

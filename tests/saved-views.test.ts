@@ -29,4 +29,12 @@ describe("the saved views file", () => {
     expect(parsed.views[1]!.filters).toEqual([]);
     expect(parseSavedViewStore("garbage").views).toEqual([]);
   });
+
+  it("keeps views that group or filter by mode", () => {
+    const byMode: SavedView = {
+      ...view("modes"), groupBy: "mode", sectionBy: "context",
+      filters: [{ kind: "value", field: "mode", operator: "in", values: ["Focused"] }],
+    };
+    expect(parseSavedViewStore({ views: [byMode] }).views).toEqual([byMode]);
+  });
 });

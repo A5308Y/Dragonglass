@@ -562,6 +562,8 @@ export interface ElmNewActionInput {
   status: Action["status"];
   projectId?: string;
   context: string;
+  /** Empty or missing: no mode. */
+  mode?: string;
   waitingSince?: string;
   followUp?: string;
   /** Minutes, one of `ESTIMATE_MINUTES`. */
@@ -622,7 +624,7 @@ export type ElmNonMenuCommand =
   | { type: "edit-action"; actionId: string }
   | { type: "set-action-status"; actionId: string; status: Action["status"] }
   | { type: "set-action-priorities"; actionIds: string[] }
-  | { type: "update-action"; actionId: string; projectId?: string; context?: string }
+  | { type: "update-action"; actionId: string; projectId?: string; context?: string; mode?: string }
   | { type: "trash-action"; actionId: string }
   | { type: "delegate-action"; actionId: string }
   | { type: "move-action-to-inbox"; actionId: string }
@@ -1140,7 +1142,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
     case "update-action":
       return typeof value.actionId === "string"
         && (value.projectId === undefined || typeof value.projectId === "string")
-        && (value.context === undefined || typeof value.context === "string");
+        && (value.context === undefined || typeof value.context === "string")
+        && (value.mode === undefined || typeof value.mode === "string");
     case "open-file":
       return typeof value.path === "string";
     case "read-inbox-body":
@@ -1219,6 +1222,7 @@ function isInboxInput(value: unknown): value is ElmInboxProcessingInput {
     && isOptionalString(value.nextAction)
     && (value.status === undefined || isOneOf(ACTION_STATUSES, value.status))
     && isOptionalString(value.context)
+    && isOptionalString(value.mode)
     && (value.energy === undefined || isOneOf(ENERGY_LEVELS, value.energy))
     && (value.estimate === undefined || isEstimate(value.estimate))
     && isOptionalString(value.waitingSince)
@@ -1257,6 +1261,7 @@ function isNewActionInput(value: unknown): value is ElmNewActionInput {
     && typeof value.title === "string"
     && isOneOf(ACTION_STATUSES, value.status)
     && typeof value.context === "string"
+    && isOptionalString(value.mode)
     && (value.projectId === undefined || typeof value.projectId === "string")
     && (value.waitingSince === undefined || typeof value.waitingSince === "string")
     && (value.followUp === undefined || typeof value.followUp === "string")

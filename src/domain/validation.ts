@@ -136,6 +136,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   const projectId = optionalString(frontmatter, "project_id");
   const projectLink = optionalString(frontmatter, "project");
   const context = optionalString(frontmatter, "context");
+  const mode = optionalString(frontmatter, "mode");
   const energy = optionalString(frontmatter, "energy");
   const estimate = frontmatter.estimate_minutes;
   const due = optionalString(frontmatter, "due");
@@ -151,6 +152,7 @@ export function parseAction(frontmatter: Frontmatter, file: TFile): Action {
   // A Waiting Action carries neither; values left in its file are ignored and cleared on its next save.
   const keepsContext = actionKeepsContext(action.status);
   if (context && keepsContext) action.context = context;
+  if (mode && keepsContext) action.mode = mode;
   const energyValue = energy ? energyLevel(energy) : undefined;
   if (energyValue && keepsContext) action.energy = energyValue;
   const estimateValue = estimateMinutes(estimate);

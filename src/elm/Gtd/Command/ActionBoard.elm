@@ -22,6 +22,7 @@ type Command
     | SetActionStatus ActionId ActionStatus
     | SetActionPriorities (List ActionId)
     | SetActionContext ActionId String
+    | SetActionMode ActionId String
     | TrashAction ActionId
     | DelegateActionByEmail ActionId
     | MoveActionToInbox ActionId
@@ -77,6 +78,9 @@ toBase command =
 
         SetActionContext actionId context ->
             Base.SetActionContext actionId context
+
+        SetActionMode actionId mode ->
+            Base.SetActionMode actionId mode
 
         TrashAction actionId ->
             Base.TrashAction actionId

@@ -128,6 +128,7 @@ type alias Model =
     , previewRequested : Maybe InboxItemId
     , project : Picker Project
     , context : Picker String
+    , mode : Picker String
     , desiredOutcome : String
 
     -- The vision last loaded from the chosen Project, to tell it from text typed here.
@@ -167,6 +168,7 @@ type Msg
     | ShowList
     | ProjectPicker (Picker.PickerMsg Project)
     | ContextPicker (Picker.PickerMsg String)
+    | ModePicker (Picker.PickerMsg String)
     | DesiredOutcomeChanged String
     | NextActionChanged String
     | UseTitleAsAction
@@ -256,6 +258,7 @@ initialModel snapshot =
     , previewRequested = Nothing
     , project = Picker.init "" Nothing
     , context = Picker.init "" Nothing
+    , mode = Picker.init "" Nothing
     , desiredOutcome = ""
     , loadedOutcome = Nothing
     , nextAction = ""
@@ -360,6 +363,9 @@ update msg model =
 
         ContextPicker pickerMsg ->
             ( { model | context = Picker.update pickerMsg (contextSuggestions model) identity model.context }, Cmd.none )
+
+        ModePicker pickerMsg ->
+            ( { model | mode = Picker.update pickerMsg (modeSuggestions model) identity model.mode }, Cmd.none )
 
         DesiredOutcomeChanged desiredOutcome ->
             ( { model | desiredOutcome = desiredOutcome }, Cmd.none )
@@ -820,6 +826,7 @@ resetCurrent current =
                     , body = Nothing
                     , project = Picker.init prefill Nothing
                     , context = Picker.init "" Nothing
+                    , mode = Picker.init "" Nothing
                     , desiredOutcome = ""
                     , loadedOutcome = Nothing
                     , nextAction = ""
@@ -1959,6 +1966,11 @@ processingForm model =
                             , Picker.view (contextPicker model) (contextSuggestions model) model.context
                             , small [] [ text "Required for this Action." ]
                             ]
+                        , div [ class "dg-processing-field" ]
+                            [ div [ class "dg-processing-field-heading" ] [ span [] [ text "Mode" ] ]
+                            , Picker.view modePicker (modeSuggestions model) model.mode
+                            , small [] [ text "Optional. The state of mind it suits." ]
+                            ]
                         , processingField False
                             "Energy"
                             "Optional. How much energy the Action takes."
@@ -2118,6 +2130,16 @@ contextPicker _ =
         }
 
 
+modePicker : Picker.Config String Msg
+modePicker =
+    Picker.config
+        { placeholder = "Search or name a mode…"
+        , label = identity
+        , hint = always Nothing
+        , tag = ModePicker
+        }
+
+
 projectSuggestions : Model -> List Project
 projectSuggestions model =
     if String.isEmpty (Picker.query model.project) then
@@ -2145,6 +2167,17 @@ contextSuggestions model =
     else
         Data.contexts model.snapshot.actions
             |> List.filter (\candidate -> Ui.matches model.context.query [ candidate ])
+            |> List.take 8
+
+
+modeSuggestions : Model -> List String
+modeSuggestions model =
+    if String.isEmpty (Picker.query model.mode) then
+        []
+
+    else
+        Data.modes model.snapshot.actions
+            |> List.filter (\candidate -> Ui.matches model.mode.query [ candidate ])
             |> List.take 8
 
 
@@ -2290,6 +2323,12 @@ processingInput model =
 
         else
             Picker.query model.context
+    , mode =
+        if model.actionStatus == ActionStatus.Waiting then
+            ""
+
+        else
+            String.trim (Picker.query model.mode)
     , waitingSince = model.waitingSince
     , followUp = model.followUp
     , energy =

@@ -86,6 +86,7 @@ type alias ActionFields =
     , status : ActionStatus
     , project : Picker Project
     , context : Picker String
+    , mode : Picker String
     , energy : Maybe Energy
     , estimate : Maybe Int
     , due : String
@@ -164,6 +165,7 @@ type Msg
     | ToggleBlocker ProjectId Bool
     | ProjectPicker (Picker.PickerMsg Project)
     | ContextPicker (Picker.PickerMsg String)
+    | ModePicker (Picker.PickerMsg String)
     | ImagePicker (Picker.PickerMsg String)
     | Submit
     | ConvertToSubproject
@@ -339,6 +341,7 @@ newActionFields snapshot maybeProject =
     , status = snapshot.settings.defaultActionStatus
     , project = projectPickerFor snapshot maybeProject
     , context = Picker.init "" Nothing
+    , mode = Picker.init "" Nothing
     , energy = Nothing
     , estimate = Nothing
     , due = ""
@@ -365,6 +368,7 @@ editActionFields snapshot action =
                     Nothing ->
                         Picker.init ("Missing Project: " ++ projectId) Nothing
     , context = Picker.init (Maybe.withDefault "" action.context) action.context
+    , mode = Picker.init (Maybe.withDefault "" action.mode) action.mode
     , energy = action.energy
     , estimate = action.estimate
     , due = Maybe.withDefault "" action.due
@@ -573,6 +577,11 @@ update msg model =
 
         ContextPicker pickerMsg ->
             ( { model | form = mapActionFields (\fields -> { fields | context = Picker.update pickerMsg (contextSuggestions model) identity fields.context }) model.form }
+            , Cmd.none
+            )
+
+        ModePicker pickerMsg ->
+            ( { model | form = mapActionFields (\fields -> { fields | mode = Picker.update pickerMsg (modeSuggestions model) identity fields.mode }) model.form }
             , Cmd.none
             )
 
@@ -892,6 +901,22 @@ contextSuggestions model =
         |> List.take 30
 
 
+modeSuggestions : Model -> List String
+modeSuggestions model =
+    let
+        typed =
+            case model.form of
+                ActionForm _ fields ->
+                    fields.mode.query
+
+                _ ->
+                    ""
+    in
+    Data.modes model.snapshot.actions
+        |> List.filter (\candidate -> Ui.matches typed [ candidate ])
+        |> List.take 30
+
+
 imageSuggestions : Model -> List String
 imageSuggestions model =
     let
@@ -998,6 +1023,7 @@ submitAction mode fields model =
                                 , status = fields.status
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
                                 , context = contextFor fields
+                                , mode = modeFor fields
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields
                                 , estimate = estimateFor fields
@@ -1013,6 +1039,7 @@ submitAction mode fields model =
                                 , status = fields.status
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
                                 , context = contextFor fields
+                                , mode = modeFor fields
                                 , energy = energyFor fields
                                 , estimate = estimateFor fields
                                 , due = fields.due
@@ -1034,6 +1061,15 @@ contextFor fields =
 
     else
         Picker.query fields.context
+
+
+modeFor : ActionFields -> String
+modeFor fields =
+    if fields.status == ActionStatus.Waiting then
+        ""
+
+    else
+        String.trim (Picker.query fields.mode)
 
 
 energyFor : ActionFields -> Maybe Energy
@@ -1423,6 +1459,9 @@ actionView model mode fields =
                 [ settingRow "Context"
                     "Required for Next and Calendar Actions; optional for Done and Cancelled ones."
                     [ Picker.view contextPickerConfig (contextSuggestions model) fields.context ]
+                , settingRow "Mode"
+                    "Optional. The state of mind it suits, e.g. Focused, Creative, Restless."
+                    [ Picker.view modePickerConfig (modeSuggestions model) fields.mode ]
                 ]
 
             else
@@ -1898,6 +1937,16 @@ contextPickerConfig =
         , label = identity
         , hint = always Nothing
         , tag = ContextPicker
+        }
+
+
+modePickerConfig : Picker.Config String Msg
+modePickerConfig =
+    Picker.config
+        { placeholder = "Search or name a Mode…"
+        , label = identity
+        , hint = always Nothing
+        , tag = ModePicker
         }
 
 

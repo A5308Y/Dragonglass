@@ -30,6 +30,7 @@ type alias NewActionInput =
     , status : ActionStatus
     , projectId : Maybe ProjectId
     , context : String
+    , mode : String
     , waitingSince : Maybe String
     , followUp : Maybe String
     , estimate : Maybe Int
@@ -42,6 +43,7 @@ type alias ActionChanges =
     , status : ActionStatus
     , projectId : Maybe ProjectId
     , context : String
+    , mode : String
     , energy : Maybe Energy
     , estimate : Maybe Int
     , due : String
@@ -157,6 +159,7 @@ newActionToBase input =
     , status = input.status
     , projectId = input.projectId
     , context = input.context
+    , mode = input.mode
     , waitingSince = input.waitingSince
     , followUp = input.followUp
     , estimate = input.estimate
@@ -170,6 +173,7 @@ actionChangesToBase changes =
     , status = changes.status
     , projectId = changes.projectId
     , context = changes.context
+    , mode = changes.mode
     , energy = changes.energy
     , estimate = changes.estimate
     , due = changes.due

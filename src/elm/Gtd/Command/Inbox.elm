@@ -44,6 +44,7 @@ type alias InboxInput =
     , nextAction : String
     , status : ActionStatus
     , context : String
+    , mode : String
     , waitingSince : String
     , followUp : String
     , energy : Maybe Energy

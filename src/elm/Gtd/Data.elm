@@ -12,6 +12,7 @@ module Gtd.Data exposing
     , empty
     , findAction
     , findProject
+    , modes
     , projectArea
     , projectDecoder
     , schedule
@@ -51,6 +52,9 @@ type alias Action =
     , created : String
     , projectId : Maybe ProjectId
     , context : Maybe String
+
+    -- The inner state the Action fits, next to the context's surroundings.
+    , mode : Maybe String
     , energy : Maybe Energy
     , estimate : Maybe Int
     , due : Maybe String
@@ -150,6 +154,13 @@ findProject projectId projects =
 contexts : List Action -> List String
 contexts actions =
     actions |> List.filterMap .context |> Set.fromList |> Set.toList |> List.sort
+
+
+{-| Every mode in use, sorted, for pickers and filters.
+-}
+modes : List Action -> List String
+modes actions =
+    actions |> List.filterMap .mode |> Set.fromList |> Set.toList |> List.sort
 
 
 {-| A Project's area, trimmed, or nothing when it is blank.
@@ -285,6 +296,7 @@ actionDecoder =
         |> optional "created" Decode.string ""
         |> optional "projectId" (Decode.maybe Decode.string) Nothing
         |> optional "context" (Decode.maybe Decode.string) Nothing
+        |> optional "mode" (Decode.maybe Decode.string) Nothing
         |> optional "energy" (Decode.maybe Energy.decoder) Nothing
         |> optional "estimate" (Decode.maybe Decode.int) Nothing
         |> optional "due" (Decode.maybe Decode.string) Nothing

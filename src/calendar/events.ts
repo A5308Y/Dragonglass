@@ -27,6 +27,7 @@ export function buildCalendarSyncEvents(snapshot: GtdSnapshot, vaultName: string
     const details = [
       project ? `Project: ${projectBreadcrumb(project, snapshot.projectsById)}` : "",
       action.context ? `Context: @${action.context}` : "",
+      action.mode ? `Mode: ${action.mode}` : "",
       `Open in Obsidian: ${obsidianOpenUrl(vaultName, action.file.path)}`,
       "Managed by Dragonglass. Calendar changes will be overwritten.",
     ].filter(Boolean);

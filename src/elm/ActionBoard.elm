@@ -13,6 +13,7 @@ import Gtd.Hierarchy as Hierarchy
 import Gtd.Host as Host exposing (Requests)
 import Gtd.Id exposing (ActionId, ProjectId)
 import Gtd.Links as Links
+import Gtd.Mode as Mode
 import Gtd.ProjectStatus as ProjectStatus exposing (ProjectStatus)
 import Gtd.Ranking as Ranking
 import Gtd.Settings as Settings
@@ -48,6 +49,7 @@ type GroupKey
     = StatusGroup ActionStatus
     | ProjectGroup (Maybe ProjectId)
     | ContextGroup (Maybe String)
+    | ModeGroup (Maybe String)
     | EnergyGroup (Maybe Energy)
     | EstimateGroup (Maybe Int)
 
@@ -62,6 +64,7 @@ type FilterField
     = FieldStatus
     | FieldProject
     | FieldContext
+    | FieldMode
     | FieldEnergy
     | FieldEstimate
     | FieldArea
@@ -1134,7 +1137,7 @@ boardControls model =
             SetGroupBy
             model.configuration.groupBy
             (List.map (\groupBy -> ( groupBy, "Columns: " ++ Settings.groupByLabel groupBy ))
-                [ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy, GroupByEstimate ]
+                [ GroupByStatus, GroupByProject, GroupByContext, GroupByMode, GroupByEnergy, GroupByEstimate ]
             )
         )
     , Ui.labelled "Sections"
@@ -1143,7 +1146,7 @@ boardControls model =
             SetSections
             model.configuration.sections
             (( Nothing, "Sections: None" )
-                :: ([ GroupByStatus, GroupByProject, GroupByContext, GroupByEnergy, GroupByEstimate ]
+                :: ([ GroupByStatus, GroupByProject, GroupByContext, GroupByMode, GroupByEnergy, GroupByEstimate ]
                         |> List.filter ((/=) model.configuration.groupBy)
                         |> List.map (\field -> ( Just field, "Sections: " ++ Settings.groupByLabel field ))
                    )
@@ -1260,6 +1263,7 @@ filterBuilder model =
             [ ( FieldStatus, "Status" )
             , ( FieldProject, "Project" )
             , ( FieldContext, "Context" )
+            , ( FieldMode, "Mode" )
             , ( FieldEnergy, "Energy" )
             , ( FieldEstimate, "Estimate" )
             , ( FieldArea, "Area" )
@@ -1424,7 +1428,7 @@ sectionView model ( key, actions ) =
 
 {-| A column's Actions split by another field, keeping the column's order inside
 each section. Statuses and energy follow their natural order; projects and
-contexts are alphabetical, with the empty section last.
+contexts and modes are alphabetical, with the empty section last.
 -}
 sectionsOf : Model -> GroupBy -> List Action -> List ( GroupKey, List Action )
 sectionsOf model field actions =
@@ -1475,6 +1479,9 @@ sectionRank model key =
 
         ContextGroup context ->
             alphabetical (context == Nothing)
+
+        ModeGroup mode ->
+            alphabetical (mode == Nothing)
 
 
 cardView : Model -> Action -> Html Msg
@@ -1562,6 +1569,7 @@ cardView model action =
         , div [ class "dg-card-meta" ]
             [ Ui.maybeView (Data.scheduleText model.snapshot.today action) (\schedule -> span [ class "dg-card-schedule" ] [ text ("🗓 " ++ schedule) ])
             , Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
+            , Ui.maybeView action.mode Mode.badge
             , Ui.maybeView action.energy Energy.badge
             , Ui.maybeView action.estimate Estimate.badge
             , Ui.maybeView action.due
@@ -1594,6 +1602,7 @@ cardView model action =
                 )
             ]
         ]
+
 
 
 -- TODAY
@@ -1829,6 +1838,9 @@ groupKeyOf groupBy action =
         GroupByContext ->
             ContextGroup action.context
 
+        GroupByMode ->
+            ModeGroup action.mode
+
         GroupByEnergy ->
             EnergyGroup action.energy
 
@@ -1849,6 +1861,9 @@ groupKeyString key =
 
         ContextGroup context ->
             Maybe.withDefault "" context
+
+        ModeGroup mode ->
+            Maybe.withDefault "" mode
 
         EnergyGroup energy ->
             Maybe.map Energy.key energy |> Maybe.withDefault ""
@@ -1876,6 +1891,12 @@ groupLabel model key =
 
         ContextGroup (Just context) ->
             capitalized context
+
+        ModeGroup Nothing ->
+            "No mode"
+
+        ModeGroup (Just mode) ->
+            Mode.label (capitalized mode)
 
         EnergyGroup Nothing ->
             "Normal energy"
@@ -1985,6 +2006,9 @@ matchesFilter model action filter =
 
         ByContext operator values ->
             applyOperator operator (List.member (Maybe.withDefault "" action.context) values)
+
+        ByMode operator values ->
+            applyOperator operator (List.member (Maybe.withDefault "" action.mode) values)
 
         ByEnergy operator values ->
             applyOperator operator (List.member (Maybe.map Energy.key action.energy |> Maybe.withDefault "") values)
@@ -2197,6 +2221,9 @@ filterValues model =
         FieldContext ->
             Data.contexts model.snapshot.actions |> List.map (\item -> ( item, item ))
 
+        FieldMode ->
+            ( "", "No mode" ) :: (Data.modes model.snapshot.actions |> List.map (\item -> ( item, item )))
+
         FieldEnergy ->
             ( "", "Normal energy" ) :: List.map (\energy -> ( Energy.key energy, Energy.symbol energy ++ " " ++ Energy.label energy )) Energy.all
 
@@ -2238,6 +2265,9 @@ draftFilter model =
 
         FieldContext ->
             Just (ByContext draft.operator [ draft.value ])
+
+        FieldMode ->
+            Just (ByMode draft.operator [ draft.value ])
 
         FieldEnergy ->
             Just (ByEnergy draft.operator [ draft.value ])
@@ -2287,6 +2317,13 @@ widen existing added =
         ( ByContext operator current, ByContext other extra ) ->
             if operator == other then
                 Just (ByContext operator (union current extra))
+
+            else
+                Nothing
+
+        ( ByMode operator current, ByMode other extra ) ->
+            if operator == other then
+                Just (ByMode operator (union current extra))
 
             else
                 Nothing
@@ -2368,6 +2405,20 @@ describeFilter model filter =
         ByContext operator values ->
             described "Context" operator values
 
+        ByMode operator values ->
+            described "Mode"
+                operator
+                (List.map
+                    (\value ->
+                        if String.isEmpty value then
+                            "No mode"
+
+                        else
+                            value
+                    )
+                    values
+                )
+
         ByEnergy operator values ->
             described "Energy"
                 operator
@@ -2441,6 +2492,16 @@ actionMenu x y model action =
                     MenuItem (tick (action.context == Just context) ++ "@" ++ context) (Command.SetActionContext action.id context)
                 )
                 contexts
+
+        modes =
+            Data.modes model.snapshot.actions
+
+        modeEntries =
+            List.map
+                (\mode ->
+                    MenuItem (tick (action.mode == Just mode) ++ Mode.label mode) (Command.SetActionMode action.id mode)
+                )
+                modes
     in
     Command.ShowMenu x
         y
@@ -2450,6 +2511,12 @@ actionMenu x y model action =
 
                 else
                     MenuSeparator :: contextEntries
+               )
+            ++ (if List.isEmpty modes || action.status == ActionStatus.Waiting then
+                    []
+
+                else
+                    MenuSeparator :: modeEntries
                )
             ++ [ MenuSeparator
                , MenuItem "Edit…" (Command.EditActionModal action.id)
@@ -2484,6 +2551,9 @@ groupByKey groupBy =
 
         GroupByContext ->
             "context"
+
+        GroupByMode ->
+            "mode"
 
         GroupByEnergy ->
             "energy"
@@ -2532,6 +2602,9 @@ filterFieldKey field =
 
         FieldContext ->
             "context"
+
+        FieldMode ->
+            "mode"
 
         FieldEnergy ->
             "energy"

@@ -55,6 +55,7 @@ type Command
     | SetActionStatus ActionId ActionStatus
     | SetActionPriorities (List ActionId)
     | SetActionContext ActionId String
+    | SetActionMode ActionId String
     | TrashAction ActionId
     | DelegateActionByEmail ActionId
     | MoveActionToInbox ActionId
@@ -193,6 +194,7 @@ type alias InboxInput =
     , nextAction : String
     , status : ActionStatus
     , context : String
+    , mode : String
     , waitingSince : String
     , followUp : String
     , energy : Maybe Energy
@@ -210,6 +212,7 @@ noInboxInput =
     , nextAction = ""
     , status = ActionStatus.Next
     , context = ""
+    , mode = ""
     , waitingSince = ""
     , followUp = ""
     , energy = Nothing
@@ -235,6 +238,7 @@ type alias NewActionInput =
     , status : ActionStatus
     , projectId : Maybe ProjectId
     , context : String
+    , mode : String
     , waitingSince : Maybe String
     , followUp : Maybe String
     , estimate : Maybe Int
@@ -247,6 +251,7 @@ type alias ActionChanges =
     , status : ActionStatus
     , projectId : Maybe ProjectId
     , context : String
+    , mode : String
     , energy : Maybe Energy
     , estimate : Maybe Int
     , due : String
@@ -357,6 +362,10 @@ encode command =
             object "update-action"
                 [ ( "actionId", Encode.string actionId ), ( "context", Encode.string context ) ]
 
+        SetActionMode actionId mode ->
+            object "update-action"
+                [ ( "actionId", Encode.string actionId ), ( "mode", Encode.string mode ) ]
+
         TrashAction actionId ->
             object "trash-action" [ ( "actionId", Encode.string actionId ) ]
 
@@ -373,6 +382,7 @@ encode command =
                         ([ ( "title", Encode.string input.title )
                          , ( "status", ActionStatus.encode input.status )
                          , ( "context", Encode.string input.context )
+                         , ( "mode", Encode.string input.mode )
                          ]
                             ++ maybeIdField "projectId" input.projectId
                             ++ maybeStringField "waitingSince" input.waitingSince
@@ -392,6 +402,7 @@ encode command =
                          , ( "status", ActionStatus.encode changes.status )
                          , ( "projectId", Encode.string (Maybe.withDefault "" changes.projectId) )
                          , ( "context", Encode.string changes.context )
+                         , ( "mode", Encode.string changes.mode )
                          , ( "energy", Encode.string (Maybe.map Energy.key changes.energy |> Maybe.withDefault "") )
                          , ( "estimate", Encode.int (Maybe.withDefault 0 changes.estimate) )
                          , ( "due", Encode.string changes.due )
@@ -830,6 +841,7 @@ encodeInboxInput input =
             ++ presentString "desiredOutcome" input.desiredOutcome
             ++ presentString "nextAction" input.nextAction
             ++ presentString "context" input.context
+            ++ presentString "mode" input.mode
             ++ maybeStringField "energy" (Maybe.map Energy.key input.energy)
             ++ maybeIntField "estimate" input.estimate
             ++ (if input.status == ActionStatus.Waiting then

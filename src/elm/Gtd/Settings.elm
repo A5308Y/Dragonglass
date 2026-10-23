@@ -53,6 +53,7 @@ type GroupBy
     = GroupByStatus
     | GroupByProject
     | GroupByContext
+    | GroupByMode
     | GroupByEnergy
     | GroupByEstimate
 
@@ -100,6 +101,7 @@ type Filter
     = ByStatus MatchOperator (List ActionStatus)
     | ByProject MatchOperator (List (Maybe ProjectId))
     | ByContext MatchOperator (List String)
+    | ByMode MatchOperator (List String)
     | ByEnergy MatchOperator (List String)
     | ByEstimate MatchOperator (List String)
     | ByArea MatchOperator (List String)
@@ -109,7 +111,7 @@ type Filter
 {-| Which group columns a board shows.
 
 The keys stay strings because what a column means follows `groupBy`: a status
-key while grouping by status, and a Project id, context, or energy otherwise.
+key while grouping by status, and a Project id, context, mode, or energy otherwise.
 
 -}
 type VisibleColumns
@@ -236,6 +238,9 @@ groupByLabel groupBy =
         GroupByContext ->
             "Context"
 
+        GroupByMode ->
+            "Mode"
+
         GroupByEnergy ->
             "Energy"
 
@@ -323,6 +328,9 @@ groupByDecoder =
 
                     "context" ->
                         Decode.succeed GroupByContext
+
+                    "mode" ->
+                        Decode.succeed GroupByMode
 
                     "energy" ->
                         Decode.succeed GroupByEnergy
@@ -428,6 +436,9 @@ valueFilterDecoder =
 
                     "context" ->
                         Decode.succeed (ByContext operator strings)
+
+                    "mode" ->
+                        Decode.succeed (ByMode operator strings)
 
                     "energy" ->
                         Decode.succeed (ByEnergy operator strings)
@@ -611,6 +622,9 @@ groupByKey groupBy =
         GroupByContext ->
             "context"
 
+        GroupByMode ->
+            "mode"
+
         GroupByEnergy ->
             "energy"
 
@@ -658,6 +672,9 @@ encodeFilter filter =
 
         ByContext operator values ->
             valueFilter "context" operator values
+
+        ByMode operator values ->
+            valueFilter "mode" operator values
 
         ByEnergy operator values ->
             valueFilter "energy" operator values

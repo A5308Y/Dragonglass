@@ -9,6 +9,7 @@ import Gtd.Data as Data exposing (Action)
 import Gtd.Energy as Energy
 import Gtd.Estimate as Estimate
 import Gtd.Links as Links
+import Gtd.Mode as Mode
 import Gtd.Ui as Ui
 import Html exposing (Html, article, div, input, span, text)
 import Html.Attributes exposing (checked, class, classList, disabled, type_)
@@ -50,6 +51,7 @@ view config action =
         , div [ class "dg-card-meta" ]
             [ Ui.maybeView (Data.scheduleText config.today action) (\schedule -> span [ class "dg-card-schedule" ] [ text ("🗓 " ++ schedule) ])
             , Ui.maybeView (Maybe.map (\context -> "@" ++ context) action.context) (\shown -> span [] [ text shown ])
+            , Ui.maybeView action.mode Mode.badge
             , Ui.maybeView action.energy Energy.badge
             , Ui.maybeView action.estimate Estimate.badge
             , Ui.maybeView action.due

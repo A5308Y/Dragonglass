@@ -54,18 +54,20 @@ describe("Waiting since", () => {
   });
 });
 
-describe("Context and energy on Waiting Actions", () => {
+describe("Context, mode and energy on Waiting Actions", () => {
   it("are kept by every status but Waiting", () => {
     expect(actionKeepsContext("waiting")).toBe(false);
     for (const status of ["next", "scheduled", "done", "cancelled"] as const) expect(actionKeepsContext(status)).toBe(true);
   });
 
   it("are ignored when a Waiting Action's file still carries them", () => {
-    const parsed = parseAction(frontmatter({ energy: "high" }), file);
+    const parsed = parseAction(frontmatter({ energy: "high", mode: "Focused" }), file);
     expect(parsed.context).toBeUndefined();
+    expect(parsed.mode).toBeUndefined();
     expect(parsed.energy).toBeUndefined();
-    const next = parseAction(frontmatter({ status: "next", energy: "high" }), file);
+    const next = parseAction(frontmatter({ status: "next", energy: "high", mode: "Focused" }), file);
     expect(next.context).toBe("Calls");
+    expect(next.mode).toBe("Focused");
     expect(next.energy).toBe("high");
   });
 });

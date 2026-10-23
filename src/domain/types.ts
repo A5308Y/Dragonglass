@@ -64,6 +64,8 @@ export interface Action {
   projectId?: string;
   projectLink?: string;
   context?: string;
+  /** The inner state the Action fits (`mode`), next to the context's surroundings; optional. */
+  mode?: string;
   energy?: Energy;
   /** Roughly how many minutes the Action takes (`estimate_minutes`). */
   estimate?: Estimate;
@@ -116,6 +118,7 @@ export interface ActionInput {
   status: ActionStatus;
   projectId?: string;
   context: string;
+  mode?: string;
   energy?: Energy;
   estimate?: Estimate;
   due?: string;
@@ -145,6 +148,7 @@ export interface InboxProcessingInput {
   /** The status for an Action created while clarifying this Inbox Item. */
   status?: ActionStatus;
   context?: string;
+  mode?: string;
   energy?: Energy;
   estimate?: Estimate;
   waitingSince?: string;
@@ -156,7 +160,7 @@ export interface InboxProcessingInput {
 }
 
 export type ActionChanges = Partial<
-  Pick<Action, "title" | "status" | "projectId" | "context" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes">
+  Pick<Action, "title" | "status" | "projectId" | "context" | "mode" | "due" | "waitingSince" | "followUp" | "scheduledStart" | "durationMinutes">
 > & {
   /** Empty clears who the Action was delegated to. */
   delegatedTo?: string;
@@ -195,7 +199,7 @@ export interface GtdSnapshot {
   issues: readonly IndexIssue[];
 }
 
-export type ValueFilterField = "status" | "project" | "context" | "energy" | "estimate" | "area";
+export type ValueFilterField = "status" | "project" | "context" | "mode" | "energy" | "estimate" | "area";
 export interface ValueFilter {
   kind: "value";
   field: ValueFilterField;
@@ -217,7 +221,7 @@ export interface DueFilter {
 }
 
 export type ActionFilter = ValueFilter | DueFilter;
-export type GroupBy = "status" | "project" | "context" | "energy" | "estimate";
+export type GroupBy = "status" | "project" | "context" | "mode" | "energy" | "estimate";
 /** `manual` is the order set by dragging cards, stored as each Action's `priority`. */
 export type SortField = "manual" | "created" | "due" | "title" | "project";
 export type SortDirection = "asc" | "desc";

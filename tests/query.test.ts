@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { TFile } from "obsidian";
 import type { Action, GtdSnapshot, Project } from "../src/domain/types";
 import { isActionStatus, parseAction } from "../src/domain/validation";
-import { buildBoard, filterActions, matchesFilter, sortActions } from "../src/state/query";
+import { buildBoard, filterActions, groupActions, matchesFilter, sortActions } from "../src/state/query";
 import { createDefaultViews } from "../src/state/defaults";
 
 const file = (path: string) => ({ path } as TFile);
 const project: Project = { type: "gtd-project", id: "P1", title: "Heating", file: file("GTD/Projects/Heating.md"), status: "active", created: "2026-09-01" };
 const actions: Action[] = [
-  { type: "gtd-action", id: "A1", title: "Compare offers", file: file("A1.md"), status: "next", projectId: "P1", context: "computer", energy: "high", due: "2026-09-20", created: "2026-09-18" },
+  { type: "gtd-action", id: "A1", title: "Compare offers", file: file("A1.md"), status: "next", projectId: "P1", context: "computer", mode: "focused", energy: "high", due: "2026-09-20", created: "2026-09-18" },
   { type: "gtd-action", id: "A2", title: "Call installer", file: file("A2.md"), status: "waiting", projectId: "P1", context: "phone", due: "2026-09-25", created: "2026-09-17" },
   { type: "gtd-action", id: "A3", title: "Future research", file: file("A3.md"), status: "next", created: "2026-09-16" },
 ];
@@ -39,6 +39,15 @@ describe("query model", () => {
       { kind: "value", field: "context", operator: "in", values: ["computer"] },
     ], "", projects);
     expect(result.map((action) => action.id)).toEqual(["A1"]);
+  });
+
+  it("filters and groups by mode, with Actions without one apart", () => {
+    expect(filterActions(actions, [{ kind: "value", field: "mode", operator: "in", values: ["focused"] }], "", projects).map((action) => action.id)).toEqual(["A1"]);
+    expect(filterActions(actions, [{ kind: "value", field: "mode", operator: "in", values: [""] }], "", projects).map((action) => action.id)).toEqual(["A2", "A3"]);
+    expect(groupActions(actions, "mode", projects).map((group) => [group.label, group.actions.map((action) => action.id)])).toEqual([
+      ["Focused", ["A1"]],
+      ["No mode", ["A2", "A3"]],
+    ]);
   });
 
   it("uses inclusive due-soon boundaries", () => {

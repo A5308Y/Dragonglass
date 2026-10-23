@@ -157,6 +157,7 @@ export class GtdRepository {
         frontmatter.project_id = input.projectId ?? null;
         frontmatter.project = project ? wikiLink(project) : null;
         frontmatter.context = actionKeepsContext(input.status) ? context || null : null;
+        frontmatter.mode = actionKeepsContext(input.status) ? input.mode?.trim() || null : null;
         frontmatter.energy = actionKeepsContext(input.status) ? input.energy || null : null;
         frontmatter.estimate_minutes = actionKeepsContext(input.status) ? input.estimate ?? null : null;
         frontmatter.due = input.due || null;
@@ -485,10 +486,12 @@ export class GtdRepository {
         // A Waiting Action keeps neither a context nor an energy level.
         if (!actionKeepsContext(resolvedStatus)) {
           if (frontmatter.context != null) frontmatter.context = null;
+          if (frontmatter.mode != null) frontmatter.mode = null;
           if (frontmatter.energy != null) frontmatter.energy = null;
           if (frontmatter.estimate_minutes != null) frontmatter.estimate_minutes = null;
         } else {
           if (changes.context !== undefined) frontmatter.context = changes.context.trim() || null;
+          if (changes.mode !== undefined) frontmatter.mode = changes.mode.trim() || null;
           if (changes.energy !== undefined) frontmatter.energy = changes.energy || null;
           if (changes.estimate !== undefined) frontmatter.estimate_minutes = changes.estimate;
         }
@@ -814,6 +817,7 @@ export class GtdRepository {
       project_id: project?.id ?? null,
       project: project ? wikiLink(project) : null,
       context: actionKeepsContext(status) ? context || null : null,
+      mode: actionKeepsContext(status) ? input.mode?.trim() || null : null,
       energy: actionKeepsContext(status) ? input.energy || null : null,
       estimate_minutes: actionKeepsContext(status) ? input.estimate ?? null : null,
       due: input.due || null,
@@ -1297,7 +1301,7 @@ function projectNotesFromAction(content: string, title: string): string {
 
 /** The frontmatter only an Action has, taken off when it goes back to the Inbox. */
 const ACTION_ONLY_KEYS = [
-  "status", "project_id", "project", "context", "energy", "estimate_minutes", "due", "waiting_since", "follow_up", "delegated_to",
+  "status", "project_id", "project", "context", "mode", "energy", "estimate_minutes", "due", "waiting_since", "follow_up", "delegated_to",
   "scheduled_start", "duration_minutes", "completed", "priority", "captured",
 ] as const;
 
@@ -1320,6 +1324,7 @@ function clearGtdFrontmatter(frontmatter: Record<string, unknown>): void {
     "project_id",
     "project",
     "context",
+    "mode",
     "energy",
     "estimate_minutes",
     "due",
@@ -1375,6 +1380,7 @@ function processingActionInput(title: string, context: string, input: InboxProce
     context,
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
     ...(input.followUp ? { followUp: input.followUp } : {}),
+    ...(input.mode?.trim() ? { mode: input.mode.trim() } : {}),
     ...(input.energy ? { energy: input.energy } : {}),
     ...(input.estimate ? { estimate: input.estimate } : {}),
     ...(input.scheduledStart ? { scheduledStart: input.scheduledStart } : {}),

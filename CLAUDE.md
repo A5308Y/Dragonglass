@@ -144,6 +144,13 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   can filter and group by it; a hand-written value reads as the next step up (`estimateStep`). Like energy,
   Waiting Actions drop it. `Gtd/Estimate.elm` lists the same steps: change both together.
 
+## Action modes
+
+- `mode` is the inner state an Action fits (focused, creative, restless…), next to `context`, which names
+  the surroundings it needs. It works like a context (free text, picker of the modes in use, board filter,
+  columns and sections, card menu) but is optional, and like energy, Waiting Actions drop it. Elm shows it
+  with `Gtd.Mode` (◐) so it doesn't read as a context.
+
 ## Delegating Actions by email
 
 - "Delegate by email…" (Action Board menu, "Delegate" on the Project page's Action rows) makes the Action

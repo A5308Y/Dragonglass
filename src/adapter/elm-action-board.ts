@@ -126,6 +126,7 @@ export class ElmActionBoardHost {
         await this.services.repository.updateAction(command.actionId, {
           ...(command.projectId !== undefined ? { projectId: command.projectId } : {}),
           ...(command.context !== undefined ? { context: command.context } : {}),
+          ...(command.mode !== undefined ? { mode: command.mode } : {}),
         });
         return;
       case "delegate-action":
