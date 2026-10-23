@@ -2537,6 +2537,71 @@ body.is-phone .dg-delegate-agent-options { grid-template-columns: 1fr; }
   font-size: var(--font-ui-smaller);
 }
 .dg-someday-drop { color: var(--text-error); }
+/* Sub-projects gather under their top-level Project, in a group that folds. */
+.dg-someday-review-list > * + * { border-top: 1px solid var(--background-modifier-border); }
+.dg-someday-review-list > .dg-someday-item { border-top-width: 0; }
+.dg-someday-review-list > * + .dg-someday-item { border-top-width: 1px; }
+.dg-someday-group-heading { margin: 0; font-size: var(--font-ui-medium); }
+.dg-someday-group-toggle {
+  gap: 12px;
+  padding: 10px 14px;
+  height: auto;
+  text-align: left;
+  white-space: normal;
+}
+.dg-someday-group-toggle:hover { background: var(--background-modifier-hover) !important; }
+.dg-someday-group-toggle:focus-visible { outline-offset: -2px; }
+.dg-someday-group-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+.dg-someday-group-status { color: var(--text-muted); font-size: var(--font-ui-smaller); font-weight: var(--font-normal); }
+.dg-someday-group-items {
+  margin-left: 14px;
+  border-left: 2px solid var(--background-modifier-border);
+}
+.dg-someday-group-items > .dg-someday-item:first-child { border-top: 1px solid var(--background-modifier-border); }
+.dg-someday-review-body > .dg-workflow-footer { margin-top: 16px; }
+.dg-someday-review-body > .dg-workflow-footer span { color: var(--text-muted); font-size: var(--font-ui-small); }
+
+/* The end of the review: a moment to see what got decided. */
+/* Centred while it fits; scrolls once the checklists make it taller than the view. */
+.dg-someday-done {
+  flex: 0 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+}
+.dg-someday-done-mark { display: inline-block; animation: dg-someday-pop 0.5s ease-out; }
+@keyframes dg-someday-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.dg-someday-tallies {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dg-someday-tally {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 110px;
+  padding: 10px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.dg-someday-tally strong { color: var(--text-normal); font-size: var(--font-ui-large); }
+.dg-someday-tally span { font-size: var(--font-ui-smaller); }
+.dg-someday-tally.is-activated strong { color: var(--text-success); }
+.dg-someday-tally.is-committed strong { color: var(--text-accent); }
+.dg-workflow-complete p.dg-someday-done-note { margin-top: 16px; color: var(--text-normal); }
+@media (prefers-reduced-motion: reduce) {
+  .dg-someday-done-mark { animation: none; }
+}
 
 /* Undo, offered in place of asking first. */
 .dg-undo-notice { display: flex; align-items: center; gap: 12px; }
