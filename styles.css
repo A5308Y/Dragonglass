@@ -3093,6 +3093,20 @@ body.is-phone .dg-board-view :is(.dg-attention-summary, .dg-focus-summary) {
 }
 body.is-phone .dg-board-view .dg-focus-clear { margin-left: 0; }
 body.is-phone .dg-board-view .dg-view-header > div:not(.dg-header-actions) { flex-wrap: wrap; row-gap: 6px; }
+/* Opened, the controls can be taller than the screen, and only the board below them
+   scrolled, so the rest couldn't be reached. Then the whole view scrolls as one page,
+   controls and cards together. */
+body.is-phone .dg-board-view.is-controls-open {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+body.is-phone .dg-board-view.is-controls-open > * { flex-shrink: 0; }
+body.is-phone .dg-board-view.is-controls-open > .dg-board {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+}
 
 /* Stacked columns (phones, narrow panes), on the Action board and the Projects
    boards, scroll as one list with their headings. The desktop layout caps each column
