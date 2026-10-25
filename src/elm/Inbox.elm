@@ -15,8 +15,8 @@ import Gtd.Id exposing (InboxItemId, ProjectId)
 import Gtd.Picker as Picker exposing (Picker)
 import Gtd.ProjectStatus as ProjectStatus
 import Gtd.Ui as Ui exposing (Key(..))
-import Html exposing (Html, article, audio, button, div, h2, h3, h4, header, input, label, li, node, option, p, section, select, small, span, strong, text, textarea, ul)
-import Html.Attributes exposing (attribute, checked, class, classList, controls, for, id, placeholder, preload, selected, src, style, tabindex, title, type_, value)
+import Html exposing (Html, article, audio, button, div, h2, h3, h4, header, img, input, label, li, node, option, p, section, select, small, span, strong, text, textarea, ul)
+import Html.Attributes exposing (alt, attribute, checked, class, classList, controls, for, id, placeholder, preload, selected, src, style, tabindex, title, type_, value)
 import Html.Events exposing (onCheck, onClick, onInput)
 import Html.Keyed
 import Json.Decode as Decode exposing (Decoder)
@@ -1453,7 +1453,13 @@ inboxRow selectedId item =
         , onClick (SelectRow item.id)
         , Html.Events.on "dblclick" (Decode.succeed (Send IgnoreReply (Command.OpenFile item.file.path)))
         ]
-        [ span [ class "dg-inbox-row-title" ] [ text item.title ]
+        [ if isImage item.file.extension then
+            -- The picture itself says more than its file name; decorative, since the title follows.
+            img [ class "dg-inbox-row-thumb", src item.resourceUrl, alt "", attribute "loading" "lazy" ] []
+
+          else
+            text ""
+        , span [ class "dg-inbox-row-title" ] [ text item.title ]
         , span [ class "dg-inbox-meta" ] [ text (itemMeta item) ]
         ]
 
@@ -1468,6 +1474,18 @@ markdownView className markdown item =
         , attribute "data-source-path" item.file.path
         ]
         []
+
+
+{-| An Item that is an image file, shown whole; a click opens it in Obsidian.
+-}
+imageView : String -> InboxItem -> Html Msg
+imageView className item =
+    div [ class (className ++ " dg-inbox-image") ]
+        [ button [ class "dg-inbox-image-open dg-flat-button", onClick (Send IgnoreReply (Command.OpenFile item.file.path)) ]
+            [ img [ src item.resourceUrl, alt item.title ] []
+            , Ui.srOnly ("Open " ++ item.file.name)
+            ]
+        ]
 
 
 {-| The selected Item in full, below the list, with what can be done to it.
@@ -1511,6 +1529,9 @@ readingPane model item =
             ]
         , if isAudio item.file.extension then
             audio [ class "dg-inbox-audio", controls True, preload "metadata", src item.resourceUrl ] []
+
+          else if isImage item.file.extension then
+            imageView "dg-inbox-reading-body" item
 
           else
             case body of
@@ -1919,6 +1940,9 @@ itemCard model item =
                 [ audio [ class "dg-inbox-audio", controls True, preload "metadata", src item.resourceUrl ] []
                 , transcriptView model item
                 ]
+
+          else if isImage item.file.extension then
+            imageView "dg-inbox-preview" item
 
           else if String.isEmpty body then
             div [ class "dg-inbox-preview is-empty" ] [ text "No additional notes." ]
@@ -2469,6 +2493,14 @@ indexOf wanted items =
         |> List.filter (\( _, item ) -> item.id == wanted)
         |> List.head
         |> Maybe.map Tuple.first
+
+
+{-| The image formats Obsidian's window can show, as `src/ui/image-input.ts` lists them.
+-}
+isImage : String -> Bool
+isImage extension =
+    List.member (String.toLower extension)
+        [ "avif", "bmp", "gif", "jpeg", "jpg", "png", "svg", "webp" ]
 
 
 isAudio : String -> Bool
