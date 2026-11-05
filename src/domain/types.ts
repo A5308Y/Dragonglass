@@ -121,6 +121,8 @@ export interface ActionInput {
   projectId?: string;
   context: string;
   mode?: string;
+  /** Puts the new Action in focus. */
+  focus?: boolean;
   energy?: Energy;
   estimate?: Estimate;
   due?: string;

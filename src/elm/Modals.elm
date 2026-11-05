@@ -1031,6 +1031,7 @@ submitAction mode fields model =
                                 , projectId = Maybe.map .id (Picker.selection fields.project)
                                 , context = contextFor fields
                                 , mode = modeFor fields
+                                , focus = fields.focus
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields
                                 , estimate = estimateFor fields
@@ -1489,6 +1490,9 @@ actionView model mode fields =
             else
                 []
 
+        focusRow =
+            settingRow "Focus" "One of the Actions to work on for now; the board can show only these." [ toggle "Focus" fields.focus ToggleFocus ]
+
         conditionalRows =
             (if fields.status == ActionStatus.Waiting then
                 [ settingRow "Waiting since" "The day this Action started waiting." [ dateInput "Waiting since" fields.waitingSince WaitingField ]
@@ -1516,6 +1520,7 @@ actionView model mode fields =
             ]
                 ++ contextRows
                 ++ estimateRows
+                ++ [ focusRow ]
                 ++ conditionalRows
                 ++ [ noticeView model, actions model [] (submitButton model "Create Action") ]
 
@@ -1529,7 +1534,7 @@ actionView model mode fields =
                 ++ energyRows
                 ++ estimateRows
                 ++ [ settingRow "Due" "" [ dateInput "Due" fields.due DueField ]
-                   , settingRow "Focus" "One of the Actions to work on for now; the board can show only these." [ toggle "Focus" fields.focus ToggleFocus ]
+                   , focusRow
                    ]
                 ++ conditionalRows
                 ++ [ noticeView model

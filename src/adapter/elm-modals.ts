@@ -358,6 +358,7 @@ function actionInput(input: ElmNewActionInput): ActionInput {
     ...(input.projectId ? { projectId: input.projectId } : {}),
     context: input.context,
     ...(input.mode?.trim() ? { mode: input.mode } : {}),
+    ...(input.focus ? { focus: true } : {}),
     ...(input.estimate && isEstimate(input.estimate) ? { estimate: input.estimate } : {}),
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
     ...(input.followUp ? { followUp: input.followUp } : {}),

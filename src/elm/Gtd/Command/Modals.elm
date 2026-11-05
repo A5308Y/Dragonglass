@@ -31,6 +31,7 @@ type alias NewActionInput =
     , projectId : Maybe ProjectId
     , context : String
     , mode : String
+    , focus : Bool
     , waitingSince : Maybe String
     , followUp : Maybe String
     , estimate : Maybe Int
@@ -161,6 +162,7 @@ newActionToBase input =
     , projectId = input.projectId
     , context = input.context
     , mode = input.mode
+    , focus = input.focus
     , waitingSince = input.waitingSince
     , followUp = input.followUp
     , estimate = input.estimate

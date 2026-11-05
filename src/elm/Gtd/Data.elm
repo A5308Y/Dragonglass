@@ -12,6 +12,7 @@ module Gtd.Data exposing
     , empty
     , findAction
     , findProject
+    , focusFirst
     , modes
     , projectArea
     , projectDecoder
@@ -145,6 +146,17 @@ empty =
 findAction : ActionId -> List Action -> Maybe Action
 findAction actionId actions =
     List.filter (\action -> action.id == actionId) actions |> List.head
+
+
+{-| Actions in focus ahead of the rest, each part keeping the order it had.
+-}
+focusFirst : List Action -> List Action
+focusFirst actions =
+    let
+        ( inFocus, rest ) =
+            List.partition .focus actions
+    in
+    inFocus ++ rest
 
 
 findProject : ProjectId -> List Project -> Maybe Project

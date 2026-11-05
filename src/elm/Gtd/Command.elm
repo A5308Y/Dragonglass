@@ -242,6 +242,7 @@ type alias NewActionInput =
     , projectId : Maybe ProjectId
     , context : String
     , mode : String
+    , focus : Bool
     , waitingSince : Maybe String
     , followUp : Maybe String
     , estimate : Maybe Int
@@ -397,6 +398,7 @@ encode command =
                          , ( "status", ActionStatus.encode input.status )
                          , ( "context", Encode.string input.context )
                          , ( "mode", Encode.string input.mode )
+                         , ( "focus", Encode.bool input.focus )
                          ]
                             ++ maybeIdField "projectId" input.projectId
                             ++ maybeStringField "waitingSince" input.waitingSince

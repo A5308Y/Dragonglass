@@ -920,6 +920,7 @@ nextActions model projectId =
     model.snapshot.actions
         |> List.filter (\action -> action.projectId == Just projectId && action.status == ActionStatus.Next)
         |> List.sortBy (\action -> ( Maybe.withDefault 999999 action.priority, action.created ))
+        |> Data.focusFirst
 
 
 {-| One level of a Project tree as a session shows it: the Project, how deep it sits

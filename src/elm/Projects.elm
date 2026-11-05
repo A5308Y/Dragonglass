@@ -1507,7 +1507,7 @@ viewDetail model project =
             projectActions model project
 
         openActions =
-            List.filter (\action -> ActionStatus.isOpen action.status) actions
+            List.filter (\action -> ActionStatus.isOpen action.status) actions |> Data.focusFirst
 
         completedActions =
             List.filter (\action -> action.status == ActionStatus.Done) actions

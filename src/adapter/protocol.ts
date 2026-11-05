@@ -564,6 +564,8 @@ export interface ElmNewActionInput {
   context: string;
   /** Empty or missing: no mode. */
   mode?: string;
+  /** Puts the new Action in focus. */
+  focus?: boolean;
   waitingSince?: string;
   followUp?: string;
   /** Minutes, one of `ESTIMATE_MINUTES`. */
@@ -1275,6 +1277,7 @@ function isNewActionInput(value: unknown): value is ElmNewActionInput {
     && isOneOf(ACTION_STATUSES, value.status)
     && typeof value.context === "string"
     && isOptionalString(value.mode)
+    && isOptionalBoolean(value.focus)
     && (value.projectId === undefined || typeof value.projectId === "string")
     && (value.waitingSince === undefined || typeof value.waitingSince === "string")
     && (value.followUp === undefined || typeof value.followUp === "string")

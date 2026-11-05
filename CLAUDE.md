@@ -155,7 +155,10 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
 ## Focus
 
 - `focus: true` marks an Action to work on for now (`Ui.focusBadge`, ★). Set it with F on a board card,
-  the card menu or the Edit dialog. The board's "in focus" button shows only those, among what the
+  the card menu, or the New Action / Edit dialog.
+- Actions in focus come first in every Action list, whatever the sort (`Data.focusFirst`): the board's
+  columns, the Project page, the Project Review and the Pomodoro picker. A drag on the board ranks only
+  among the cards on the target's side of that split (`priorityOrder`), so the other side keeps its ranks. The board's "in focus" button shows only those, among what the
   view shows (the Today strip stays); that switch is per device (`app.saveLocalStorage`).
 - "Clear focus" takes it off every Action after `confirmDialog`, since it writes one file each.
 - `updateAction` checks the context rule only when status or context change, so marking an Action

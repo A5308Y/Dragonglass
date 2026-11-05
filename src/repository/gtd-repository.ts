@@ -822,6 +822,7 @@ export class GtdRepository {
       project: project ? wikiLink(project) : null,
       context: actionKeepsContext(status) ? context || null : null,
       mode: actionKeepsContext(status) ? input.mode?.trim() || null : null,
+      ...(input.focus ? { focus: true } : {}),
       energy: actionKeepsContext(status) ? input.energy || null : null,
       estimate_minutes: actionKeepsContext(status) ? input.estimate ?? null : null,
       due: input.due || null,

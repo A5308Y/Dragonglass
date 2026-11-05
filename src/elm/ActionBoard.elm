@@ -2228,7 +2228,8 @@ sortActions model actions =
             else
                 compare ( key left, left.id ) ( key right, right.id )
     in
-    List.sortWith compareActions actions
+    -- Whatever the sort, the Actions in focus come first.
+    List.sortWith compareActions actions |> Data.focusFirst
 
 
 {-| The Manual sort: a ranked Action always comes before an unranked one.
@@ -2252,11 +2253,22 @@ comparePriority left right =
 {-| The order visible on the board with the dropped card moved. The host keeps
 every priority that already fits it, so a drop usually rewrites one Action, and
 Actions outside the current filters keep theirs.
+
+Actions in focus are shown ahead of the rest, so the order is ranked only among
+the cards on the target's side of that split; the other side's ranks stay as they are.
 -}
 priorityOrder : Model -> ActionId -> ActionId -> List ActionId
 priorityOrder model actionId targetId =
-    buildGroups model
-        |> List.concatMap (.actions >> List.map .id)
+    let
+        shown =
+            buildGroups model |> List.concatMap .actions
+
+        targetFocus =
+            shown |> List.filter (\action -> action.id == targetId) |> List.head |> Maybe.map .focus |> Maybe.withDefault False
+    in
+    shown
+        |> List.filter (\action -> action.focus == targetFocus || action.id == actionId)
+        |> List.map .id
         |> insertBefore actionId targetId
 
 

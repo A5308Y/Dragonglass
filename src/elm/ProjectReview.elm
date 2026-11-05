@@ -595,7 +595,7 @@ viewProject model project =
             reviewActions model
 
         openActions =
-            List.filter (\action -> ActionStatus.isOpen action.status) actions
+            List.filter (\action -> ActionStatus.isOpen action.status) actions |> Data.focusFirst
 
         nextActions =
             List.filter (\action -> action.status == ActionStatus.Next) openActions
