@@ -162,6 +162,9 @@ describe("Elm adapter protocol", () => {
     expect(parseModalCommand(envelope({ type: "save-new-action", input }))?.command.type).toBe("save-new-action");
     expect(parseModalCommand(envelope({ type: "save-new-action", input: { ...input, focus: true } }))?.command.type).toBe("save-new-action");
     expect(parseModalCommand(envelope({ type: "save-new-action", input: { ...input, focus: "yes" } }))).toBeNull();
+    expect(parseModalCommand(envelope({ type: "save-new-action", input: { ...input, energy: "low", due: "2026-11-20" } }))?.command.type)
+      .toBe("save-new-action");
+    expect(parseModalCommand(envelope({ type: "save-new-action", input: { ...input, energy: "exhausted" } }))).toBeNull();
     expect(parseModalCommand(envelope({
       type: "save-new-action",
       input: { ...input, schedule: { kind: "timed", localStart: "2026-09-22T12:00", durationMinutes: 45 } },

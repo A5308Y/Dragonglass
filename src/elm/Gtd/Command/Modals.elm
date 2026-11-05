@@ -32,6 +32,8 @@ type alias NewActionInput =
     , context : String
     , mode : String
     , focus : Bool
+    , energy : Maybe Energy
+    , due : String
     , waitingSince : Maybe String
     , followUp : Maybe String
     , estimate : Maybe Int
@@ -163,6 +165,8 @@ newActionToBase input =
     , context = input.context
     , mode = input.mode
     , focus = input.focus
+    , energy = input.energy
+    , due = input.due
     , waitingSince = input.waitingSince
     , followUp = input.followUp
     , estimate = input.estimate

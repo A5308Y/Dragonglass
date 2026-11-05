@@ -359,6 +359,8 @@ function actionInput(input: ElmNewActionInput): ActionInput {
     context: input.context,
     ...(input.mode?.trim() ? { mode: input.mode } : {}),
     ...(input.focus ? { focus: true } : {}),
+    ...(input.energy ? { energy: input.energy } : {}),
+    ...(input.due ? { due: input.due } : {}),
     ...(input.estimate && isEstimate(input.estimate) ? { estimate: input.estimate } : {}),
     ...(input.waitingSince ? { waitingSince: input.waitingSince } : {}),
     ...(input.followUp ? { followUp: input.followUp } : {}),

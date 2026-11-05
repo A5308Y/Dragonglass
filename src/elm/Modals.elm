@@ -1032,6 +1032,8 @@ submitAction mode fields model =
                                 , context = contextFor fields
                                 , mode = modeFor fields
                                 , focus = fields.focus
+                                , energy = energyFor fields
+                                , due = fields.due
                                 , waitingSince = waitingSince fields
                                 , followUp = followUp fields
                                 , estimate = estimateFor fields
@@ -1508,27 +1510,12 @@ actionView model mode fields =
                     else
                         []
                    )
-    in
-    case mode of
-        NewAction ->
-            [ heading "New Action"
-            , titleRow False
+        -- The same fields for a new Action and an edited one, so neither dialog lacks one.
+        -- Status comes right before Context: it decides whether Context is asked for at all.
+        rows editing =
+            [ titleRow editing
             , projectRow model "Project" "Type to fuzzy-search. Clear the field for no Project." fields.project
-
-            -- Status first: it decides whether Context is asked for at all.
             , statusRow
-            ]
-                ++ contextRows
-                ++ estimateRows
-                ++ [ focusRow ]
-                ++ conditionalRows
-                ++ [ noticeView model, actions model [] (submitButton model "Create Action") ]
-
-        EditAction action allowConversion ->
-            [ heading "Edit Action"
-            , titleRow True
-            , statusRow
-            , projectRow model "Project" "Type to fuzzy-search. Clear the field for no Project." fields.project
             ]
                 ++ contextRows
                 ++ energyRows
@@ -1537,6 +1524,16 @@ actionView model mode fields =
                    , focusRow
                    ]
                 ++ conditionalRows
+    in
+    case mode of
+        NewAction ->
+            heading "New Action"
+                :: rows False
+                ++ [ noticeView model, actions model [] (submitButton model "Create Action") ]
+
+        EditAction action allowConversion ->
+            heading "Edit Action"
+                :: rows True
                 ++ [ noticeView model
                    , actions model
                         (if allowConversion && action.projectId /= Nothing then

@@ -566,6 +566,10 @@ export interface ElmNewActionInput {
   mode?: string;
   /** Puts the new Action in focus. */
   focus?: boolean;
+  /** Empty or missing: normal energy. */
+  energy?: Energy | "";
+  /** Empty or missing: no due date. */
+  due?: string;
   waitingSince?: string;
   followUp?: string;
   /** Minutes, one of `ESTIMATE_MINUTES`. */
@@ -573,7 +577,7 @@ export interface ElmNewActionInput {
   schedule?: ElmScheduleInput;
 }
 
-export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId" | "followUp" | "estimate"> {
+export interface ElmActionChanges extends Omit<ElmNewActionInput, "projectId" | "followUp" | "estimate" | "energy" | "due"> {
   projectId: string;
   /** Empty clears the energy level. */
   energy: Energy | "";
@@ -1278,6 +1282,8 @@ function isNewActionInput(value: unknown): value is ElmNewActionInput {
     && typeof value.context === "string"
     && isOptionalString(value.mode)
     && isOptionalBoolean(value.focus)
+    && (value.energy === undefined || value.energy === "" || isOneOf(ENERGY_LEVELS, value.energy))
+    && isOptionalString(value.due)
     && (value.projectId === undefined || typeof value.projectId === "string")
     && (value.waitingSince === undefined || typeof value.waitingSince === "string")
     && (value.followUp === undefined || typeof value.followUp === "string")

@@ -243,6 +243,8 @@ type alias NewActionInput =
     , context : String
     , mode : String
     , focus : Bool
+    , energy : Maybe Energy
+    , due : String
     , waitingSince : Maybe String
     , followUp : Maybe String
     , estimate : Maybe Int
@@ -401,6 +403,8 @@ encode command =
                          , ( "focus", Encode.bool input.focus )
                          ]
                             ++ maybeIdField "projectId" input.projectId
+                            ++ maybeStringField "energy" (Maybe.map Energy.key input.energy)
+                            ++ presentString "due" input.due
                             ++ maybeStringField "waitingSince" input.waitingSince
                             ++ maybeStringField "followUp" input.followUp
                             ++ maybeIntField "estimate" input.estimate
