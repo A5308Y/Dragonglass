@@ -31,27 +31,36 @@ export function inboxPrimaryDisposition(input: {
   const nextAction = input.nextAction.trim();
   const context = input.context.trim();
   const projectName = input.projectName.trim();
-  const withAction = nextAction ? " + Next Action" : "";
+  // The outcome names what it writes: the Action's text once typed, and the Project.
+  const namedAction = nextAction ? `Next Action ${quoted(nextAction)}` : "Next Action";
+  const withAction = nextAction ? ` + ${namedAction}` : "";
+  const namedProject = projectName ? ` ${quoted(projectName)}` : "";
   // These dispositions need no Next Action, but once one is typed it still needs a context.
   const optionalActionReady = !nextAction || Boolean(context);
 
   if (input.someday) {
     const target = input.projectExists && projectName
-      ? `Move ${projectName} to Someday/Maybe`
-      : "Create Someday/Maybe Project";
+      ? `Move ${quoted(projectName)} to Someday/Maybe`
+      : `Create Someday/Maybe Project${namedProject}`;
     return { operation: "someday", label: `${target}${withAction}`, ready: optionalActionReady };
   }
   if (input.fileOriginal) {
-    const target = projectName ? `File with ${projectName}` : "File as General Reference";
+    const target = projectName ? `File with ${quoted(projectName)}` : "File as General Reference";
     return { operation: "file", label: `${target}${withAction}`, ready: optionalActionReady };
   }
   return {
     operation: "next-action",
     label: projectName
-      ? input.projectExists ? `Create Next Action in ${projectName}` : "Create Project + Next Action"
-      : "Create Next Action",
+      ? input.projectExists
+        ? `Create ${namedAction} in ${quoted(projectName)}`
+        : `Create Project ${quoted(projectName)} + ${namedAction}`
+      : `Create ${namedAction}`,
     ready: Boolean(nextAction && context),
   };
+}
+
+function quoted(name: string): string {
+  return `“${name}”`;
 }
 
 /**

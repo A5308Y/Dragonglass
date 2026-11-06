@@ -32,12 +32,14 @@ describe("Primary processing disposition", () => {
 
   it("creates an Action, consuming the capture, when filing is off", () => {
     expect(disposition({ nextAction: "Call the plumber", context: "Calls" }))
-      .toEqual({ operation: "next-action", label: "Create Next Action", ready: true });
+      .toEqual({ operation: "next-action", label: "Create Next Action “Call the plumber”", ready: true });
   });
 
-  it("names the Project it will create or reuse", () => {
-    expect(disposition({ projectName: "Heating" }).label).toBe("Create Project + Next Action");
-    expect(disposition({ projectName: "Heating", projectExists: true }).label).toBe("Create Next Action in Heating");
+  it("names the Action and the Project it will create or reuse", () => {
+    expect(disposition({ projectName: "Heating" }).label).toBe("Create Project “Heating” + Next Action");
+    expect(disposition({ projectName: "Heating", projectExists: true }).label).toBe("Create Next Action in “Heating”");
+    expect(disposition({ projectName: "Heating", projectExists: true, nextAction: "Call the plumber" }).label)
+      .toBe("Create Next Action “Call the plumber” in “Heating”");
   });
 
   it("needs a Next Action and a context before it will create one", () => {
@@ -48,12 +50,12 @@ describe("Primary processing disposition", () => {
   it("files the capture instead once filing is on, with no Next Action required", () => {
     expect(disposition({ fileOriginal: true }))
       .toEqual({ operation: "file", label: "File as General Reference", ready: true });
-    expect(disposition({ fileOriginal: true, projectName: "Heating" }).label).toBe("File with Heating");
+    expect(disposition({ fileOriginal: true, projectName: "Heating" }).label).toBe("File with “Heating”");
   });
 
   it("still files and creates an Action together", () => {
     expect(disposition({ fileOriginal: true, projectName: "Heating", nextAction: "Call the plumber", context: "Calls" }))
-      .toEqual({ operation: "file", label: "File with Heating + Next Action", ready: true });
+      .toEqual({ operation: "file", label: "File with “Heating” + Next Action “Call the plumber”", ready: true });
   });
 
   it("holds back a filed Next Action that has no context", () => {
@@ -65,12 +67,12 @@ describe("Primary processing disposition", () => {
       .toEqual({ operation: "someday", label: "Create Someday/Maybe Project", ready: true });
     expect(disposition({ someday: true, fileOriginal: true }).operation).toBe("someday");
     expect(disposition({ someday: true, projectName: "Heating", projectExists: true }).label)
-      .toBe("Move Heating to Someday/Maybe");
+      .toBe("Move “Heating” to Someday/Maybe");
   });
 
   it("names a Next Action parked alongside the Project", () => {
     expect(disposition({ someday: true, nextAction: "Call the plumber", context: "Calls" }).label)
-      .toBe("Create Someday/Maybe Project + Next Action");
+      .toBe("Create Someday/Maybe Project + Next Action “Call the plumber”");
     expect(disposition({ someday: true, nextAction: "Call the plumber" }).ready).toBe(false);
   });
 });

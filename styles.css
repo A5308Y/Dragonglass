@@ -1631,7 +1631,7 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.dg-processor-outcome > strong { color: var(--text-normal); }
+.dg-processor-outcome > strong { color: var(--text-normal); overflow-wrap: anywhere; }
 .dg-processor-buttons {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);

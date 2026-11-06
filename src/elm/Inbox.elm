@@ -2243,12 +2243,20 @@ disposition model =
                 |> Maybe.map .title
                 |> Maybe.withDefault (Hierarchy.leafTitle model.project.query model.snapshot.projects)
 
+        -- The Action as the outcome names it: its kind, then its text once typed.
+        namedAction =
+            if String.isEmpty action then
+                actionLabel model.actionStatus
+
+            else
+                actionLabel model.actionStatus ++ " " ++ quoted action
+
         actionSuffix =
             if String.isEmpty action then
                 ""
 
             else
-                " + " ++ actionLabel model.actionStatus
+                " + " ++ namedAction
 
         optionalReady =
             String.isEmpty action || actionIsReady model
@@ -2258,10 +2266,10 @@ disposition model =
         , label =
             (case project of
                 Just found ->
-                    "Move " ++ found.title ++ " to Backlog"
+                    "Move " ++ quoted found.title ++ " to Backlog"
 
                 Nothing ->
-                    "Create Backlog Project"
+                    "Create Backlog Project" ++ namedProject projectName
             )
                 ++ actionSuffix
         , ready = optionalReady
@@ -2272,10 +2280,10 @@ disposition model =
         , label =
             (case project of
                 Just found ->
-                    "Move " ++ found.title ++ " to Someday/Maybe"
+                    "Move " ++ quoted found.title ++ " to Someday/Maybe"
 
                 Nothing ->
-                    "Create Someday/Maybe Project"
+                    "Create Someday/Maybe Project" ++ namedProject projectName
             )
                 ++ actionSuffix
         , ready = optionalReady
@@ -2288,7 +2296,7 @@ disposition model =
                 "File as General Reference"
 
              else
-                "File with " ++ projectName
+                "File with " ++ quoted projectName
             )
                 ++ actionSuffix
         , ready = optionalReady
@@ -2298,15 +2306,29 @@ disposition model =
         { operation = CreateNextAction
         , label =
             if String.isEmpty projectName then
-                "Create " ++ actionLabel model.actionStatus
+                "Create " ++ namedAction
 
             else if project /= Nothing then
-                "Create " ++ actionLabel model.actionStatus ++ " in " ++ projectName
+                "Create " ++ namedAction ++ " in " ++ quoted projectName
 
             else
-                "Create Project + " ++ actionLabel model.actionStatus
+                "Create Project " ++ quoted projectName ++ " + " ++ namedAction
         , ready = not (String.isEmpty action) && actionIsReady model
         }
+
+
+quoted : String -> String
+quoted name =
+    "“" ++ name ++ "”"
+
+
+namedProject : String -> String
+namedProject name =
+    if String.isEmpty name then
+        ""
+
+    else
+        " " ++ quoted name
 
 
 actionLabel : ActionStatus -> String
