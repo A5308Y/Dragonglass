@@ -1275,30 +1275,11 @@ focusPicker model project =
         levels =
             projectTree model project
 
-        contexts =
-            levels |> List.concatMap .actions |> List.filterMap .context |> Ui.uniqueSorted
-
-        modes =
-            levels |> List.concatMap .actions |> List.filterMap .mode |> Ui.uniqueSorted
-
         narrowed =
             model.contextFilter /= Nothing || model.modeFilter /= Nothing
 
-        matches action =
-            (case model.contextFilter of
-                Just context ->
-                    action.context == Just context
-
-                Nothing ->
-                    True
-            )
-                && (case model.modeFilter of
-                        Just mode ->
-                            action.mode == Just mode
-
-                        Nothing ->
-                            True
-                   )
+        matches =
+            matchesFilters model
 
         shown =
             levels
@@ -1344,48 +1325,16 @@ focusPicker model project =
     div [ class "dg-pomodoro-field" ]
         (div [ class "dg-pomodoro-field-heading" ]
             [ span [ class "dg-pomodoro-label" ] [ text "Next Actions" ]
-            , div [ class "dg-pomodoro-filters" ]
-                [ if List.isEmpty contexts then
-                    text ""
-
-                  else
-                    Ui.labelled "Context"
-                        (Html.select [ class "dropdown", onInput SetContextFilter ]
-                            (Html.option [ value "", Html.Attributes.selected (model.contextFilter == Nothing) ] [ text "All contexts" ]
-                                :: List.map
-                                    (\context -> Html.option [ value context, Html.Attributes.selected (model.contextFilter == Just context) ] [ text ("@" ++ context) ])
-                                    contexts
-                            )
-                        )
-                , if List.isEmpty modes then
-                    text ""
-
-                  else
-                    Ui.labelled "Mode"
-                        (Html.select [ class "dropdown", onInput SetModeFilter ]
-                            (Html.option [ value "", Html.Attributes.selected (model.modeFilter == Nothing) ] [ text "All modes" ]
-                                :: List.map
-                                    (\mode -> Html.option [ value mode, Html.Attributes.selected (model.modeFilter == Just mode) ] [ text (Mode.label mode) ])
-                                    modes
-                            )
-                        )
-                ]
+            , filtersView model (List.concatMap .actions levels)
             ]
             :: (if none then
                     [ p [ class "dg-muted" ]
                         [ text
-                            (case ( model.contextFilter, model.modeFilter ) of
-                                ( Just context, Nothing ) ->
-                                    "No Next Actions @" ++ context ++ " in this Project."
+                            (if narrowed then
+                                noneMatching model "No Next Actions" ++ " in this Project."
 
-                                ( Nothing, Just mode ) ->
-                                    "No Next Actions in the mode " ++ mode ++ " in this Project."
-
-                                ( Just context, Just mode ) ->
-                                    "No Next Actions @" ++ context ++ " in the mode " ++ mode ++ " in this Project."
-
-                                ( Nothing, Nothing ) ->
-                                    "This Project has no Next Actions. The intention can say what the session is for."
+                             else
+                                "This Project has no Next Actions. The intention can say what the session is for."
                             )
                         ]
                     ]
@@ -1402,14 +1351,87 @@ focusPicker model project =
         )
 
 
+{-| Whether an Action fits the context and mode chosen to narrow the lists. The same choice
+holds on the start screen and while the session runs.
+-}
+matchesFilters : Model -> Action -> Bool
+matchesFilters model action =
+    (case model.contextFilter of
+        Just context ->
+            action.context == Just context
+
+        Nothing ->
+            True
+    )
+        && (case model.modeFilter of
+                Just mode ->
+                    action.mode == Just mode
+
+                Nothing ->
+                    True
+           )
+
+
+{-| The context and mode menus for a list of Actions, each only when the list uses one.
+-}
+filtersView : Model -> List Action -> Html Msg
+filtersView model actions =
+    let
+        -- The chosen one stays a choice even when the list no longer has it, so it can be cleared.
+        contexts =
+            (List.filterMap .context actions ++ Maybe.withDefault [] (Maybe.map List.singleton model.contextFilter)) |> Ui.uniqueSorted
+
+        modes =
+            (List.filterMap .mode actions ++ Maybe.withDefault [] (Maybe.map List.singleton model.modeFilter)) |> Ui.uniqueSorted
+    in
+    div [ class "dg-pomodoro-filters" ]
+        [ if List.isEmpty contexts then
+            text ""
+
+          else
+            Ui.labelled "Context"
+                (Html.select [ class "dropdown", onInput SetContextFilter ]
+                    (Html.option [ value "", Html.Attributes.selected (model.contextFilter == Nothing) ] [ text "All contexts" ]
+                        :: List.map
+                            (\context -> Html.option [ value context, Html.Attributes.selected (model.contextFilter == Just context) ] [ text ("@" ++ context) ])
+                            contexts
+                    )
+                )
+        , if List.isEmpty modes then
+            text ""
+
+          else
+            Ui.labelled "Mode"
+                (Html.select [ class "dropdown", onInput SetModeFilter ]
+                    (Html.option [ value "", Html.Attributes.selected (model.modeFilter == Nothing) ] [ text "All modes" ]
+                        :: List.map
+                            (\mode -> Html.option [ value mode, Html.Attributes.selected (model.modeFilter == Just mode) ] [ text (Mode.label mode) ])
+                            modes
+                    )
+                )
+        ]
+
+
+{-| "No Next Actions @home in the mode focused": what a narrowed list is missing.
+-}
+noneMatching : Model -> String -> String
+noneMatching model what =
+    what
+        ++ Maybe.withDefault "" (Maybe.map (\context -> " @" ++ context) model.contextFilter)
+        ++ Maybe.withDefault "" (Maybe.map (\mode -> " in the mode " ++ mode) model.modeFilter)
+
+
 {-| The Actions in focus, from every Project, as cards naming their Project; any of them can
-be picked as this session's. Context and mode filters aren't needed: focus is a short list.
+be picked as this session's, narrowed by context and mode like a Project's.
 -}
 focusActionsPicker : Model -> Html Msg
 focusActionsPicker model =
     let
         actions =
             focusActions model
+
+        shown =
+            List.filter (matchesFilters model) actions
 
         card action =
             ActionCard.view
@@ -1425,14 +1447,20 @@ focusActionsPicker model =
                 action
     in
     div [ class "dg-pomodoro-field" ]
-        (span [ class "dg-pomodoro-label" ] [ text "Actions in focus" ]
+        (div [ class "dg-pomodoro-field-heading" ]
+            [ span [ class "dg-pomodoro-label" ] [ text "Actions in focus" ]
+            , filtersView model actions
+            ]
             :: (if List.isEmpty actions then
                     [ p [ class "dg-muted" ]
                         [ text "No Actions are in focus. Mark some with F on the Action Board, or ★ in an Action's menu. The intention can still say what the session is for." ]
                     ]
 
+                else if List.isEmpty shown then
+                    [ p [ class "dg-muted" ] [ text (noneMatching model "No Actions in focus" ++ ".") ] ]
+
                 else
-                    [ div [ class "dg-pomodoro-cards" ] (List.map card actions)
+                    [ div [ class "dg-pomodoro-cards" ] (List.map card shown)
                     , small "Tick the ones this session is for, if any."
                     ]
                )
@@ -1634,16 +1662,24 @@ focusSessionActions model active =
                 []
 
               else
-                [ span [ class "dg-pomodoro-label" ]
-                    [ text
-                        (if List.isEmpty picked then
-                            "Actions in focus"
+                [ div [ class "dg-pomodoro-field-heading" ]
+                    [ span [ class "dg-pomodoro-label" ]
+                        [ text
+                            (if List.isEmpty picked then
+                                "Actions in focus"
 
-                         else
-                            "Other Actions in focus"
-                        )
+                             else
+                                "Other Actions in focus"
+                            )
+                        ]
+                    , filtersView model others
                     ]
-                , div [ class "dg-pomodoro-cards" ] (List.map row others)
+                , case List.filter (matchesFilters model) others of
+                    [] ->
+                        p [ class "dg-muted" ] [ text (noneMatching model "No other Actions in focus" ++ ".") ]
+
+                    shown ->
+                        div [ class "dg-pomodoro-cards" ] (List.map row shown)
                 ]
             ]
         )
@@ -1683,28 +1719,43 @@ projectActions model active =
                 action
     in
     div [ class "dg-pomodoro-field" ]
-        (if List.isEmpty picked && List.isEmpty others then
-            []
-
-         else
-            [ span [ class "dg-pomodoro-label" ]
-                [ text
-                    (if List.isEmpty picked then
-                        "Next Actions"
-
-                     else
-                        "Focus"
-                    )
-                ]
-            , div [ class "dg-pomodoro-cards" ] (List.map row picked)
-            , if List.isEmpty picked || List.isEmpty others then
-                text ""
+        (List.concat
+            [ if List.isEmpty picked then
+                []
 
               else
-                span [ class "dg-pomodoro-label" ] [ text "Other Next Actions" ]
+                [ span [ class "dg-pomodoro-label" ] [ text "Focus" ]
+                , div [ class "dg-pomodoro-cards" ] (List.map row picked)
+                ]
+            , if List.isEmpty others then
+                []
+
+              else
+                div [ class "dg-pomodoro-field-heading" ]
+                    [ span [ class "dg-pomodoro-label" ]
+                        [ text
+                            (if List.isEmpty picked then
+                                "Next Actions"
+
+                             else
+                                "Other Next Actions"
+                            )
+                        ]
+                    , filtersView model others
+                    ]
+                    :: (case
+                            levels
+                                |> List.map (\level -> { level | actions = List.filter (matchesFilters model) level.actions })
+                                -- While the timer runs, only sub-projects with something left to tick.
+                                |> List.filter (\level -> not (List.isEmpty level.actions))
+                        of
+                            [] ->
+                                [ p [ class "dg-muted" ] [ text (noneMatching model "No other Next Actions" ++ ".") ] ]
+
+                            shown ->
+                                treeActionsView shown row
+                       )
             ]
-                -- While the timer runs, only sub-projects with something left to tick.
-                ++ treeActionsView (List.filter (\level -> not (List.isEmpty level.actions)) levels) row
         )
 
 
