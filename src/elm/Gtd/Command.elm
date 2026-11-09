@@ -119,6 +119,8 @@ type Command
     | SetPomodoroSound String
     | CompletePomodoroAction ActionId
     | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
+      -- A session on the Actions in focus, across Projects; `focusActionIds` are the ones picked.
+    | StartFocusPomodoro { intention : String, focusActionIds : List ActionId, minutes : Int }
     | OpenChecklistPomodoro String
       -- Checklists
     | StartChecklistRun String
@@ -656,6 +658,13 @@ encode command =
             object "start-checklist-pomodoro"
                 [ ( "path", Encode.string fields.path )
                 , ( "intention", Encode.string fields.intention )
+                , ( "minutes", Encode.int fields.minutes )
+                ]
+
+        StartFocusPomodoro fields ->
+            object "start-focus-pomodoro"
+                [ ( "intention", Encode.string fields.intention )
+                , ( "focusActionIds", Encode.list Encode.string fields.focusActionIds )
                 , ( "minutes", Encode.int fields.minutes )
                 ]
 

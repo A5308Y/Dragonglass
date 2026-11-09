@@ -164,7 +164,16 @@ describe("the Pomodoro log file", () => {
     const onChecklist = { ...start, projectId: "", projectTitle: "Daily", projectPath: "", checklist: { runId: "R1", path: "GTD/Checklists/Daily.md" } };
     const finished = finishPomodoro(startPomodoro(emptyPomodoroStore(), onChecklist, at("10:00")), { outcome: null, reflection: "" }, at("10:25"));
     expect(parsePomodoroStore(JSON.parse(JSON.stringify(finished)))).toEqual(finished);
-    expect(() => startPomodoro(emptyPomodoroStore(), { ...start, projectId: "" }, at("10:00"))).toThrow("Choose a Project or a checklist");
+    expect(() => startPomodoro(emptyPomodoroStore(), { ...start, projectId: "" }, at("10:00"))).toThrow("Choose a Project, a checklist or the Actions in focus");
+  });
+
+  it("keeps a session on the Actions in focus, which has no Project", () => {
+    const onFocus: PomodoroStart = { ...start, projectId: "", projectTitle: "Actions in focus", projectPath: "", inFocus: true, focusActionIds: ["A7"] };
+    const finished = finishPomodoro(startPomodoro(emptyPomodoroStore(), onFocus, at("10:00")), { outcome: null, reflection: "" }, at("10:25"));
+    expect(finished.sessions[0]).toMatchObject({ projectId: "", inFocus: true, focusActionIds: ["A7"] });
+    expect(parsePomodoroStore(JSON.parse(JSON.stringify(finished)))).toEqual(finished);
+    const dto = elmPomodoro(finished, 25, at("11:00"));
+    expect(dto.sessions[0]).toMatchObject({ inFocus: true, checklistPath: null });
   });
 
   it("drops malformed sessions instead of failing", () => {
@@ -184,6 +193,9 @@ describe("the Pomodoro view's data and commands", () => {
     expect(parsePomodoroCommand(envelope({ type: "start-pomodoro", projectId: "P1", intention: "Draft", focusActionIds: ["A1"], minutes: 25 }))?.command.type)
       .toBe("start-pomodoro");
     expect(parsePomodoroCommand(envelope({ type: "finish-pomodoro", outcome: null, reflection: "" }))?.command.type).toBe("finish-pomodoro");
+    expect(parsePomodoroCommand(envelope({ type: "start-focus-pomodoro", intention: "Clear", focusActionIds: ["A1"], minutes: 25 }))?.command.type)
+      .toBe("start-focus-pomodoro");
+    expect(parsePomodoroCommand(envelope({ type: "start-focus-pomodoro", intention: "Clear", focusActionIds: "A1", minutes: 25 }))).toBeNull();
     expect(parsePomodoroCommand(envelope({ type: "finish-pomodoro", outcome: "partly", reflection: "ok" }))?.command.type).toBe("finish-pomodoro");
     expect(parsePomodoroCommand(envelope({ type: "start-pomodoro", projectId: "P1", intention: "Draft", focusActionIds: [], minutes: 0 }))).toBeNull();
     expect(parsePomodoroCommand(envelope({ type: "start-pomodoro", projectId: "P1", intention: "Draft", focusActionIds: [], minutes: 25.5 }))).toBeNull();

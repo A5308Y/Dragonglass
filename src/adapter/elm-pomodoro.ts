@@ -9,6 +9,7 @@ import type { GtdServices } from "../ui/services";
 import { localDate } from "../utils/date";
 import { openWebLink } from "../ui/open-link";
 import { createUlid } from "../utils/ulid";
+import { FOCUS_SESSION_TITLE } from "../domain/pomodoro";
 import { assertNever, subscribeElmCommands, type ElmOutgoingPort } from "./elm-host";
 import { executeSupportCommand, projectDetail } from "./project-detail";
 import type { Project } from "../domain/types";
@@ -227,6 +228,21 @@ export class ElmPomodoroHost {
           checklist: { runId: run.id, path: run.path },
           intention: command.intention,
           focusActionIds: [],
+          plannedMinutes: command.minutes,
+        });
+      }
+      case "start-focus-pomodoro": {
+        const actionsById = this.services.repository.index.getSnapshot().actionsById;
+        // Only Actions still in focus: one taken out of focus since the view drew is dropped.
+        const picked = command.focusActionIds.filter((id) => actionsById.get(id)?.focus === true);
+        return this.pomodoro.begin({
+          id: createUlid(),
+          projectId: "",
+          projectTitle: FOCUS_SESSION_TITLE,
+          projectPath: "",
+          inFocus: true,
+          intention: command.intention,
+          focusActionIds: picked,
           plannedMinutes: command.minutes,
         });
       }

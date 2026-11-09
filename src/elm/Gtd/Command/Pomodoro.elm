@@ -24,6 +24,7 @@ type Command
     | CompletePomodoroAction ActionId
     | ShowProject ProjectId
     | StartChecklistPomodoro { path : String, intention : String, minutes : Int }
+    | StartFocusPomodoro { intention : String, focusActionIds : List ActionId, minutes : Int }
     | MarkChecklistItem { runId : String, key : String, state : MarkState }
     | OpenChecklistRun String
       -- The session's Support Material, as on the Project page.
@@ -77,6 +78,9 @@ encode command =
 
             StartChecklistPomodoro fields ->
                 Base.StartChecklistPomodoro fields
+
+            StartFocusPomodoro fields ->
+                Base.StartFocusPomodoro fields
 
             MarkChecklistItem fields ->
                 Base.MarkChecklistItem fields

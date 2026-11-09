@@ -87,6 +87,7 @@ describe("mite time entries", () => {
         session("new"),
         session("checklist", { projectId: "", checklist: { runId: "R1", path: "GTD/Checklists/Daily.md" } }),
         session("logged", { manual: true }),
+        session("focus", { projectId: "", projectTitle: "Actions in focus", inFocus: true }),
       ],
     };
     expect(unsentSessions(store, "2026-09-01").map((entry) => entry.id)).toEqual(["new"]);

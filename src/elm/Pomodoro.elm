@@ -51,6 +51,9 @@ type alias Active =
     , projectId : ProjectId
     , projectTitle : String
     , checklist : Maybe { runId : String, path : String }
+
+    -- Spent on the Actions in focus, which can belong to any Project.
+    , inFocus : Bool
     , intention : String
     , focusActionIds : List ActionId
     , completedActionIds : List ActionId
@@ -67,6 +70,7 @@ type alias Session =
     , projectTitle : String
     , projectPath : String
     , checklistPath : Maybe String
+    , inFocus : Bool
     , intention : String
     , day : String
     , startedTime : String
@@ -102,16 +106,19 @@ type alias ChecklistChoice =
     { path : String, title : String, itemCount : Int }
 
 
-{-| What a session is spent on. A checklist isn't a Project, so it is a subject of its own.
+{-| What a session is spent on. A checklist isn't a Project, so it is a subject of its own;
+so are the Actions in focus (`focus: true`), which can belong to any Project.
 -}
 type Subject
     = OnProject Project
     | OnChecklist ChecklistChoice
+    | OnFocus
 
 
 type SubjectKey
     = ProjectKey ProjectId
     | ChecklistKey String
+    | FocusKey
 
 
 subjectKey : Subject -> SubjectKey
@@ -122,6 +129,9 @@ subjectKey subject =
 
         OnChecklist checklist ->
             ChecklistKey checklist.path
+
+        OnFocus ->
+            FocusKey
 
 
 
@@ -485,6 +495,13 @@ update msg model =
                                     Command.StartChecklistPomodoro
                                         { path = checklist.path
                                         , intention = String.trim model.intention
+                                        , minutes = minutes
+                                        }
+
+                                OnFocus ->
+                                    Command.StartFocusPomodoro
+                                        { intention = String.trim model.intention
+                                        , focusActionIds = Set.toList model.focusIds
                                         , minutes = minutes
                                         }
                             )
@@ -866,7 +883,13 @@ openProjects model =
 
 subjectSuggestions : Model -> List Subject
 subjectSuggestions model =
-    List.map OnProject (projectSuggestions model (Picker.query model.subject))
+    (if Ui.matches (Picker.query model.subject) [ focusTitle, "focus", "★" ] then
+        [ OnFocus ]
+
+     else
+        []
+    )
+        ++ List.map OnProject (projectSuggestions model (Picker.query model.subject))
         ++ (model.state.checklists
                 |> List.filter (\checklist -> Ui.matches (Picker.query model.subject) [ checklist.title, "checklist" ])
                 |> List.take 10
@@ -883,6 +906,9 @@ subjectLabel model subject =
         OnChecklist checklist ->
             checklist.title
 
+        OnFocus ->
+            focusTitle
+
 
 subjectHint : Model -> Subject -> Maybe String
 subjectHint model subject =
@@ -892,6 +918,42 @@ subjectHint model subject =
 
         OnChecklist _ ->
             Just "Checklist"
+
+        OnFocus ->
+            Just ("★ " ++ Ui.plural (List.length (focusActions model)) "Action" ++ ", any Project")
+
+
+{-| What the Actions in focus are called as a subject; the host files their sessions under it too.
+-}
+focusTitle : String
+focusTitle =
+    "Actions in focus"
+
+
+{-| The open Actions in focus, from every Project: Next Actions first, then by rank.
+-}
+focusActions : Model -> List Action
+focusActions model =
+    model.snapshot.actions
+        |> List.filter (\action -> action.focus && ActionStatus.isOpen action.status)
+        |> List.sortBy
+            (\action ->
+                ( if action.status == ActionStatus.Next then
+                    0
+
+                  else
+                    1
+                , Maybe.withDefault 999999 action.priority
+                , action.created
+                )
+            )
+
+
+{-| An Action's Project, named on its card where Actions of several Projects are listed.
+-}
+actionProjectName : Model -> Action -> Maybe String
+actionProjectName model action =
+    action.projectId |> Maybe.andThen (Hierarchy.breadcrumbFor model.snapshot.projects)
 
 
 projectSuggestions : Model -> String -> List Project
@@ -1001,7 +1063,11 @@ scopeSubject model =
                     Just (ChecklistKey checklist.path)
 
                 Nothing ->
-                    Just (ProjectKey active.projectId)
+                    if active.inFocus then
+                        Just FocusKey
+
+                    else
+                        Just (ProjectKey active.projectId)
 
         Nothing ->
             Picker.selection model.subject |> Maybe.map subjectKey
@@ -1014,7 +1080,11 @@ sessionKey session =
             ChecklistKey path
 
         Nothing ->
-            ProjectKey session.projectId
+            if session.inFocus then
+                FocusKey
+
+            else
+                ProjectKey session.projectId
 
 
 
@@ -1056,10 +1126,10 @@ setupView model =
         [ h3 [] [ text "New Pomodoro" ]
         , focusResetOffer model
         , div [ class "dg-pomodoro-field" ]
-            [ span [ class "dg-pomodoro-label" ] [ text "Project or checklist" ]
+            [ span [ class "dg-pomodoro-label" ] [ text "Project, checklist or focus" ]
             , Picker.view
                 (Picker.config
-                    { placeholder = "Search Projects and checklists…"
+                    { placeholder = "Search Projects, checklists, focus…"
                     , label = subjectLabel model
                     , hint = subjectHint model
                     , tag = SubjectPicker
@@ -1075,6 +1145,9 @@ setupView model =
             Just (OnChecklist checklist) ->
                 p [ class "dg-muted" ]
                     [ text (Ui.plural checklist.itemCount "item" ++ ", to tick off while the timer runs. A run under way goes on; otherwise one starts.") ]
+
+            Just OnFocus ->
+                focusActionsPicker model
 
             Nothing ->
                 text ""
@@ -1299,6 +1372,43 @@ focusPicker model project =
         )
 
 
+{-| The Actions in focus, from every Project, as cards naming their Project; any of them can
+be picked as this session's. Context and mode filters aren't needed: focus is a short list.
+-}
+focusActionsPicker : Model -> Html Msg
+focusActionsPicker model =
+    let
+        actions =
+            focusActions model
+
+        card action =
+            ActionCard.view
+                { today = model.snapshot.today
+                , selected = Set.member action.id model.focusIds
+                , done = False
+                , select = ToggleFocus action.id
+                , selectLabel = "Work on"
+                , project = actionProjectName model action
+                , openUrl = \url -> Send (Command.OpenLink url)
+                , openNote = \link -> Send (Command.OpenNoteLink link action.file.path)
+                }
+                action
+    in
+    div [ class "dg-pomodoro-field" ]
+        (span [ class "dg-pomodoro-label" ] [ text "Actions in focus" ]
+            :: (if List.isEmpty actions then
+                    [ p [ class "dg-muted" ]
+                        [ text "No Actions are in focus. Mark some with F on the Action Board, or ★ in an Action's menu. The intention can still say what the session is for." ]
+                    ]
+
+                else
+                    [ div [ class "dg-pomodoro-cards" ] (List.map card actions)
+                    , small "Tick the ones this session is for, if any."
+                    ]
+               )
+        )
+
+
 runningView : Model -> Active -> Html Msg
 runningView model active =
     let
@@ -1349,8 +1459,12 @@ subjectLink active =
                 [ text ("Checklist: " ++ active.projectTitle) ]
 
         Nothing ->
-            button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject active.projectId)) ]
-                [ text active.projectTitle ]
+            if active.inFocus then
+                span [ class "dg-pomodoro-project-link" ] [ text ("★ " ++ active.projectTitle) ]
+
+            else
+                button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject active.projectId)) ]
+                    [ text active.projectTitle ]
 
 
 {-| What plays while the timer runs: nothing, a ticking clock, or the sound folder.
@@ -1404,7 +1518,67 @@ sessionActions model active =
                     text ""
 
         Nothing ->
-            projectActions model active
+            if active.inFocus then
+                focusSessionActions model active
+
+            else
+                projectActions model active
+
+
+{-| A session on the Actions in focus: the ones picked for it, then the rest in focus,
+each naming its Project; ticking one completes it.
+-}
+focusSessionActions : Model -> Active -> Html Msg
+focusSessionActions model active =
+    let
+        byId =
+            Dict.fromList (List.map (\action -> ( action.id, action )) model.snapshot.actions)
+
+        picked =
+            List.filterMap (\actionId -> Dict.get actionId byId) active.focusActionIds
+
+        others =
+            focusActions model |> List.filter (\action -> not (List.member action.id active.focusActionIds))
+
+        row action =
+            ActionCard.view
+                { today = model.snapshot.today
+                , selected = False
+                , done = action.status == ActionStatus.Done
+                , select = \_ -> CompleteAction action.id
+                , selectLabel = "Done"
+                , project = actionProjectName model action
+                , openUrl = \url -> Send (Command.OpenLink url)
+                , openNote = \link -> Send (Command.OpenNoteLink link action.file.path)
+                }
+                action
+    in
+    div [ class "dg-pomodoro-field" ]
+        (List.concat
+            [ if List.isEmpty picked then
+                []
+
+              else
+                [ span [ class "dg-pomodoro-label" ] [ text "This session" ]
+                , div [ class "dg-pomodoro-cards" ] (List.map row picked)
+                ]
+            , if List.isEmpty others then
+                []
+
+              else
+                [ span [ class "dg-pomodoro-label" ]
+                    [ text
+                        (if List.isEmpty picked then
+                            "Actions in focus"
+
+                         else
+                            "Other Actions in focus"
+                        )
+                    ]
+                , div [ class "dg-pomodoro-cards" ] (List.map row others)
+                ]
+            ]
+        )
 
 
 projectActions : Model -> Active -> Html Msg
@@ -1677,6 +1851,9 @@ historyView model =
                         Just (ChecklistKey _) ->
                             "This checklist"
 
+                        Just FocusKey ->
+                            "Focus sessions"
+
                         _ ->
                             "This Project"
                     )
@@ -1876,6 +2053,9 @@ sessionView model session =
                         [ if session.checklistPath /= Nothing then
                             span [] [ text ("Checklist: " ++ session.projectTitle) ]
 
+                          else if session.inFocus then
+                            span [] [ text ("★ " ++ session.projectTitle) ]
+
                           else if Data.findProject session.projectId model.snapshot.projects /= Nothing then
                             button [ class "dg-flat-button dg-pomodoro-project-link", onClick (Send (Command.ShowProject session.projectId)) ]
                                 [ text session.projectTitle ]
@@ -1967,6 +2147,7 @@ activeDecoder =
                     )
                 )
             )
+        |> andMap (Decode.oneOf [ Decode.field "inFocus" Decode.bool, Decode.succeed False ])
         |> andMap (Decode.field "intention" Decode.string)
         |> andMap (Decode.field "focusActionIds" (Decode.list Decode.string))
         |> andMap (Decode.field "completedActionIds" (Decode.list Decode.string))
@@ -1984,6 +2165,7 @@ sessionDecoder =
         |> andMap (Decode.field "projectTitle" Decode.string)
         |> andMap (Decode.field "projectPath" Decode.string)
         |> andMap (Decode.field "checklistPath" (Decode.nullable Decode.string))
+        |> andMap (Decode.oneOf [ Decode.field "inFocus" Decode.bool, Decode.succeed False ])
         |> andMap (Decode.field "intention" Decode.string)
         |> andMap (Decode.field "day" Decode.string)
         |> andMap (Decode.field "startedTime" Decode.string)

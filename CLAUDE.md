@@ -78,6 +78,11 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   `src/adapter/project-detail.ts`, shared too: change both views there, not in one of them.
   A file is listed under the Project whose support folder holds it most deeply
   (`projectSupportFiles`), so a nested sub-project's folder isn't shown twice.
+- A session can be spent on the Actions in focus instead of a Project or checklist ("Actions in
+  focus" in the picker, `OnFocus` in `Pomodoro.elm`, `start-focus-pomodoro`): `inFocus: true`, an
+  empty `projectId`, `FOCUS_SESSION_TITLE` as `projectTitle`, and the picked ones as `focusActionIds`.
+  Its cards name their Project. Like checklist sessions, it is never sent to mite and never goes to a
+  Diary, since it has no Project.
 - A time-tracking sync should: read finished sessions from the service's store,
   convert each with `toTimeEntry` (key = session id, stable across re-syncs),
   and record what it sent in `session.external[<integration>] = { id, syncedAt }`

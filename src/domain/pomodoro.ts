@@ -1,5 +1,6 @@
 /**
- * Pomodoro sessions: a fixed time slice of focus on one Project or one checklist run,
+ * Pomodoro sessions: a fixed time slice of focus on one Project, one checklist run or
+ * the Actions in focus (across Projects),
  * with an intention set before it starts and a short reflection after it ends.
  *
  * The log is one JSON file in the vault, like the Feeds and Mail stores, so it
@@ -16,6 +17,9 @@ export const POMODORO_STORE_VERSION = 1;
 
 /** How many finished sessions the log keeps before the oldest are dropped. */
 export const SESSION_LIMIT = 5_000;
+
+/** The title a session on the Actions in focus is filed under, in place of a Project's. */
+export const FOCUS_SESSION_TITLE = "Actions in focus";
 
 export type PomodoroOutcome = "achieved" | "partly" | "missed";
 
@@ -39,7 +43,7 @@ export interface PomodoroChecklist {
 interface SessionBasis {
   /** A ULID: the stable key an external time tracker reconciles against. */
   id: string;
-  /** Empty for a session on a checklist run. */
+  /** Empty for a session on a checklist run or on the Actions in focus. */
   projectId: string;
   /**
    * The Project's title and breadcrumb when the session started, so history survives
@@ -49,6 +53,11 @@ interface SessionBasis {
   projectPath: string;
   /** Set when the session is spent on a checklist run; checklists aren't Projects. */
   checklist?: PomodoroChecklist;
+  /**
+   * Set when the session is spent on the Actions in focus (`focus: true`), which can belong
+   * to any Project: there is no Project, and `focusActionIds` are the ones picked among them.
+   */
+  inFocus?: true;
   intention: string;
   /** The Actions picked to work on, if any. */
   focusActionIds: string[];
@@ -94,6 +103,7 @@ export interface PomodoroStart {
   projectTitle: string;
   projectPath: string;
   checklist?: PomodoroChecklist;
+  inFocus?: true;
   intention: string;
   focusActionIds: string[];
   plannedMinutes: number;
@@ -135,7 +145,7 @@ export function emptyPomodoroStore(): PomodoroStore {
 
 export function startPomodoro(store: PomodoroStore, start: PomodoroStart, now: Date): PomodoroStore {
   if (store.active) throw new Error("A Pomodoro is already running.");
-  if (!start.projectId && !start.checklist) throw new Error("Choose a Project or a checklist first.");
+  if (!start.projectId && !start.checklist && !start.inFocus) throw new Error("Choose a Project, a checklist or the Actions in focus first.");
   if (!start.intention.trim()) throw new Error("Set an intention before starting.");
   if (!Number.isInteger(start.plannedMinutes) || start.plannedMinutes < 1 || start.plannedMinutes > 180) {
     throw new Error("A Pomodoro lasts between 1 and 180 minutes.");
@@ -317,7 +327,8 @@ function parseBasis(raw: Record<string, unknown>): SessionBasis | null {
   const checklist = isRecord(raw.checklist) && text(raw.checklist.runId)
     ? { runId: text(raw.checklist.runId), path: text(raw.checklist.path) }
     : undefined;
-  if (!id || (!projectId && !checklist) || Number.isNaN(Date.parse(startedAt)) || !Number.isInteger(plannedMinutes) || plannedMinutes < 1) {
+  const inFocus = raw.inFocus === true;
+  if (!id || (!projectId && !checklist && !inFocus) || Number.isNaN(Date.parse(startedAt)) || !Number.isInteger(plannedMinutes) || plannedMinutes < 1) {
     return null;
   }
   return {
@@ -331,6 +342,7 @@ function parseBasis(raw: Record<string, unknown>): SessionBasis | null {
     plannedMinutes,
     startedAt,
     ...(checklist ? { checklist } : {}),
+    ...(inFocus ? { inFocus: true as const } : {}),
   };
 }
 
