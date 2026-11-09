@@ -128,15 +128,21 @@ describe("Typed Project paths", () => {
       .toEqual({ parentId: "P2", parentBreadcrumb: "House > Heating", title: "Heat pump" });
   });
 
-  it("keeps an unresolvable prefix in the title rather than inventing a parent", () => {
-    expect(parseProjectPath("Nonsense > Heat pump", all)).toEqual({ title: "Nonsense > Heat pump" });
+  it("refuses an unresolvable prefix rather than inventing a parent or a \">\" in a title", () => {
+    expect(parseProjectPath("Nonsense > Heat pump", all)).toEqual({
+      title: "Nonsense > Heat pump",
+      problem: "No Project is called “Nonsense”: choose the parent from the list.",
+    });
     // Only the final segment is ever created, so a missing middle resolves nothing.
-    expect(parseProjectPath("House > Missing > Heat pump", all)).toEqual({ title: "House > Missing > Heat pump" });
+    expect(parseProjectPath("House > Missing > Heat pump", all).problem).toContain("“House > Missing”");
   });
 
   it("refuses a bare title carried by two Projects", () => {
     const elsewhere = [named("P3", "Garden"), named("P4", "Heating", "P3")];
-    expect(parseProjectPath("Heating > Heat pump", [...all, ...elsewhere])).toEqual({ title: "Heating > Heat pump" });
+    expect(parseProjectPath("Heating > Heat pump", [...all, ...elsewhere])).toEqual({
+      title: "Heating > Heat pump",
+      problem: "Several Projects are called “Heating”: choose the parent from the list.",
+    });
   });
 
   it("prefers the Project whose whole breadcrumb was typed", () => {
@@ -146,8 +152,8 @@ describe("Typed Project paths", () => {
       .toEqual({ parentId: "P3", parentBreadcrumb: "Heating", title: "Heat pump" });
   });
 
-  it("ignores a separator with nothing on one side", () => {
-    expect(parseProjectPath("Heating >", all)).toEqual({ title: "Heating >" });
-    expect(parseProjectPath("> Heat pump", all)).toEqual({ title: "> Heat pump" });
+  it("refuses a separator with nothing on one side", () => {
+    expect(parseProjectPath("Heating >", all).problem).toBe("Name the new sub-project after “>”.");
+    expect(parseProjectPath("> Heat pump", all).problem).toBe("Name the parent Project before “>”.");
   });
 });

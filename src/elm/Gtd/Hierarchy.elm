@@ -6,8 +6,12 @@ module Gtd.Hierarchy exposing
     , isDescendantOf
     , area
     , root
-    , leafTitle
+    , lineage
+    , openChildren
     , separator
+    , TypedPath(..)
+    , typedPath
+    , typedPathProblem
     )
 
 {-| Reading the Project tree.
@@ -19,6 +23,7 @@ so every walk here carries the ids it has already seen and stops when one repeat
 
 import Gtd.Data exposing (Project)
 import Gtd.Id exposing (ProjectId)
+import Gtd.ProjectStatus as ProjectStatus
 import Set exposing (Set)
 
 
@@ -119,22 +124,70 @@ descendantIds rootId projects =
         |> Set.fromList
 
 
-{-| The segment after the last separator of a typed path, when the prefix names an
-existing Project. `Heating > Heat pump` becomes `Heat pump`; an unresolvable prefix
-such as `Nonsense > Heat pump` stays whole, so no parent is invented.
+{-| A Project and the Projects above it, the top-level one first.
 -}
-leafTitle : String -> List Project -> String
-leafTitle query projects =
+lineage : List Project -> Project -> List Project
+lineage projects project =
+    let
+        walk seen current found =
+            if Set.member current.id seen then
+                found
+
+            else
+                case current.parentProjectId |> Maybe.andThen (\parentId -> Gtd.Data.findProject parentId projects) of
+                    Just parent ->
+                        walk (Set.insert current.id seen) parent (parent :: found)
+
+                    Nothing ->
+                        found
+    in
+    walk Set.empty project [ project ]
+
+
+{-| The sub-projects directly below a Project that aren't finished, in board order.
+-}
+openChildren : List Project -> Project -> List Project
+openChildren projects project =
+    projects
+        |> List.filter
+            (\candidate ->
+                candidate.parentProjectId
+                    == Just project.id
+                    && candidate.id
+                    /= project.id
+                    && not (List.member (ProjectStatus.key candidate.status) [ "completed", "cancelled" ])
+            )
+        |> List.sortWith compareByOrder
+
+
+{-| A typed Project name read as a path into the tree.
+
+  - `Plain`: no separator, a name as it is.
+  - `Under`: the part before the last separator names an existing Project, and the
+    rest (possibly still empty) is the sub-project to create below it.
+  - `NoParent`: the part before it names no Project, or several; the text says which.
+
+Only the last segment is ever created, and a path that doesn't resolve is never
+saved: neither an invented parent nor a Project titled "Heating > Heat pump" is what
+someone typing it wanted. `parseProjectPath` in `src/domain/project-hierarchy.ts`
+applies the same rule on the host.
+
+-}
+type TypedPath
+    = Plain String
+    | Under Project String
+    | NoParent String
+
+
+typedPath : String -> List Project -> TypedPath
+typedPath query projects =
     let
         typed =
             String.trim query
-
-        separators =
-            String.indexes ">" typed
     in
-    case List.reverse separators |> List.head of
+    case String.indexes ">" typed |> List.reverse |> List.head of
         Nothing ->
-            typed
+            Plain typed
 
         Just separatorIndex ->
             let
@@ -147,17 +200,47 @@ leafTitle query projects =
                 normalized =
                     String.toLower prefix
 
-                breadcrumbMatch =
-                    List.any (\project -> String.toLower (breadcrumb projects project) == normalized) projects
+                byBreadcrumb =
+                    List.filter (\project -> String.toLower (breadcrumb projects project) == normalized) projects
 
-                titleMatches =
-                    List.filter (\project -> String.toLower project.title == normalized) projects |> List.length
+                byTitle =
+                    List.filter (\project -> String.toLower project.title == normalized) projects
             in
-            if not (String.isEmpty prefix) && not (String.isEmpty leaf) && (breadcrumbMatch || titleMatches == 1) then
-                leaf
+            if String.isEmpty prefix then
+                NoParent "Name the parent Project before “>”."
 
             else
-                typed
+                case ( byBreadcrumb, byTitle ) of
+                    ( parent :: _, _ ) ->
+                        Under parent leaf
+
+                    ( [], [ parent ] ) ->
+                        Under parent leaf
+
+                    ( [], [] ) ->
+                        NoParent ("No Project is called “" ++ prefix ++ "”: choose the parent from the list.")
+
+                    ( [], _ ) ->
+                        NoParent ("Several Projects are called “" ++ prefix ++ "”: choose the parent from the list.")
+
+
+{-| Why a typed path can't be created, if it can't.
+-}
+typedPathProblem : TypedPath -> Maybe String
+typedPathProblem path =
+    case path of
+        Plain _ ->
+            Nothing
+
+        Under _ leaf ->
+            if String.isEmpty leaf then
+                Just "Name the new sub-project after “>”."
+
+            else
+                Nothing
+
+        NoParent problem ->
+            Just problem
 
 
 {-| Board priority first, then title, so an unordered Project sorts after ordered siblings.

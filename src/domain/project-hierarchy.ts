@@ -109,14 +109,18 @@ export interface ProjectPath {
   parentBreadcrumb?: string;
   /** The title to create, with any resolved parent path stripped. */
   title: string;
+  /** Why the typed path can't be created: it names no parent, or no name below it. */
+  problem?: string;
 }
 
 /**
  * Reads a typed Project name as a path into the hierarchy, so `Heating > Heat pump` names a new
  * sub-project of an existing `Heating`.
  *
- * Only the segment after the final separator is ever created. An unresolvable prefix stays part
- * of the title, because inventing an unasked-for parent is worse than one oddly named Project.
+ * Only the segment after the final separator is ever created. A path whose parent can't be found
+ * comes back with a `problem` and must not be created: neither an invented parent nor a Project
+ * named "Heating > Heat pump" is what someone typing it wanted. `Gtd.Hierarchy.typedPath` in Elm
+ * applies the same rule, so the form refuses before the host does.
  */
 export function parseProjectPath(query: string, projects: readonly Project[]): ProjectPath {
   const title = query.trim();
@@ -125,7 +129,7 @@ export function parseProjectPath(query: string, projects: readonly Project[]): P
 
   const prefix = title.slice(0, separator).trim();
   const leaf = title.slice(separator + PROJECT_PATH_SEPARATOR.length).trim();
-  if (!prefix || !leaf) return { title };
+  if (!prefix) return { title, problem: "Name the parent Project before “>”." };
 
   const projectsById = new Map(projects.map((project) => [project.id, project]));
   const normalized = prefix.toLocaleLowerCase();
@@ -134,7 +138,15 @@ export function parseProjectPath(query: string, projects: readonly Project[]): P
   // A bare title only resolves when it is unambiguous; two "Heating" Projects name no parent.
   const byTitle = projects.filter((project) => project.title.toLocaleLowerCase() === normalized);
   const parent = byBreadcrumb ?? (byTitle.length === 1 ? byTitle[0] : undefined);
-  if (!parent) return { title };
+  if (!parent) {
+    return {
+      title,
+      problem: byTitle.length > 1
+        ? `Several Projects are called “${prefix}”: choose the parent from the list.`
+        : `No Project is called “${prefix}”: choose the parent from the list.`,
+    };
+  }
+  if (!leaf) return { title, problem: "Name the new sub-project after “>”." };
 
   return { parentId: parent.id, parentBreadcrumb: breadcrumbs.get(parent.id) ?? parent.title, title: leaf };
 }

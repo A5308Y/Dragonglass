@@ -872,6 +872,7 @@ export class GtdRepository {
     if (!title) return undefined;
     // An unmatched name may still be a path into the hierarchy, naming the parent to create under.
     const path = parseProjectPath(title, snapshot.projects);
+    if (path.problem) throw new Error(path.problem);
     // A new Project keeps the web links its Item's note refers to.
     const externalLinks = item.file.extension === "md" ? externalLinksInNote(await this.app.vault.cachedRead(item.file)) : [];
     return this.createProjectRecord({

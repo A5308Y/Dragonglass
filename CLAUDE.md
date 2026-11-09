@@ -256,6 +256,10 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   imported, processed, moved there, or opened again) reopens it and the Projects above it that aren't
   Active (`projectsReopenedByOpenAction`, `GtdRepository.reopenForOpenAction`), reported by
   `onProjectsReopened`.
+- A typed "Parent > Name" in processing creates a sub-project only if the parent resolves (full
+  breadcrumb, or a title only one Project has); otherwise it is refused, never saved as a title
+  with ">" in it. The rule is in both `Hierarchy.typedPath` (Elm) and `parseProjectPath` (host):
+  change both together.
 - Active Projects below an inactive one ("stranded") count as parked for the
   missing-Action rule and show up as index issues until fixed by hand.
 

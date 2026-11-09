@@ -168,6 +168,7 @@ type Msg
     | StartProcessing (Maybe InboxItemId)
     | ShowList
     | ProjectPicker (Picker.PickerMsg Project)
+    | StartSubProject Project
     | ContextPicker (Picker.PickerMsg String)
     | ModePicker (Picker.PickerMsg String)
     | DesiredOutcomeChanged String
@@ -334,7 +335,7 @@ update msg model =
         ProjectPicker pickerMsg ->
             let
                 picked =
-                    Picker.update pickerMsg (projectSuggestions model) (Hierarchy.breadcrumb model.snapshot.projects) model.project
+                    pickProject pickerMsg model
 
                 chosen =
                     Picker.selection picked |> Maybe.map .id
@@ -361,6 +362,13 @@ update msg model =
 
                     Nothing ->
                         ( next, Cmd.none )
+
+        StartSubProject parent ->
+            let
+                ( next, cmd ) =
+                    update (ProjectPicker (Picker.Typed (Hierarchy.breadcrumb model.snapshot.projects parent ++ Hierarchy.separator))) model
+            in
+            ( next, Cmd.batch [ cmd, focus projectInputId ] )
 
         ContextPicker pickerMsg ->
             ( { model | context = Picker.update pickerMsg (contextSuggestions model) identity model.context }, Cmd.none )
@@ -1963,8 +1971,9 @@ processingForm model =
         [ div [ class "dg-processing-grid" ]
             ([ processingField True
                 "Project"
-                "Optional. Select an existing Project, or type a new name or “Parent > New sub-project”."
+                "Optional. Choose a Project or type a new name. Type “>” after a Project to start a sub-project below it."
                 [ Picker.view (projectPicker model) (projectSuggestions model) model.project
+                , projectLocation model
                 , div [ class "dg-processing-toggles" ]
                     [ label [ class "dg-processing-inline-toggle" ]
                         [ input [ type_ "checkbox", checked model.backlog, onCheck SetBacklog ] [], span [] [ text "Backlog" ] ]
@@ -2153,6 +2162,145 @@ projectPicker model =
         , hint = Hierarchy.area model.snapshot.projects
         , tag = ProjectPicker
         }
+        |> Picker.withInputId projectInputId
+
+
+projectInputId : String
+projectInputId =
+    "dg-processing-project"
+
+
+{-| Where the Project field points in the tree: the chosen Project with the Projects
+above and below it (each one click away) and a way to start a sub-project; or, for a
+typed path, the parent it lands under, or why it can't be created.
+-}
+projectLocation : Model -> Html Msg
+projectLocation model =
+    let
+        projects =
+            model.snapshot.projects
+
+        choose project =
+            button [ type_ "button", class "dg-processing-crumb dg-flat-button", onClick (ProjectPicker (Picker.Chose project)) ] [ text project.title ]
+
+        separatorMark =
+            span [ class "dg-processing-crumb-separator", attribute "aria-hidden" "true" ] [ text "›" ]
+
+        trail crumbs =
+            List.intersperse separatorMark crumbs
+
+        newSubProject parent =
+            button [ type_ "button", class "dg-processing-new-sub dg-flat-button", onClick (StartSubProject parent) ]
+                [ text ("+ New sub-project of " ++ quoted parent.title) ]
+    in
+    case selectedProject model of
+        Just project ->
+            let
+                above =
+                    Hierarchy.lineage projects project |> List.reverse |> List.drop 1 |> List.reverse
+
+                children =
+                    Hierarchy.openChildren projects project
+
+                shown =
+                    List.take 8 children
+            in
+            div [ class "dg-processing-location" ]
+                [ div [ class "dg-processing-path" ]
+                    (span [ class "dg-processing-location-label" ] [ text "In:" ]
+                        :: trail (List.map choose above ++ [ strong [] [ text project.title ] ])
+                    )
+                , if List.isEmpty children then
+                    text ""
+
+                  else
+                    div [ class "dg-processing-path" ]
+                        (span [ class "dg-processing-location-label" ] [ text "Below:" ]
+                            :: List.map choose shown
+                            ++ (if List.length children > List.length shown then
+                                    [ span [ class "dg-processing-location-more" ] [ text ("+" ++ String.fromInt (List.length children - List.length shown) ++ " more") ] ]
+
+                                else
+                                    []
+                               )
+                        )
+                , newSubProject project
+                ]
+
+        Nothing ->
+            case Hierarchy.typedPath model.project.query projects of
+                Hierarchy.Plain _ ->
+                    text ""
+
+                Hierarchy.Under parent leaf ->
+                    div [ class "dg-processing-location" ]
+                        [ div [ class "dg-processing-path" ]
+                            (span [ class "dg-processing-location-label" ] [ text "New sub-project in:" ]
+                                :: trail
+                                    (List.map choose (Hierarchy.lineage projects parent)
+                                        ++ (if String.isEmpty leaf then
+                                                []
+
+                                            else
+                                                [ strong [] [ text leaf ], small [ class "dg-processing-location-new" ] [ text "new" ] ]
+                                           )
+                                    )
+                            )
+                        , if String.isEmpty leaf then
+                            p [ class "dg-processing-location-note" ] [ text "Now type the sub-project's name." ]
+
+                          else
+                            text ""
+                        ]
+
+                Hierarchy.NoParent problem ->
+                    let
+                        typed =
+                            Picker.query model.project
+
+                        lastSeparator =
+                            String.indexes ">" typed |> List.reverse |> List.head |> Maybe.withDefault 0
+
+                        leaf =
+                            String.dropLeft (lastSeparator + 1) typed |> String.trim
+
+                        -- The parent's own name as typed: the last level of what came before “>”.
+                        parentName =
+                            String.left lastSeparator typed
+                                |> String.split ">"
+                                |> List.reverse
+                                |> List.head
+                                |> Maybe.withDefault ""
+                                |> String.trim
+
+                        candidates =
+                            if String.isEmpty parentName then
+                                []
+
+                            else
+                                projects
+                                    |> List.filter (\candidate -> not (List.member (ProjectStatus.key candidate.status) [ "completed", "cancelled" ]))
+                                    |> List.filter (\candidate -> Ui.matches parentName [ candidate.title ])
+                                    |> List.sortBy (Hierarchy.breadcrumb projects)
+                                    |> List.take 5
+
+                        useParent candidate =
+                            button
+                                [ type_ "button"
+                                , class "dg-processing-crumb dg-flat-button"
+                                , onClick (ProjectPicker (Picker.Typed (Hierarchy.breadcrumb projects candidate ++ Hierarchy.separator ++ leaf)))
+                                ]
+                                [ text (Hierarchy.breadcrumb projects candidate) ]
+                    in
+                    div [ class "dg-processing-location is-problem" ]
+                        [ p [ class "dg-processing-location-note" ] [ text ("⚠ " ++ problem) ]
+                        , if List.isEmpty candidates then
+                            text ""
+
+                          else
+                            div [ class "dg-processing-path" ]
+                                (span [ class "dg-processing-location-label" ] [ text "Parent:" ] :: List.map useParent candidates)
+                        ]
 
 
 contextPicker : Model -> Picker.Config String Msg
@@ -2224,6 +2372,58 @@ type alias Decision =
     { operation : Disposition, label : String, ready : Bool }
 
 
+{-| The Project field's next state. Typing “>” right after a Project, chosen or
+highlighted in the list, completes its breadcrumb and starts a sub-project below it,
+so the parent is always one that exists and only the new name is typed.
+-}
+pickProject : Picker.PickerMsg Project -> Model -> Picker Project
+pickProject pickerMsg model =
+    let
+        plain =
+            Picker.update pickerMsg (projectSuggestions model) (Hierarchy.breadcrumb model.snapshot.projects) model.project
+
+        parent =
+            case Picker.selection model.project of
+                Just chosen ->
+                    Just chosen
+
+                Nothing ->
+                    let
+                        highlighted =
+                            if model.project.open then
+                                List.drop model.project.activeIndex (projectSuggestions model) |> List.head
+
+                            else
+                                Nothing
+                    in
+                    -- A row moved to with the arrows wins; otherwise a Project named exactly.
+                    if model.project.activeIndex > 0 then
+                        highlighted
+
+                    else
+                        case selectedProject model of
+                            Just exact ->
+                                Just exact
+
+                            Nothing ->
+                                highlighted
+    in
+    case ( pickerMsg, parent ) of
+        ( Picker.Typed typed, Just found ) ->
+            if typed == model.project.query ++ ">" then
+                let
+                    started =
+                        Picker.init (Hierarchy.breadcrumb model.snapshot.projects found ++ Hierarchy.separator) Nothing
+                in
+                { started | open = True }
+
+            else
+                plain
+
+        _ ->
+            plain
+
+
 {-| The single primary button, and whether the form has said enough to press it.
 -}
 disposition : Model -> Decision
@@ -2238,10 +2438,34 @@ disposition model =
         project =
             selectedProject model
 
+        path =
+            Hierarchy.typedPath model.project.query model.snapshot.projects
+
         projectName =
-            project
-                |> Maybe.map .title
-                |> Maybe.withDefault (Hierarchy.leafTitle model.project.query model.snapshot.projects)
+            case ( project, path ) of
+                ( Just found, _ ) ->
+                    found.title
+
+                ( Nothing, Hierarchy.Plain typed ) ->
+                    typed
+
+                ( Nothing, Hierarchy.Under _ leaf ) ->
+                    leaf
+
+                ( Nothing, Hierarchy.NoParent _ ) ->
+                    Picker.query model.project
+
+        -- A path that names no parent is never created (the field says why).
+        pathReady =
+            project /= Nothing || Hierarchy.typedPathProblem path == Nothing
+
+        newProjectKind =
+            case path of
+                Hierarchy.Under _ _ ->
+                    "sub-project"
+
+                _ ->
+                    "Project"
 
         -- The Action as the outcome names it: its kind, then its text once typed.
         namedAction =
@@ -2259,7 +2483,7 @@ disposition model =
                 " + " ++ namedAction
 
         optionalReady =
-            String.isEmpty action || actionIsReady model
+            pathReady && (String.isEmpty action || actionIsReady model)
     in
     if model.backlog then
         { operation = ParkAsBacklog
@@ -2312,8 +2536,8 @@ disposition model =
                 "Create " ++ namedAction ++ " in " ++ quoted projectName
 
             else
-                "Create Project " ++ quoted projectName ++ " + " ++ namedAction
-        , ready = not (String.isEmpty action) && actionIsReady model
+                "Create " ++ newProjectKind ++ " " ++ quoted projectName ++ " + " ++ namedAction
+        , ready = pathReady && not (String.isEmpty action) && actionIsReady model
         }
 
 

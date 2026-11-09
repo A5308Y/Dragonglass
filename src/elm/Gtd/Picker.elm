@@ -10,6 +10,7 @@ module Gtd.Picker exposing
     , selection
     , update
     , view
+    , withInputId
     )
 
 {-| The fuzzy field Dragonglass uses wherever a Project, a context, or a vault
@@ -23,7 +24,7 @@ the second.
 
 import Gtd.Ui as Ui exposing (Key(..))
 import Html exposing (Html, button, div, input, small, span, text)
-import Html.Attributes exposing (attribute, class, classList, placeholder, tabindex, type_, value)
+import Html.Attributes exposing (attribute, class, classList, id, placeholder, tabindex, type_, value)
 import Html.Events exposing (custom, onBlur, onFocus, onInput, onMouseEnter)
 import Json.Decode as Decode
 
@@ -45,6 +46,7 @@ type alias Config value msg =
     , focused : Bool -> msg
     , keyed : Key -> msg
     , hovered : Int -> msg
+    , inputId : Maybe String
     }
 
 
@@ -119,7 +121,15 @@ config fields =
     , focused = Focused >> fields.tag
     , keyed = Keyed >> fields.tag
     , hovered = Hovered >> fields.tag
+    , inputId = Nothing
     }
+
+
+{-| Gives the input an id, so the form can move focus into it.
+-}
+withInputId : String -> Config value msg -> Config value msg
+withInputId inputId settings =
+    { settings | inputId = Just inputId }
 
 
 {-| Typing always clears the resolved choice: the text no longer describes it.
@@ -192,7 +202,7 @@ view settings suggestions picker =
     div [ class "dg-fuzzy-field" ]
         [ Ui.labelled (String.replace "…" "" settings.placeholder) <|
             input
-            [ value picker.query
+            ([ value picker.query
             , placeholder settings.placeholder
             , attribute "role" "combobox"
             , attribute "aria-autocomplete" "list"
@@ -203,7 +213,9 @@ view settings suggestions picker =
             , onBlur (settings.focused False)
             , onInput settings.changed
             , keydown picker.open settings.keyed
-            ]
+             ]
+                ++ Ui.maybeList settings.inputId id
+            )
             []
         , if not picker.open || List.isEmpty suggestions then
             text ""

@@ -1525,6 +1525,49 @@ button.dg-action-row-title:hover { color: var(--text-accent); }
   cursor: pointer;
 }
 .dg-processing-label-with-link > .dg-processing-use-title:hover { color: var(--text-accent-hover); text-decoration: underline; }
+/* Where the Project field points in the tree: crumbs, sub-projects, a problem. */
+.dg-processing-location {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+.dg-processing-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+}
+.dg-processing-path > strong { color: var(--text-normal); }
+.dg-processing-location-label { color: var(--text-faint); }
+.dg-processing-crumb-separator { color: var(--text-faint); }
+.dg-processing-location-new {
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--text-accent);
+  border: 1px solid var(--text-accent);
+  font-size: var(--font-ui-smaller);
+}
+.dg-processing-location-note { margin: 0; }
+.dg-processing-location.is-problem .dg-processing-location-note { color: var(--text-error); }
+/* Two classes, to outrank Obsidian's `button:not(.clickable-icon)` size and padding. */
+.dg-processing-location .dg-processing-crumb,
+.dg-processing-location .dg-processing-new-sub {
+  height: auto;
+  padding: 1px 4px !important;
+  border-radius: var(--radius-s);
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  line-height: inherit;
+  cursor: pointer;
+}
+.dg-processing-location .dg-processing-new-sub { align-self: flex-start; }
+.dg-processing-location .dg-processing-crumb:hover,
+.dg-processing-location .dg-processing-new-sub:hover {
+  background: var(--background-modifier-hover) !important;
+  color: var(--text-accent-hover);
+}
 .dg-processing-field > small,
 .dg-inbox-file-toggle > small {
   color: var(--text-faint);
