@@ -29,10 +29,12 @@ import Gtd.Support as Support
 import Gtd.Ui as Ui
 import Html exposing (Html, article, button, div, h2, h3, header, input, label, li, p, section, span, strong, text, textarea, ul)
 import Html.Attributes exposing (attribute, checked, class, classList, disabled, for, id, placeholder, rows, style, title, type_, value)
-import Html.Events exposing (onCheck, onClick, onInput)
+import Html.Events exposing (onBlur, onCheck, onClick, onInput)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
+import Process
 import Set exposing (Set)
+import Task
 import Time
 
 
@@ -55,6 +57,9 @@ type alias Active =
     -- Spent on the Actions in focus, which can belong to any Project.
     , inFocus : Bool
     , intention : String
+
+    -- Thoughts written down while it runs, offered as the reflection at the end.
+    , notes : String
     , focusActionIds : List ActionId
     , completedActionIds : List ActionId
     , plannedMinutes : Int
@@ -183,7 +188,15 @@ type alias Model =
     , minutes : String
     , wrappingUp : Bool
     , outcome : Maybe PomodoroOutcome
+
+    -- The running session's notes, which become its reflection: one text from start to end.
     , reflection : String
+
+    -- The notes as the host last had them, to tell unsaved typing from a change elsewhere.
+    , notesSynced : String
+
+    -- Counts edits, so only the last one of a burst is saved.
+    , notesEdits : Int
     , scope : Scope
     , historyLimit : Int
     , logForm : Maybe LogForm
@@ -217,6 +230,7 @@ type Msg
     | KeepGoing
     | ChooseOutcome PomodoroOutcome
     | ReflectionChanged String
+    | SaveNotes Int
     | Finish
     | Discard
     | CompleteAction ActionId
@@ -289,7 +303,9 @@ initialModel snapshot state nowMs =
     , minutes = String.fromInt state.focusMinutes
     , wrappingUp = False
     , outcome = Nothing
-    , reflection = ""
+    , reflection = state.active |> Maybe.map .notes |> Maybe.withDefault ""
+    , notesSynced = state.active |> Maybe.map .notes |> Maybe.withDefault ""
+    , notesEdits = 0
     , scope = AllSessions
     , historyLimit = 20
     , logForm = Nothing
@@ -527,7 +543,21 @@ update msg model =
             ( { model | outcome = Just outcome }, Cmd.none )
 
         ReflectionChanged reflection ->
-            ( { model | reflection = reflection }, Cmd.none )
+            let
+                edits =
+                    model.notesEdits + 1
+            in
+            ( { model | reflection = reflection, notesEdits = edits }
+              -- Saved once typing pauses, so a burst of keys writes the log once.
+            , Process.sleep 1000 |> Task.perform (\_ -> SaveNotes edits)
+            )
+
+        SaveNotes edits ->
+            if edits == model.notesEdits && model.reflection /= model.notesSynced && model.state.active /= Nothing then
+                send (Command.SetPomodoroNotes model.reflection) model
+
+            else
+                ( model, Cmd.none )
 
         Finish ->
             send (Command.FinishPomodoro model.outcome (String.trim model.reflection))
@@ -820,7 +850,7 @@ receiveHost value model =
                 wrappingUp =
                     model.wrappingUp && state.active /= Nothing
             in
-            ( selectChecklist model.pendingChecklist { model | state = state, wrappingUp = wrappingUp }, Cmd.none )
+            ( selectChecklist model.pendingChecklist (syncNotes state { model | state = state, wrappingUp = wrappingUp }), Cmd.none )
 
         Ok (SelectProjectEvent projectId) ->
             ( selectProject (Just projectId) model, Cmd.none )
@@ -1436,6 +1466,7 @@ runningView model active =
             ]
         , div [ class "dg-progress-track" ] [ span [ style "width" (String.fromFloat progress ++ "%") ] [] ]
         , blockquote active.intention
+        , notesView model
         , sessionActions model active
         , sessionSupportView model active
         , div [ class "dg-pomodoro-controls" ]
@@ -1449,6 +1480,43 @@ runningView model active =
             , button [ class "mod-warning", onClick Discard ] [ text "Discard" ]
             ]
         ]
+
+
+{-| A place to put a thought down without leaving the session, e.g. while an agent works.
+It is the reflection, begun early: the wrap-up shows the same text to finish.
+-}
+notesView : Model -> Html Msg
+notesView model =
+    div [ class "dg-pomodoro-field" ]
+        [ label [ class "dg-pomodoro-label", for "dg-pomodoro-notes" ] [ text "Notes" ]
+        , textarea
+            [ id "dg-pomodoro-notes"
+            , rows 3
+            , value model.reflection
+            , placeholder "A thought to park, what you're waiting for, what to try next…"
+            , onInput ReflectionChanged
+            , onBlur (SaveNotes model.notesEdits)
+            ]
+            []
+        , small "Kept with the session and offered as its reflection when it ends."
+        ]
+
+
+{-| Takes the running session's notes from the host: when it starts, when another device
+changed them, or when it ends, unless something typed here hasn't been saved yet.
+-}
+syncNotes : PomodoroState -> Model -> Model
+syncNotes state model =
+    case state.active of
+        Just active ->
+            if model.reflection == model.notesSynced then
+                { model | reflection = active.notes, notesSynced = active.notes }
+
+            else
+                { model | notesSynced = active.notes }
+
+        Nothing ->
+            { model | reflection = "", notesSynced = "" }
 
 
 subjectLink : Active -> Html Msg
@@ -2149,6 +2217,7 @@ activeDecoder =
             )
         |> andMap (Decode.oneOf [ Decode.field "inFocus" Decode.bool, Decode.succeed False ])
         |> andMap (Decode.field "intention" Decode.string)
+        |> andMap (Decode.oneOf [ Decode.field "notes" Decode.string, Decode.succeed "" ])
         |> andMap (Decode.field "focusActionIds" (Decode.list Decode.string))
         |> andMap (Decode.field "completedActionIds" (Decode.list Decode.string))
         |> andMap (Decode.field "plannedMinutes" Decode.int)

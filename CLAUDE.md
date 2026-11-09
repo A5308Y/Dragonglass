@@ -78,6 +78,10 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   `src/adapter/project-detail.ts`, shared too: change both views there, not in one of them.
   A file is listed under the Project whose support folder holds it most deeply
   (`projectSupportFiles`), so a nested sub-project's folder isn't shown twice.
+- "Notes" on the running screen is the reflection begun early: one text (`reflection` in
+  `Pomodoro.elm`) that the wrap-up shows to finish. While the session runs it is kept in
+  `active.notes` (`setPomodoroNotes`, saved a second after typing stops), so it survives closing
+  the view; the filed session keeps only the reflection. Don't add a second notes field to sessions.
 - A session can be spent on the Actions in focus instead of a Project or checklist ("Actions in
   focus" in the picker, `OnFocus` in `Pomodoro.elm`, `start-focus-pomodoro`): `inFocus: true`, an
   empty `projectId`, `FOCUS_SESSION_TITLE` as `projectTitle`, and the picked ones as `focusActionIds`.

@@ -211,6 +211,8 @@ export class ElmPomodoroHost {
         return this.pomodoro.finish({ outcome: command.outcome, reflection: command.reflection });
       case "discard-pomodoro":
         return this.pomodoro.discard();
+      case "set-pomodoro-notes":
+        return this.pomodoro.setNotes(command.notes);
       case "set-pomodoro-sound": {
         const settings = this.services.getSettings();
         await this.services.saveSettings({ ...settings, pomodoro: { ...settings.pomodoro, sound: command.sound } }, false);

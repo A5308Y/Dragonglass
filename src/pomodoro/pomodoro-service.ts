@@ -12,6 +12,7 @@ import {
   remainingSeconds,
   restorePomodoro,
   resumePomodoro,
+  setPomodoroNotes,
   startPomodoro,
   type PastPomodoro,
   type PomodoroSession,
@@ -116,6 +117,12 @@ export class PomodoroService {
   async resume(): Promise<void> {
     this.prepareSound();
     await this.update(resumePomodoro(this.store, new Date()));
+  }
+
+  /** Keeps what was written during the session with it, so closing the view loses nothing. */
+  async setNotes(notes: string): Promise<void> {
+    const next = setPomodoroNotes(this.store, notes);
+    if (next !== this.store) await this.update(next);
   }
 
   async recordAction(actionId: string): Promise<void> {

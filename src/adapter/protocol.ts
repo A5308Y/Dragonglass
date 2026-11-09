@@ -192,6 +192,8 @@ export interface ElmActivePomodoroDto {
   /** Spent on the Actions in focus rather than a Project or a checklist. */
   inFocus: boolean;
   intention: string;
+  /** Thoughts written down during the session, offered as its reflection. */
+  notes: string;
   focusActionIds: string[];
   completedActionIds: string[];
   plannedMinutes: number;
@@ -282,6 +284,7 @@ export function elmPomodoro(
         checklist: active.checklist ? { ...active.checklist } : null,
         inFocus: active.inFocus === true,
         intention: active.intention,
+        notes: active.notes,
         focusActionIds: [...active.focusActionIds],
         completedActionIds: [...active.completedActionIds],
         plannedMinutes: active.plannedMinutes,
@@ -694,6 +697,7 @@ export type ElmNonMenuCommand =
   /** `start` is local wall-clock time, `YYYY-MM-DDTHH:MM`. */
   | { type: "log-pomodoro"; projectId: string; start: string; minutes: number; intention: string; outcome: PomodoroOutcome | null; reflection: string }
   | { type: "discard-pomodoro" }
+  | { type: "set-pomodoro-notes"; notes: string }
   | { type: "set-pomodoro-sound"; sound: PomodoroSound }
   | { type: "complete-pomodoro-action"; actionId: string }
   | { type: "start-checklist-pomodoro"; path: string; intention: string; minutes: number }
@@ -821,7 +825,7 @@ export const SURFACE_COMMANDS = {
   ],
   somedayReview: ["set-project-status", "move-subproject", "review-someday-project", "show-project", "open-file"],
   pomodoro: [
-    "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro", "log-pomodoro",
+    "start-pomodoro", "pause-pomodoro", "resume-pomodoro", "finish-pomodoro", "discard-pomodoro", "log-pomodoro", "set-pomodoro-notes",
     "complete-pomodoro-action", "show-project", "start-checklist-pomodoro", "start-focus-pomodoro", "mark-checklist-item", "open-checklist-run",
     "set-pomodoro-sound", "open-link", "open-note-link",
     // The session's Support Material, as on the Project page (`src/adapter/project-detail.ts`).
@@ -1043,6 +1047,8 @@ function isNonMenuCommand(value: unknown): value is ElmNonMenuCommand {
         && Number.isInteger(value.minutes)
         && Number(value.minutes) >= 1
         && Number(value.minutes) <= 180;
+    case "set-pomodoro-notes":
+      return typeof value.notes === "string";
     case "start-focus-pomodoro":
       return typeof value.intention === "string"
         && isStringArray(value.focusActionIds)

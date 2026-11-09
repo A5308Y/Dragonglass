@@ -13,6 +13,7 @@ import {
   restorePomodoro,
   discardPomodoro,
   resumePomodoro,
+  setPomodoroNotes,
   startPomodoro,
   toTimeEntry,
   type PastPomodoro,
@@ -74,6 +75,23 @@ describe("a Pomodoro session", () => {
     });
     const early = finishPomodoro(running, { outcome: null, reflection: "" }, at("10:12"));
     expect(early.sessions[0]).toMatchObject({ status: "stopped", focusedSeconds: 720, outcome: null });
+  });
+
+  it("keeps notes with the running session, but files only the reflection", () => {
+    const running = setPomodoroNotes(startPomodoro(emptyPomodoroStore(), start, at("10:00")), "Waiting for the agent\nTry the other layout");
+    expect(running.active?.notes).toBe("Waiting for the agent\nTry the other layout");
+    expect(parsePomodoroStore(JSON.parse(JSON.stringify(running))).active?.notes).toBe("Waiting for the agent\nTry the other layout");
+    expect(elmPomodoro(running, 25, at("10:05")).active?.notes).toBe("Waiting for the agent\nTry the other layout");
+    const filed = finishPomodoro(running, { outcome: null, reflection: "Try the other layout" }, at("10:25"));
+    expect(filed.sessions[0]).toMatchObject({ reflection: "Try the other layout" });
+    expect(filed.sessions[0]).not.toHaveProperty("notes");
+    expect(setPomodoroNotes(emptyPomodoroStore(), "nothing runs")).toEqual(emptyPomodoroStore());
+  });
+
+  it("reads a running session saved before notes existed", () => {
+    const running = startPomodoro(emptyPomodoroStore(), start, at("10:00"));
+    const { notes: _notes, ...older } = running.active!;
+    expect(parsePomodoroStore({ ...running, active: older }).active?.notes).toBe("");
   });
 
   it("restores a discarded session unless another one has started", () => {

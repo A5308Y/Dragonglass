@@ -73,6 +73,11 @@ export interface ActivePomodoro extends SessionBasis {
   resumedAt: string | null;
   /** Seconds focused before the current running stretch. */
   focusedBefore: number;
+  /**
+   * Thoughts written down while the session runs. The view offers them as the reflection when
+   * the session ends; the filed session keeps only that reflection.
+   */
+  notes: string;
 }
 
 export interface PomodoroSession extends SessionBasis {
@@ -161,6 +166,7 @@ export function startPomodoro(store: PomodoroStore, start: PomodoroStart, now: D
       startedAt,
       resumedAt: startedAt,
       focusedBefore: 0,
+      notes: "",
     },
   };
 }
@@ -193,6 +199,13 @@ export function resumePomodoro(store: PomodoroStore, now: Date): PomodoroStore {
   return { ...store, active: { ...active, resumedAt: now.toISOString() } };
 }
 
+/** Replaces the running session's notes, as typed; nothing while no session runs. */
+export function setPomodoroNotes(store: PomodoroStore, notes: string): PomodoroStore {
+  const active = store.active;
+  if (!active || active.notes === notes) return store;
+  return { ...store, active: { ...active, notes } };
+}
+
 export function recordCompletedAction(store: PomodoroStore, actionId: string): PomodoroStore {
   const active = store.active;
   if (!active) return store;
@@ -204,7 +217,7 @@ export function finishPomodoro(store: PomodoroStore, wrapUp: PomodoroWrapUp, now
   const active = store.active;
   if (!active) throw new Error("No Pomodoro is running.");
   const focused = focusedSeconds(active, now);
-  const { resumedAt: _resumedAt, focusedBefore: _focusedBefore, ...basis } = active;
+  const { resumedAt: _resumedAt, focusedBefore: _focusedBefore, notes: _notes, ...basis } = active;
   const session: PomodoroSession = {
     ...basis,
     endedAt: now.toISOString(),
@@ -352,7 +365,7 @@ function parseActive(raw: unknown): ActivePomodoro | null {
   if (!basis) return null;
   const resumedAt = typeof raw.resumedAt === "string" && !Number.isNaN(Date.parse(raw.resumedAt)) ? raw.resumedAt : null;
   const focusedBefore = Number(raw.focusedBefore);
-  return { ...basis, resumedAt, focusedBefore: Number.isFinite(focusedBefore) && focusedBefore > 0 ? focusedBefore : 0 };
+  return { ...basis, resumedAt, focusedBefore: Number.isFinite(focusedBefore) && focusedBefore > 0 ? focusedBefore : 0, notes: text(raw.notes) };
 }
 
 function parseSession(raw: unknown): PomodoroSession[] {

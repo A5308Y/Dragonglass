@@ -114,6 +114,8 @@ type Command
     | ResumePomodoro
     | FinishPomodoro (Maybe PomodoroOutcome) String
     | DiscardPomodoro
+      -- What was written during the running session, kept with it.
+    | SetPomodoroNotes String
       -- A session that wasn't timed; `start` is local `YYYY-MM-DDTHH:MM`.
     | LogPomodoro { projectId : ProjectId, start : String, minutes : Int, intention : String, outcome : Maybe PomodoroOutcome, reflection : String }
     | SetPomodoroSound String
@@ -637,6 +639,9 @@ encode command =
 
         DiscardPomodoro ->
             object "discard-pomodoro" []
+
+        SetPomodoroNotes notes ->
+            object "set-pomodoro-notes" [ ( "notes", Encode.string notes ) ]
 
         LogPomodoro fields ->
             object "log-pomodoro"
