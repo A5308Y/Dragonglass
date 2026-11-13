@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   attributeSection,
   attributeText,
+  awaitedLength,
   decodeMailbox,
   encodeMailbox,
   findTextPart,
   flattenBodyStructure,
   formatSequenceSet,
-  hasAttachment,
   imapDate,
   isTagged,
   MAX_LITERAL_BYTES,
@@ -204,6 +204,14 @@ describe("FETCH responses", () => {
   });
 });
 
+describe("Waiting for a large literal", () => {
+  it("names the length the buffer must reach, so the reader needn't re-read it per chunk", () => {
+    expect(awaitedLength("* 1 FETCH (BODY[2] {10}\r\nabc")).toBe(35);
+    expect(awaitedLength("* 1 FETCH (BODY[2] {3}\r\nabc)")).toBe(0);
+    expect(awaitedLength("* 1 FETCH (UID")).toBe(0);
+  });
+});
+
 describe("Body structures", () => {
   const single: Token = ["TEXT", "PLAIN", ["CHARSET", "UTF-8"], "NIL", "NIL", "7BIT", "1234", "20"];
 
@@ -221,7 +229,10 @@ describe("Body structures", () => {
 
   it("numbers a single-part message as part one", () => {
     expect(flattenBodyStructure(single)).toEqual([
-      { path: "1", type: "text", subtype: "plain", charset: "UTF-8", encoding: "7bit", size: 1234 },
+      {
+        path: "1", type: "text", subtype: "plain", charset: "UTF-8", encoding: "7bit", size: 1234,
+        disposition: "", parameters: new Map([["charset", "UTF-8"]]), contentId: "",
+      },
     ]);
   });
 
@@ -248,9 +259,17 @@ describe("Body structures", () => {
       .toMatchObject({ path: "1.1", encoding: "quoted-printable", size: 500 });
   });
 
-  it("notices a message that brought something with it", () => {
-    expect(hasAttachment(flattenBodyStructure(withAttachment))).toBe(true);
-    expect(hasAttachment(flattenBodyStructure(alternative))).toBe(false);
+  it("reads a part's disposition, file name and Content-ID from the extension fields", () => {
+    const parts = flattenBodyStructure([
+      ["TEXT", "PLAIN", ["CHARSET", "UTF-8"], "NIL", "NIL", "7BIT", "10", "1", "NIL", ["INLINE", "NIL"], "NIL", "NIL"],
+      ["IMAGE", "PNG", ["NAME", "logo.png"], "<logo@x>", "NIL", "BASE64", "900", "NIL", ["INLINE", ["FILENAME", "logo.png"]]],
+      ["TEXT", "CSV", ["CHARSET", "UTF-8", "NAME", "a.csv"], "NIL", "NIL", "BASE64", "40", "2", "NIL", ["ATTACHMENT", ["FILENAME", "b.csv"]]],
+      "MIXED",
+    ]);
+    expect(parts.map((part) => [part.disposition, part.parameters.get("filename") ?? "", part.contentId]))
+      .toEqual([["inline", "", ""], ["inline", "logo.png", "<logo@x>"], ["attachment", "b.csv", ""]]);
+    // A text file sent as an attachment is not the message's text.
+    expect(findTextPart([...parts].reverse())?.path).toBe("1");
   });
 });
 

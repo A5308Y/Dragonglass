@@ -11,6 +11,8 @@ interface FakeMessage {
   subject: string;
   from: string;
   body: string;
+  /** Sent after the text as `multipart/mixed`; `data` is the file's content. */
+  attachments?: Array<{ name: string; type: string; subtype: string; data: string }>;
 }
 
 /**
@@ -73,11 +75,24 @@ class FakeMailbox {
         .map((message, index) => {
           const headers = `Message-ID: <${message.messageId}>\r\nSubject: ${message.subject}\r\n`
             + `From: ${message.from}\r\nDate: Mon, 14 Sep 2026 08:30:00 +0000\r\n\r\n`;
+          const text = `("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" ${message.body.length} 1)`;
+          const files = (message.attachments ?? []).map((file) =>
+            `("${file.type}" "${file.subtype}" ("NAME" "${file.name}") NIL NIL "BASE64" ${btoa(file.data).length} NIL `
+            + `("ATTACHMENT" ("FILENAME" "${file.name}")) NIL NIL)`);
+          const structure = files.length ? `(${text}${files.join("")} "MIXED")` : text;
           return `* ${index + 1} FETCH (UID ${message.uid} `
-            + `BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" ${message.body.length} 1) `
+            + `BODYSTRUCTURE ${structure} `
             + `BODY[HEADER.FIELDS (MESSAGE-ID)] {${headers.length}}\r\n${headers})\r\n`;
         });
       return lines.join("") + done;
+    }
+    const attachment = /^UID FETCH (\d+) \(BODY\.PEEK\[(\d+)\]\)/.exec(command);
+    if (attachment && attachment[2] !== "1") {
+      const message = this.messages.find((entry) => entry.uid === Number(attachment[1]));
+      const file = message?.attachments?.[Number(attachment[2]) - 2];
+      if (!file) return done;
+      const encoded = btoa(file.data);
+      return `* 1 FETCH (UID ${message?.uid} BODY[${attachment[2]}] {${encoded.length}}\r\n${encoded})\r\n${done}`;
     }
     if (/^UID FETCH \d+ \(BODY\.PEEK\[1\]\)/.test(command)) {
       const uid = Number(/^UID FETCH (\d+)/.exec(command)?.[1] ?? 0);
@@ -135,6 +150,7 @@ const account = (changes: Partial<MailAccount> = {}): MailAccount => ({
 describe("Mirroring a mailbox into the Inbox", () => {
   let files: Map<string, string>;
   let created: Array<{ title: string; details: string }>;
+  let saved: Array<{ fileName: string; data: string }>;
   let delegated: unknown[];
   let settings: MailSettingsView;
 
@@ -159,6 +175,10 @@ describe("Mirroring a mailbox into the Inbox", () => {
         created.push({ title, details });
         return { id: `item-${created.length}` };
       },
+      createInboxFile: async (fileName: string, data: Uint8Array) => {
+        saved.push({ fileName, data: new TextDecoder().decode(data) });
+        return `GTD/Inbox/${fileName}`;
+      },
       index: { getSnapshot: () => ({ actions: delegated }) },
     } as unknown as GtdRepository;
 
@@ -169,6 +189,7 @@ describe("Mirroring a mailbox into the Inbox", () => {
   beforeEach(() => {
     files = new Map();
     created = [];
+    saved = [];
     delegated = [];
     settings = {
       enabled: true,
@@ -176,6 +197,8 @@ describe("Mirroring a mailbox into the Inbox", () => {
       refreshMinutes: 30,
       importCap: 50,
       accounts: [account()],
+      importAttachments: true,
+      attachmentLimitMb: 10,
     };
   });
 
@@ -220,6 +243,39 @@ describe("Mirroring a mailbox into the Inbox", () => {
     expect(created[0]?.details.split("\n")[0]).toBe(
       "Reply about the delegated Action [[GTD/Actions/Book the plumber|Book the plumber]]");
     expect(created[1]?.details).not.toContain("Reply about");
+  });
+
+  it("saves an attachment as an Inbox Item of its own and links it from the message", async () => {
+    const mailbox = new FakeMailbox([message(1)]);
+    const service = build(mailbox);
+    await service.importAll();
+    mailbox.deliver({
+      ...message(2, "Heat pump quote"),
+      attachments: [
+        { name: "quote.pdf", type: "APPLICATION", subtype: "PDF", data: "%PDF-1.7 quote" },
+        { name: "setup.exe", type: "APPLICATION", subtype: "OCTET-STREAM", data: "MZ" },
+      ],
+    });
+    await service.importAll();
+
+    expect(saved).toEqual([{ fileName: "quote.pdf", data: "%PDF-1.7 quote" }]);
+    expect(created[0]?.details).toContain("> [!dg-attachments] 2 attachments, 1 saved as an Inbox Item\n"
+      + "> - [[GTD/Inbox/quote.pdf|quote.pdf]] · 14 B\n"
+      + "> - setup.exe · 3 B · not imported: Dragonglass doesn't save this kind of file");
+    // The program was never even downloaded.
+    expect(mailbox.commands.filter((command) => /BODY\.PEEK\[3\]/.test(command))).toEqual([]);
+  });
+
+  it("only lists attachments when saving them is off", async () => {
+    settings.importAttachments = false;
+    const mailbox = new FakeMailbox([message(1)]);
+    const service = build(mailbox);
+    await service.importAll();
+    mailbox.deliver({ ...message(2), attachments: [{ name: "quote.pdf", type: "APPLICATION", subtype: "PDF", data: "%PDF" }] });
+    await service.importAll();
+
+    expect(saved).toEqual([]);
+    expect(created[0]?.details).toContain("> [!dg-attachments] 1 attachment, in the message\n> - quote.pdf · 6 B · not imported");
   });
 
   it("does not import the same message twice", async () => {
@@ -314,7 +370,8 @@ describe("Archiving what it imported", () => {
 
   beforeEach(() => {
     files = new Map();
-    settings = { enabled: true, storePath: "GTD/mail.json", refreshMinutes: 30, importCap: 50, accounts: [account()] };
+    settings = { enabled: true, storePath: "GTD/mail.json", refreshMinutes: 30, importCap: 50, accounts: [account()],
+      importAttachments: true, attachmentLimitMb: 10 };
   });
 
   it("leaves the server alone when no archive mailbox is set", async () => {
@@ -378,7 +435,7 @@ describe("When mail cannot be imported here", () => {
     const service = new MailService(
       app,
       { createIdentifiedInboxItem: async () => ({ id: "x" }) } as unknown as GtdRepository,
-      () => ({ enabled: true, storePath: "GTD/mail.json", refreshMinutes: 30, importCap: 50, accounts: [account()] }),
+      () => ({ enabled: true, storePath: "GTD/mail.json", refreshMinutes: 30, importCap: 50, accounts: [account()], importAttachments: true, attachmentLimitMb: 10 }),
       () => "app-password",
       {
         connect: async () => {
@@ -408,7 +465,7 @@ describe("When mail cannot be imported here", () => {
     const service = new MailService(
       app,
       { createIdentifiedInboxItem: async () => ({ id: "x" }) } as unknown as GtdRepository,
-      () => ({ enabled: true, storePath: "GTD/mail.json", refreshMinutes: 30, importCap: 50, accounts: [] }),
+      () => ({ enabled: true, storePath: "GTD/mail.json", refreshMinutes: 30, importCap: 50, accounts: [], importAttachments: true, attachmentLimitMb: 10 }),
       () => "",
       {
         connect: async () => {

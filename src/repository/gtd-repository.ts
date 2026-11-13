@@ -73,6 +73,24 @@ export class GtdRepository {
     return this.createInboxRecord(title, details, messageId);
   }
 
+  /**
+   * Saves a file into the Inbox folder, where it is an Inbox Item of its own (as a
+   * recording or a scan dropped there is). `fileName` must already be safe; see
+   * `attachmentFileName`. Returns the vault path it was saved under.
+   */
+  async createInboxFile(fileName: string, data: Uint8Array): Promise<string> {
+    const directory = await this.ensureFolder(normalizeVaultPath(this.getSettings().inboxDirectory) || "GTD/Inbox");
+    const dot = fileName.lastIndexOf(".");
+    const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+    const extension = dot > 0 ? fileName.slice(dot) : "";
+    let path = normalizePath(`${directory}/${stem}${extension}`);
+    for (let counter = 2; this.app.vault.getAbstractFileByPath(path); counter += 1) {
+      path = normalizePath(`${directory}/${stem} ${counter}${extension}`);
+    }
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+    return (await this.app.vault.createBinary(path, buffer)).path;
+  }
+
   /** Creates one Action file directly, without an Inbox Item, and returns its id. */
   async createAction(input: ActionInput): Promise<string> {
     const project = input.projectId ? this.requireProject(input.projectId) : undefined;

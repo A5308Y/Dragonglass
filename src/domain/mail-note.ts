@@ -9,6 +9,7 @@ import { addressLabel, parseAddress } from "./mime";
 import { htmlToMarkdown } from "./html-markdown";
 import { escapeVaultText } from "./text";
 import { localDateTime } from "../utils/date";
+import { LEGACY_ATTACHMENT_CALLOUT } from "./mail-attachments";
 
 export interface MailMessage {
   /** The `Message-ID`, or `""` when the sender omitted one. */
@@ -23,7 +24,6 @@ export interface MailMessage {
   date: string;
   /** Plain text. Transfer encoding and markup are already resolved. */
   body: string;
-  hasAttachment: boolean;
 }
 
 /**
@@ -61,8 +61,11 @@ export function mailItemTitle(message: Pick<MailMessage, "subject">): string {
  *
  * Everything a sender wrote is escaped. Mail is an adversarial channel: left alone,
  * a subject line could add itself to your Project graph.
+ *
+ * `attachments` is the callout from `attachmentCallout`, set apart between the header
+ * lines and the text so a message with files can't be mistaken for one without.
  */
-export function mailItemNote(message: MailMessage, accountLabel: string, mailLink?: string): string {
+export function mailItemNote(message: MailMessage, accountLabel: string, mailLink?: string, attachments = ""): string {
   const lines: string[] = [];
   const sender = formatSender(message.from);
   if (sender) lines.push(`From: ${escapeVaultText(sender)}`);
@@ -71,7 +74,7 @@ export function mailItemNote(message: MailMessage, accountLabel: string, mailLin
   const location = [accountLabel.trim(), message.mailbox.trim()].filter(Boolean).join(" · ");
   if (location) lines.push(`Mailbox: ${escapeVaultText(location)}`);
   if (mailLink) lines.push(`Original: [Open in Apple Mail](${mailLink})`);
-  if (message.hasAttachment) lines.push("Attachments: yes");
+  if (attachments) lines.push("", attachments);
 
   // HTML keeps its structure as Markdown, which escapes everything else itself.
   const body = /<\/?[a-z][a-z0-9]*(?:\s[^<>]*)?\/?>/i.test(message.body)
@@ -81,12 +84,20 @@ export function mailItemNote(message: MailMessage, accountLabel: string, mailLin
   return lines.join("\n");
 }
 
-/** Hide the identifier in the processor for notes imported before it was removed. */
+/**
+ * Hide the identifier in the processor for notes imported before it was removed, and
+ * show their bare `Attachments: yes` as the callout newer notes have.
+ */
 export function mailProcessingBody(body: string): string {
   const headerEnd = body.search(/\r?\n\r?\n/);
-  const metadata = headerEnd < 0 ? body : body.slice(0, headerEnd);
+  let metadata = headerEnd < 0 ? body : body.slice(0, headerEnd);
   const rest = headerEnd < 0 ? "" : body.slice(headerEnd);
-  return withoutRemoteMarkup((metadata.replace(/^Message-ID:[^\r\n]*(?:\r?\n|$)/m, "") + rest).trim());
+  metadata = metadata.replace(/^Message-ID:[^\r\n]*(?:\r?\n|$)/m, "");
+  const legacyAttachments = /^Attachments: yes[ \t]*(?:\r?\n|$)/m;
+  if (legacyAttachments.test(metadata)) {
+    metadata = `${metadata.replace(legacyAttachments, "").trimEnd()}\n\n${LEGACY_ATTACHMENT_CALLOUT}`;
+  }
+  return withoutRemoteMarkup((metadata + rest).trim());
 }
 
 /**

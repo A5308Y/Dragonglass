@@ -14,11 +14,11 @@
 import {
   attributeSection,
   attributeText,
+  awaitedLength,
   encodeMailbox,
   findTextPart,
   flattenBodyStructure,
   formatSequenceSet,
-  hasAttachment,
   imapDate,
   isTagged,
   needsLiteral,
@@ -31,11 +31,14 @@ import {
   quoteString,
   takeResponse,
   validateCriterion,
+  type BodyPart,
   type ImapResponse,
   type MailboxListing,
 } from "../domain/imap-protocol";
+import { attachmentParts } from "../domain/mail-attachments";
 import {
   decodeMessagePart,
+  decodeTransferEncoding,
   headerValue,
   isBulk,
   parseHeaders,
@@ -43,7 +46,7 @@ import {
   parseMessageId,
 } from "../domain/mime";
 
-/** How long one command may take before the session is abandoned. */
+/** How long the server may stay silent during a command before the session is abandoned. */
 const COMMAND_TIMEOUT_MS = 30_000;
 
 /** The headers worth pulling for a triage decision, and nothing more. */
@@ -78,7 +81,8 @@ export interface MessageSummary {
   from: string;
   /** RFC 3339, or `""`. */
   date: string;
-  hasAttachment: boolean;
+  /** The parts that are attachments, not the text or a logo embedded in it; see `mail-attachments.ts`. */
+  attachments: BodyPart[];
   /** True when the message's own headers say it is a mailing list or bulk send. */
   bulk: boolean;
   /** Where the readable text lives, for a later fetch, or `null` when there is none. */
@@ -87,7 +91,18 @@ export interface MessageSummary {
 
 export class ImapConnection {
   private buffer = "";
-  private waiter: { resolve: (response: ImapResponse) => void; reject: (error: Error) => void } | null = null;
+  /** Chunks not yet added to `buffer`, kept apart while a literal is still incomplete. */
+  private arriving: string[] = [];
+  private arrivingLength = 0;
+  /** The buffer length a complete response needs, or 0 when unknown. */
+  private awaited = 0;
+  private waiter: {
+    resolve: (response: ImapResponse) => void;
+    reject: (error: Error) => void;
+    /** Data arrived, though not yet a whole response. */
+    heard: () => void;
+  } | null = null;
+  private silence: ReturnType<typeof setTimeout> | null = null;
   private queue: ImapResponse[] = [];
   private failure: Error | null = null;
   private closed = false;
@@ -201,7 +216,7 @@ export class ImapConnection {
         subject: headerValue(headers, "subject"),
         from: headers.get("from")?.[0] ?? "",
         date: parseMailDate(headerValue(headers, "date")),
-        hasAttachment: hasAttachment(parts),
+        attachments: attachmentParts(parts, text),
         bulk: isBulk(headers),
         textPart: text
           ? { path: text.path, encoding: text.encoding, charset: text.charset, subtype: text.subtype, size: text.size }
@@ -227,6 +242,21 @@ export class ImapConnection {
       if (raw) return decodeMessagePart(raw, part);
     }
     return "";
+  }
+
+  /**
+   * One attachment's bytes, fetched alone and without marking the message read.
+   * The caller has checked its size against `MAX_LITERAL_BYTES` and the settings.
+   */
+  async fetchAttachment(uid: number, part: Pick<BodyPart, "path" | "encoding">): Promise<Uint8Array> {
+    const { responses } = await this.run(`UID FETCH ${uid} (BODY.PEEK[${part.path}])`);
+    for (const response of responses) {
+      const fetched = parseFetchResponse(response);
+      if (!fetched) continue;
+      const raw = attributeSection(fetched.attributes, "BODY[");
+      if (raw) return decodeTransferEncoding(raw, part.encoding);
+    }
+    throw new Error("The mail server sent no data for the attachment.");
   }
 
   /**
@@ -293,7 +323,14 @@ export class ImapConnection {
   // TRANSPORT
 
   private receive(chunk: string): void {
-    this.buffer += chunk;
+    this.waiter?.heard();
+    this.arriving.push(chunk);
+    this.arrivingLength += chunk.length;
+    if (this.buffer.length + this.arrivingLength < this.awaited) return;
+    this.buffer += this.arriving.join("");
+    this.arriving = [];
+    this.arrivingLength = 0;
+    this.awaited = 0;
     for (;;) {
       let taken;
       try {
@@ -302,7 +339,10 @@ export class ImapConnection {
         this.fail(error instanceof Error ? error : new Error("The mail server sent something unreadable."));
         return;
       }
-      if (!taken) return;
+      if (!taken) {
+        this.awaited = awaitedLength(this.buffer);
+        return;
+      }
       this.buffer = taken.rest;
       const waiting = this.waiter;
       if (waiting) waiting.resolve(taken.response);
@@ -310,19 +350,26 @@ export class ImapConnection {
     }
   }
 
-  /** The next response, whether it has already arrived or is still on its way. */
+  /**
+   * The next response, whether it has already arrived or is still on its way.
+   *
+   * The clock restarts whenever data arrives, so a large attachment on a slow line
+   * isn't taken for a server that stopped responding.
+   */
   private next(): Promise<ImapResponse> {
     const queued = this.queue.shift();
     if (queued) return Promise.resolve(queued);
     if (this.failure) return Promise.reject(this.failure);
 
     return new Promise<ImapResponse>((resolve, reject) => {
-      const timer = setTimeout(
-        () => this.fail(new Error("The mail server stopped responding.")),
-        COMMAND_TIMEOUT_MS,
-      );
+      const arm = (): void => {
+        if (this.silence !== null) clearTimeout(this.silence);
+        this.silence = setTimeout(() => this.fail(new Error("The mail server stopped responding.")), COMMAND_TIMEOUT_MS);
+      };
+      arm();
       const settle = (): void => {
-        clearTimeout(timer);
+        if (this.silence !== null) clearTimeout(this.silence);
+        this.silence = null;
         this.waiter = null;
       };
       this.waiter = {
@@ -334,6 +381,7 @@ export class ImapConnection {
           settle();
           reject(error);
         },
+        heard: arm,
       };
     });
   }

@@ -137,22 +137,31 @@ export function decodeQuotedPrintable(text: string): Uint8Array {
   return Uint8Array.from(bytes);
 }
 
+const BASE64_VALUES = (() => {
+  const table = new Int16Array(256).fill(-1);
+  for (let index = 0; index < BASE64_ALPHABET.length; index += 1) table[BASE64_ALPHABET.charCodeAt(index)] = index;
+  return table;
+})();
+
+/** Into a typed array as it goes: an attachment can be tens of megabytes. */
 export function decodeBase64(text: string): Uint8Array {
-  const clean = text.replace(/[^A-Za-z0-9+/]/g, "");
-  const bytes: number[] = [];
+  const bytes = new Uint8Array(Math.floor((text.length * 3) / 4) + 3);
+  let length = 0;
   let buffer = 0;
   let bits = 0;
-  for (const character of clean) {
-    const value = BASE64_ALPHABET.indexOf(character);
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    const value = code < 256 ? BASE64_VALUES[code] ?? -1 : -1;
     if (value < 0) continue;
-    buffer = (buffer << 6) | value;
+    buffer = ((buffer << 6) | value) & 0xffffff;
     bits += 6;
     if (bits >= 8) {
       bits -= 8;
-      bytes.push((buffer >> bits) & 0xff);
+      bytes[length] = (buffer >> bits) & 0xff;
+      length += 1;
     }
   }
-  return Uint8Array.from(bytes);
+  return bytes.slice(0, length);
 }
 
 /**
@@ -190,6 +199,56 @@ export function decodeMessagePart(
 ): string {
   const text = decodeCharset(decodeTransferEncoding(raw, part.encoding), part.charset);
   return part.subtype === "plain" ? text : htmlToText(text);
+}
+
+/**
+ * A MIME parameter such as an attachment's `filename`, whichever way it was written.
+ *
+ * RFC 2231 allows `filename*=utf-8''%C3%BC.pdf` and splitting into `filename*0*`,
+ * `filename*1`, …; many senders instead put an RFC 2047 encoded-word into a plain
+ * `name`. Both are resolved here, and `""` comes back when there is no such parameter.
+ */
+export function mimeParameter(parameters: ReadonlyMap<string, string>, name: string): string {
+  const key = name.toLowerCase();
+  const extended = parameters.get(`${key}*`);
+  if (extended !== undefined) return decodeExtendedValue([{ value: extended, encoded: true }]);
+
+  const segments: Array<{ value: string; encoded: boolean }> = [];
+  for (let index = 0; index < 100; index += 1) {
+    const encoded = parameters.get(`${key}*${index}*`);
+    const plain = parameters.get(`${key}*${index}`);
+    if (encoded !== undefined) segments.push({ value: encoded, encoded: true });
+    else if (plain !== undefined) segments.push({ value: plain, encoded: false });
+    else break;
+  }
+  if (segments.length) return decodeExtendedValue(segments);
+  return decodeEncodedWords(parameters.get(key) ?? "");
+}
+
+function decodeExtendedValue(segments: ReadonlyArray<{ value: string; encoded: boolean }>): string {
+  let charset = "utf-8";
+  const bytes: number[] = [];
+  segments.forEach((segment, index) => {
+    let value = segment.value;
+    if (segment.encoded && index === 0) {
+      // charset'language'value; the language is of no use here.
+      const match = /^([^']*)'[^']*'([\s\S]*)$/.exec(value);
+      if (match) {
+        charset = match[1] || charset;
+        value = match[2] ?? "";
+      }
+    }
+    for (let at = 0; at < value.length; at += 1) {
+      const pair = value.slice(at + 1, at + 3);
+      if (segment.encoded && value[at] === "%" && /^[0-9a-fA-F]{2}$/.test(pair)) {
+        bytes.push(parseInt(pair, 16));
+        at += 2;
+      } else {
+        for (const byte of new TextEncoder().encode(value[at] ?? "")) bytes.push(byte);
+      }
+    }
+  });
+  return decodeCharset(Uint8Array.from(bytes), charset);
 }
 
 export interface MailAddress {

@@ -1,5 +1,6 @@
 import { parseMiteSettings } from "../domain/mite";
 import { DEFAULT_TRANSCRIPTION } from "../domain/transcription";
+import { ATTACHMENT_LIMIT_MB } from "../domain/mail-attachments";
 import { localDate } from "../utils/date";
 import { DEFAULT_WEEKLY_REVIEW_DAY } from "../domain/weekly-review";
 import { DEFAULT_FEED_CHECK_TIMES } from "../domain/attention";
@@ -140,6 +141,8 @@ export function defaultSettings(): GtdSettings {
       refreshMinutes: 30,
       importCap: 50,
       reviewContext: "Laptop",
+      importAttachments: true,
+      attachmentLimitMb: ATTACHMENT_LIMIT_MB.default,
       accounts: [],
       passwords: {},
     },

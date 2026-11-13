@@ -434,6 +434,10 @@ export interface MailSettings {
   importCap: number;
   /** The context of review Actions made from a pull request while processing. */
   reviewContext: string;
+  /** Saves a message's attachments as Inbox Items of their own; see `mail-attachments.ts`. */
+  importAttachments: boolean;
+  /** The largest attachment saved, in MB (at most `ATTACHMENT_LIMIT_MB.max`). */
+  attachmentLimitMb: number;
   accounts: MailAccountSettings[];
   /**
    * Old copies of app passwords by account id, from before they moved to Obsidian's

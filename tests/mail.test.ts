@@ -23,6 +23,7 @@ import {
   type MailboxState,
   type MailCandidate,
 } from "../src/domain/mail";
+import { LEGACY_ATTACHMENT_CALLOUT } from "../src/domain/mail-attachments";
 import { appleMailLink, formatSender, mailItemNote, mailItemTitle, mailProcessingBody, type MailMessage } from "../src/domain/mail-note";
 
 const stateWith = (changes: Partial<MailboxState> = {}): MailboxState => ({ ...emptyMailboxState(), ...changes });
@@ -273,7 +274,6 @@ describe("What an imported message becomes", () => {
     // Local time, so the expected text holds in any time zone.
     date: new Date(2026, 8, 14, 8, 30).toISOString(),
     body: "Attached is the quote you asked for.",
-    hasAttachment: true,
     ...changes,
   });
 
@@ -282,7 +282,18 @@ describe("What an imported message becomes", () => {
       "From: Ada Lovelace <ada@example.com>\n"
       + "Date: 2026-09-14 08:30\n"
       + "Mailbox: Work · INBOX\n"
-      + "Attachments: yes\n"
+      + "\n"
+      + "> Attached is the quote you asked for.",
+    );
+  });
+
+  it("sets the attachments apart between the header and the text", () => {
+    expect(mailItemNote(message(), "Work", undefined, "> [!dg-attachments] 1 attachment\n> - quote.pdf")).toBe(
+      "From: Ada Lovelace <ada@example.com>\n"
+      + "Date: 2026-09-14 08:30\n"
+      + "Mailbox: Work · INBOX\n"
+      + "\n"
+      + "> [!dg-attachments] 1 attachment\n> - quote.pdf\n"
       + "\n"
       + "> Attached is the quote you asked for.",
     );
@@ -306,7 +317,7 @@ describe("What an imported message becomes", () => {
   });
 
   it("omits what a message does not carry", () => {
-    expect(mailItemNote(message({ from: "", date: "", messageId: "", body: "", hasAttachment: false }), ""))
+    expect(mailItemNote(message({ from: "", date: "", messageId: "", body: "" }), ""))
       .toBe("Mailbox: INBOX");
   });
 
@@ -347,6 +358,11 @@ describe("What an imported message becomes", () => {
   it("hides a legacy Message-ID only in the processor metadata", () => {
     const oldNote = "From: Ada\nMessage-ID: abc123@example.com\nOriginal: Open in Mail\n\n> Message-ID: part of the email";
     expect(mailProcessingBody(oldNote)).toBe("From: Ada\nOriginal: Open in Mail\n\n> Message-ID: part of the email");
+  });
+
+  it("shows an older note's bare \"Attachments: yes\" as the callout", () => {
+    const oldNote = "From: Ada\nAttachments: yes\n\n> Attachments: yes, in the text";
+    expect(mailProcessingBody(oldNote)).toBe(`From: Ada\n\n${LEGACY_ATTACHMENT_CALLOUT}\n\n> Attachments: yes, in the text`);
   });
 });
 

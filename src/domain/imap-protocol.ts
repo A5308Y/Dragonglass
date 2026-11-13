@@ -11,8 +11,11 @@
  * in. Text is decoded later, in `mime.ts`, once a part's charset is known.
  */
 
-/** A literal larger than this is not mail Dragonglass has any use for. */
-export const MAX_LITERAL_BYTES = 8_000_000;
+/**
+ * A literal larger than this is not mail Dragonglass has any use for. It leaves room
+ * for the largest attachment the settings allow (25 MB, a third more as base64).
+ */
+export const MAX_LITERAL_BYTES = 36_000_000;
 
 export interface ImapResponse {
   /** The response with each literal left as its `{n}` marker. */
@@ -49,6 +52,24 @@ export function takeResponse(buffer: string): { response: ImapResponse; rest: st
     if (buffer.length < start + size) return null;
     literals.push(buffer.slice(start, start + size));
     index = start + size;
+  }
+}
+
+/**
+ * How long the buffer must grow before `takeResponse` can succeed: the end of the
+ * literal it is waiting for, or 0 when it is waiting for a line. Lets the reader
+ * collect a large attachment without re-reading the buffer on every chunk.
+ */
+export function awaitedLength(buffer: string): number {
+  let index = 0;
+  for (;;) {
+    const end = buffer.indexOf("\r\n", index);
+    if (end < 0) return 0;
+    const marker = /\{(\d+)\+?\}$/.exec(buffer.slice(index, end));
+    if (!marker) return 0;
+    const next = end + 2 + Number(marker[1]);
+    if (buffer.length < next) return next;
+    index = next;
   }
 }
 
@@ -303,7 +324,14 @@ export interface BodyPart {
   subtype: string;
   charset: string;
   encoding: string;
+  /** Octets on the wire, before the transfer encoding is undone. */
   size: number;
+  /** `attachment`, `inline`, or `""` when the sender gave no Content-Disposition. */
+  disposition: string;
+  /** The file name the sender gave, raw: RFC 2231 and encoded-words are resolved in `mime.ts`. */
+  parameters: ReadonlyMap<string, string>;
+  /** `Content-ID`, which an HTML body uses to embed the part; `""` without one. */
+  contentId: string;
 }
 
 /**
@@ -312,6 +340,9 @@ export interface BodyPart {
  * The tree matters only for numbering the parts, and numbering is the whole point:
  * fetching `BODY[1.1]` pulls a few kilobytes of text where fetching the message
  * whole would pull every attachment with it.
+ *
+ * The parameters of the part (`name`) and of its disposition (`filename`) are kept
+ * together, the disposition's winning, since either may carry the file name.
  */
 export function flattenBodyStructure(token: Token): BodyPart[] {
   const parts: BodyPart[] = [];
@@ -330,18 +361,28 @@ export function flattenBodyStructure(token: Token): BodyPart[] {
     }
     const type = String(node[0] ?? "").toLowerCase();
     const subtype = String(node[1] ?? "").toLowerCase();
-    const parameters = Array.isArray(node[2]) ? node[2] : [];
-    let charset = "";
-    for (let index = 0; index < parameters.length; index += 2) {
-      if (String(parameters[index] ?? "").toLowerCase() === "charset") charset = String(parameters[index + 1] ?? "");
+    const parameters = new Map<string, string>();
+    readParameters(node[2], parameters);
+    // The extension fields follow a type-specific tail: text has a line count, and
+    // message/rfc822 an envelope, a body structure and a line count.
+    const dispositionIndex = type === "text" ? 9 : type === "message" && subtype === "rfc822" ? 11 : 8;
+    const dispositionToken = node[dispositionIndex];
+    let disposition = "";
+    if (Array.isArray(dispositionToken)) {
+      disposition = String(dispositionToken[0] ?? "").toLowerCase();
+      readParameters(dispositionToken[1], parameters);
     }
+    const contentId = typeof node[3] === "string" && node[3].toUpperCase() !== "NIL" ? node[3] : "";
     parts.push({
       path: prefix || "1",
       type,
       subtype,
-      charset,
+      charset: parameters.get("charset") ?? "",
       encoding: String(node[5] ?? "7bit").toLowerCase(),
       size: Number(node[6] ?? 0) || 0,
+      disposition,
+      parameters,
+      contentId,
     });
   };
 
@@ -349,22 +390,25 @@ export function flattenBodyStructure(token: Token): BodyPart[] {
   return parts;
 }
 
-/** The part worth reading: the first plain-text one, or failing that the first HTML. */
-export function findTextPart(parts: readonly BodyPart[]): BodyPart | null {
-  return parts.find((part) => part.type === "text" && part.subtype === "plain")
-    ?? parts.find((part) => part.type === "text")
-    ?? null;
+function readParameters(token: Token | undefined, into: Map<string, string>): void {
+  if (!Array.isArray(token)) return;
+  for (let index = 0; index + 1 < token.length; index += 2) {
+    const name = token[index];
+    const value = token[index + 1];
+    if (typeof name === "string" && typeof value === "string") into.set(name.toLowerCase(), value);
+  }
 }
 
 /**
- * Whether the message carries something beyond its text.
- *
- * Read from the structure rather than from Content-Disposition, because an inline
- * image is still a thing the message brought with it, and a note that says so is
- * more useful than a note that quibbles about how it was attached.
+ * The part worth reading: the first plain-text one, or failing that the first other
+ * text (usually HTML).
+ * A text file sent as an attachment is not the message's text.
  */
-export function hasAttachment(parts: readonly BodyPart[]): boolean {
-  return parts.some((part) => part.type !== "text" && part.type !== "multipart");
+export function findTextPart(parts: readonly BodyPart[]): BodyPart | null {
+  const body = parts.filter((part) => part.type === "text" && part.disposition !== "attachment");
+  return body.find((part) => part.subtype === "plain")
+    ?? body[0]
+    ?? null;
 }
 
 // MAILBOX NAMES

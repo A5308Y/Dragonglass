@@ -20,6 +20,8 @@ import {
 } from "../domain/mail";
 import { delegatedActionFor, replyAboutLine } from "../domain/email-delegation";
 import { appleMailLink, mailItemNote, mailItemTitle } from "../domain/mail-note";
+import { attachmentCallout, planAttachments, type AttachmentEntry } from "../domain/mail-attachments";
+import { MAX_LITERAL_BYTES } from "../domain/imap-protocol";
 import type { GtdRepository } from "../repository/gtd-repository";
 import { SyncedJsonFile } from "../state/synced-json-file";
 import { ImapConnection, type ImapSocketFactory, type MessageSummary } from "./imap-client";
@@ -33,6 +35,10 @@ export interface MailSettingsView {
   /** How many messages one sync will import before deferring the rest. */
   importCap: number;
   accounts: MailAccount[];
+  /** Whether attachments are saved as Inbox Items of their own; see `mail-attachments.ts`. */
+  importAttachments: boolean;
+  /** The largest attachment saved, in MB. */
+  attachmentLimitMb: number;
 }
 
 export interface MailSyncStatus {
@@ -294,8 +300,11 @@ export class MailService {
       const summary = summaries.find((entry) => entry.uid === candidate.uid);
       if (!summary) continue;
       const body = await connection.fetchText(summary.uid, summary.textPart);
+      // Saved before the message's own Item, which links them; a crash in between
+      // costs a second copy on the next import, never a lost file.
+      const attachments = await this.saveAttachments(connection, summary);
 
-      await this.createInboxItem(account, mailbox, summary, body);
+      await this.createInboxItem(account, mailbox, summary, body, attachments);
       // Handled the moment the Item exists, so a later failure cannot duplicate it.
       state = recordHandled(state, [candidate], { uidValidity: status.uidValidity, fetchedAt });
       this.store = withMailboxState(this.store, account.id, mailbox, state);
@@ -313,11 +322,38 @@ export class MailService {
     }
   }
 
+  /**
+   * Saves the attachments the rules allow into the Inbox, one at a time. One that
+   * fails to download is named in the note as such and doesn't stop the import.
+   */
+  private async saveAttachments(connection: ImapConnection, summary: MessageSummary): Promise<string> {
+    const settings = this.getSettings();
+    const limitMb = settings.attachmentLimitMb;
+    const plans = planAttachments(summary.attachments, { enabled: settings.importAttachments, limitMb });
+    const entries: AttachmentEntry[] = [];
+    for (const plan of plans) {
+      const entry: AttachmentEntry = { fileName: plan.fileName, bytes: plan.bytes, ...(plan.skip ? { skip: plan.skip } : {}) };
+      if (!plan.skip) {
+        try {
+          if (plan.part.size > MAX_LITERAL_BYTES) throw new Error("too large to fetch");
+          const data = await connection.fetchAttachment(summary.uid, plan.part);
+          entry.bytes = data.byteLength;
+          entry.path = await this.repository.createInboxFile(plan.fileName, data);
+        } catch {
+          entry.skip = "failed";
+        }
+      }
+      entries.push(entry);
+    }
+    return attachmentCallout(entries, limitMb);
+  }
+
   private async createInboxItem(
     account: MailAccount,
     mailbox: string,
     summary: MessageSummary,
     body: string,
+    attachments: string,
   ): Promise<void> {
     const message = {
       messageId: summary.messageId,
@@ -328,10 +364,9 @@ export class MailService {
       from: summary.from,
       date: summary.date,
       body,
-      hasAttachment: summary.hasAttachment,
     };
     const mailLink = account.appleMailLink ? appleMailLink(message.messageId) : undefined;
-    const note = mailItemNote(message, account.label, mailLink);
+    const note = mailItemNote(message, account.label, mailLink, attachments);
     // A reply to a delegated Action links to it; what it says is for you to decide on.
     const about = delegatedActionFor(message.subject, this.repository.index?.getSnapshot().actions ?? []);
     await this.repository.createIdentifiedInboxItem(mailItemTitle(message), about ? `${replyAboutLine(about)}\n${note}` : note, message.messageId);

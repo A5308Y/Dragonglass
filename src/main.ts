@@ -12,6 +12,7 @@ import { parseCodeAgentSettings } from "./domain/delegation";
 import { RibbonAttention } from "./ui/ribbon-attention";
 import { ErrorBar } from "./ui/error-bar";
 import { describeImport, normalizeMailPort } from "./domain/mail";
+import { ATTACHMENT_LIMIT_MB } from "./domain/mail-attachments";
 import { SavedViewService } from "./state/saved-view-service";
 import { migrateSavedViews } from "./domain/saved-views";
 import { POMODORO_SOUNDS, PROCESSING_PARTNER_PROVIDERS, type ActionStatus, type ChecklistSettings, type GtdSettings, type MailAccountSettings, type PomodoroSettings, type PomodoroSound, type Project, type ProjectStatus, type SavedView } from "./domain/types";
@@ -269,6 +270,13 @@ export default class DragonglassGtdPlugin extends Plugin {
         reviewContext: typeof saved?.mail?.reviewContext === "string" && saved.mail.reviewContext.trim()
           ? saved.mail.reviewContext.trim()
           : defaults.mail.reviewContext,
+        importAttachments: typeof saved?.mail?.importAttachments === "boolean"
+          ? saved.mail.importAttachments
+          : defaults.mail.importAttachments,
+        attachmentLimitMb: Number.isInteger(saved?.mail?.attachmentLimitMb)
+          && saved!.mail!.attachmentLimitMb >= 1 && saved!.mail!.attachmentLimitMb <= ATTACHMENT_LIMIT_MB.max
+          ? saved!.mail!.attachmentLimitMb
+          : defaults.mail.attachmentLimitMb,
         accounts: Array.isArray(saved?.mail?.accounts) ? saved.mail.accounts.map(migrateMailAccount) : [],
         passwords: isStringMap(saved?.mail?.passwords) ? saved.mail.passwords : {},
       },

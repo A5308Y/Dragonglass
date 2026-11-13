@@ -637,6 +637,12 @@ body.is-phone .workspace-leaf-content:is(
 }
 .dg-inbox-reading-body > :first-child,
 dg-markdown.dg-inbox-preview > :first-child { margin-top: 0; }
+/* An imported message's attachments (`attachmentCallout`), in the processor and the note alike. */
+.callout[data-callout="dg-attachments"] {
+  --callout-color: var(--callout-warning);
+  --callout-icon: lucide-paperclip;
+}
+.callout[data-callout="dg-attachments"] .callout-title { font-weight: var(--font-semibold); }
 .dg-inbox-reading-body.is-empty { color: var(--text-muted); font-style: italic; }
 .dg-inbox-row-actions { display: flex; align-items: center; gap: 6px; }
 .dg-inbox-meta {

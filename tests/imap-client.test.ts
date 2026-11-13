@@ -49,6 +49,11 @@ class FakeServer implements ImapSocket {
     this.closed = true;
   }
 
+  /** Sends data unasked, as the rest of a reply arriving in pieces does. */
+  send(chunk: string): void {
+    this.data?.(chunk);
+  }
+
   /** Drops the connection, as a server does when it gives up on you. */
   hangUp(): void {
     this.ended?.();
@@ -218,9 +223,9 @@ describe("Fetching summaries", () => {
       subject: "Heat pump quote",
       from: "Ada Lovelace <ada@example.com>",
       date: "2026-09-14T08:30:00.000Z",
-      hasAttachment: true,
       bulk: false,
     });
+    expect(summary?.attachments.map((part) => part.path)).toEqual(["2"]);
   });
 
   it("locates the text part without fetching it", async () => {
@@ -338,5 +343,22 @@ describe("When the connection goes wrong", () => {
     queueMicrotask(() => server.hangUp());
     await connection.logout();
     expect(server.closed).toBe(true);
+  });
+});
+
+describe("Fetching an attachment", () => {
+  it("collects a literal that arrives in many pieces and decodes it", async () => {
+    const bytes = Uint8Array.from({ length: 5_000 }, (_, index) => (index * 31) % 256);
+    const encoded = btoa(String.fromCharCode(...bytes)).replace(/(.{76})/g, "$1\r\n");
+    const server = new FakeServer((command, tag) => {
+      if (!/^UID FETCH 42 \(BODY\.PEEK\[2\]\)$/.test(command)) return ok(tag);
+      const reply = `* 7 FETCH (UID 42 BODY[2] {${encoded.length}}\r\n${encoded})\r\n${ok(tag)}`;
+      queueMicrotask(() => {
+        for (let start = 0; start < reply.length; start += 97) server.send(reply.slice(start, start + 97));
+      });
+      return null;
+    });
+    const connection = await connect(server);
+    expect(await connection.fetchAttachment(42, { path: "2", encoding: "base64" })).toEqual(bytes);
   });
 });

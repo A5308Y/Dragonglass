@@ -182,6 +182,20 @@ Use `Ui.onModEnter msg` (it listens for the `dg-mod-enter` event) and call
   starts a reply's Inbox Item with a link to that Action (`replyAboutLine`). A reply never changes the
   Action: mail is an open channel. Rules: `src/domain/email-delegation.ts`, dialog `src/ui/delegate-action.ts`.
 
+## Mail attachments
+
+- An imported message's attachments are saved into the Inbox folder, each an Inbox Item of its own (a raw
+  file, like a recording), before the message's Item, which lists every attachment in a `[!dg-attachments]`
+  callout: saved ones linked, the others with the reason they stayed in the message. Older notes'
+  `Attachments: yes` is shown as that callout in the processor (`mailProcessingBody`).
+- Rules are in `src/domain/mail-attachments.ts` (tested in `tests/mail-attachments.test.ts`): an allowlist of
+  extensions (never notes, Canvas/Bases, HTML/SVG, archives, programs, scripts or macro-capable Office files;
+  files Dragonglass writes carry no quarantine mark), judged by the sanitized name it is saved under; a size
+  limit (setting `mail.attachmentLimitMb`, at most 25) and `MAX_ATTACHMENTS_PER_MESSAGE`. Small images
+  embedded in the HTML (logos) aren't attachments. Widening the allowlist is a deliberate change.
+- Settings: `mail.importAttachments` (off: only listed). `MAX_LITERAL_BYTES` must stay above the largest
+  limit as base64, or a fetch fails the whole mailbox.
+
 ## Exporting a Project tree for reading
 
 - "Export for reading…" (Project menus, command "Export Project tree for reading…") writes one self-contained

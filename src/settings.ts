@@ -13,6 +13,7 @@ import { ACTION_STATUSES, type ActionStatus } from "./domain/types";
 import type DragonglassGtdPlugin from "./main";
 import { addImagePathSetting } from "./ui/image-input";
 import { describeImport, describeMailboxState, mailboxState, normalizeMailPort } from "./domain/mail";
+import { ATTACHMENT_LIMIT_MB, MAX_ATTACHMENTS_PER_MESSAGE } from "./domain/mail-attachments";
 import { createUlid as createAccountId } from "./utils/ulid";
 import { isPathInDirectory, normalizeVaultPath } from "./utils/path";
 
@@ -1334,6 +1335,35 @@ export class GtdSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings(false);
         });
       });
+
+    new Setting(sectionEl)
+      .setName("Import attachments")
+      .setDesc("Saves a message's attachments into the Inbox folder, each an Inbox Item of its own, and links them from the "
+        + "message's Item. Only documents, images, audio and video are saved; programs, scripts, archives, web pages, "
+        + `notes and Office files that can hold macros stay in the message, as does anything past ${MAX_ATTACHMENTS_PER_MESSAGE} `
+        + "per message. Either way the message's Item lists every attachment.")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.mail.importAttachments).onChange(async (value) => {
+        this.plugin.settings.mail.importAttachments = value;
+        await this.plugin.saveSettings(false);
+        this.display();
+      }));
+
+    if (this.plugin.settings.mail.importAttachments) {
+      new Setting(sectionEl)
+        .setName("Largest attachment")
+        .setDesc(`In MB, at most ${ATTACHMENT_LIMIT_MB.max}. Larger ones stay in the message. They sync with the vault, so keep this modest.`)
+        .addText((text) => {
+          text.inputEl.type = "number";
+          text.inputEl.min = "1";
+          text.inputEl.max = String(ATTACHMENT_LIMIT_MB.max);
+          text.setValue(String(this.plugin.settings.mail.attachmentLimitMb)).onChange(async (value) => {
+            const limit = Number(value);
+            if (!Number.isInteger(limit) || limit < 1 || limit > ATTACHMENT_LIMIT_MB.max) return;
+            this.plugin.settings.mail.attachmentLimitMb = limit;
+            await this.plugin.saveSettings(false);
+          });
+        });
+    }
 
     new Setting(sectionEl)
       .setName("Sync store")
